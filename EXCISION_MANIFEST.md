@@ -235,6 +235,55 @@ unrelated `terminal/local_tty/docker_sandbox`; `bedrock_credentials` matches
 settings keys as well as the module; `handoff_snapshot` matches `server_api`
 method names. Match on the module path, not the bare identifier.
 
+### What `agent_sdk` taught us (and what stopped working after it)
+
+`agent_sdk` came out cleanly because it was a genuine **leaf**: nothing inside
+`app/src/ai` depended on it much (4 internal consumers, all reducible to
+explicit failures). That property, not its size, is what made it removable.
+
+Two follow-up attempts were reverted, and the reason generalises:
+
+**`ai/orchestration` (3,003 LOC, 16 usages) — reverted.** Its consumers live
+*inside* `ai/blocklist` (`action_model/execute/run_agents.rs`,
+`handoff/pipeline.rs`, `inline_action/orchestration_controls.rs`,
+`inline_action/run_agents_card_view.rs`). `app/src/ai` is a tightly-coupled
+cluster centred on `blocklist`, so a low external cascade does not imply
+separability. **Check internal consumers, not just external ones.** After
+`agent_sdk`, the only remaining true leaves (zero internal consumers) are tiny:
+`cloud_agent_config` (58), `generate_block_title` (13),
+`generate_code_review_content` (25), `voice` (160).
+
+**`terminal/view/use_agent_footer` (2,259 LOC) — reverted.** 43 errors across 6
+files, because the module exports an `impl TerminalView` block whose methods
+(`open_cli_agent_rich_input`, `maybe_show_use_agent_footer_in_blocklist`,
+`has_active_cli_agent_input_session`, …) are called throughout
+`terminal/view.rs`, `shared_session/shared_handlers.rs`, `pane_group/pane/mod.rs`
+and `local_tty/terminal_view_adaptor.rs`. It also contains
+`warpify_footer.rs` — **Warpify is shell setup, not an agent feature** — and a
+generic `is_running_warp_tui` helper.
+
+### The trap to watch for
+
+Warp's terminal-view modules bundle agent and non-agent UI in the same module.
+This has now bitten twice, and the compiler caught it both times:
+
+| Module | Agent part | Must survive |
+|---|---|---|
+| `terminal/view/docker_sandbox` | `initialize_docker_sandbox_environment` (agent env driver) | `create_and_push_docker_sandbox` — user-facing sandbox pane behind `FeatureFlag::LocalDockerSandbox` |
+| `terminal/view/use_agent_footer` | `UseAgentToolbar` | `warpify_footer.rs`, `is_running_warp_tui` |
+
+So the remaining work is **per-function surgery inside shared modules**, not
+module deletion. That is a slower mode than the `agent_sdk` slice — budget
+accordingly, and expect the module's LOC count to overstate what can actually
+be removed.
+
+Recommended next direction: rather than deleting further `app/src/ai`
+submodules from the inside, remove `ai::`'s **external** consumers first (the
+386 files / 1,255 imports outside `app/src/ai`) so the cluster can eventually
+come out as a unit. Start with modules that are wholly agent with no shared
+helpers — verify by reading the module's exports before deleting, not by
+grepping its name.
+
 ### Leave for last
 
 `ai/blocklist` (121,932 LOC, 381 external sites) and `ai/agent` (24,616 LOC,

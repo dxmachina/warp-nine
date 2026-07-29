@@ -186,9 +186,26 @@ are:
          `root_view.rs`, `util/bindings.rs`, `auth/login_slide.rs`,
          `resource_center/mod.rs`, and `app/src/drive` (23K LOC). Do it in the
          cloud pass, not here.
-   - [ ] `ai_page` (10,164), `teams_page` (4,477), `billing_and_usage_page`
-         (3,605) + `_v2` (2,252), `code_page` (3,012), `environments_page`
-         (2,095), `mcp_servers_page` (589)
+   - [x] `ai_page` — 14,005 lines across 31 files. Deleting it orphaned five
+         modals that only it constructed (`custom_inference_modal`,
+         `execution_profile_view`, `custom_router_view`,
+         `set_default_model_modal`,
+         `remove_custom_endpoint_confirmation_dialog`), which went too.
+   - [ ] Remaining pages, with measured external cascade (sites / files):
+
+     | Page | LOC | Cascade |
+     |---|---|---|
+     | `teams_page` | 4,477 | 16 / 6 |
+     | `billing_and_usage_page` + `_v2` | 5,857 | 39 / 10 |
+     | `code_page` | 3,012 | 24 / 3 |
+     | `environments_page` | 2,095 | 44 / 8 |
+     | `mcp_servers_page` | 589 | 23 / 7 |
+     | `warp_drive_page` | 282 | 15 / 2 |
+
+     Measure the cascade before picking the next one — `ai_page` was the
+     largest file but among the cheapest to remove, and `environments_page` is
+     the opposite (16 of its 44 sites are in
+     `pane_group/pane/environment_management_pane.rs`).
 2. Terminal/pane/workspace integration points (410 external `ai::` refs).
 3. `app/src/ai` + `crates/ai` + agent crates.
 4. Cloud: drive, cloud_object, graphql.

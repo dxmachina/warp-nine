@@ -173,6 +173,89 @@ are:
   feature set; `completions_v2` (which uses the local
   `crates/command-signatures-v2`) is not.
 
+## The agent excision: measured plan
+
+Cutting `mod ai;` from `lib.rs` produces **912 errors across 268 files**
+(measured, not estimated). Concentrated in the integration hubs: `lib.rs` (48),
+`terminal/view.rs` (45), `workspace/view.rs` (42), `terminal/input.rs` (38).
+
+**Agent state is in the core data model, not just the UI.** Agent concepts reach
+`persistence/sqlite.rs`, `server/graphql/schema/mod.rs`, `server/sync_queue.rs`,
+`tab.rs`, `launch_configs/launch_config.rs`, `app_state.rs`, and
+`cloud_object/model/persistence.rs` — session restore and tab configs serialize
+agent conversations. So this is not a module extraction; part of it is schema
+and serialization surgery.
+
+### Delete `app/src/ai` submodules in this order
+
+Cascade counts are consumers *outside the submodule itself*, split by whether
+they live inside `app/src/ai`. Ascending cascade = correct deletion order.
+
+| Module | LOC | sites | outside | inside `ai` |
+|---|---|---|---|---|
+| `ai/generate_block_title` | 13 | 2 | 2 | 0 |
+| `ai/generate_code_review_content` | 25 | 2 | 2 | 0 |
+| `ai/cloud_agent_config` | 58 | 1 | 1 | 0 |
+| `ai/voice` | 160 | 2 | 2 | 0 |
+| `ai/loading` | 45 | 3 | 2 | 1 |
+| `ai/outline` | 498 | 9 | 7 | 2 |
+| `ai/get_relevant_files` | 1,009 | 8 | 4 | 4 |
+| `ai/conversation_navigation` | 349 | 9 | 5 | 4 |
+| `ai/agent_events` | 1,846 | 7 | **0** | 7 |
+| `ai/predict` | 1,707 | 16 | 13 | 3 |
+| `ai/orchestration` | 3,003 | 8 | 3 | 5 |
+| **`ai/agent_sdk`** | **38,674** | **16** | 12 | 4 |
+| `ai/agent_management` | 7,258 | 14 | 12 | 2 |
+| `ai/facts` | 2,094 | 26 | 22 | 4 |
+| `ai/artifacts` | 1,073 | 33 | 8 | 25 |
+| `ai/cloud_environments` | 426 | 44 | 22 | 22 |
+| `ai/agent_conversations_model` | 739 | 56 | 40 | 16 |
+| `ai/document` | 3,743 | 64 | 36 | 28 |
+| `ai/skills` | 8,269 | 77 | 35 | 42 |
+| `ai/mcp` | 8,016 | 83 | 46 | 37 |
+| `ai/execution_profiles` | 8,439 | 83 | 50 | 33 |
+| `ai/ambient_agents` | 3,243 | 193 | 95 | 98 |
+| `ai/agent` | 24,616 | 680 | 238 | 442 |
+| `ai/blocklist` | **121,932** | 436 | 381 | 55 |
+
+**`ai/agent_sdk` is the standout: 38,674 LOC — 15% of the agent system — for
+16 consumers.** Do it first. Its 12 external consumers are mostly pure-agent
+files that go with it: `pane_group/pane/local_harness_launch.rs` (284),
+`server/server_api/harness_support.rs` (498), `remote_server/handoff_snapshot.rs`
+(67), `ai/bedrock_credentials.rs` (174), `terminal/view/docker_sandbox/mod.rs`
+(338). The genuinely mixed consumers need only 1–4 edits each: `lib.rs` (a CLI
+dispatch to `agent_sdk::run`), `workspace/view.rs` (claude/codex transcript
+rehydration), `ai/blocklist/controller.rs` (`ClaudeHarness::wake_dormant_session`),
+`ai/blocklist/action_model/recording_finalize.rs` (artifact upload), and
+`ai/blocklist/handoff/snapshot.rs`.
+
+Caution when grepping for those consumer files: several identifiers are
+ambiguous. `docker_sandbox` matches both `terminal/view/docker_sandbox` and an
+unrelated `terminal/local_tty/docker_sandbox`; `bedrock_credentials` matches
+settings keys as well as the module; `handoff_snapshot` matches `server_api`
+method names. Match on the module path, not the bare identifier.
+
+### Leave for last
+
+`ai/blocklist` (121,932 LOC, 381 external sites) and `ai/agent` (24,616 LOC,
+238 external sites) are the load-bearing ones. `RichContentType` in
+`terminal/model/rich_content.rs` is the seam where agent blocks enter the
+terminal's block list — its `AIBlock`, `EnterAgentView`, `InlineAgentViewHeader`,
+and `AgentViewZeroState` variants are the agent side;
+`WarpifySuccessBlock`, `TerminalViewZeroState`, and `PluginInstructionsBlock`
+are not and must survive.
+
+### Pure-agent modules outside `app/src/ai` (~40K LOC)
+
+`terminal/view/ambient_agent` (10,142), `search/ai_context_menu` (7,527),
+`terminal/cli_agent_sessions` (4,568), `ai_assistant` (3,637),
+`integration_testing/agent_mode` (2,461), `terminal/view/use_agent_footer`
+(2,259), `workspace/view/conversation_list` (2,198), `pane_group/child_agent`
+(1,084), `terminal/view/load_ai_conversation.rs` (1,176).
+
+Note `search/ai_context_menu` is the "@" menu and is woven into
+`terminal/input.rs`'s editor — more entangled than its file count suggests.
+
 ## Excision order (dependents before dependencies)
 
 1. Leaf UI: settings pages, menus, command palette, onboarding slides.

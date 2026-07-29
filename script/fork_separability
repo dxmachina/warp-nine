@@ -56,9 +56,16 @@ def main():
     for f in files:
         src = open(f).read()
         loc += src.count("\n")
-        # `impl Foo`, `impl Foo for Bar`, `impl<T> Foo` — capture the type methods land on
-        for m in re.finditer(r"^impl(?:<[^>]*>)?\s+([A-Za-z_][A-Za-z0-9_]*)", src, re.M):
-            impls.add(m.group(1))
+        # Only *inherent* impls matter here: `impl Foo { ... }` hangs methods off
+        # Foo, so if Foo is defined elsewhere its callers use bare method names.
+        # `impl Trait for Foo` is a trait impl — normal and harmless — so skip
+        # anything with a `for` clause.
+        for m in re.finditer(
+            r"^impl(?:<[^>]*>)?\s+([A-Za-z_][A-Za-z0-9_:]*)(?:<[^>]*>)?\s*(\{|for\b)",
+            src, re.M,
+        ):
+            if m.group(2) == "{":
+                impls.add(m.group(1).split("::")[-1])
         for m in re.finditer(
             r"^\s*pub(?:\([a-z():]+\))?\s+"
             r"(?:fn|struct|enum|trait|type|const|static)\s+([A-Za-z_][A-Za-z0-9_]*)",
@@ -77,10 +84,21 @@ def main():
         print()
 
     # External references to exported names.
-    ext_by_name = {}
+    #
+    # Names are checked for collisions first: `DisplayMode` is defined both here
+    # and in code/diff_viewer.rs, which made this module look like it had a
+    # 33-file surface when its real one is 5. A colliding name is reported but
+    # excluded from the risk verdict, since its hits cannot be attributed.
+    ext_by_name, colliding = {}, set()
     for name in sorted(exports):
         if len(name) < 4:
             continue  # too short to grep meaningfully
+        defined_elsewhere = [
+            l for l in grep(rf"^\s*(pub(\([a-z():]+\))?\s+)?(struct|enum|trait|type|fn|const|static)\s+{name}\b", regex=True)
+            if not any(l.split(":")[0] == f for f in files)
+        ]
+        if defined_elsewhere:
+            colliding.add(name)
         hits = [
             l for l in grep(name)
             if not any(l.split(":")[0] == f or l.split(":")[0].startswith(target + "/") for f in files)
@@ -92,8 +110,13 @@ def main():
         top = sorted(ext_by_name.items(), key=lambda kv: -kv[1])[:12]
         print("  EXPORTED NAMES REFERENCED OUTSIDE (name -> files):")
         for n, c in top:
-            print(f"    {c:4d}  {n}")
-        print(f"    ({len(ext_by_name)} exported names referenced externally in total)\n")
+            mark = "  [name also defined elsewhere — count unreliable]" if n in colliding else ""
+            print(f"    {c:4d}  {n}{mark}")
+        attributable = {n: c for n, c in ext_by_name.items() if n not in colliding}
+        print(f"    ({len(ext_by_name)} referenced externally, "
+              f"{len(attributable)} attributable to this module)\n")
+    else:
+        attributable = {}
 
     # Files whose names suggest they are not agent code.
     mixed = [f for f in files if any(h in os.path.basename(f).lower() for h in NON_AGENT_HINTS)]
@@ -103,7 +126,7 @@ def main():
             print(f"    {f}")
         print()
 
-    risk = bool(foreign) or len(ext_by_name) > 6 or bool(mixed)
+    risk = bool(foreign) or len(attributable) > 6 or bool(mixed)
     print("  VERDICT:", "NOT cleanly separable — expect a wide cascade" if risk
           else "looks separable — small external surface, no foreign impls")
     return 0

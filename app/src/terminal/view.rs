@@ -258,9 +258,8 @@ use crate::ai::blocklist::{
     BlocklistAIContextModel, BlocklistAIController, BlocklistAIControllerEvent,
     BlocklistAIHistoryEvent, BlocklistAIHistoryModel, BlocklistAIInputEvent, BlocklistAIInputModel,
     ClientIdentifiers, ConversationSelection, ConversationStatusUpdate, InputConfig, InputType,
-    InputTypeAutoDetectionSource, LegacyPassiveSuggestionsEvent, LegacyPassiveSuggestionsModel,
-    MaaPassiveSuggestionsEvent, MaaPassiveSuggestionsModel, PRE_REWIND_PREFIX,
-    PassiveSuggestionsModels, PendingAttachment, PendingQueryState, QueuedQuery, QueuedQueryId,
+    InputTypeAutoDetectionSource, PRE_REWIND_PREFIX,
+    PendingAttachment, PendingQueryState, QueuedQuery, QueuedQueryId,
     QueuedQueryModel, QueuedQueryOrigin, RequestFileEditsFormatKind, ShellCommandExecutor,
     ShellCommandExecutorEvent, SlashCommandRequest, StartAgentExecutor, StartAgentExecutorEvent,
     StartAgentRequest, ai_brand_color, block_context_from_terminal_model,
@@ -2700,7 +2699,6 @@ pub struct TerminalView {
     hover_near_snackbar_area: bool,
 
     ai_controller: ModelHandle<BlocklistAIController>,
-    passive_suggestions_models: PassiveSuggestionsModels,
     ai_action_model: ModelHandle<BlocklistAIActionModel>,
     ai_input_model: ModelHandle<BlocklistAIInputModel>,
     ai_context_model: ModelHandle<BlocklistAIContextModel>,
@@ -3505,40 +3503,7 @@ impl TerminalView {
                 ctx,
             )
         });
-        let maa_passive_suggestions_model = ctx.add_model(|ctx| {
-            MaaPassiveSuggestionsModel::new(
-                active_session.clone(),
-                model.clone(),
-                ai_controller.clone(),
-                &model_events_handle,
-                ambient_agent_view_model.clone(),
-                terminal_view_id,
-                ctx,
-            )
-        });
-        ctx.subscribe_to_model(
-            &maa_passive_suggestions_model,
-            Self::handle_maa_passive_suggestions_event,
-        );
-        let legacy_passive_suggestions_model = ctx.add_model(|ctx| {
-            LegacyPassiveSuggestionsModel::new(
-                active_session.clone(),
-                model.clone(),
-                ai_controller.clone(),
-                &model_events_handle,
-                terminal_view_id,
-                ctx,
-            )
-        });
-        ctx.subscribe_to_model(
-            &legacy_passive_suggestions_model,
-            Self::handle_legacy_passive_suggestions_event,
-        );
-        let passive_suggestions_models = PassiveSuggestionsModels {
-            maa: maa_passive_suggestions_model,
-            legacy: legacy_passive_suggestions_model,
-        };
-
+        // LOCAL FORK: passive AI suggestion models removed.
         let find_model = ctx.add_model(|ctx| TerminalFindModel::new(model.clone(), ctx));
 
         ctx.subscribe_to_model(
@@ -4348,7 +4313,6 @@ impl TerminalView {
             show_snackbar: true,
             hover_near_snackbar_area: false,
             ai_controller,
-            passive_suggestions_models,
             ai_action_model,
             ai_render_context,
             get_relevant_files_controller,
@@ -5665,48 +5629,6 @@ impl TerminalView {
         self.drain_queued_prompts(conversation_id, FinishReason::Complete, ctx);
     }
 
-    fn handle_legacy_passive_suggestions_event(
-        &mut self,
-        _: ModelHandle<LegacyPassiveSuggestionsModel>,
-        event: &LegacyPassiveSuggestionsEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            LegacyPassiveSuggestionsEvent::PromptSuggestionsGenerated {
-                prompt_suggestion,
-                block_id,
-                command,
-                request_duration_ms,
-            } => {
-                self.on_legacy_prompt_suggestion_generated(
-                    prompt_suggestion.clone(),
-                    block_id.clone(),
-                    command.clone(),
-                    *request_duration_ms,
-                    ctx,
-                );
-            }
-            LegacyPassiveSuggestionsEvent::PassiveCodeDiffRequestStarted {
-                prompt_suggestion_id,
-                code_exchange_id,
-                block_id,
-            } => {
-                send_telemetry_from_ctx!(
-                    TelemetryEvent::SuggestedCodeDiffBannerShown {
-                        prompt_suggestion_id: prompt_suggestion_id.clone(),
-                        code_exchange_id: *code_exchange_id,
-                        block_id: Some(block_id.to_string()),
-                        request_duration_ms: 0,
-                        server_request_token: None,
-                    },
-                    ctx
-                );
-            }
-            LegacyPassiveSuggestionsEvent::PassiveCodeDiffFailed { reason } => {
-                self.try_clear_prompt_suggestions_banner_code_state(*reason, ctx);
-            }
-        }
-    }
 
     fn build_agent_todos_popup(
         ai_context_model: ModelHandle<BlocklistAIContextModel>,
@@ -8974,14 +8896,7 @@ impl TerminalView {
             active_init_env_block.update(ctx, |init_env_block, ctx| {
                 init_env_block.handle_ctrl_c(ctx);
             });
-        } else if self
-            .passive_suggestions_models
-            .legacy
-            .as_ref(ctx)
-            .is_passive_code_diff_being_generated()
-        {
-            // Handle Ctrl-C for passive code generation blocks ("Generating fix..." state)
-            self.abort_prompt_and_code_suggestions(ctx);
+        } else if false {
         } else if let Some(active_env_var_block) = self.active_env_var_collection_block(ctx) {
             active_env_var_block.update(ctx, |env_var_block, ctx| {
                 env_var_block.handle_ctrl_c(ctx);
@@ -11173,39 +11088,10 @@ impl TerminalView {
         false
     }
 
-    // Abort any pending prompt or code suggestions, which may now be irrelevant.
-    fn abort_prompt_and_code_suggestions(&mut self, ctx: &mut ViewContext<Self>) {
-        // Abort both models to handle any in-flight requests from before a
-        // feature flag change.
-        self.passive_suggestions_models
-            .maa
-            .update(ctx, |model, ctx| model.abort_pending_requests(ctx));
-        let pending_stream_ids = self
-            .passive_suggestions_models
-            .legacy
-            .update(ctx, |model, ctx| model.abort_pending_requests(ctx));
-        for stream_id in pending_stream_ids {
-            if let Some(passive_block) =
-                self.rich_content_views
-                    .iter()
-                    .rev()
-                    .find_map(|rich_content| {
-                        let ai_metadata = rich_content.ai_block_metadata()?;
-                        if ai_metadata
-                            .ai_block_handle
-                            .as_ref(ctx)
-                            .response_stream_id()
-                            .is_some_and(|id| id == &stream_id)
-                        {
-                            return Some(ai_metadata.ai_block_handle.clone());
-                        }
-                        None
-                    })
-            {
-                self.cleanup_and_remove_conversation_for_ai_block(&passive_block, ctx);
-            }
-        }
-    }
+    // LOCAL FORK: no-op. This aborted in-flight passive prompt/code suggestion
+    // requests and removed the "Generating fix..." blocks they created. Both
+    // passive suggestion models are gone, so there is nothing pending to abort.
+    fn abort_prompt_and_code_suggestions(&mut self, _ctx: &mut ViewContext<Self>) {}
 
     /// Cleans up and removes the conversation associated with the given AI block.
     ///
@@ -15205,55 +15091,6 @@ impl TerminalView {
         self.update_scroll_position_locking(ScrollPositionUpdate::AfterEnd, ctx);
     }
 
-    fn handle_maa_passive_suggestions_event(
-        &mut self,
-        _: ModelHandle<MaaPassiveSuggestionsModel>,
-        event: &MaaPassiveSuggestionsEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            MaaPassiveSuggestionsEvent::NewPromptSuggestion {
-                prompt,
-                label,
-                request_duration_ms,
-                trigger,
-                conversation_id,
-                server_request_token,
-            } => {
-                self.on_maa_prompt_suggestion_generated(
-                    prompt,
-                    &label.clone(),
-                    *request_duration_ms,
-                    trigger.clone(),
-                    *conversation_id,
-                    server_request_token.clone(),
-                    ctx,
-                );
-            }
-            MaaPassiveSuggestionsEvent::NewCodeDiffSuggestion {
-                diffs,
-                edit_format_kind,
-                title,
-                original_edits,
-                conversation_id,
-                request_duration_ms,
-                trigger,
-                server_request_token,
-            } => {
-                self.on_maa_code_diff_generated(
-                    diffs.clone(),
-                    *edit_format_kind,
-                    title.clone(),
-                    original_edits.clone(),
-                    *conversation_id,
-                    *request_duration_ms,
-                    trigger.clone(),
-                    server_request_token.clone(),
-                    ctx,
-                );
-            }
-        }
-    }
 
     #[allow(clippy::too_many_arguments)]
     fn on_maa_prompt_suggestion_generated(

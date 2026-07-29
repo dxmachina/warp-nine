@@ -14,7 +14,10 @@ use itertools::Itertools as _;
 use keybindings::KeybindingsView;
 use main_page::{MainPageAction, MainSettingsPageEvent, MainSettingsPageView};
 use mcp_servers_page::MCPServersSettingsPageView;
-use nav::{SettingsNavItem, SettingsUmbrella};
+// LOCAL FORK: `SettingsUmbrella` is unused now that the Agents / Code / Cloud
+// platform umbrellas are gone from the sidebar. The type is kept in `nav.rs`
+// rather than deleted so the diff against upstream stays small.
+use nav::SettingsNavItem;
 use pathfinder_geometry::vector::Vector2F;
 use privacy_page::{PrivacyPageView, PrivacyPageViewEvent};
 use referrals_page::{ReferralsPageEvent, ReferralsPageView};
@@ -245,10 +248,12 @@ pub enum SettingsViewEvent {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum SettingsSection {
     About,
-    #[default]
     Account,
     MCPServers,
     BillingAndUsage,
+    // LOCAL FORK: default landing section is Appearance. Upstream defaults to
+    // Account, which this build no longer exposes in the sidebar.
+    #[default]
     Appearance,
     Features,
     Keybindings,
@@ -1329,37 +1334,18 @@ impl SettingsView {
             SettingsPage::new(about_page_handle),
         ]);
 
-        // Build sidebar nav items. AI page is presented as an "Agents" umbrella
-        // with subpages; the actual AI SettingsPage is hidden from direct sidebar listing.
+        // LOCAL FORK: sidebar lists only terminal-local sections. Removed upstream
+        // entries: Account, the "Agents" umbrella (Warp Agent / Profiles / MCP
+        // servers / Knowledge / Third party CLI agents), Billing and usage, the
+        // "Code" umbrella (Indexing / Editor and Code Review), the "Cloud platform"
+        // umbrella (Environments / Oz Cloud API Keys), Teams, Referrals, Shared
+        // blocks, and Warp Drive. Their backing SettingsPages are still constructed
+        // above but are no longer reachable from the sidebar.
         let mut nav_items = vec![
-            SettingsNavItem::Page(SettingsSection::Account),
-            SettingsNavItem::Umbrella(SettingsUmbrella::new(
-                "Agents",
-                SettingsSection::ai_subpages().to_vec(),
-            )),
-            SettingsNavItem::Page(SettingsSection::BillingAndUsage),
-            SettingsNavItem::Umbrella(SettingsUmbrella::new(
-                "Code",
-                vec![
-                    SettingsSection::CodeIndexing,
-                    SettingsSection::EditorAndCodeReview,
-                ],
-            )),
-            SettingsNavItem::Umbrella(SettingsUmbrella::new(
-                "Cloud platform",
-                vec![
-                    SettingsSection::CloudEnvironments,
-                    SettingsSection::OzCloudAPIKeys,
-                ],
-            )),
-            SettingsNavItem::Page(SettingsSection::Teams),
             SettingsNavItem::Page(SettingsSection::Appearance),
             SettingsNavItem::Page(SettingsSection::Features),
             SettingsNavItem::Page(SettingsSection::Keybindings),
             SettingsNavItem::Page(SettingsSection::Warpify),
-            SettingsNavItem::Page(SettingsSection::Referrals),
-            SettingsNavItem::Page(SettingsSection::SharedBlocks),
-            SettingsNavItem::Page(SettingsSection::WarpDrive),
             SettingsNavItem::Page(SettingsSection::Privacy),
             SettingsNavItem::Page(SettingsSection::About),
         ];
@@ -1382,7 +1368,7 @@ impl SettingsView {
             Some(SettingsSection::AI) => SettingsSection::WarpAgent,
             Some(SettingsSection::Code) => SettingsSection::CodeIndexing,
             Some(SettingsSection::Scripting) if !FeatureFlag::WarpControlCli.is_enabled() => {
-                SettingsSection::Account
+                SettingsSection::Appearance
             }
             Some(section) if section.is_subpage() => section,
             other => other.unwrap_or_default(),

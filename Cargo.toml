@@ -420,14 +420,13 @@ parquet = { version = "55.0.0", features = ["arrow"] }
 rmcp = { version = "1.6" }
 
 [profile.release]
-# Use line-tables-only (debug = 1) rather than full debuginfo (debug = 2 /
-# `true`). Line tables are enough to symbolicate panics and Sentry stack
-# traces with file/line info, but they omit the per-variable/type DWARF that
-# dominates DWARF size. Dropping the type info significantly reduces rustc's
-# peak memory during ThinLTO + codegen (which was OOM-killing release builds
-# on CI), at the cost of not being able to inspect locals/types when
-# attaching a debugger to a release binary.
-debug = 1
+# LOCAL FORK: upstream sets `debug = 1` (line tables) so Sentry can symbolicate
+# crash reports. This fork removes crash reporting entirely, so the line tables
+# are dead weight: they account for ~90MB of `__LINKEDIT` in the shipped binary
+# (measured `strip -x` on the stock arm64 slice: 414MB -> 331MB).
+debug = 0
+# Drop the symbol table at link time rather than relying on a later `strip`.
+strip = "symbols"
 # Force the rust compiler to create a dSYM. Starting in 1.53 the default on MacOS is "unpacked".
 split-debuginfo = "packed"
 

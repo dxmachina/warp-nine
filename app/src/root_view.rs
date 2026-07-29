@@ -1807,7 +1807,6 @@ impl RootView {
         });
         let server_api_provider = ServerApiProvider::as_ref(ctx);
         let server_api = server_api_provider.get();
-        let auth_state = AuthStateProvider::as_ref(ctx).get().clone();
 
         ctx.subscribe_to_model(&AuthManager::handle(ctx), |me, _, event, ctx| {
             me.handle_auth_manager_event(event, ctx);
@@ -1839,46 +1838,14 @@ impl RootView {
             workspace_setting,
         };
 
-        let auth_onboarding_state = if auth_state.is_logged_in() {
-            AuthOnboardingState::Terminal(workspace_args.create_workspace(ctx))
-        } else {
-            cfg_if! {
-                if #[cfg(target_family = "wasm")] {
-                    AuthOnboardingState::WebImport(AuthOnboardingTarget::Workspace(workspace_args.into()))
-                } else {
-                    // Account-first onboarding and the current settings-modes flow both run before
-                    // login for users who have not completed onboarding locally.
-                    let pre_login_onboarding_enabled =
-                        FeatureFlag::AccountFirstOnboarding.is_enabled()
-                            || FeatureFlag::OpenWarpNewSettingsModes.is_enabled();
-                    let has_completed_local_onboarding = pre_login_onboarding_enabled
-                        && has_completed_local_onboarding(ctx);
-                    let should_show_pre_login_onboarding = pre_login_onboarding_enabled
-                        && FeatureFlag::AgentOnboarding.is_enabled()
-                        && !has_completed_local_onboarding;
-                    if FeatureFlag::ForceLogin.is_enabled() {
-                        // ForceLogin is true for Preview
-                        AuthOnboardingState::Auth(workspace_args.into())
-                    } else if should_show_pre_login_onboarding {
-                        let workspace_args_box: Box<WorkspaceArgs> = workspace_args.into();
-                        let onboarding_view = Self::create_agent_onboarding_view(ctx);
-                        onboarding_view.update(ctx, |view, ctx| {
-                            view.start_onboarding(ctx);
-                        });
-                        AuthOnboardingState::Onboarding {
-                            onboarding_view,
-                            target: AuthOnboardingTarget::Workspace(workspace_args_box),
-                        }
-                    } else if FeatureFlag::SkipFirebaseAnonymousUser.is_enabled() {
-                        // When SkipFirebaseAnonymousUser is enabled, skip the login screen
-                        // entirely and go directly into the workspace.
-                        AuthOnboardingState::Terminal(workspace_args.create_workspace(ctx))
-                    } else {
-                        AuthOnboardingState::Auth(workspace_args.into())
-                    }
-                }
-            }
-        };
+        // LOCAL FORK: this build has no accounts and no agent onboarding, so it
+        // always boots straight into the terminal. Upstream branches here between
+        // a login wall (`AuthOnboardingState::Auth`), the agent onboarding flow
+        // (`AuthOnboardingState::Onboarding`), a wasm web-import path, and the
+        // terminal — all gated on `auth_state.is_logged_in()` plus the ForceLogin
+        // / AccountFirstOnboarding / AgentOnboarding feature flags.
+        let auth_onboarding_state =
+            AuthOnboardingState::Terminal(workspace_args.create_workspace(ctx));
 
         let needs_sso_link_view = ctx.add_typed_action_view(|_| NeedsSsoLinkView::new());
 

@@ -181,9 +181,14 @@ function notarize_artifact() {
 }
 
 # Defaults for command-line flags.
-UNIVERSAL_BINARY=true
+#
+# LOCAL FORK: default to an Apple-Silicon-only build. Upstream defaults to a
+# universal binary, which doubles the shipped executable (the stock 840MB
+# `stable` binary is 426MB x86_64 + 414MB arm64). Pass `--universal` to opt
+# back into a fat binary.
+UNIVERSAL_BINARY=false
 BUILD_BINARY=true
-TARGET_ARCH=""
+TARGET_ARCH="aarch64"
 DMG_NAME_SUFFIX=""
 # By default we build dev bundles.
 RELEASE_CHANNEL="dev"
@@ -237,6 +242,14 @@ while (( "$#" )); do
     --nouniversal)
       echo "Only building for default target $DEFAULT_TARGET, not a universal binary."
       UNIVERSAL_BINARY=false
+      shift
+      ;;
+    # LOCAL FORK: opt back into a fat binary. This fork defaults to arm64-only,
+    # so `--universal` is the escape hatch rather than the default.
+    --universal)
+      echo "Building a universal (x86_64 + arm64) binary."
+      UNIVERSAL_BINARY=true
+      TARGET_ARCH=""
       shift
       ;;
     # Build only for a specific architecture (implies --nouniversal)

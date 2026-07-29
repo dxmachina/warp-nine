@@ -6,7 +6,6 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use settings::macros::{define_settings_group, maybe_define_setting, register_settings_events};
 use settings::{RespectUserSyncSetting, Setting, SupportedPlatforms, SyncToCloud};
-use warp_core::features::FeatureFlag;
 use warp_errors::{report_error, report_if_error};
 use warp_graphql::mutations::update_user_settings::UpdateUserSettingsInput;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity, UpdateModel};
@@ -172,9 +171,16 @@ pub struct PrivacySettings {
 /// A snapshot of a user's [`PrivacySettings`] settings at some point in time.
 #[derive(Clone, Copy)]
 pub struct PrivacySettingsSnapshot {
+    // LOCAL FORK: these four are still written by the settings/persistence layer
+    // but never read — the accessors above return hard-coded `false`. Kept as
+    // fields so the surrounding settings plumbing compiles unchanged.
+    #[allow(dead_code)]
     is_telemetry_enabled: bool,
+    #[allow(dead_code)]
     is_crash_reporting_enabled: bool,
+    #[allow(dead_code)]
     is_telemetry_force_enabled: bool,
+    #[allow(dead_code)]
     should_collect_ai_ugc_telemetry: bool,
     // This is an option so that, if a user has not set this value (and it's set to its default value of true),
     // the default value won't override a value that the user previously set on a different device.
@@ -187,27 +193,30 @@ impl PrivacySettingsSnapshot {
         self.cloud_conversation_storage_enabled
     }
 
+    // LOCAL FORK: telemetry, crash reporting, and AI-UGC collection are hard-off
+    // in this build. These accessors deliberately ignore the stored settings and
+    // the AgentModeAnalytics feature flag — upstream lets `is_telemetry_force_enabled`
+    // and that flag override a user's opt-out, which is exactly what this fork
+    // exists to prevent. The backing fields are retained so the settings
+    // model/persistence code still compiles unchanged.
     pub fn is_telemetry_enabled(&self) -> bool {
-        self.is_telemetry_enabled
+        false
     }
 
     pub fn is_crash_reporting_enabled(&self) -> bool {
-        self.is_crash_reporting_enabled
+        false
     }
 
     pub fn is_telemetry_force_enabled(&self) -> bool {
-        self.is_telemetry_force_enabled
+        false
     }
 
     pub fn should_disable_telemetry(&self) -> bool {
-        // If a user has opted in to the agent mode analytics experiment, telemetry must be enabled.
-        !self.is_telemetry_enabled
-            && !self.is_telemetry_force_enabled
-            && !FeatureFlag::AgentModeAnalytics.is_enabled()
+        true
     }
 
     pub fn should_collect_ai_ugc_telemetry(&self) -> bool {
-        self.should_collect_ai_ugc_telemetry
+        false
     }
 
     #[cfg(test)]

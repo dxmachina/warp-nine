@@ -8,7 +8,6 @@ use enclose::enclose;
 use itertools::Itertools;
 use settings::Setting as _;
 use settings::manager::SettingsManager;
-use warp_core::context_flag::ContextFlag;
 use warp_errors::{report_error, report_if_error};
 use warp_util::path::user_friendly_path;
 use warpui::actions::StandardAction;
@@ -70,8 +69,10 @@ pub fn menu_bar(ctx: &mut AppContext) -> MenuBar {
         make_new_view_menu(ctx),
         make_new_tab_menu(ctx),
         make_new_blocks_menu(ctx),
-        make_new_ai_menu(ctx),
-        make_new_drive_menu(ctx),
+        // LOCAL FORK: the "AI" and "Drive" top-level menus are removed. Their
+        // builders (`make_new_ai_menu` / `make_new_drive_menu`) are left in place
+        // for now so the CustomActions they reference stay wired until the agent
+        // and Drive subsystems are deleted outright.
         make_new_window_menu(),
         make_new_help_menu(),
     ])
@@ -514,38 +515,9 @@ fn make_new_tab_menu(ctx: &AppContext) -> Menu {
     Menu::new("Tab", items)
 }
 
-fn make_new_ai_menu(ctx: &AppContext) -> Menu {
-    let mut items = vec![updateable_custom_item_without_checkmark(
-        CustomAction::NewAgentModePane,
-        ctx,
-    )];
-
-    items.push(updateable_custom_item_without_checkmark(
-        CustomAction::AttachSelectionAsAgentModeContext,
-        ctx,
-    ));
-
-    items.extend([
-        MenuItem::Separator,
-        updateable_custom_item_without_checkmark(CustomAction::AISearch, ctx),
-    ]);
-
-    if FeatureFlag::AIRules.is_enabled() {
-        items.extend([
-            MenuItem::Separator,
-            updateable_custom_item_without_checkmark(CustomAction::OpenAIFactCollection, ctx),
-        ]);
-    }
-
-    if FeatureFlag::McpServer.is_enabled() && ContextFlag::ShowMCPServers.is_enabled() {
-        items.push(updateable_custom_item_without_checkmark(
-            CustomAction::OpenMCPServerCollection,
-            ctx,
-        ));
-    }
-
-    Menu::new("AI", items)
-}
+// LOCAL FORK: `make_new_ai_menu` removed. It built the top-level "AI" menu from
+// CustomAction::{NewAgentModePane, AttachSelectionAsAgentModeContext, AISearch,
+// OpenAIFactCollection, OpenMCPServerCollection}.
 
 fn make_new_blocks_menu(ctx: &AppContext) -> Menu {
     let mut items = vec![
@@ -585,49 +557,9 @@ fn make_new_blocks_menu(ctx: &AppContext) -> Menu {
     Menu::new("Blocks", items)
 }
 
-fn make_new_drive_menu(ctx: &AppContext) -> Menu {
-    let mut items = vec![
-        updateable_custom_item_without_checkmark(CustomAction::NewPersonalWorkflow, ctx),
-        updateable_custom_item_without_checkmark(CustomAction::NewPersonalNotebook, ctx),
-        updateable_custom_item_without_checkmark(CustomAction::NewPersonalAIPrompt, ctx),
-    ];
-    items.push(updateable_custom_item_without_checkmark(
-        CustomAction::NewPersonalEnvVars,
-        ctx,
-    ));
-    items.extend([
-        MenuItem::Separator,
-        updateable_custom_item_without_checkmark(CustomAction::NewTeamWorkflow, ctx),
-        updateable_custom_item_without_checkmark(CustomAction::NewTeamNotebook, ctx),
-        updateable_custom_item_without_checkmark(CustomAction::NewTeamAIPrompt, ctx),
-    ]);
-    items.push(updateable_custom_item_without_checkmark(
-        CustomAction::NewTeamEnvVars,
-        ctx,
-    ));
-    items.extend([
-        MenuItem::Separator,
-        updateable_custom_item_without_checkmark(CustomAction::ToggleWarpDrive, ctx),
-        updateable_custom_item_without_checkmark(CustomAction::SearchDrive, ctx),
-        updateable_custom_item_without_checkmark(CustomAction::OpenTeamSettings, ctx),
-        updateable_custom_item_without_checkmark(CustomAction::OpenAIFactCollection, ctx),
-        updateable_custom_item_without_checkmark(CustomAction::OpenMCPServerCollection, ctx),
-    ]);
-
-    items.push(updateable_custom_item_without_checkmark(
-        CustomAction::SharePaneContents,
-        ctx,
-    ));
-
-    if FeatureFlag::CreatingSharedSessions.is_enabled() {
-        items.extend([
-            MenuItem::Separator,
-            updateable_custom_item_without_checkmark(CustomAction::ShareCurrentSession, ctx),
-        ])
-    }
-
-    Menu::new("Drive", items)
-}
+// LOCAL FORK: `make_new_drive_menu` removed. It built the top-level "Drive" menu
+// (personal/team workflows, notebooks, AI prompts, env vars, Warp Drive toggle,
+// team settings, AI fact collection, MCP servers, and session sharing).
 
 /// Returns [`MenuItem`]s that aid debugging to be included in the Block menu.
 fn block_menu_debug_items() -> Vec<MenuItem> {

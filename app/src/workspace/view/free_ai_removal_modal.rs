@@ -19,7 +19,6 @@ use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{AppContext, Element, Entity, SingletonEntity, TypedActionView, View, ViewContext};
 
 use crate::auth::AuthStateProvider;
-use crate::settings_view::SettingsSection;
 use crate::ui_components::blended_colors;
 use crate::workspace::WorkspaceAction;
 use crate::workspaces::user_workspaces::UserWorkspaces;
@@ -320,7 +319,7 @@ impl TypedActionView for FreeAiRemovalModal {
                 // the settings page this opens.
                 ctx.dispatch_typed_action_deferred(WorkspaceAction::ShowSettingsPageWithSearch {
                     search_query: "api".to_string(),
-                    section: Some(SettingsSection::WarpAgent),
+                    section: None,
                 });
                 ctx.emit(FreeAiRemovalModalEvent::Close);
             }

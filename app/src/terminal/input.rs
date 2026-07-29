@@ -5238,9 +5238,8 @@ impl Input {
                     llm_prefs.remove_llm_override(self.terminal_view_id, ctx);
                 });
             }
-            InlineProfileSelectorEvent::ManageProfiles => {
-                ctx.emit(Event::OpenSettings(SettingsSection::AgentProfiles));
-            }
+            // LOCAL FORK: no agent profiles settings page to open.
+            InlineProfileSelectorEvent::ManageProfiles => {}
             InlineProfileSelectorEvent::Dismissed => {
                 if self
                     .suggestions_mode_model

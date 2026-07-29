@@ -1667,7 +1667,6 @@ fn settings_section_for_simple_subpage(subpage: &str) -> Option<SettingsSection>
         "billing_and_usage" => Some(SettingsSection::BillingAndUsage),
         "platform" => Some(SettingsSection::OzCloudAPIKeys),
         "appearance" => Some(SettingsSection::Appearance),
-        "warp_agent" => Some(SettingsSection::WarpAgent),
         _ => None,
     }
 }

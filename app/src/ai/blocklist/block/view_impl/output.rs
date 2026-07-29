@@ -115,7 +115,6 @@ use crate::ai::skills::{
 use crate::appearance::Appearance;
 use crate::code::diff_viewer::DisplayMode;
 use crate::code::editor_management::CodeSource;
-use crate::settings_view::SettingsSection;
 use crate::terminal::ShellLaunchData;
 #[cfg(not(target_family = "wasm"))]
 use crate::terminal::input::slash_commands::fork_button_action;
@@ -1453,7 +1452,7 @@ fn render_search_codebase(
                                             ctx.dispatch_typed_action(
                                                 WorkspaceAction::ShowSettingsPageWithSearch {
                                                     search_query: "Autonomy".to_string(),
-                                                    section: Some(SettingsSection::WarpAgent),
+                                                    section: None,
                                                 },
                                             );
                                         })),

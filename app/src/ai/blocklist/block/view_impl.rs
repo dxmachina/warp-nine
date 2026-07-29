@@ -71,7 +71,6 @@ use crate::ai::blocklist::model::AIBlockModelHelper;
 use crate::appearance::Appearance;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::settings::{AISettings, InputModeSettings, InputSettings};
-use crate::settings_view::SettingsSection;
 use crate::terminal::TerminalView;
 use crate::terminal::block_list_element::BlockListMenuSource;
 use crate::terminal::grid_renderer::URL_COLOR;
@@ -773,7 +772,7 @@ where
                                     ctx.dispatch_typed_action(
                                         WorkspaceAction::ShowSettingsPageWithSearch {
                                             search_query: "Autonomy".to_string(),
-                                            section: Some(SettingsSection::AI),
+                                            section: None,
                                         },
                                     );
                                 })),
@@ -848,7 +847,7 @@ pub fn render_autonomy_checkbox_setting_speedbump_footer(
                                 ctx.dispatch_typed_action(
                                     WorkspaceAction::ShowSettingsPageWithSearch {
                                         search_query: "Autonomy".to_string(),
-                                        section: Some(SettingsSection::WarpAgent),
+                                        section: None,
                                     },
                                 );
                             })),

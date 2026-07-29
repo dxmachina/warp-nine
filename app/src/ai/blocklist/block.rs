@@ -179,7 +179,6 @@ use crate::settings::{
     InputModeSettings, InputModeSettingsChangedEvent, InputSettings,
     OrchestrationMessageDisplayMode,
 };
-use crate::settings_view::SettingsSection;
 use crate::terminal::find::TerminalFindModel;
 use crate::terminal::model::BlockId;
 use crate::terminal::model::secrets::RichContentSecretTooltipInfo;
@@ -4137,7 +4136,7 @@ impl AIBlock {
             AwsBedrockCredentialsErrorEvent::ConfigureLoginCommand => {
                 ctx.dispatch_typed_action(&WorkspaceAction::ShowSettingsPageWithSearch {
                     search_query: "aws bedrock".to_string(),
-                    section: Some(SettingsSection::WarpAgent),
+                    section: None,
                 });
             }
         });
@@ -4177,7 +4176,7 @@ impl AIBlock {
             GeminiEnterpriseCredentialsErrorEvent::OpenSettings => {
                 ctx.dispatch_typed_action(&WorkspaceAction::ShowSettingsPageWithSearch {
                     search_query: "gemini enterprise".to_string(),
-                    section: Some(SettingsSection::WarpAgent),
+                    section: None,
                 });
             }
         });
@@ -6917,7 +6916,7 @@ impl TypedActionView for AIBlock {
             AIBlockAction::ConfigureAwsLoginCommand => {
                 ctx.dispatch_typed_action(&WorkspaceAction::ShowSettingsPageWithSearch {
                     search_query: "aws bedrock".to_string(),
-                    section: Some(SettingsSection::WarpAgent),
+                    section: None,
                 });
             }
             AIBlockAction::ToggleImportedCommentCollapsed {

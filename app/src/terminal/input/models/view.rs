@@ -19,7 +19,6 @@ use crate::ai::llms::{LLMId, LLMPreferences, LLMPreferencesEvent};
 use crate::features::FeatureFlag;
 use crate::search::data_source::{Query, QueryFilter};
 use crate::search::mixer::{SearchMixer, SearchMixerEvent};
-use crate::settings_view::SettingsSection;
 use crate::terminal::input::buffer_model::InputBufferModel;
 use crate::terminal::input::inline_menu::{
     InlineMenuEvent, InlineMenuHeaderConfig, InlineMenuModel, InlineMenuPositioner,
@@ -165,7 +164,7 @@ impl InlineModelSelectorView {
                     .on_click(|ctx| {
                         ctx.dispatch_typed_action(WorkspaceAction::ShowSettingsPageWithSearch {
                             search_query: String::new(),
-                            section: Some(SettingsSection::WarpAgent),
+                            section: None,
                         });
                     })
             });

@@ -6120,7 +6120,7 @@ impl Workspace {
     fn handle_ai_fact_view_event(&mut self, event: &AIFactViewEvent, ctx: &mut ViewContext<Self>) {
         match event {
             AIFactViewEvent::OpenSettings => {
-                self.show_settings_with_section(Some(SettingsSection::WarpAgent), ctx);
+                self.show_settings_with_section(None, ctx);
             }
             #[allow(unused_variables)]
             AIFactViewEvent::OpenFile(location) => {

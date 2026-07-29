@@ -2624,13 +2624,8 @@ impl TypedActionView for AgentInputFooter {
             AgentInputFooterAction::StopRemoteControl => {
                 ctx.emit(AgentInputFooterEvent::StopRemoteControl);
             }
-            AgentInputFooterAction::OpenCodingAgentSettings => {
-                #[cfg(not(target_family = "wasm"))]
-                ctx.dispatch_typed_action_deferred(WorkspaceAction::ScrollToSettingsWidget {
-                    page: SettingsSection::ThirdPartyCLIAgents,
-                    widget_id: crate::settings_view::cli_agent_settings_widget_id(),
-                });
-            }
+            // LOCAL FORK: no third-party CLI agent settings page to scroll to.
+            AgentInputFooterAction::OpenCodingAgentSettings => {}
             AgentInputFooterAction::HandoffChipClicked => {
                 if FeatureFlag::OzHandoff.is_enabled()
                     && FeatureFlag::HandoffLocalCloud.is_enabled()

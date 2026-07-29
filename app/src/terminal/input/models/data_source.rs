@@ -39,7 +39,6 @@ use crate::search::data_source::{Query, QueryFilter, QueryResult};
 use crate::search::mixer::DataSourceRunErrorWrapper;
 use crate::search::result_renderer::ItemHighlightState;
 use crate::search::{SearchItem, SyncDataSource};
-use crate::settings_view::SettingsSection;
 use crate::terminal::input::inline_menu::{
     DetailsRenderConfig, InlineMenuAction, InlineMenuMessageArgs, InlineMenuType,
     default_navigation_message_items, styles as inline_styles,
@@ -644,7 +643,7 @@ impl SearchItem for ModelSearchItem {
                 .on_click(move |ctx, _, _| {
                     ctx.dispatch_typed_action(WorkspaceAction::ShowSettingsPageWithSearch {
                         search_query: search_query.clone(),
-                        section: Some(SettingsSection::WarpAgent),
+                        section: None,
                     });
                 })
                 .finish();
@@ -734,7 +733,7 @@ impl SearchItem for ModelSearchItem {
                     "bring your own key",
                     WorkspaceAction::ShowSettingsPageWithSearch {
                         search_query: "api".to_string(),
-                        section: Some(SettingsSection::WarpAgent),
+                        section: None,
                     },
                 ));
             }

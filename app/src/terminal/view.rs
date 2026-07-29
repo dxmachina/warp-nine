@@ -20345,9 +20345,8 @@ impl TerminalView {
             } => {
                 self.handle_usage_footer_toggled(block.id(), *conversation_id, *is_expanded, ctx);
             }
-            AIBlockEvent::OpenSettings => {
-                ctx.emit(Event::OpenSettings(SettingsSection::WarpAgent));
-            }
+            // LOCAL FORK: no agent settings page to open.
+            AIBlockEvent::OpenSettings => {}
             #[cfg(feature = "local_fs")]
             AIBlockEvent::OpenCodeInWarp { source, layout } => {
                 ctx.emit(Event::OpenCodeInWarp {

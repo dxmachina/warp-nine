@@ -14,7 +14,7 @@ use warpui::elements::new_scrollable::{
 };
 use warpui::elements::{
     Align, Border, ChildAnchor, ChildView, ClippedScrollStateHandle, ConstrainedBox, Container,
-    CornerRadius, CrossAxisAlignment, Element, Empty, Expanded, Flex, Hoverable, MainAxisAlignment,
+    CornerRadius, CrossAxisAlignment, Element, Empty, Expanded, Flex, Hoverable,
     MainAxisSize, MouseStateHandle, NewScrollable, OffsetPositioning, ParentAnchor, ParentElement,
     ParentOffsetBounds, Radius, SavePosition, ScrollTarget, ScrollToPositionMode, Shrinkable,
     SizeConstraintCondition, SizeConstraintSwitch, Stack, Text,
@@ -28,7 +28,6 @@ use warpui::{Action, AppContext, SingletonEntity, ViewContext, ViewHandle};
 
 use super::SettingsSection;
 use super::about_page::AboutPageView;
-use super::ai_page::{AISettingsPageAction, AISettingsPageView};
 use super::appearance_page::AppearanceSettingsPageView;
 use super::billing_and_usage_dispatch::BillingAndUsageDispatchView;
 use super::code_page::CodeSettingsPageView;
@@ -113,7 +112,6 @@ pub enum SettingsPageViewHandle {
     Privacy(ViewHandle<PrivacyPageView>),
     Warpify(ViewHandle<WarpifyPageView>),
     Scripting(ViewHandle<ScriptingSettingsPageView>),
-    AI(ViewHandle<AISettingsPageView>),
     CloudEnvironments(ViewHandle<EnvironmentsPageView>),
     BillingAndUsage(ViewHandle<BillingAndUsageDispatchView>),
     MCPServers(ViewHandle<MCPServersSettingsPageView>),
@@ -136,7 +134,6 @@ impl SettingsPageViewHandle {
             Privacy(view_handle) => ChildView::new(view_handle).finish(),
             Warpify(view_handle) => ChildView::new(view_handle).finish(),
             Scripting(view_handle) => ChildView::new(view_handle).finish(),
-            AI(view_handle) => ChildView::new(view_handle).finish(),
             CloudEnvironments(view_handle) => ChildView::new(view_handle).finish(),
             BillingAndUsage(view_handle) => ChildView::new(view_handle).finish(),
             MCPServers(view_handle) => ChildView::new(view_handle).finish(),
@@ -383,85 +380,6 @@ pub fn render_separator(appearance: &Appearance) -> Box<dyn Element> {
         .finish()
 }
 
-pub fn render_full_pane_width_ai_button(
-    text: &str,
-    is_any_ai_enabled: bool,
-    mouse_state: MouseStateHandle,
-    action: AISettingsPageAction,
-    appearance: &Appearance,
-) -> Box<dyn Element> {
-    let (text_color, bg, icon_bg) = if is_any_ai_enabled {
-        (
-            appearance
-                .theme()
-                .main_text_color(appearance.theme().background())
-                .into(),
-            internal_colors::neutral_3(appearance.theme()),
-            appearance.theme().background(),
-        )
-    } else {
-        (
-            appearance.theme().disabled_ui_text_color().into(),
-            internal_colors::neutral_2(appearance.theme()),
-            appearance.theme().disabled_ui_text_color(),
-        )
-    };
-
-    let mut button = Hoverable::new(mouse_state, |_| {
-        Container::new(
-            Flex::row()
-                .with_main_axis_size(MainAxisSize::Max)
-                .with_cross_axis_alignment(CrossAxisAlignment::Center)
-                .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                .with_child(
-                    Expanded::new(
-                        1.,
-                        appearance
-                            .ui_builder()
-                            .wrappable_text(text.to_string(), true)
-                            .with_style(UiComponentStyles {
-                                font_size: Some(CONTENT_FONT_SIZE),
-                                font_color: Some(text_color),
-                                ..Default::default()
-                            })
-                            .build()
-                            .finish(),
-                    )
-                    .finish(),
-                )
-                .with_child(
-                    ConstrainedBox::new(
-                        Icon::ChevronRight
-                            .to_warpui_icon(appearance.theme().main_text_color(icon_bg))
-                            .finish(),
-                    )
-                    .with_width(16.)
-                    .with_height(16.)
-                    .finish(),
-                )
-                .finish(),
-        )
-        .with_background(bg)
-        .with_border(
-            Border::new(1.).with_border_fill(internal_colors::neutral_4(appearance.theme())),
-        )
-        .with_corner_radius(CornerRadius::with_all(Radius::Pixels(4.)))
-        .with_horizontal_padding(16.)
-        .with_vertical_padding(11.)
-        .with_margin_bottom(12.)
-        .finish()
-    });
-
-    if is_any_ai_enabled {
-        button = button
-            .on_click(move |ctx, _, _| {
-                ctx.dispatch_typed_action(action.clone());
-            })
-            .with_cursor(Cursor::PointingHand);
-    }
-
-    button.finish()
-}
 
 #[derive(Default)]
 pub struct AdditionalInfo<T> {

@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use about_page::AboutPageView;
-use ai_page::{AISettingsPageAction, AISettingsPageEvent, AISettingsPageView, AISubpage};
 use appearance_page::{AppearancePageAction, AppearanceSettingsPageView};
 use billing_and_usage_dispatch::BillingAndUsageDispatchView;
 use billing_and_usage_page::BillingAndUsagePageEvent;
@@ -77,19 +76,15 @@ use crate::{GlobalResourceHandlesProvider, TelemetryEvent};
 mod about_page;
 mod admin_actions;
 mod agent_assisted_environment_modal;
-mod ai_page;
 mod appearance_page;
 mod billing_and_usage;
 mod billing_and_usage_dispatch;
 mod billing_and_usage_page;
 mod billing_and_usage_page_v2;
 mod code_page;
-pub(crate) mod custom_inference_modal;
-mod custom_router_view;
 mod delete_environment_confirmation_dialog;
 mod directory_color_add_picker;
 pub(crate) mod environments_page;
-mod execution_profile_view;
 mod features;
 mod features_page;
 pub(crate) mod handoff_environment_creation_modal;
@@ -103,9 +98,7 @@ mod platform;
 mod platform_page;
 mod privacy;
 mod privacy_page;
-mod remove_custom_endpoint_confirmation_dialog;
 mod scripting_page;
-mod set_default_model_modal;
 mod settings_file_footer;
 pub(crate) mod settings_page;
 mod show_blocks_view;
@@ -118,8 +111,6 @@ mod warp_drive_page;
 mod warpify_page;
 
 #[cfg(not(target_family = "wasm"))]
-pub(crate) use ai_page::cli_agent_settings_widget_id;
-pub(crate) use ai_page::custom_model_routers_widget_id;
 pub use billing_and_usage_page::create_discount_badge;
 pub use code_page::CodeSettingsPageView;
 pub use features_page::FeaturesPageAction;
@@ -261,17 +252,6 @@ pub enum SettingsSection {
     Teams,
     WarpDrive,
     Warpify,
-    /// Internal backing-page identifier for AISettingsPageView. Multiple subpages
-    /// (WarpAgent, AgentProfiles, Knowledge, ThirdPartyCLIAgents) share this single
-    /// backing page, so this variant is needed as the key in `settings_pages`.
-    /// External callers should navigate to a specific subpage (e.g. `WarpAgent`) instead.
-    AI,
-    // ── Agents umbrella subpages ──
-    WarpAgent,
-    AgentProfiles,
-    AgentMCPServers,
-    Knowledge,
-    ThirdPartyCLIAgents,
     /// Internal backing-page identifier for CodeSettingsPageView. Multiple subpages
     /// (CodeIndexing, EditorAndCodeReview) share this single backing page,
     /// so this variant is needed as the key in `settings_pages`.
@@ -298,11 +278,6 @@ impl Display for SettingsSection {
             SettingsSection::MCPServers => write!(f, "MCP Servers"),
             SettingsSection::Scripting => write!(f, "Scripting"),
             SettingsSection::WarpDrive => write!(f, "Warp Drive"),
-            SettingsSection::WarpAgent => write!(f, "Warp Agent"),
-            SettingsSection::AgentProfiles => write!(f, "Profiles"),
-            SettingsSection::AgentMCPServers => write!(f, "MCP servers"),
-            SettingsSection::Knowledge => write!(f, "Knowledge"),
-            SettingsSection::ThirdPartyCLIAgents => write!(f, "Third party CLI agents"),
             SettingsSection::CodeIndexing => write!(f, "Indexing and projects"),
             SettingsSection::EditorAndCodeReview => write!(f, "Editor and Code Review"),
             SettingsSection::CloudEnvironments => write!(f, "Environments"),
@@ -315,19 +290,7 @@ impl Display for SettingsSection {
 impl SettingsSection {
     /// Returns true if this section is a subpage under any umbrella.
     pub fn is_subpage(&self) -> bool {
-        self.is_ai_subpage() || self.is_code_subpage() || self.is_cloud_platform_subpage()
-    }
-
-    /// Returns true if this section is a subpage under the "Agents" umbrella.
-    pub fn is_ai_subpage(&self) -> bool {
-        matches!(
-            self,
-            Self::WarpAgent
-                | Self::AgentProfiles
-                | Self::AgentMCPServers
-                | Self::Knowledge
-                | Self::ThirdPartyCLIAgents
-        )
+        self.is_code_subpage() || self.is_cloud_platform_subpage()
     }
 
     /// Returns true if this section is a subpage under the "Code" umbrella.
@@ -344,27 +307,12 @@ impl SettingsSection {
     /// Non-subpage sections return themselves.
     pub fn parent_page_section(&self) -> Self {
         match self {
-            // AgentMCPServers renders the standalone MCPServers page directly.
-            Self::AgentMCPServers => Self::MCPServers,
-            // All other AI subpages render within the AI page.
-            s if s.is_ai_subpage() => Self::AI,
             // Code subpages render within the Code page.
             s if s.is_code_subpage() => Self::Code,
             // CloudEnvironments and OzCloudAPIKeys ARE their own backing pages
             // (1:1 mapping), so they return themselves.
             other => *other,
         }
-    }
-
-    /// The ordered list of AI subpage sections shown under the Agents umbrella.
-    pub fn ai_subpages() -> &'static [Self] {
-        &[
-            Self::WarpAgent,
-            Self::AgentProfiles,
-            Self::AgentMCPServers,
-            Self::Knowledge,
-            Self::ThirdPartyCLIAgents,
-        ]
     }
 
     /// The ordered list of Code subpage sections shown under the Code umbrella.
@@ -385,7 +333,6 @@ impl FromStr for SettingsSection {
         match s {
             "About" => Ok(Self::About),
             "Account" => Ok(Self::Account),
-            "AI" => Ok(Self::AI),
             "MCP Servers" => Ok(Self::MCPServers),
             "Billing and usage" => Ok(Self::BillingAndUsage),
             "Appearance" => Ok(Self::Appearance),
@@ -399,11 +346,6 @@ impl FromStr for SettingsSection {
             "Warpify" => Ok(Self::Warpify),
             "WarpDrive" | "Warp Drive" => Ok(Self::WarpDrive),
             // This page was called "Oz" at one point, keep for backward compatibility.
-            "Oz" | "Warp Agent" => Ok(Self::WarpAgent),
-            "Profiles" | "AgentProfiles" => Ok(Self::AgentProfiles),
-            "MCP servers" | "AgentMCPServers" => Ok(Self::AgentMCPServers),
-            "Knowledge" => Ok(Self::Knowledge),
-            "Third party CLI agents" | "ThirdPartyCLIAgents" => Ok(Self::ThirdPartyCLIAgents),
             "Indexing and projects" | "CodeIndexing" => Ok(Self::CodeIndexing),
             "Editor and Code Review" | "EditorAndCodeReview" => Ok(Self::EditorAndCodeReview),
             "CloudEnvironments" => Ok(Self::CloudEnvironments),
@@ -425,12 +367,6 @@ pub fn settings_widget_deeplink_target(slug: &str) -> Option<(SettingsSection, &
         "global_hotkey" => Some((
             SettingsSection::Features,
             features_page::global_hotkey_widget_id(),
-        )),
-        "custom_router" => Some((SettingsSection::WarpAgent, custom_model_routers_widget_id())),
-        #[cfg(not(target_family = "wasm"))]
-        "cli_agents" => Some((
-            SettingsSection::ThirdPartyCLIAgents,
-            cli_agent_settings_widget_id(),
         )),
         _ => None,
     }
@@ -645,7 +581,6 @@ pub fn init_actions_from_parent_view<T: Action + Clone>(
     features_page::init_actions_from_parent_view(app, context, builder);
     warpify_page::init_actions_from_parent_view(app, context, builder);
     privacy_page::init_actions_from_parent_view(app, context, builder);
-    ai_page::init_actions_from_parent_view(app, context, builder);
     code_page::init_actions_from_parent_view(app, context, builder);
     warp_drive_page::init_actions_from_parent_view(app, context, builder);
 
@@ -949,7 +884,6 @@ pub enum SettingsAction {
     AppearancePageToggle(AppearancePageAction),
     FeaturesPageToggle(FeaturesPageAction),
     PrivacyPageToggle(PrivacyPageAction),
-    AI(AISettingsPageAction),
     Code(CodeSettingsPageAction),
     WarpDrive(warp_drive_page::WarpDriveSettingsPageAction),
     WarpifyPageToggle(WarpifyPageAction),
@@ -1102,7 +1036,6 @@ macro_rules! update_page {
             SettingsPageViewHandle::OzCloudAPIKeys(handle) => $ctx.update_view(handle, $update),
             SettingsPageViewHandle::Privacy(handle) => $ctx.update_view(handle, $update),
             SettingsPageViewHandle::Scripting(handle) => $ctx.update_view(handle, $update),
-            SettingsPageViewHandle::AI(handle) => $ctx.update_view(handle, $update),
             SettingsPageViewHandle::CloudEnvironments(handle) => $ctx.update_view(handle, $update),
             SettingsPageViewHandle::About(handle) => $ctx.update_view(handle, $update),
             SettingsPageViewHandle::Code(handle) => $ctx.update_view(handle, $update),
@@ -1127,7 +1060,6 @@ pub struct SettingsView {
     /// Sidebar navigation items (pages + umbrellas).
     nav_items: Vec<SettingsNavItem>,
     /// Handle to the AI settings page, used to switch subpage modes.
-    ai_page_handle: ViewHandle<AISettingsPageView>,
     /// Handle to the Code settings page, used to switch subpage modes.
     code_page_handle: ViewHandle<CodeSettingsPageView>,
     /// Per-subpage search match results. Populated during search so that
@@ -1190,11 +1122,6 @@ impl SettingsView {
         let about_page_handle = ctx.add_view(AboutPageView::new);
 
         // AI page
-        let ai_page_handle = ctx.add_typed_action_view(AISettingsPageView::new);
-        let ai_page_handle_for_nav = ai_page_handle.clone();
-        ctx.subscribe_to_view(&ai_page_handle, |me, _, event, ctx| {
-            me.handle_ai_page_event(event, ctx);
-        });
 
         // Environments page
         let environments_page_handle = ctx.add_typed_action_view(EnvironmentsPageView::new);
@@ -1298,7 +1225,6 @@ impl SettingsView {
 
         let mut settings_pages = vec![
             SettingsPage::new(main_page_handle),
-            SettingsPage::new(ai_page_handle),
             billing_and_usage_page,
             SettingsPage::new(code_page_handle),
             SettingsPage::new(teams_page_handle),
@@ -1353,7 +1279,6 @@ impl SettingsView {
 
         // Resolve the initial page: map internal backing-page sections to their default subpage.
         let initial_page = match page {
-            Some(SettingsSection::AI) => SettingsSection::WarpAgent,
             Some(SettingsSection::Code) => SettingsSection::CodeIndexing,
             Some(SettingsSection::Scripting) if !FeatureFlag::WarpControlCli.is_enabled() => {
                 SettingsSection::Appearance
@@ -1388,7 +1313,6 @@ impl SettingsView {
             context_menu_state: Default::default(),
             environments_page_handle,
             nav_items,
-            ai_page_handle: ai_page_handle_for_nav,
             code_page_handle: code_page_handle_for_nav,
             subpage_filter: HashMap::new(),
             settings_file_error: None,
@@ -1464,22 +1388,7 @@ impl SettingsView {
                     // For each AI subpage, temporarily switch to that subpage's
                     // widget set and run the filter to get a subpage-specific result.
                     self.subpage_filter.clear();
-                    for &subpage_section in SettingsSection::ai_subpages() {
-                        if subpage_section == SettingsSection::AgentMCPServers {
-                            // AgentMCPServers has its own backing page; handled below.
-                            continue;
-                        }
-                        if let Some(subpage) = AISubpage::from_section(subpage_section) {
-                            self.ai_page_handle.update(ctx, |view, ctx| {
-                                view.set_active_subpage(Some(subpage), ctx);
-                            });
-                            let match_data = self
-                                .ai_page_handle
-                                .update(ctx, |view, ctx| view.update_filter(&search_query, ctx));
-                            self.subpage_filter.insert(subpage_section, match_data);
-                        }
-                    }
-                    // Do the same for Code subpages.
+                    // Code subpages.
                     for &subpage_section in SettingsSection::code_subpages() {
                         if let Some(subpage) = CodeSubpage::from_section(subpage_section) {
                             self.code_page_handle.update(ctx, |view, ctx| {
@@ -1508,9 +1417,6 @@ impl SettingsView {
                 // Switch AI/Code to all-widgets mode so standalone backing page
                 // filter is correct for pages_filter.
                 if is_search_active {
-                    self.ai_page_handle.update(ctx, |view, ctx| {
-                        view.set_active_subpage(None, ctx);
-                    });
                     self.code_page_handle.update(ctx, |view, ctx| {
                         view.set_active_subpage(None, ctx);
                     });
@@ -1531,15 +1437,6 @@ impl SettingsView {
                 // Restore the active subpage after filtering.
                 if is_search_active {
                     let current = self.current_settings_page;
-                    if current.is_ai_subpage()
-                        && current != SettingsSection::AgentMCPServers
-                        && let Some(subpage) = AISubpage::from_section(current)
-                    {
-                        self.ai_page_handle.update(ctx, |view, ctx| {
-                            view.set_active_subpage(Some(subpage), ctx);
-                            view.update_filter(&search_query, ctx);
-                        });
-                    }
                     if current.is_code_subpage()
                         && let Some(subpage) = CodeSubpage::from_section(current)
                     {
@@ -1904,38 +1801,6 @@ impl SettingsView {
         }
     }
 
-    fn handle_ai_page_event(&mut self, event: &AISettingsPageEvent, ctx: &mut ViewContext<Self>) {
-        match event {
-            AISettingsPageEvent::FocusModal => ctx.focus(&self.search_editor),
-            AISettingsPageEvent::OpenAIFactCollection => {
-                ctx.emit(SettingsViewEvent::OpenAIFactCollection)
-            }
-            AISettingsPageEvent::OpenMCPServerCollection => {
-                ctx.emit(SettingsViewEvent::OpenMCPServerCollection)
-            }
-            #[cfg(feature = "local_fs")]
-            AISettingsPageEvent::OpenCustomRouterEditor(router) => {
-                ctx.emit(SettingsViewEvent::OpenCustomRouterEditor(router.clone()));
-            }
-            #[cfg(feature = "local_fs")]
-            AISettingsPageEvent::OpenCustomRouterFile(path) => {
-                ctx.emit(SettingsViewEvent::OpenCustomRouterFile(path.clone()));
-            }
-            AISettingsPageEvent::OpenExecutionProfileEditor(profile_id) => {
-                ctx.emit(SettingsViewEvent::OpenExecutionProfileEditor(
-                    profile_id.clone(),
-                ));
-            }
-            AISettingsPageEvent::SignupAnonymousUser => {
-                ctx.emit(SettingsViewEvent::SignupAnonymousUser)
-            }
-            AISettingsPageEvent::ShowModal | AISettingsPageEvent::HideModal => {
-                // Modal rendering is handled in get_modal_content_for_page
-                ctx.notify();
-            }
-        }
-    }
-
     fn handle_code_page_event(
         &mut self,
         event: &CodeSettingsPageEvent,
@@ -1991,7 +1856,6 @@ impl SettingsView {
         // Map internal backing-page sections to their default subpage.
         // External callers should use subpage variants directly.
         let section = match section {
-            SettingsSection::AI => SettingsSection::WarpAgent,
             SettingsSection::Code => SettingsSection::CodeIndexing,
             other => other,
         };
@@ -2027,13 +1891,6 @@ impl SettingsView {
         // When navigating to a subpage, update the backing page's active subpage mode
         // and auto-expand the umbrella containing it.
         if section.is_subpage() {
-            // AI subpages: update the AI page's subpage mode.
-            if section.is_ai_subpage() && section != SettingsSection::AgentMCPServers {
-                let subpage = AISubpage::from_section(section);
-                self.ai_page_handle.update(ctx, |view, ctx| {
-                    view.set_active_subpage(subpage, ctx);
-                });
-            }
             // Code subpages: update the Code page's subpage mode.
             if section.is_code_subpage() {
                 let subpage = CodeSubpage::from_section(section);
@@ -2099,7 +1956,6 @@ impl SettingsView {
             SettingsPageViewHandle::Privacy(v) => v.as_ref(app).should_render(app),
             SettingsPageViewHandle::Warpify(v) => v.as_ref(app).should_render(app),
             SettingsPageViewHandle::Scripting(v) => v.as_ref(app).should_render(app),
-            SettingsPageViewHandle::AI(v) => v.as_ref(app).should_render(app),
             SettingsPageViewHandle::CloudEnvironments(v) => v.as_ref(app).should_render(app),
             SettingsPageViewHandle::MCPServers(v) => v.as_ref(app).should_render(app),
             SettingsPageViewHandle::Code(v) => v.as_ref(app).should_render(app),
@@ -2130,8 +1986,7 @@ impl SettingsView {
         autoinstall_gallery_title: Option<&str>,
         ctx: &mut ViewContext<Self>,
     ) {
-        // Navigate to the AgentMCPServers subpage (under the Agents umbrella).
-        self.set_and_refresh_current_page(SettingsSection::AgentMCPServers, ctx);
+        self.set_and_refresh_current_page(SettingsSection::MCPServers, ctx);
         if let Some(mcp_page) = self.settings_page(SettingsSection::MCPServers)
             && let SettingsPageViewHandle::MCPServers(view) = &mcp_page.view_handle
         {
@@ -2211,14 +2066,6 @@ impl SettingsView {
         ctx: &mut ViewContext<Self>,
     ) {
         let current = self.current_settings_page;
-        if current.is_ai_subpage()
-            && current != SettingsSection::AgentMCPServers
-            && AISubpage::from_section(current).is_some()
-        {
-            self.ai_page_handle.update(ctx, |view, ctx| {
-                view.update_filter(query, ctx);
-            });
-        }
         if current.is_code_subpage() && CodeSubpage::from_section(current).is_some() {
             self.code_page_handle.update(ctx, |view, ctx| {
                 view.update_filter(query, ctx);
@@ -2347,9 +2194,6 @@ impl SettingsView {
                 view.read(app, |view, _| view.get_modal_content())
             }
             SettingsPageViewHandle::MCPServers(view) => {
-                view.read(app, |view, _| view.get_modal_content(app))
-            }
-            SettingsPageViewHandle::AI(view) => {
                 view.read(app, |view, _| view.get_modal_content(app))
             }
             _ => None,
@@ -2736,15 +2580,6 @@ impl TypedActionView for SettingsView {
                 {
                     view.update(ctx, |view, ctx| {
                         view.handle_action(privacy_action, ctx);
-                    })
-                }
-            }
-            SettingsAction::AI(ai_action) => {
-                if let Some(ai_page) = self.settings_page(SettingsSection::AI)
-                    && let SettingsPageViewHandle::AI(view) = &ai_page.view_handle
-                {
-                    view.update(ctx, |view, ctx| {
-                        view.handle_action(ai_action, ctx);
                     })
                 }
             }

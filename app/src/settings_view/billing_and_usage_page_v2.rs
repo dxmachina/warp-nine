@@ -27,7 +27,6 @@ use warpui::{
     ViewContext, ViewHandle, WeakViewHandle,
 };
 
-use super::SettingsSection;
 use super::billing_and_usage::billing_cycle_usage_section::BillingCycleUsageSectionView;
 use super::billing_and_usage::overage_limit_modal::{SpendingLimitModal, SpendingLimitModalEvent};
 use super::billing_and_usage::usage_history_entry::UsageHistoryEntry;
@@ -2155,7 +2154,7 @@ impl TypedActionView for BillingAndUsagePageV2View {
             BillingAndUsagePageAction::NavigateToByokSettings => {
                 ctx.dispatch_typed_action_deferred(WorkspaceAction::ShowSettingsPageWithSearch {
                     search_query: "api".to_string(),
-                    section: Some(SettingsSection::WarpAgent),
+                    section: None,
                 });
             }
         }

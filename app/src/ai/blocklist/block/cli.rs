@@ -78,7 +78,6 @@ use crate::editor::InteractionState;
 use crate::menu::{Event as MenuEvent, Menu, MenuItemFields, MenuVariant};
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings::AISettings;
-use crate::settings_view::SettingsSection;
 use crate::terminal::input::SET_INPUT_MODE_TERMINAL_ACTION_NAME;
 use crate::terminal::model::block::BlockId;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
@@ -94,7 +93,6 @@ use crate::view_components::compactible_action_button::{
     CompactibleActionButton, RenderCompactibleActionButton, render_compact_and_regular_button_rows,
 };
 use crate::view_components::compactible_split_action_button::CompactibleSplitActionButton;
-use crate::workspace::WorkspaceAction;
 use crate::{BlocklistAIHistoryModel, ToastStack, send_telemetry_from_ctx};
 const MENU_WIDTH: f32 = 200.0;
 const MAX_HEIGHT: f32 = 320.0;
@@ -1871,11 +1869,8 @@ fn render_permissions_speedbump(
         props.ai_settings_link.clone(),
     )
     .with_hyperlink_font_color(blended_colors::accent_fg_strong(theme).into())
-    .register_default_click_handlers(|_, ctx, _| {
-        ctx.dispatch_typed_action(WorkspaceAction::ShowSettingsPage(
-            SettingsSection::WarpAgent,
-        ));
-    })
+    // LOCAL FORK: no agent settings page to link to.
+    .register_default_click_handlers(|_, _, _| {})
     .finish();
 
     Container::new(

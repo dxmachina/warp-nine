@@ -89,7 +89,6 @@ use crate::code::editor_management::CodeSource;
 use crate::notebooks::editor::{markdown_table_appearance, rich_text_styles};
 use crate::search::slash_command_menu::static_commands::commands;
 use crate::settings::{FontSettings, InputSettings};
-use crate::settings_view::SettingsSection;
 use crate::terminal::find::TerminalFindModel;
 use crate::terminal::grid_renderer::{FOCUSED_MATCH_COLOR, MATCH_COLOR};
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
@@ -3307,7 +3306,7 @@ fn render_invalid_api_key_error(
         .on_click(move |ctx, _, _| {
             ctx.dispatch_typed_action(WorkspaceAction::ShowSettingsPageWithSearch {
                 search_query: "api keys".to_string(),
-                section: Some(SettingsSection::WarpAgent),
+                section: None,
             });
         })
         .finish();

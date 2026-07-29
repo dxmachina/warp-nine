@@ -1,112 +1,132 @@
-<a href="https://www.warp.dev">
-    <img width="1024" alt="Warp Agentic Development Environment product preview" src="https://github.com/user-attachments/assets/9976b2da-2edd-4604-a36c-8fd53719c6d4" />
-</a>
-&nbsp;
-<p align="center">
-  <a href="https://www.warp.dev"><img height="20" alt="Built with Warp" src="https://raw.githubusercontent.com/warpdotdev/brand-assets/main/Github/Built-With-Warp-Export@2x.png" /></a>
-  &nbsp;
-  <a href="https://oz.warp.dev"><img height="20" alt="Powered by Oz" src="https://raw.githubusercontent.com/warpdotdev/brand-assets/main/Github/Powered-By-Oz-Export@2x.png" /></a>
-</p>
+# warp-nine
 
-<p align="center">
-  <a href="https://www.warp.dev">Website</a>
-  ·
-  <a href="https://www.warp.dev/code">Code</a>
-  ·
-  <a href="https://www.warp.dev/agents">Agents</a>
-  ·
-  <a href="https://www.warp.dev/terminal">Terminal</a>
-  ·
-  <a href="https://www.warp.dev/drive">Drive</a>
-  ·
-  <a href="https://docs.warp.dev">Docs</a>
-  ·
-  <a href="https://www.warp.dev/blog/how-warp-works">How Warp Works</a>
-</p>
+A personal fork of [Warp](https://github.com/warpdotdev/warp) that strips out the
+account system, the built-in coding agent, and the cloud backend — leaving the
+terminal.
 
-> [!NOTE]
-> OpenAI is the founding sponsor of the new, open-source Warp repository, and the new agentic management workflows are powered by GPT models.
+Maintained by Sebastian Katz. Not affiliated with or endorsed by Warp Dev, Inc.
 
-<h1></h1>
+## Why
 
-## About
+Warp is a genuinely good terminal wrapped in things I don't want:
 
-[Warp](https://www.warp.dev) is an agentic development environment, born out of the terminal. Use Warp's built-in coding agent, or bring your own CLI agent (Claude Code, Codex, Gemini CLI, and others).
+1. **Forced sign-in.** The stock client gates startup behind a Warp account.
+2. **The agent.** An entire coding-agent product compiled into the terminal.
+3. **Size.** The shipped `Warp.app` is **857 MB**. For a terminal.
 
-## Installation
+That last number turns out to be mostly self-inflicted. Measured against the
+stock `/Applications/Warp.app`:
 
-You can [download Warp](https://www.warp.dev/download) and [read our docs](https://docs.warp.dev/) for platform-specific instructions.
+| Component | Size |
+|---|---|
+| `Contents/MacOS/stable` | 840 MB |
+| — x86_64 slice | 426 MB |
+| — arm64 slice | 414 MB |
+| Frameworks (Sentry) | 32 MB |
+| Helpers (pprof) | 12 MB |
+| Resources | 6.5 MB |
+| PlugIns (DockTile, fat) | 4.4 MB |
 
-## Warp Contributions Overview Dashboard
+Half the binary is an Intel slice that does nothing on Apple Silicon, and
+another 90 MB is a symbol table kept for crash-report symbolication.
 
-Explore [build.warp.dev](https://build.warp.dev) to:
-- Watch thousands of Oz agents triage issues, write specs, implement changes, and review PRs
-- View top contributors and in-flight features
-- Track your own issues with GitHub sign-in
-- Click into active agent sessions in a web-compiled Warp terminal
+## Current state
 
-## Oz for OSS
+**857 MB → 281 MB**, verified running.
 
-Maintaining a popular open-source project? [Apply for Oz credits](https://tally.so/r/LZWxqG) to explore [Oz for OSS](https://github.com/warpdotdev/oz-for-oss).
+| | Stock | This fork |
+|---|---|---|
+| App bundle | 857 MB | **281 MB** |
+| Main binary | 840 MB (fat) | 292 MB (arm64) |
+| `__LINKEDIT` (symbols) | 90 MB | 3.5 MB |
+| Architectures | x86_64 + arm64 | arm64 only |
+| Login wall | yes | no |
+| Telemetry on startup | yes | no |
 
-Oz for OSS is our partner program for bringing the same agentic open-source management workflows used in this repository to select partner repositories. We work directly with maintainers to implement workflows for issue triage, PR review, community management, and contributor coordination in a way that fits each project.
+The remaining 292 MB is `__text` 111 MB + `__const` 148 MB — that's the agent
+and cloud code, and it only shrinks by deleting it. That work is in progress;
+see [`EXCISION_MANIFEST.md`](EXCISION_MANIFEST.md).
 
-## Licensing
+### Done
 
-Warp's UI framework (the `warpui_core` and `warpui` crates) are licensed under the [MIT license](LICENSE-MIT).
+- **Apple-Silicon-only builds.** `script/macos/bundle` defaults to arm64;
+  `--universal` opts back in.
+- **Symbols stripped.** `[profile.release]` uses `debug = 0` + `strip = "symbols"`
+  instead of upstream's `debug = 1`.
+- **No login, no onboarding.** The startup gate in `root_view.rs` branched
+  between a login wall, the agent onboarding flow, and the terminal. It now
+  always boots to the terminal.
+- **No telemetry.** Hard-off in `settings/privacy.rs`. Upstream's
+  `should_disable_telemetry()` could be overridden by a force flag or the
+  `AgentModeAnalytics` experiment; both are ignored here.
+- **Agent UI removed** from the settings sidebar and the menu bar.
 
-The rest of the code in this repository is licensed under the [AGPL v3](LICENSE-AGPL).
+### In progress
 
-## Open Source & Contributing
+Deleting the code itself: `app/src/ai` (261K LOC), `app/src/auth`,
+`app/src/drive`, and the `ai` / `warp_server_auth` / `warp_server_client` /
+`firebase` / `cloud_object_*` / `input_classifier` crates. The last of those
+embeds three ONNX models (~51 MB) via `rust-embed`.
 
-Warp's client codebase is open source and lives in this repository. We welcome community contributions and have designed a lightweight workflow to help new contributors get started. For the full contribution flow, read our [CONTRIBUTING.md](CONTRIBUTING.md) guide.
+## A note on Warp's feature flags
 
-> [!TIP]
-> **Chat with contributors and the Warp team** in the [`#oss-contributors`](https://warpcommunity.slack.com/archives/C0B0LM8N4DB) Slack channel — a good place for ad-hoc questions, design discussion, and pairing with maintainers. New here? [Join the Warp Slack community](https://go.warp.dev/join-preview) first, then jump into `#oss-contributors`.
+Worth recording, because it's counterintuitive and it determines what is
+actually possible here: **Warp's cargo features are runtime flags, not compile
+gates.** `app/src/features.rs` maps them onto `FeatureFlag::set_enabled()`
+booleans, and `agent_mode` appears as a `#[cfg(feature = ...)]` gate exactly
+once in the whole tree.
 
-### Issue to PR
+So turning features off hides UI but compiles every line of it into the binary.
+There is no configuration that makes this smaller. Only deletion does.
 
-Before filing, [search existing issues](https://github.com/warpdotdev/warp/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc) for your bug or feature request. If nothing exists, [file an issue](https://github.com/warpdotdev/warp/issues/new/choose) using our templates. Security vulnerabilities should be reported privately as described in [CONTRIBUTING.md](CONTRIBUTING.md#reporting-security-issues).
+## Building
 
-Once filed, a Warp maintainer reviews the issue and may apply a readiness label: [`ready-to-spec`](https://github.com/warpdotdev/warp/issues?q=is%3Aissue+is%3Aopen+label%3Aready-to-spec) signals the design is open for contributors to spec out, and [`ready-to-implement`](https://github.com/warpdotdev/warp/issues?q=is%3Aissue+is%3Aopen+label%3Aready-to-implement) signals the design is settled and code PRs are welcome. Anyone can pick up a labeled issue — mention **@oss-maintainers** on an issue if you'd like it considered for a readiness label.
-
-### Building the Repo Locally
-
-To build and run Warp from source:
+Requires the pinned toolchain from `rust-toolchain.toml` (1.92.0) — Homebrew's
+Rust will not do, since it ignores the pin.
 
 ```bash
-./script/bootstrap   # platform-specific setup
-./script/run         # build and run Warp
-./script/presubmit   # fmt, clippy, and tests
+rustup toolchain install 1.92.0
+cargo install cargo-bundle --git=https://github.com/burtonageo/cargo-bundle \
+  --rev ae4c76e92c08774bf54ff077b1c52e3d1cd6c16d
+
+export PATH="$HOME/.cargo/bin:$PATH"
+./script/run --release --dont-open
 ```
 
-See [AGENTS.md](AGENTS.md) for the full engineering guide, including coding style, testing, and platform-specific notes.
+Output: `target/release/bundle/osx/WarpOss.app`.
 
-## Joining the Team
+Verify it is single-architecture:
 
-Interested in joining the team? See our [open roles](https://www.warp.dev/careers).
+```bash
+lipo -info target/release/bundle/osx/WarpOss.app/Contents/MacOS/warp-oss
+# Non-fat file: ... is architecture: arm64
+```
 
-## Support and Questions
+`./script/bootstrap` also works but installs a large amount of tooling
+(Docker, gcloud, PowerShell, Sentry CLI) that this fork does not need.
 
-1. See our [docs](https://docs.warp.dev/) for a comprehensive guide to Warp's features.
-2. Join our [Slack Community](https://go.warp.dev/join-preview) to connect with other users and get help from the Warp team — contributors hang out in [`#oss-contributors`](https://warpcommunity.slack.com/archives/C0B0LM8N4DB).
-3. Try our [Preview build](https://www.warp.dev/download-preview) to test the latest experimental features.
-4. Mention **@oss-maintainers** on any issue to escalate to the team — for example, if you encounter problems with the automated agents.
+macOS only. The Linux and Windows build paths are untouched but unexercised.
 
-## Code of Conduct
+## Tracking upstream
 
-We ask everyone to be respectful and empathetic. Warp follows the [Code of Conduct](CODE_OF_CONDUCT.md). To report violations, email warp-coc at warp.dev.
+```
+origin    https://github.com/dxmachina/warp-nine.git
+upstream  https://github.com/warpdotdev/warp.git
+```
 
-## Open Source Dependencies
+`master` mirrors upstream; the fork lives on `local/slim-arm64-no-cloud`.
 
-We'd like to call out a few of the [open source dependencies](https://docs.warp.dev/help/licenses) that have helped Warp to get off the ground:
+```bash
+git fetch upstream && git rebase upstream/master
+```
 
-- [Tokio](https://github.com/tokio-rs/tokio)
-- [NuShell](https://github.com/nushell/nushell)
-- [Fig Completion Specs](https://github.com/withfig/autocomplete)
-- [Warp Server Framework](https://github.com/seanmonstar/warp)
-- [Alacritty](https://github.com/alacritty/alacritty)
-- [Hyper HTTP library](https://github.com/hyperium/hyper)
-- [FontKit](https://github.com/servo/font-kit)
-- [Core-foundation](https://github.com/servo/core-foundation-rs)
-- [Smol](https://github.com/smol-rs/smol)
+Expect this to get harder as deletion proceeds — that is the trade being made
+deliberately, in exchange for a binary that doesn't contain a coding agent.
+
+## License
+
+Unchanged from upstream: [AGPL v3](LICENSE-AGPL), except the `warpui` and
+`warpui_core` crates, which are [MIT](LICENSE-MIT).
+
+For upstream's own documentation, see
+[warpdotdev/warp](https://github.com/warpdotdev/warp).

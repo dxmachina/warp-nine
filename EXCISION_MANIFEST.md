@@ -150,6 +150,29 @@ The balance is compiler-generated static data across 1.6M LOC of
 generic-heavy UI code — it shrinks roughly in proportion to deleted code
 rather than in one cut.
 
+### Decision: keep the completion specs (2026-07-29)
+
+The 488 Fig specs stay, all of them. They cost ~25-30 MB of uncompressed JSON
+in `__const` (`rust-embed` is configured without a compression feature), which
+is ~10% of the current binary and will be a much larger share of a smaller one.
+Kept anyway: the completion dropdown is the main reason to run Warp over a
+plain terminal, and this fork exists to remove the agent, not the terminal.
+
+Do not re-open this without a reason. If it ever needs revisiting, the levers
+are:
+
+- `embed-signatures` is a feature, not a hard dep — upstream already builds
+  without it for wasm (`app/Cargo.toml`, the `cfg(target_family = "wasm")`
+  dependency block). Dropping it is a supported configuration.
+- Trimming to a subset means vendoring `warp-command-signatures` into
+  `crates/` (it is a git dependency) and pruning its `json/` folder. The size
+  is a long tail — the largest single spec is `mongocli.json` at 1.2 MB, and
+  488 files average ~60 KB — so a useful trim means picking tools, not
+  deleting a few hogs.
+- `classic_completions` and `force_classic_completions` are in the default
+  feature set; `completions_v2` (which uses the local
+  `crates/command-signatures-v2`) is not.
+
 ## Excision order (dependents before dependencies)
 
 1. Leaf UI: settings pages, menus, command palette, onboarding slides.

@@ -1,7 +1,7 @@
 use std::future::Future;
 use std::time::Duration;
 
-use ai::agent::action_result::{RecordingStopped, StopRecordingResult};
+use ai::agent::action_result::StopRecordingResult;
 use futures::channel::oneshot;
 use warpui::r#async::Timer;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
@@ -12,9 +12,7 @@ use super::recording_controller::{
     StopRecordingControllerError,
 };
 use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::agent_sdk::artifact_upload::{FileArtifactUploadRequest, FileArtifactUploader};
 use crate::ai::blocklist::BlocklistAIHistoryModel;
-use crate::server::server_api::ServerApiProvider;
 
 const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -64,7 +62,6 @@ async fn finalize_recording(
     recording: ActiveRecording,
     reason: FinalizeReason,
     should_upload: bool,
-    uploader: FileArtifactUploader,
     server_conversation_token: Option<crate::ai::agent::api::ServerConversationToken>,
 ) -> StopRecordingResult {
     // A no-upload finalization discards the recording without publishing: it
@@ -136,18 +133,10 @@ async fn finalize_recording(
         }
     };
 
-    let request = FileArtifactUploadRequest {
-        path: upload_path,
-        run_id: None,
-        conversation_id: server_conversation_token,
-        title: recording.summary.clone(),
-        description: recording.description.clone(),
-    };
-    let upload_result = async {
-        let association = uploader.resolve_upload_association(&request).await?;
-        uploader.upload_with_association(request, association).await
-    }
-    .await;
+    // LOCAL FORK: uploading the finalized recording went through agent_sdk's
+    // FileArtifactUploader, which is gone. The local files are still cleaned up
+    // below — that cleanup was already unconditional on upload outcome.
+    let _ = (&upload_path, &server_conversation_token, &duration);
     // Local files are ephemeral regardless of upload outcome. Retrying failed
     // uploads or retaining their files requires a separate persistence policy.
     let _ = std::fs::remove_file(&local_path);
@@ -156,18 +145,10 @@ async fn finalize_recording(
         let _ = std::fs::remove_file(overlay_path);
     }
 
-    match upload_result {
-        Ok(upload) => StopRecordingResult::Success(RecordingStopped {
-            artifact_uid: upload.artifact.artifact_uid,
-            duration,
-            width_px: output.width as i32,
-            height_px: output.height as i32,
-            size_bytes: upload.size_bytes,
-            completion_status: output.completion_status,
-            termination_reason: reason.termination_reason(output.completion_status),
-        }),
-        Err(error) => StopRecordingResult::Error(format_upload_error(&error)),
-    }
+    let _ = (&output, &reason);
+    StopRecordingResult::Error(format_upload_error(&anyhow::anyhow!(
+        "artifact upload is not supported in this build"
+    )))
 }
 
 /// Captures the upload association and clients while the app models are still
@@ -185,10 +166,6 @@ fn build_finalize_future(
         .conversation(&recording.conversation_id)
         .and_then(|conversation| conversation.server_conversation_token())
         .cloned();
-    let uploader = FileArtifactUploader::new(
-        ServerApiProvider::as_ref(ctx).get_ai_client(),
-        ServerApiProvider::as_ref(ctx).get(),
-    );
     let id = recording.id.clone();
     (
         id,
@@ -196,7 +173,6 @@ fn build_finalize_future(
             recording,
             reason,
             should_upload,
-            uploader,
             server_conversation_token,
         ),
     )

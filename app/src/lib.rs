@@ -3005,11 +3005,10 @@ fn launch(ctx: &mut warpui::AppContext, app_state: Option<AppState>, launch_mode
                 if #[cfg(target_family = "wasm")] {
                     panic!("Cannot execute CLI command {command:?} on the web");
                 } else {
-                    if let Err(err) = crate::ai::agent_sdk::run(ctx, command.clone(), global_options.clone()) {
-                        eprintln!("{err:#}");
-                        report_error!(err);
-                        std::process::exit(1);
-                    }
+                    // LOCAL FORK: the `agent_sdk::run` CLI dispatcher is gone.
+                    let _ = (ctx, &global_options);
+                    eprintln!("CLI command {command:?} is not supported in this build");
+                    std::process::exit(1);
                 }
             }
         }

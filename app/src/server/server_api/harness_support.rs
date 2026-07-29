@@ -9,12 +9,10 @@ use async_trait::async_trait;
 use mockall::automock;
 
 use super::ServerApi;
-#[cfg(feature = "local_fs")]
-pub use super::presigned_upload::FileUploadBody;
 pub use super::presigned_upload::UploadBody;
 use crate::ai::agent::conversation::AIConversationId;
 #[cfg(not(target_family = "wasm"))]
-use crate::ai::agent_sdk::retry::with_bounded_retry;
+use crate::server::retry_strategies::with_bounded_retry;
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::artifacts::Artifact;
 

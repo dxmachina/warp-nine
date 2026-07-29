@@ -15,7 +15,6 @@ use warpui::{
 };
 
 #[cfg(not(target_family = "wasm"))]
-use super::local_harness_launch::{PreparedLocalHarnessLaunch, prepare_local_harness_child_launch};
 use super::{
     DetachType, PaneConfiguration, PaneContent, PaneId, PaneStackEvent, PaneView, ShareableLink,
     ShareableLinkError, TerminalPaneId,
@@ -48,8 +47,6 @@ use crate::pane_group::child_agent::{
 };
 use crate::pane_group::{self, Direction, PaneGroup};
 use crate::persistence::{BlockCompleted, ModelEvent};
-#[cfg(not(target_family = "wasm"))]
-use crate::server::server_api::ServerApiProvider;
 use crate::session_management::SessionNavigationData;
 use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::general_settings::GeneralSettings;
@@ -1489,7 +1486,7 @@ fn handle_terminal_view_event(
 fn dispatch_start_agent_conversation(
     group: &mut PaneGroup,
     parent_pane_id: PaneId,
-    terminal_pane_id: TerminalPaneId,
+    _terminal_pane_id: TerminalPaneId,
     request: StartAgentRequest,
     ctx: &mut ViewContext<PaneGroup>,
 ) {
@@ -1501,18 +1498,26 @@ fn dispatch_start_agent_conversation(
         } => {
             launch_local_no_harness_child(group, parent_pane_id, request, model_id, ctx);
         }
+        // LOCAL FORK: third-party CLI harnesses (Claude Code, Codex, Gemini) ran
+        // through `launch_local_harness_child`, which drove them via ai/agent_sdk.
+        // That subsystem is gone, so this path reports an error the same way the
+        // wasm build already does for local children.
         #[cfg(not(target_family = "wasm"))]
         StartAgentExecutionMode::Local {
-            harness_type: Some(harness_type),
-            model_id,
+            harness_type: Some(_),
+            ..
         } => {
-            launch_local_harness_child(
+            let _ = create_error_child_agent_conversation(
                 group,
-                parent_pane_id,
-                terminal_pane_id,
-                request,
-                harness_type,
-                model_id,
+                ErrorChildAgentConversationRequest {
+                    parent_pane_id,
+                    name: request.name,
+                    parent_conversation_id: request.parent_conversation_id,
+                    request_id: Some(request.id),
+                    orchestration_harness: None,
+                    error_message: "Third-party CLI harnesses are not supported in this build."
+                        .to_string(),
+                },
                 ctx,
             );
         }
@@ -1706,153 +1711,6 @@ fn launch_local_no_harness_child(
     });
 }
 
-/// Asynchronously prepares a local harness launch, then creates the
-/// hidden child pane and executes the launch command.
-#[cfg(not(target_family = "wasm"))]
-#[allow(clippy::too_many_arguments)]
-fn launch_local_harness_child(
-    group: &mut PaneGroup,
-    parent_pane_id: PaneId,
-    terminal_pane_id: TerminalPaneId,
-    request: StartAgentRequest,
-    harness_type: String,
-    model_id: Option<String>,
-    ctx: &mut ViewContext<PaneGroup>,
-) {
-    let startup_directory = group.startup_path_for_new_session(Some(terminal_pane_id), ctx);
-    let ai_client = ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client();
-    let request_id = request.id;
-    let agent_name = normalize_orchestrator_agent_name(&request.name);
-    let request_name = agent_name.clone().unwrap_or_default();
-    let parent_conversation_id = request.parent_conversation_id;
-    let parent_run_id = request.parent_run_id.clone();
-    let prompt = request.prompt.clone();
-    let orchestration_harness =
-        Harness::parse_orchestration_harness(&harness_type).unwrap_or(Harness::Unknown);
-    let shell_type = group
-        .terminal_view_from_pane_id(parent_pane_id, ctx)
-        .and_then(|terminal_view| terminal_view.as_ref(ctx).active_session_shell_type(ctx));
-
-    // Snapshot the host's shared-session source before the spawn so we can
-    // cascade it onto the prepared child task.
-    let host_source = group
-        .terminal_view_from_pane_id(parent_pane_id, ctx)
-        .and_then(|view| host_terminal_shared_session_source_type(&view, ctx));
-
-    let model_id_for_harness_env = model_id.clone();
-    let agent_name_for_task = agent_name.clone();
-    let _ = ctx.spawn(
-        async move {
-            prepare_local_harness_child_launch(
-                prompt,
-                harness_type,
-                model_id_for_harness_env,
-                parent_run_id,
-                agent_name_for_task,
-                shell_type,
-                startup_directory,
-                ai_client,
-            )
-            .await
-        },
-        move |group, result, ctx| match result {
-            Ok(launch) => {
-                let PreparedLocalHarnessLaunch {
-                    command,
-                    env_vars,
-                    run_id,
-                    task_id,
-                } = launch;
-                let is_shared_session_creator =
-                    inherit_share_for_local_child(host_source.as_ref(), task_id);
-                match create_hidden_child_agent_conversation(
-                    group,
-                    HiddenChildAgentConversationRequest {
-                        parent_pane_id,
-                        name: request_name.clone(),
-                        parent_conversation_id,
-                        orchestration_harness: Some(orchestration_harness),
-                        env_vars,
-                        task_context: None,
-                        is_shared_session_creator,
-                    },
-                    ctx,
-                ) {
-                    Some(HiddenChildAgentConversation {
-                        terminal_view: new_terminal_view,
-                        terminal_view_id,
-                        conversation_id,
-                        ..
-                    }) => {
-                        apply_child_agent_model_override(
-                            terminal_view_id,
-                            model_id.as_deref(),
-                            ctx,
-                        );
-
-                        BlocklistAIHistoryModel::handle(ctx).update(ctx, |model, ctx| {
-                            model.record_new_conversation_request_complete(
-                                request_id,
-                                conversation_id,
-                                ctx,
-                            );
-                        });
-
-                        BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
-                            history_model.assign_run_id_for_conversation(
-                                conversation_id,
-                                run_id,
-                                Some(task_id),
-                                terminal_view_id,
-                                ctx,
-                            );
-                        });
-
-                        new_terminal_view.update(ctx, |terminal_view, ctx| {
-                            terminal_view.execute_command_or_set_pending(&command, ctx);
-                            terminal_view.enter_agent_view(
-                                None,
-                                Some(conversation_id),
-                                AgentViewEntryOrigin::ChildAgent,
-                                ctx,
-                            );
-                        });
-                    }
-                    _ => {
-                        let _ = create_error_child_agent_conversation(
-                            group,
-                            ErrorChildAgentConversationRequest {
-                                parent_pane_id,
-                                name: request_name,
-                                parent_conversation_id,
-                                request_id: Some(request_id),
-                                orchestration_harness: Some(orchestration_harness),
-                                error_message:
-                                    "Failed to create a hidden pane for the local child harness."
-                                        .to_string(),
-                            },
-                            ctx,
-                        );
-                    }
-                }
-            }
-            Err(error_message) => {
-                let _ = create_error_child_agent_conversation(
-                    group,
-                    ErrorChildAgentConversationRequest {
-                        parent_pane_id,
-                        name: request_name,
-                        parent_conversation_id,
-                        request_id: Some(request_id),
-                        orchestration_harness: Some(orchestration_harness),
-                        error_message,
-                    },
-                    ctx,
-                );
-            }
-        },
-    );
-}
 
 /// Sets up a hidden ambient-agent pane for a Remote child agent: creates the
 /// child conversation, marks it as remote, resolves runtime skills (silently

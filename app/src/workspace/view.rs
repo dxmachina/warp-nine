@@ -178,7 +178,6 @@ use crate::ai::agent_management::notifications::view::{
 use crate::ai::agent_management::telemetry::AgentManagementTelemetryEvent;
 use crate::ai::agent_management::view::{AgentManagementView, AgentManagementViewEvent};
 #[cfg(not(target_family = "wasm"))]
-use crate::ai::agent_sdk::driver::harness::{claude_transcript, codex_transcript};
 use crate::ai::ambient_agents::AmbientAgentTaskId;
 use crate::ai::ambient_agents::telemetry::{CloudAgentTelemetryEvent, CloudModeEntryPoint};
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
@@ -12544,9 +12543,9 @@ impl Workspace {
                 .as_ref(ctx)
                 .active_session_view(ctx)
             {
-                Some(terminal_view) => {
-                    TerminalView::initialize_docker_sandbox_environment(&terminal_view, ctx);
-                }
+                // LOCAL FORK: the agent's environment-setup pipeline is gone; the
+                // sandbox tab itself is created normally above.
+                Some(_terminal_view) => {}
                 _ => {
                     log::warn!(
                         "Could not find docker sandbox terminal view after creating new tab"
@@ -13418,25 +13417,14 @@ impl Workspace {
 
                 let file = std::fs::File::open(&transcript_path)
                     .context("Failed to open downloaded run transcript")?;
-                match harness {
-                    AIAgentHarness::ClaudeCode => {
-                        let launch =
-                            claude_transcript::rehydrate_claude_transcript_from_reader(file)?;
-                        Ok(ThirdPartyLocalContinuationLaunch {
-                            command: launch.command,
-                        })
-                    }
-                    AIAgentHarness::Codex => {
-                        let launch =
-                            codex_transcript::rehydrate_codex_transcript_from_reader(file)?;
-                        Ok(ThirdPartyLocalContinuationLaunch {
-                            command: launch.command,
-                        })
-                    }
-                    _ => anyhow::bail!(
-                        "Local continuation is not supported for this harness"
-                    ),
-                }
+                // LOCAL FORK: rehydrating a Claude Code / Codex transcript into a
+                // resumable local command required agent_sdk's transcript parsers,
+                // which are gone. Every harness now takes the unsupported path.
+                let _ = file;
+                let _ = harness;
+                Err::<ThirdPartyLocalContinuationLaunch, anyhow::Error>(anyhow::anyhow!(
+                    "Local continuation is not supported in this build"
+                ))
             },
             move |workspace, result, ctx| {
                 let launch = match result {

@@ -23,7 +23,6 @@ use crate::ai::AIRequestUsageModel;
 use crate::ai::agent::conversation::{AIConversationId, ConversationStatus};
 use crate::ai::agent::{RenderableAIError, display_user_query_with_mode};
 #[cfg(not(target_family = "wasm"))]
-use crate::ai::agent_sdk::driver::harness::auth_check_command_for;
 use crate::ai::ambient_agents::telemetry::{CloudAgentTelemetryEvent, CloudModeEntryPoint};
 use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
@@ -636,15 +635,8 @@ impl TerminalView {
         // command instead so it stays in the existing setup-commands
         // group. The driver's harness impls are the single source of
         // truth for what an auth check command looks like.
-        #[cfg(not(target_family = "wasm"))]
-        {
-            let command_trimmed = command.trim();
-            if let Some(auth_cmd) = auth_check_command_for(selected_harness)
-                && auth_cmd.trim() == command_trimmed
-            {
-                return false;
-            }
-        }
+        // LOCAL FORK: `auth_check_command_for` lived in the agent driver, which is
+        // gone, so harness auth-check commands are no longer recognised here.
         match selected_harness {
             Harness::Oz => false,
             Harness::Claude => matches!(cli_agent, CLIAgent::Claude),

@@ -17,7 +17,6 @@ use crate::terminal::model::session::active_session::ActiveSession;
 use crate::{
     ai::{
         agent::{AIAgentAction, AIAgentActionResultType, AIAgentActionType, UploadArtifactResult},
-        agent_sdk::artifact_upload::{FileArtifactUploadRequest, FileArtifactUploader},
         blocklist::{BlocklistAIHistoryModel, BlocklistAIPermissions},
         paths::host_native_absolute_path,
     },
@@ -136,29 +135,20 @@ impl UploadArtifactExecutor {
             let server_api = ServerApiProvider::as_ref(ctx).get();
             let description = request.description.clone();
 
+            // LOCAL FORK: artifact upload ran through agent_sdk's
+            // FileArtifactUploader, which is gone. The action now always fails.
             ActionExecution::new_async(
                 async move {
-                    let uploader = FileArtifactUploader::new(ai_client, server_api);
-                    let request = FileArtifactUploadRequest {
-                        path: resolved_path,
-                        run_id: None,
-                        conversation_id: Some(server_conversation_token),
-                        title: None,
-                        description,
-                    };
-                    let association = uploader.resolve_upload_association(&request).await?;
-                    uploader.upload_with_association(request, association).await
+                    let _ = (ai_client, server_api, resolved_path, server_conversation_token,
+                             description);
+                    Err::<(), anyhow::Error>(anyhow::anyhow!(
+                        "artifact upload is not supported in this build"
+                    ))
                 },
                 |result, _ctx| match result {
-                    Ok(upload) => {
-                        AIAgentActionResultType::UploadArtifact(UploadArtifactResult::Success {
-                            artifact_uid: upload.artifact.artifact_uid,
-                            filepath: Some(upload.artifact.filepath),
-                            mime_type: upload.artifact.mime_type,
-                            description: upload.artifact.description,
-                            size_bytes: upload.size_bytes,
-                        })
-                    }
+                    Ok(()) => AIAgentActionResultType::UploadArtifact(
+                        UploadArtifactResult::Error("unreachable".to_string()),
+                    ),
                     Err(err) => AIAgentActionResultType::UploadArtifact(
                         UploadArtifactResult::Error(format_upload_artifact_error(&err)),
                     ),

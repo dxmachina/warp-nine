@@ -17,7 +17,6 @@ pub mod auth_secret_types;
 #[cfg(not(target_family = "wasm"))]
 pub mod aws_credentials;
 #[cfg(not(target_family = "wasm"))]
-pub(crate) mod bedrock_credentials;
 pub(crate) mod block_context;
 pub(crate) mod blocklist;
 #[cfg(any(feature = "local_fs", not(target_family = "wasm")))]
@@ -58,7 +57,6 @@ pub use agent_tips::*;
 pub use request_usage_model::*;
 use warpui::AppContext;
 #[cfg(not(target_family = "wasm"))]
-pub mod agent_sdk;
 pub mod cloud_agent_config;
 pub mod cloud_agent_settings;
 pub mod cloud_environments;

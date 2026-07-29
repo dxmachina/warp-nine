@@ -1,7 +1,6 @@
 //! This module is meant to house the app's reusable Views
 
 pub mod action_button;
-mod agent_toast;
 pub mod alert;
 pub mod callout_bubble;
 mod clickable_text_input;
@@ -18,7 +17,6 @@ mod markdown_toggle_view;
 mod submittable_text_input;
 mod warning_box;
 
-pub use agent_toast::*;
 pub use alert::Alert;
 pub use clickable_text_input::*;
 pub use compact_dropdown::{CompactDropdown, CompactDropdownEvent, CompactDropdownItem};

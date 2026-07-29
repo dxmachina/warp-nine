@@ -7,7 +7,7 @@ use ai::skills::{
     ParsedSkill, SkillPathOrigin, SkillProvider, SkillReference, SkillScope, provider_rank,
 };
 pub use file_watchers::{
-    SkillWatcher, SkillWatcherEvent, extract_skill_parent_directory, read_skills_from_directories,
+    SkillWatcher, SkillWatcherEvent, extract_skill_parent_directory,
 };
 use warp_core::features::FeatureFlag;
 use warp_util::host_id::HostId;

@@ -154,24 +154,12 @@ impl AuthState {
             return state;
         }
 
-        // Try reading from secure storage.
-        match PersistedUser::from_secure_storage(ctx) {
-            Ok(persisted) => {
-                if persisted.auth_tokens.refresh_token.is_empty() {
-                    log::warn!(
-                        "Found persisted user with empty refresh token; clearing secure storage entry"
-                    );
-                    let _ = PersistedUser::remove_from_secure_storage(ctx).map_err(|err| {
-                        log::warn!("Unable to clear invalid user from secure storage: {err:?}");
-                    });
-                } else {
-                    state.apply_persisted_user(persisted);
-                }
-            }
-            Err(err) => {
-                log::info!("Unable to read user from secure storage: {err:?}");
-            }
-        }
+        // LOCAL FORK: no secure-storage read. This build has no accounts, so there
+        // is never a persisted user to restore. Beyond being dead work, the read
+        // touched the macOS Keychain, which makes the OS raise a "wants to access
+        // your keychain" prompt on every freshly-signed build — blocking startup
+        // until someone clicks it, which is a real problem over SSH/remote.
+        let _ = ctx;
 
         state
     }

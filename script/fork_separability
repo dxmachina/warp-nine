@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Report how separable a module is before deleting it.
+
+LOCAL FORK tool. Grepping a module's *name* understates its coupling in this
+codebase, which caused four bad deletions on this branch. The reliable signals
+are:
+
+  1. `impl ForeignType` blocks — a module can hang methods off a type it does
+     not own (e.g. `impl TerminalView`). Callers then use bare method names that
+     never mention the module. This is what broke the use_agent_footer and
+     load_ai_conversation attempts.
+  2. Exported item names used elsewhere — callers import a type and then refer
+     to it by name only.
+  3. Non-agent files inside the module — Warp bundles agent and non-agent UI
+     together (docker_sandbox held the user-facing sandbox pane; use_agent_footer
+     holds warpify_footer).
+
+Usage:  script/fork_separability app/src/terminal/view/some_module
+        script/fork_separability app/src/some_file.rs
+"""
+
+import os
+import re
+import subprocess
+import sys
+
+NON_AGENT_HINTS = ("warpify", "docker", "tui", "shell", "block_list", "blockgrid")
+
+
+def rust_files(target):
+    if os.path.isfile(target):
+        return [target]
+    out = []
+    for root, _dirs, files in os.walk(target):
+        out += [os.path.join(root, f) for f in files if f.endswith(".rs")]
+    return out
+
+
+def grep(pattern, regex=False):
+    cmd = ["grep", "-rn", "-E" if regex else "-F", pattern, "app/src", "crates", "--include=*.rs"]
+    return subprocess.run(cmd, capture_output=True, text=True).stdout.splitlines()
+
+
+def main():
+    if len(sys.argv) != 2:
+        print(__doc__)
+        return 2
+    target = sys.argv[1].rstrip("/")
+    files = rust_files(target)
+    if not files:
+        print(f"no .rs files under {target}")
+        return 1
+
+    loc = 0
+    impls, exports = set(), set()
+    for f in files:
+        src = open(f).read()
+        loc += src.count("\n")
+        # `impl Foo`, `impl Foo for Bar`, `impl<T> Foo` — capture the type methods land on
+        for m in re.finditer(r"^impl(?:<[^>]*>)?\s+([A-Za-z_][A-Za-z0-9_]*)", src, re.M):
+            impls.add(m.group(1))
+        for m in re.finditer(
+            r"^\s*pub(?:\([a-z():]+\))?\s+"
+            r"(?:fn|struct|enum|trait|type|const|static)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            src, re.M,
+        ):
+            exports.add(m.group(1))
+
+    print(f"{target}\n  {loc} LOC across {len(files)} file(s)\n")
+
+    # Types this module hangs methods off but does not define itself.
+    foreign = sorted(t for t in impls if t not in exports)
+    if foreign:
+        print("  FOREIGN impl BLOCKS (callers use bare method names — grep by module name misses these):")
+        for t in foreign:
+            print(f"    impl {t}")
+        print()
+
+    # External references to exported names.
+    ext_by_name = {}
+    for name in sorted(exports):
+        if len(name) < 4:
+            continue  # too short to grep meaningfully
+        hits = [
+            l for l in grep(name)
+            if not any(l.split(":")[0] == f or l.split(":")[0].startswith(target + "/") for f in files)
+            and "_tests.rs" not in l.split(":")[0]
+        ]
+        if hits:
+            ext_by_name[name] = len({h.split(":")[0] for h in hits})
+    if ext_by_name:
+        top = sorted(ext_by_name.items(), key=lambda kv: -kv[1])[:12]
+        print("  EXPORTED NAMES REFERENCED OUTSIDE (name -> files):")
+        for n, c in top:
+            print(f"    {c:4d}  {n}")
+        print(f"    ({len(ext_by_name)} exported names referenced externally in total)\n")
+
+    # Files whose names suggest they are not agent code.
+    mixed = [f for f in files if any(h in os.path.basename(f).lower() for h in NON_AGENT_HINTS)]
+    if mixed:
+        print("  POSSIBLY NON-AGENT FILES IN THIS MODULE (read before deleting):")
+        for f in mixed:
+            print(f"    {f}")
+        print()
+
+    risk = bool(foreign) or len(ext_by_name) > 6 or bool(mixed)
+    print("  VERDICT:", "NOT cleanly separable — expect a wide cascade" if risk
+          else "looks separable — small external surface, no foreign impls")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

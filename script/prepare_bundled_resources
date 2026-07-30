@@ -163,6 +163,13 @@ if [ "${SKIP_SETTINGS_SCHEMA:-}" != "1" ]; then
   else
     echo "Generating settings schema at $SCHEMA_OUTPUT"
 
+    # `generate_settings_schema` is a bin target of the `warp` package. Fall
+    # back to the workspace root if that manifest ever moves.
+    SCHEMA_MANIFEST="$REPO_ROOT/app/Cargo.toml"
+    if [ ! -f "$SCHEMA_MANIFEST" ]; then
+      SCHEMA_MANIFEST="$REPO_ROOT/Cargo.toml"
+    fi
+
     SCHEMA_CMD=(cargo run)
     if [ -n "$CARGO_PROFILE" ]; then
       SCHEMA_CMD+=(--profile "$CARGO_PROFILE")
@@ -177,12 +184,21 @@ if [ "${SKIP_SETTINGS_SCHEMA:-}" != "1" ]; then
     # app's feature set, so it produces a second ~600 MB libwarp plus its own
     # copy of every dependency whose feature unification shifted. Between them
     # that duplicated tree reached 5.6 GB on this fork, all to build a 2 MB
-    # helper. Matching both makes the schema share the app's unit graph, so
-    # this step links rather than compiles.
+    # helper.
     #
-    # Matching features is also more correct: the schema then describes the
-    # settings of the build actually being bundled, not of a default build
-    # nobody ships.
+    # Matching features is also more correct on its own: the schema then
+    # describes the settings of the build actually being bundled, rather than
+    # of a default build nobody ships.
+    #
+    # The manifest path matters for the same reason. Pointing it at the virtual
+    # workspace root puts every default-member in the resolver's context, and
+    # under resolver v2 that unifies features differently than building from
+    # inside `app`, which is what `cargo bundle` does. Identical features,
+    # profile, target and rustflags still produced a distinct libwarp because 9
+    # of 252 workspace path-deps (ai, mcp, warp_terminal, onboarding,
+    # warp_server_client and friends) resolved to different feature sets.
+    # Naming app/Cargo.toml directly makes both invocations agree, so this step
+    # links against the app's artifacts rather than rebuilding them.
     #
     # --target is safe here only because we build for the host arch (see the
     # arm64 default in script/macos/bundle). A genuine cross-compile would need
@@ -193,7 +209,7 @@ if [ "${SKIP_SETTINGS_SCHEMA:-}" != "1" ]; then
     if [ -n "$CARGO_FEATURES" ]; then
       SCHEMA_CMD+=(--features "$CARGO_FEATURES")
     fi
-    SCHEMA_CMD+=(--manifest-path "$REPO_ROOT/Cargo.toml" --bin generate_settings_schema --)
+    SCHEMA_CMD+=(--manifest-path "$SCHEMA_MANIFEST" --bin generate_settings_schema --)
     if [ -n "$CHANNEL" ]; then
       SCHEMA_CMD+=(--channel "$CHANNEL")
     fi

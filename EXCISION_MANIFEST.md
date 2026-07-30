@@ -51,6 +51,63 @@ so no configuration makes the binary smaller, only deletion does." The first hal
 is true. The conclusion is false: build-profile and asset-embedding changes did
 most of the work.
 
+## Correction (2026-07-30, second pass): `ai/blocklist` is agent code
+
+An earlier note in this file held that `app/src/ai/blocklist` was the terminal's
+block list, that it and `terminal/` imported each other, and that the block list
+therefore had to be extracted before `app/src/ai` could be deleted. That was the
+stated reason the excision had "no small first step." It is wrong.
+
+- `terminal/` owns its block list outright: `terminal/model/block.rs`,
+  `model/blocks.rs`, `model/blockgrid.rs`, `block_list_element.rs`,
+  `block_list_viewport.rs`, `blockgrid_element.rs`, `blockgrid_renderer.rs`.
+- `ai/blocklist` is the **agent conversation** list. Its `mod.rs` is 133 lines of
+  nothing but `pub mod` / `pub use`, and every exported name is an agent type:
+  `AIActionStatus`, `RunAgentsExecutor`, `BlocklistAIController`,
+  `BlocklistAIPermissions`, `QueuedQueryModel`, `inherit_child_agent_settings`.
+- `BlocklistAIHistoryModel`, despite being reached from `terminal/`, holds
+  `HashMap<AIConversationId, AIConversation>` keyed by terminal surface. It is
+  agent state hanging off a terminal surface, not terminal state.
+- `blocklist/persistence.rs:587` carries an upstream `TODO(roland)` noting that
+  `SerializedBlockListItem` now has a single `Command` variant because the
+  serialized AI block is already gone.
+
+So there is no extraction step. `app/src/ai` comes out wholesale.
+
+### Sizing the repair, not the deletion
+
+The 220K LOC figure measures what gets deleted, which is the easy part (one
+`rm`). The work is the references left behind:
+
+| | |
+|---|---|
+| `app/src/ai` | 219,959 LOC, 441 files (54,990 LOC in 123 `*_tests.rs`) |
+| Agent crates | `ai` 30,744, `computer_use` 11,834, `mcp` 2,691, `input_classifier` 2,034 |
+| **Reference lines outside `app/src/ai`** | **1,169 across 322 files** |
+
+Concentration of those 1,169: `terminal/` 535, `workspace/` 121, `pane_group/`
+105, `server/` 62, `settings_view/` 45, `search/` 23, `drive/` 15,
+`code_review/` 14. Compare the 912-errors-across-268-files measurement below;
+the two agree in magnitude.
+
+### Warp Drive is not separable the way the agent is
+
+Deleting `app/src/drive` looked attractive because Warp Drive needs the sign-in
+this fork removed, so the feature is already dead. The code is not. `drive/`
+hosts the object model *and* the editing UI for objects this fork keeps:
+
+- `app/src/workflows` uses `drive::workflows::workflow_arg_selector`,
+  `workflow_arg_type_helpers`, `arguments::ArgumentsState`,
+  `enum_creation_dialog::WorkflowEnumData`, `items::WarpDriveWorkflow`.
+- `app/src/env_vars` uses `drive::items::env_var_collection`, `drive::sharing`,
+  `drive::export::ExportManager`.
+
+Workflows and environment variables are kept features. So Drive needs the
+carve-out that the agent turned out not to need: lift the workflow and env-var
+item models and their argument UI into `workflows/` and `env_vars/` first, then
+delete the cloud sync and sharing layers around them. Do it after the agent, as
+its own pass, and do not bundle the two.
+
 ## On `script/fork_separability`
 
 The tool's foreign-`impl` signal is sound and caught real traps. Its

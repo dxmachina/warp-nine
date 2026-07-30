@@ -19,7 +19,7 @@ use super::{
     FontSettings, FontSettingsChangedEvent, GPUSettings, InputBoxType, InputModeSettings,
     InputSettings, LocalControlSettings, PaneSettings, SameLinePromptBlockSettings, ScrollSettings,
     SelectionSettings, SharedObjectLimitBannerSettings, SshSettings, ThemeSettings,
-    TuiAutoupdateSettings, TuiThemeSettings, TuiZeroStateSettings, VimBannerSettings,
+    VimBannerSettings,
     WarpDrivePrivacySettings,
 };
 use crate::appearance;
@@ -78,9 +78,6 @@ pub fn register_all_settings(ctx: &mut AppContext) {
     SelectionSettings::register(ctx);
     InputModeSettings::register(ctx);
     ThemeSettings::register(ctx);
-    TuiAutoupdateSettings::register(ctx);
-    TuiThemeSettings::register(ctx);
-    TuiZeroStateSettings::register(ctx);
     AccessibilitySettings::register(ctx);
     NativePreferenceSettings::register(ctx);
     CloudPreferencesSettings::register(ctx);

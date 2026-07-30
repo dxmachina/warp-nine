@@ -257,45 +257,14 @@ fn to_arborium_name(lang: &str) -> &str {
 }
 
 /// Get the bundled highlight query from arborium for a given language.
-fn get_arborium_highlight_query(lang: &str) -> Option<&str> {
-    match lang {
-        "rust" => Some(arborium::lang_rust::HIGHLIGHTS_QUERY),
-        "golang" => Some(arborium::lang_go::HIGHLIGHTS_QUERY),
-        "yaml" => Some(arborium::lang_yaml::HIGHLIGHTS_QUERY),
-        "python" => Some(arborium::lang_python::HIGHLIGHTS_QUERY),
-        "javascript" => Some(arborium::lang_javascript::HIGHLIGHTS_QUERY),
-        "jsx" => Some(arborium::lang_javascript::HIGHLIGHTS_QUERY),
-        "typescript" => Some(&arborium::lang_typescript::HIGHLIGHTS_QUERY),
-        "tsx" => Some(&arborium::lang_tsx::HIGHLIGHTS_QUERY),
-        "java" => Some(arborium::lang_java::HIGHLIGHTS_QUERY),
-        "cpp" => Some(&arborium::lang_cpp::HIGHLIGHTS_QUERY),
-        "shell" => Some(arborium::lang_bash::HIGHLIGHTS_QUERY),
-        "csharp" => Some(arborium::lang_c_sharp::HIGHLIGHTS_QUERY),
-        "html" => Some(arborium::lang_html::HIGHLIGHTS_QUERY),
-        "css" => Some(arborium::lang_css::HIGHLIGHTS_QUERY),
-        "c" => Some(arborium::lang_c::HIGHLIGHTS_QUERY),
-        "json" => Some(arborium::lang_json::HIGHLIGHTS_QUERY),
-        "jq" => Some(arborium::lang_jq::HIGHLIGHTS_QUERY),
-        "hcl" => Some(arborium::lang_hcl::HIGHLIGHTS_QUERY),
-        "lua" => Some(arborium::lang_lua::HIGHLIGHTS_QUERY),
-        "nix" => Some(arborium::lang_nix::HIGHLIGHTS_QUERY),
-        "ruby" => Some(arborium::lang_ruby::HIGHLIGHTS_QUERY),
-        "php" => Some(arborium::lang_php::HIGHLIGHTS_QUERY),
-        "toml" => Some(arborium::lang_toml::HIGHLIGHTS_QUERY),
-        "swift" => Some(arborium::lang_swift::HIGHLIGHTS_QUERY),
-        "kotlin" => Some(arborium::lang_kotlin::HIGHLIGHTS_QUERY),
-        "scala" => Some(arborium::lang_scala::HIGHLIGHTS_QUERY),
-        "powershell" => Some(arborium::lang_powershell::HIGHLIGHTS_QUERY),
-        "elixir" => Some(arborium::lang_elixir::HIGHLIGHTS_QUERY),
-        "sql" => Some(arborium::lang_sql::HIGHLIGHTS_QUERY),
-        "starlark" => Some(arborium::lang_starlark::HIGHLIGHTS_QUERY),
-        "objective-c" => Some(&arborium::lang_objc::HIGHLIGHTS_QUERY),
-        "xml" => Some(arborium::lang_xml::HIGHLIGHTS_QUERY),
-        "vue" => Some(&arborium::lang_vue::HIGHLIGHTS_QUERY),
-        "dockerfile" => Some(arborium::lang_dockerfile::HIGHLIGHTS_QUERY),
-        "markdown" => Some(arborium::lang_markdown::HIGHLIGHTS_QUERY),
-        _ => None,
-    }
+///
+/// LOCAL FORK: always `None`. Upstream matched 34 languages onto
+/// `arborium::lang_*::HIGHLIGHTS_QUERY` constants; those grammars are no longer
+/// compiled in (see the `arborium` dependency in the workspace Cargo.toml), so
+/// the match arms would not resolve. Returning `None` makes `load_language`
+/// bail the same way it already did for any unsupported language.
+fn get_arborium_highlight_query(_lang: &str) -> Option<&str> {
+    None
 }
 
 fn load_language(lang: &str) -> Option<Language> {

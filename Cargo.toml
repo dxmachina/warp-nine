@@ -299,42 +299,23 @@ tracing-subscriber = { version = "0.3.22", default-features = false, features = 
   "registry",
   "std",
 ] }
-arborium = { version = "2", default-features = false, features = [
-  "lang-rust",
-  "lang-go",
-  "lang-yaml",
-  "lang-python",
-  "lang-javascript",
-  "lang-typescript",
-  "lang-tsx",
-  "lang-java",
-  "lang-cpp",
-  "lang-bash",
-  "lang-c-sharp",
-  "lang-html",
-  "lang-css",
-  "lang-c",
-  "lang-json",
-  "lang-jq",
-  "lang-hcl",
-  "lang-lua",
-  "lang-nix",
-  "lang-ruby",
-  "lang-php",
-  "lang-toml",
-  "lang-swift",
-  "lang-kotlin",
-  "lang-scala",
-  "lang-powershell",
-  "lang-elixir",
-  "lang-sql",
-  "lang-starlark",
-  "lang-objc",
-  "lang-xml",
-  "lang-vue",
-  "lang-dockerfile",
-  "lang-markdown",
-] }
+# LOCAL FORK: no tree-sitter grammars.
+#
+# Upstream enables 34 `lang-*` features here, which compile to ~40MB of static
+# parse tables in the binary (`sql` alone is 9.3MB, then kotlin/cpp/objc/scala at
+# ~5MB each). Nothing in the terminal used them: the input line's syntax coloring
+# lives in `terminal/input/decorations.rs` and uses the completer's own shell
+# tokenizer, not tree-sitter. The only consumers were Warp's code editor
+# (`app/src/code`) and the agent's codebase indexer, and this fork is a terminal.
+#
+# The base crate is still needed — `syntax_tree` uses its `tree_sitter`
+# re-export, which is not feature-gated. With no `lang-*` features,
+# `arborium::get_language()` returns None for every language, so `load_language`
+# in `crates/languages` yields None and the editor renders text unhighlighted
+# rather than failing. Language *detection* by filename is a plain table in
+# `crates/languages` and is unaffected, so file-type icons and the "open in Warp"
+# banner keep working.
+arborium = { version = "2", default-features = false }
 unicode-general-category = "1.1.0"
 unicode-linebreak = "0.1.5"
 unicode-segmentation = "1.11.0"

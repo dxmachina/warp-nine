@@ -931,7 +931,6 @@ struct VerticalTabsSummaryPrimaryLabel {
     text: String,
     /// Some when the contributing pane is a conversation with a known status. Drives the
     /// per-line status pill prefix in Summary mode.
-    status: Option<ConversationStatus>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -1014,7 +1013,6 @@ fn push_normalized_unique_summary_label(
     values: &mut Vec<VerticalTabsSummaryPrimaryLabel>,
     seen: &mut HashMap<String, ()>,
     text: &str,
-    status: Option<ConversationStatus>,
 ) {
     let Some(normalized) = normalize_summary_text(text) else {
         return;
@@ -6510,7 +6508,6 @@ fn render_detail_badge(
 }
 
 fn render_detail_status_pill(
-    status: &ConversationStatus,
     appearance: &Appearance,
 ) -> Box<dyn Element> {
     let theme = appearance.theme();

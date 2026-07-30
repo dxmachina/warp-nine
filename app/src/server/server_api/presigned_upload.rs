@@ -402,7 +402,6 @@ fn encode_crc32c_base64(crc32c: u32) -> String {
 #[cfg(feature = "local_fs")]
 pub(crate) async fn upload_file_to_target(
     http_client: &http_client::Client,
-    target: &FileArtifactUploadTargetInfo,
     body: impl UploadBody,
 ) -> Result<String> {
     let normalized = NormalizedUploadTarget::from(target);

@@ -41,7 +41,6 @@ pub enum ShareableObject {
         started_at: DateTime<Local>,
     },
     /// An AI conversation.
-    AIConversation(AIConversationId),
 }
 
 impl ShareableObject {

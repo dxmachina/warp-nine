@@ -1517,7 +1517,6 @@ pub enum NewWorkspaceSource {
     },
     Restored {
         window_snapshot: WindowSnapshot,
-        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlockListItem>>>,
     },
     Session {
         options: Box<NewTerminalOptions>,
@@ -1526,7 +1525,6 @@ pub enum NewWorkspaceSource {
         session_id: SessionId,
     },
     FromCloudConversationId {
-        conversation_id: ServerConversationToken,
     },
     NotebookFromFilePath {
         file_path: Option<PathBuf>,

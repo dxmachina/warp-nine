@@ -884,7 +884,6 @@ pub struct PromptSuggestion {
     pub prompt: String,
 
     /// If this is some, we eagerly pre-fetch the Agent Mode response for this query.
-    pub coding_query_context: Option<Vec<FileLocations>>,
 
     /// If this is a static prompt suggestion, we store the name of the suggestion type here.
     pub static_prompt_suggestion_name: Option<String>,
@@ -998,7 +997,6 @@ struct InlineBannersState {
 
     vim_banner_state: Option<VimModeBannerState>,
 
-    codebase_index_speedbump_banner: Option<CodebaseIndexSpeedbumpBannerState>,
 
     agent_setup_speedbump_banner: Option<AgentModeSetupSpeedbumpBannerState>,
 
@@ -1288,34 +1286,24 @@ pub enum ContextMenuAction {
     AskAI(AskAISource),
     OpenWorkflowModal,
     CopyAIDebuggingLink {
-        conversation_token: ServerConversationToken,
-        request_id: Option<ServerOutputId>,
     },
     CopyExternalDebuggingId {
-        request_id: Option<ServerOutputId>,
-        conversation_id: ServerConversationToken,
     },
     CopyConversationId {
-        conversation_id: ServerConversationToken,
     },
     CopyServerRequestId {
-        request_id: ServerConversationToken,
     },
     // Copy the share link for a conversation in the blocklist.
     CopyConversationShareLink {
-        conversation_id: AIConversationId,
     },
     // Copy the text of a conversation in the blocklist.
     CopyConversationText {
-        conversation_id: AIConversationId,
     },
     // Fork a conversation in the blocklist into a new pane.
     ForkAIConversation {
-        conversation_id: AIConversationId,
     },
     /// Opens the sharing dialog for a conversation from the AI block context menu
     OpenConversationShareDialog {
-        conversation_id: AIConversationId,
     },
     OpenShareSessionModal,
     StopSharing,
@@ -1345,14 +1333,10 @@ pub enum ContextMenuAction {
     /// Forks at the query boundary (includes all exchanges up to the next user query).
     ForkAIConversationFromBlock {
         ai_block_view_id: EntityId,
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
     },
     /// Fork the AI conversation from the exact exchange that was clicked on.
     ForkAIConversationFromExactExchange {
         ai_block_view_id: EntityId,
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
     },
     /// Save the AI block prompt as an agent mode workflow (saved prompt)
     SavePromptAsAgentModeWorkflow {
@@ -1529,7 +1513,6 @@ impl IndicatorPositionArg {
 
 #[derive(Clone)]
 pub struct ExecuteAIRequestedCommandEvent {
-    pub requested_command_id: AIAgentActionId,
     pub command: String,
     pub shell_type: ShellType,
 }
@@ -1587,7 +1570,6 @@ pub enum Event {
     },
     Pane(PaneEvent),
     OpenSettings(SettingsSection),
-    AskAIAssistant(AskAIType),
     /// Event propagates terminal inputs up to the workspace,
     /// to be processed on the way back down through the view hierarchy.
     SyncInput(SyncEvent),
@@ -1603,18 +1585,14 @@ pub enum Event {
     OpenWorkflowModalWithTemporary(Box<Workflow>),
     OpenWarpDriveObjectInPane(ObjectUid),
     OpenSuggestedAgentModeWorkflowModal {
-        workflow_and_id: SuggestedAgentModeWorkflowAndId,
     },
     OpenSuggestedRuleDialog {
-        rule_and_id: SuggestedRuleAndId,
     },
     OpenAIFactCollection {
         /// If set, open the fact collection to the specific rule.
         sync_id: Option<SyncId>,
     },
     ToggleAIDocumentPane {
-        document_id: AIDocumentId,
-        document_version: AIDocumentVersion,
     },
     /// Closes all visible AI document panes without opening a new one.
     HideAIDocumentPanes,
@@ -1622,8 +1600,6 @@ pub enum Event {
     /// When `is_auto_open` is true, subject to conditions to check if auto opening is acceptable.
     /// When `is_auto_open` is false (user-triggered), always opens unconditionally.
     OpenAIDocumentPane {
-        document_id: AIDocumentId,
-        document_version: AIDocumentVersion,
         is_auto_open: bool,
     },
     OpenPromptEditor,
@@ -1647,7 +1623,6 @@ pub enum Event {
     },
     WriteAgentInputToPty {
         bytes: Cow<'static, [u8]>,
-        mode: AIAgentPtyWriteMode,
     },
     Resize {
         size_update: SizeUpdate,
@@ -1672,7 +1647,6 @@ pub enum Event {
         source: CodeSource,
     },
     OpenCodeDiff {
-        view: ViewHandle<CodeDiffView>,
     },
     OpenCodeReviewPane(CodeReviewPanelArg),
     ToggleCodeReviewPane(CodeReviewPanelArg),
@@ -1848,7 +1822,6 @@ pub enum Event {
     OpenThemeChooser,
     OpenConversationHistory,
     OpenMCPSettingsPage {
-        page: Option<MCPServersSettingsPage>,
     },
     OpenAddRulePane,
     OpenRulesPane,
@@ -1884,13 +1857,11 @@ pub enum Event {
     },
     SlowBootstrap,
     OpenAgentProfileEditor {
-        profile_id: ExecutionProfileId,
     },
     OpenAutoReloadModal {
         purchased_credits: i32,
     },
     #[cfg(not(target_family = "wasm"))]
-    OpenPluginInstructionsPane(CLIAgent, PluginModalKind),
     ShowToast {
         message: String,
         flavor: ToastFlavor,
@@ -1916,16 +1887,13 @@ pub enum Event {
     /// [`BlocklistAIHistoryModel::record_new_conversation_request_complete`]
     /// so the executor can disambiguate per-request pendings when multiple
     /// StartAgent requests are in flight in parallel.
-    StartAgentConversation(StartAgentRequest),
     /// Emitted when the user clicks a child agent row in the status card to reveal
     /// its hidden pane.
     RevealChildAgent {
-        conversation_id: AIConversationId,
     },
     /// Emitted when the user clicks a pill in the orchestration pill bar.
     /// The pane group swaps visibility instead of cloning the conversation.
     SwapPaneToConversation {
-        conversation_id: AIConversationId,
     },
     /// Emitted by `OrchestrationViewerModel` when a child of a shared-session
     /// orchestration first reports a `session_id`. The pane group materializes
@@ -1934,26 +1902,21 @@ pub enum Event {
     /// joining the child's session. Subsequent pill clicks navigate to the
     /// hidden pane via the existing `SwapPaneToConversation` mechanism.
     EnsureSharedSessionViewerChildPane {
-        conversation_id: AIConversationId,
         session_id: session_sharing_protocol::common::SessionId,
     },
     /// Emitted when "Open in new tab" is picked from a child pill's 3-dot menu.
     /// Bubbles up to the workspace to create the new tab.
     OpenChildAgentInNewTab {
-        conversation_id: AIConversationId,
     },
     /// Emitted when "Open in new pane" is picked from a child pill's 3-dot menu.
     /// Reuses the existing dedicated child pane to preserve in-flight state.
     OpenChildAgentInNewPane {
-        conversation_id: AIConversationId,
     },
     /// Emitted when "Stop agent" is picked from a child pill's 3-dot menu.
     StopAgentConversation {
-        conversation_id: AIConversationId,
     },
     /// Emitted when "Kill agent" is picked from a child pill's 3-dot menu.
     KillAgentConversation {
-        conversation_id: AIConversationId,
     },
     /// Emitted when this pane's [`ambient_agent::AmbientAgentViewModel`] is lazily
     /// created — e.g. a raw `shared_session` link-join viewer that only discovers the
@@ -2109,10 +2072,8 @@ pub struct BlocklistAIRenderContext {
 
     /// The ID of the selected Agent Mode conversation, if any.
     ///
-    selected_conversation_id: Option<AIConversationId>,
 
     /// The IDs of exchanges in the selected conversation.
-    exchange_ids: Option<HashSet<AIAgentExchangeId>>,
 
     /// `true` if we should highlight pending and active context in this conversation.
     pub should_highlight_context: bool,
@@ -2294,7 +2255,6 @@ pub struct TerminalViewStateChange {
 struct CtrlCActiveBlockState {
     is_long_running: bool,
     is_agent_in_control_of_command: bool,
-    conversation_id_to_stop: Option<AIConversationId>,
 }
 
 impl Default for TerminalViewStateChange {
@@ -2445,7 +2405,6 @@ pub struct TerminalView {
     /// agent view's blocks have mounted. Set when entering the agent view from the
     /// terminal (where the target block doesn't exist yet on the current frame) and
     /// consumed in `after_terminal_view_layout`, after layout has mounted it.
-    pending_agent_scroll_target: Option<AIAgentExchangeId>,
 
     find_link_tx: Sender<FindLinkArg>,
 
@@ -2585,8 +2544,6 @@ pub struct TerminalView {
     pending_user_query_view_id: Option<EntityId>,
     pending_user_query_kind: Option<PendingUserQueryKind>,
     queued_prompt_callback: Option<ConversationFinishedCallback>,
-    last_observed_conversation_status: HashMap<AIConversationId, ConversationStatus>,
-    last_observed_active_subagent: HashMap<AIConversationId, bool>,
 
     /// Cached view ids for usage footers keyed by the AI block view id that owns them.
     usage_footer_view_ids: HashMap<EntityId, EntityId>,
@@ -2608,11 +2565,6 @@ pub struct TerminalView {
     show_snackbar: bool,
     hover_near_snackbar_area: bool,
 
-    ai_controller: ModelHandle<BlocklistAIController>,
-    ai_action_model: ModelHandle<BlocklistAIActionModel>,
-    ai_input_model: ModelHandle<BlocklistAIInputModel>,
-    ai_context_model: ModelHandle<BlocklistAIContextModel>,
-    get_relevant_files_controller: ModelHandle<GetRelevantFilesController>,
 
     pending_env_var_collection: Option<CloudEnvVarCollection>,
 
@@ -2701,7 +2653,6 @@ pub struct TerminalView {
 
     is_todo_popup_visible: bool,
 
-    agent_todos_popup: ViewHandle<AgentTodosPopupView>,
 
     /// Per-repo git status model for the current repository, if any.
     git_repo_status: Option<ModelHandle<GitRepoStatusModel>>,
@@ -2731,22 +2682,15 @@ pub struct TerminalView {
     // we want to keep the title as the conversation title, so we should ignore the model event setting the title after bootstrapping finishes
     ignore_next_set_title_event: bool,
 
-    cli_subagent_views: HashMap<BlockId, ViewHandle<CLISubagentView>>,
-    cli_subagent_controller: ModelHandle<CLISubagentController>,
-    use_agent_footer: ViewHandle<UseAgentToolbar>,
 
-    agent_view_controller: ModelHandle<AgentViewController>,
     agent_view_back_button: ViewHandle<ActionButton>,
     /// Pill bar shown above the agent view header listing the orchestrator and
     /// child agents. Always constructed; render-time guards control whether it draws anything.
-    orchestration_pill_bar: ViewHandle<OrchestrationPillBar>,
     /// `true` when this view hosts a child agent split off into its own
     /// pane/tab. Drives breadcrumb-vs-pill-bar rendering in the pane header.
     is_orchestration_split_off: bool,
     is_using_conversation_for_pane_header_title: bool,
 
-    ambient_agent_view_model: Option<ModelHandle<ambient_agent::AmbientAgentViewModel>>,
-    pending_cloud_followup_task_id: Option<AmbientAgentTaskId>,
 
     /// Conversation details panel (side panel showing conversation/task metadata).
     /// Available for cloud Oz runs and for any active local AI conversation.
@@ -2770,7 +2714,6 @@ pub struct TerminalView {
     ambient_agent_cancel_mouse_state: warpui::elements::MouseStateHandle,
 
     /// First-time cloud agent setup view (full-screen overlay for creating initial environment).
-    first_time_cloud_agent_setup_view: ViewHandle<ambient_agent::FirstTimeCloudAgentSetupView>,
 
     /// Environment setup mode selector modal for /create-environment command.
     environment_setup_mode_selector: ViewHandle<EnvironmentSetupModeSelector>,
@@ -2803,7 +2746,6 @@ pub struct TerminalView {
     /// (tab close, update relaunch, etc.) are not attributed to agent commands.
     manual_pty_shutdown_requested: bool,
 
-    ephemeral_message_model: ModelHandle<EphemeralMessageModel>,
 
     /// Per-session PTY recorder for writing PTY bytes to a file.
     pty_recorder: ModelHandle<PtyRecorder>,
@@ -3012,8 +2954,6 @@ impl TerminalView {
         colors: List,
         model_event_sender: Option<SyncSender<persistence::ModelEvent>>,
         current_prompt: ModelHandle<PromptType>,
-        initial_input_config: Option<InputConfig>,
-        conversation_restoration: Option<ConversationRestorationInNewPaneType>,
         inactive_pty_reads_rx: Option<async_broadcast::InactiveReceiver<Arc<Vec<u8>>>>,
         is_ambient_agent: bool,
         ctx: &mut ViewContext<Self>,
@@ -3261,12 +3201,6 @@ impl TerminalView {
                     // Delete the conversation if it's unmodified, new, has no init steps,
                     // and isn't a child agent in an orchestration tree.
                     if !was_modified && was_new && !has_init_steps && !is_child_agent {
-                        conversation_utils::remove_conversation(
-                            *conversation_id,
-                            me.view_id,
-                            false, // Empty new conversations were never synced to the cloud.
-                            ctx,
-                        );
                     }
 
                     // This handles the case where the user has taken over control but the command is still in progress.
@@ -3292,13 +3226,6 @@ impl TerminalView {
                         || matches!(origin, AgentViewEntryOrigin::AgentRequestedNewConversation);
                     if should_insert {
                         me.insert_agent_view_entry_block(
-                            AgentViewEntryBlockParams {
-                                conversation_id: *conversation_id,
-                                is_new: was_new,
-                                is_restored: false, /* is_restored */
-                                origin: origin.clone(),
-                                agent_view_controller: me.agent_view_controller.clone(),
-                            },
                             RichContentInsertionPosition::Append {
                                 insert_below_long_running_block: true,
                             },
@@ -5070,7 +4997,6 @@ impl TerminalView {
     pub fn enqueue_prompt(
         &mut self,
         prompt: String,
-        origin: QueuedQueryOrigin,
         ctx: &mut ViewContext<Self>,
     ) -> Option<QueuedQueryId> {
         // Guard against queueing when no conversation is active to avoid stranding prompts.
@@ -5100,8 +5026,6 @@ impl TerminalView {
     pub fn enqueue_followup_prompt(
         &mut self,
         prompt: String,
-        origin: QueuedQueryOrigin,
-        conversation_id: AIConversationId,
         ctx: &mut ViewContext<Self>,
     ) {
         if FeatureFlag::QueuedPromptsV2.is_enabled() {
@@ -5174,7 +5098,6 @@ impl TerminalView {
 
     pub fn attach_plan_as_context(
         &mut self,
-        ai_document_id: AIDocumentId,
         ctx: &mut ViewContext<Self>,
     ) {
         self.input.update(ctx, |input, ctx| {
@@ -5211,7 +5134,6 @@ impl TerminalView {
 
     fn remove_pending_cloud_mode_query_if_exchange_has_renderable_user_query(
         &mut self,
-        ai_block_model: &AIBlockModelImpl<AIBlock>,
         ctx: &mut ViewContext<Self>,
     ) {
         let kind_is_cloud_mode =
@@ -5252,7 +5174,6 @@ impl TerminalView {
     fn handle_usage_footer_toggled(
         &mut self,
         source_ai_block_view_id: EntityId,
-        conversation_id: AIConversationId,
         is_expanded: bool,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -5410,7 +5331,6 @@ impl TerminalView {
         &mut self,
         delta_pref: GitDeltaPreference,
         entrypoint: CodeReviewPaneEntrypoint,
-        cli_agent: Option<super::CLIAgent>,
         focus_new_pane: bool,
         event_constructor: impl Fn(CodeReviewPanelArg) -> Event,
         ctx: &mut ViewContext<Self>,
@@ -5467,7 +5387,6 @@ impl TerminalView {
         &mut self,
         delta_pref: GitDeltaPreference,
         entrypoint: CodeReviewPaneEntrypoint,
-        cli_agent: Option<super::CLIAgent>,
         focus_new_pane: bool,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -5485,7 +5404,6 @@ impl TerminalView {
         &mut self,
         delta_pref: GitDeltaPreference,
         entrypoint: CodeReviewPaneEntrypoint,
-        cli_agent: Option<super::CLIAgent>,
         focus_new_pane: bool,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -5532,7 +5450,6 @@ impl TerminalView {
             input.replace_at_symbol_with_text(&attachment_reference, ctx);
             input.ensure_agent_mode_for_ai_features(
                 true,
-                Some(InputTypeAutoDetectionSource::AttachmentForcedAi),
                 ctx,
             );
         });
@@ -5673,8 +5590,6 @@ impl TerminalView {
 
     fn handle_shell_command_executor_event(
         &mut self,
-        _: ModelHandle<ShellCommandExecutor>,
-        event: &ShellCommandExecutorEvent,
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
@@ -6019,7 +5934,6 @@ impl TerminalView {
     /// This bypasses normal event emission to prevent update loops.
     pub fn apply_external_input_mode_update(
         &mut self,
-        config: InputConfig,
         ctx: &mut ViewContext<Self>,
     ) {
         self.input.update(ctx, |input, ctx| {
@@ -8066,7 +7980,6 @@ impl TerminalView {
     /// The banner is shown when the user could be using AWS Bedrock to save on warp AI spend, but isn't.
     fn maybe_insert_aws_bedrock_login_banner(
         &mut self,
-        model_id: &LLMId,
         ctx: &mut ViewContext<Self>,
     ) {
         // Don't show if already displayed
@@ -9234,21 +9147,6 @@ impl TerminalView {
                                                         .auto_open_rich_input_on_cli_agent_start;
                                                 sessions_model.set_session(
                                                     view_id,
-                                                    CLIAgentSession {
-                                                        agent,
-                                                        status: CLIAgentSessionStatus::InProgress,
-                                                        session_context:
-                                                            CLIAgentSessionContext::default(),
-                                                        input_state: CLIAgentInputState::Closed,
-                                                        should_auto_toggle_input,
-                                                        listener: None,
-                                                        plugin_version: None,
-                                                        remote_host,
-                                                        draft_text: None,
-                                                        custom_command_prefix:
-                                                            custom_command_prefix.clone(),
-                                                        received_rich_notification: false,
-                                                    },
                                                     ctx,
                                                 );
                                             }
@@ -11778,7 +11676,6 @@ impl TerminalView {
                     // Force agent mode, overriding any shell lock
                     input.ensure_agent_mode_for_ai_features(
                         true,
-                        Some(InputTypeAutoDetectionSource::OnboardingAgentPrompt),
                         ctx,
                     );
                 }
@@ -12026,7 +11923,6 @@ impl TerminalView {
     #[cfg(not(target_family = "wasm"))]
     pub(crate) fn remove_plugin_instructions_block(
         &mut self,
-        block_handle: ViewHandle<plugin_instructions_block::PluginInstructionsBlock>,
         ctx: &mut ViewContext<Self>,
     ) {
         let block_id = block_handle.id();
@@ -14287,7 +14183,6 @@ impl TerminalView {
     /// Sets the pending query follow-up state for this terminal view's AI context model.
     pub fn set_pending_query_state(
         &mut self,
-        state: PendingQueryState,
         ctx: &mut ViewContext<Self>,
     ) {
         self.ai_context_model
@@ -16143,7 +16038,6 @@ impl TerminalView {
     ///
     /// Returns `None` if the conversation has no user-query exchanges.
     fn thread_start_exchange_id(
-        conversation_id: &AIConversationId,
         ctx: &AppContext,
     ) -> Option<AIAgentExchangeId> {
         BlocklistAIHistoryModel::as_ref(ctx)
@@ -16161,7 +16055,6 @@ impl TerminalView {
     /// conversation.
     fn all_comments_in_thread(
         &self,
-        conversation_id: &AIConversationId,
         ctx: &AppContext,
     ) -> (Vec<AttachedReviewComment>, Option<String>) {
         let mut all_comments = Vec::new();
@@ -16183,7 +16076,6 @@ impl TerminalView {
     /// review comments.
     pub(crate) fn has_imported_comments_in_thread(
         &self,
-        conversation_id: &AIConversationId,
         ctx: &AppContext,
     ) -> bool {
         self.ai_blocks_for_current_thread(conversation_id, ctx)
@@ -18257,7 +18149,6 @@ impl TerminalView {
 
     pub fn send_inline_review(
         &mut self,
-        review_comments: AgentReviewCommentBatch,
         ctx: &mut ViewContext<Self>,
     ) -> anyhow::Result<()> {
         // Treat sending an inline review like executing a command/AI query for scrolling purposes.
@@ -18302,7 +18193,6 @@ impl TerminalView {
                         .with_input_type(InputType::AI)
                         .unlocked_if_autodetection_enabled(false, ctx),
                     true,
-                    Some(InputTypeAutoDetectionSource::InlineCodeReviewSend),
                     ctx,
                 );
             });
@@ -20184,8 +20074,6 @@ impl TerminalView {
     fn show_rewind_confirmation_dialog(
         &mut self,
         ai_block_view_id: EntityId,
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
         entrypoint: AgentModeRewindEntrypoint,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -22483,12 +22371,10 @@ impl TypedActionView for TerminalView {
             }
             OpenViewMCPPane => {
                 ctx.emit(Event::OpenMCPSettingsPage {
-                    page: Some(MCPServersSettingsPage::List),
                 });
             }
             OpenAddMCPPane => {
                 ctx.emit(Event::OpenMCPSettingsPage {
-                    page: Some(MCPServersSettingsPage::Edit { item_id: None }),
                 });
             }
             OpenBillingAndUsagePane => {

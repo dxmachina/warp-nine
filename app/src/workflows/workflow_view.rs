@@ -309,7 +309,6 @@ pub struct WorkflowView {
     pub(super) ai_metadata_assist_state: AiAssistState,
     revision_ts: Option<Revision>,
     pub(super) auth_state: Arc<AuthState>,
-    pub(super) ai_client: Arc<dyn AIClient>,
     owner: Option<Owner>,
     initial_folder_id: Option<SyncId>,
 

@@ -9,7 +9,6 @@ use crate::app_state::LeafContents;
 use crate::pane_group::focus_state::PaneFocusHandle;
 
 pub struct CustomRouterEditorPane {
-    view: ViewHandle<PaneView<CustomRouterEditorView>>,
     pane_configuration: ModelHandle<PaneConfiguration>,
 }
 
@@ -25,7 +24,6 @@ impl CustomRouterEditorPane {
     }
 
     pub fn from_view(
-        editor_view: ViewHandle<CustomRouterEditorView>,
         ctx: &mut AppContext,
     ) -> Self {
         let pane_configuration = editor_view.as_ref(ctx).pane_configuration();

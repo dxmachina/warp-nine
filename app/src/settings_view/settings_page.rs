@@ -113,7 +113,6 @@ pub enum SettingsPageViewHandle {
     Scripting(ViewHandle<ScriptingSettingsPageView>),
     CloudEnvironments(ViewHandle<EnvironmentsPageView>),
     BillingAndUsage(ViewHandle<BillingAndUsageDispatchView>),
-    MCPServers(ViewHandle<MCPServersSettingsPageView>),
     WarpDrive(ViewHandle<WarpDriveSettingsPageView>),
 }
 

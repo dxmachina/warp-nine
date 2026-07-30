@@ -2571,7 +2571,6 @@ impl BillingAndUsagePageView {
         &self,
         appearance: &Appearance,
         app: &AppContext,
-        ai_request_usage_model: &AIRequestUsageModel,
         formatted_next_refresh_time: &str,
         workspace_is_delinquent_due_to_payment_issue: bool,
         prorated_request_limits_info_mouse_states: &[MouseStateHandle],

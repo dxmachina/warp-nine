@@ -41,12 +41,10 @@ struct TombstoneDisplayData {
     /// Working directory at start of conversation
     working_directory: Option<String>,
     /// Artifacts from the conversation
-    artifacts: Vec<Artifact>,
 }
 
 #[derive(Debug, Clone)]
 pub enum ConversationEndedTombstoneEvent {
-    ContinueInCloud { task_id: AmbientAgentTaskId },
 }
 
 impl TombstoneDisplayData {
@@ -94,7 +92,6 @@ impl TombstoneDisplayData {
 /// Displays metadata, artifacts, and actions like "Continue locally".
 pub struct ConversationEndedTombstoneView {
     display_data: TombstoneDisplayData,
-    artifact_buttons_view: ViewHandle<ArtifactButtonsRow>,
     continue_in_cloud_button: Option<ViewHandle<ActionButton>>,
     #[cfg(not(target_family = "wasm"))]
     continue_locally_button: Option<ViewHandle<ActionButton>>,
@@ -107,8 +104,6 @@ impl ConversationEndedTombstoneView {
     pub fn new(
         ctx: &mut ViewContext<Self>,
         terminal_view_id: EntityId,
-        task_id: Option<AmbientAgentTaskId>,
-        tombstone_cta: Option<TombstoneCta>,
     ) -> Self {
         let conversation_id = BlocklistAIHistoryModel::handle(ctx)
             .as_ref(ctx)
@@ -134,34 +129,10 @@ impl ConversationEndedTombstoneView {
         let artifact_buttons_view =
             ctx.add_typed_action_view(|ctx| ArtifactButtonsRow::new(&display_data.artifacts, ctx));
         let continue_in_cloud_button = match tombstone_cta {
-            Some(TombstoneCta::ContinueInCloud { task_id }) => {
-                Some(ctx.add_typed_action_view(move |_| {
-                    ActionButton::new("Continue", PrimaryTheme)
-                        .with_tooltip("Continue this cloud conversation")
-                        .on_click(move |ctx| {
-                            ctx.dispatch_typed_action(
-                                ConversationEndedTombstoneAction::ContinueInCloud { task_id },
-                            );
-                        })
-                }))
-            }
-            Some(TombstoneCta::ContinueLocally { .. }) | None => None,
         };
 
         #[cfg(not(target_family = "wasm"))]
         let continue_locally_button = match tombstone_cta {
-            Some(TombstoneCta::ContinueLocally { conversation_id }) => {
-                Some(ctx.add_typed_action_view(move |_| {
-                    ActionButton::new("Continue locally", PrimaryTheme)
-                        .with_tooltip("Fork this conversation locally")
-                        .on_click(move |ctx| {
-                            ctx.dispatch_typed_action(
-                                ConversationEndedTombstoneAction::ContinueLocally(conversation_id),
-                            );
-                        })
-                }))
-            }
-            Some(TombstoneCta::ContinueInCloud { .. }) | None => None,
         };
 
         // In wasm, continuing locally is impossible so we instead
@@ -484,10 +455,8 @@ impl ConversationEndedTombstoneView {
 #[derive(Debug, Clone)]
 pub enum ConversationEndedTombstoneAction {
     ContinueInCloud {
-        task_id: AmbientAgentTaskId,
     },
     #[cfg(not(target_family = "wasm"))]
-    ContinueLocally(AIConversationId),
     #[cfg(target_family = "wasm")]
     OpenInWarp(AIConversationId),
 }

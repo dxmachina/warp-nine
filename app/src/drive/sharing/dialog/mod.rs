@@ -399,9 +399,6 @@ impl SharingDialog {
     fn target_cloud_object_id(&self, app: &AppContext) -> Option<ServerId> {
         match self.target.as_ref() {
             Some(ShareableObject::WarpDriveObject(id)) => Some(*id),
-            Some(ShareableObject::AIConversation(id)) => BlocklistAIHistoryModel::as_ref(app)
-                .get_server_conversation_metadata(id)
-                .map(|m| ServerId::from_string_lossy(m.metadata.uid.uid())),
             _ => None,
         }
     }

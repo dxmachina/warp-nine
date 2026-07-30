@@ -52,7 +52,6 @@ impl TerminalManager {
         initial_size: Vector2F,
         model_event_sender: Option<SyncSender<ModelEvent>>,
         window_id: WindowId,
-        initial_input_config: Option<InputConfig>,
         ctx: &mut AppContext,
     ) -> TerminalManagerInit {
         // Create all the necessary channels we need for communication.

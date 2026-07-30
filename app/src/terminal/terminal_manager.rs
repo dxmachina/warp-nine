@@ -109,7 +109,6 @@ pub(super) fn compute_block_size(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn create_terminal_model(
     startup_directory: Option<PathBuf>,
-    restored_blocks: Option<&Vec<SerializedBlockListItem>>,
     initial_size: Vector2F,
     channel_event_proxy: ChannelEventListener,
     shell_state: ShellLaunchState,

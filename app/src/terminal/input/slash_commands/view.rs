@@ -72,7 +72,6 @@ impl InlineSlashCommandView {
         positioner: &ModelHandle<InlineMenuPositioner>,
         slash_commands_source: ModelHandle<GuiSlashCommandDataSource>,
         suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         input_buffer_model: ModelHandle<InputBufferModel>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {

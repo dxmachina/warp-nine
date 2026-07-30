@@ -228,7 +228,6 @@ pub struct EnvironmentsPageView {
     // Delete confirmation dialog
     delete_confirmation_dialog: ViewHandle<DeleteEnvironmentConfirmationDialog>,
     // Agent-assisted environment creation modal
-    agent_assisted_environment_modal: ViewHandle<AgentAssistedEnvironmentModal>,
     // New environment button (search -> tab focus target)
     new_env_button: ViewHandle<NewEnvironmentButtonView>,
     // Mode selector modal for new environment setup
@@ -563,7 +562,6 @@ impl EnvironmentsPageView {
     }
     pub fn set_github_auth_redirect_target(
         &mut self,
-        target: GithubAuthRedirectTarget,
         ctx: &mut ViewContext<Self>,
     ) {
         self.environment_form

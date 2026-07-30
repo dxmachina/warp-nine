@@ -38,7 +38,6 @@ const DIALOG_WIDTH: f32 = 460.;
 
 #[derive(Clone)]
 pub struct DeleteConversationDialogSource {
-    pub conversation_id: AIConversationId,
     pub conversation_title: String,
     pub terminal_view_id: Option<warpui::EntityId>,
 }

@@ -30,9 +30,7 @@ pub struct InlineHistoryItem {
 #[derive(Debug, Clone)]
 enum HistoryItemType {
     Conversation {
-        conversation_id: AIConversationId,
         title: String,
-        status: ConversationStatus,
     },
     Command {
         command: String,

@@ -1891,7 +1891,6 @@ pub(crate) fn initialize_app(
     timer.mark_interval_end("INITIALIZE_TELEMETRY_COLLECTION");
 
     // Register initial keybindings prior to creating menus
-    ai::init(ctx);
     app_services::init(ctx);
     // // TODO: Temporarily disabling keybindings for WASM builds. Will be implemented in future WASM support.
     #[cfg(not(target_family = "wasm"))]
@@ -1924,7 +1923,6 @@ pub(crate) fn initialize_app(
     ai::blocklist::block::status_bar::init(ctx);
     drive::index::init(ctx);
     drive::sharing::dialog::init(ctx);
-    ai_assistant::panel::init(ctx);
     settings_view::update_environment_form::init(ctx);
     env_vars::env_var_collection_block::init(ctx);
     context_chips::display_menu::init(ctx);

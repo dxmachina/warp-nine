@@ -18,7 +18,6 @@ pub enum RewindMenuEvent {
     /// User accepted a rewind point (hit enter).
     /// If exchange_id is None, user selected "Current" (dismiss without rewinding).
     AcceptedRewindPoint {
-        exchange_id: Option<AIAgentExchangeId>,
     },
     /// User dismissed the menu (escape or click).
     Dismissed,
@@ -33,9 +32,7 @@ pub struct RewindMenuView {
 
 impl RewindMenuView {
     pub fn new(
-        conversation_id: AIConversationId,
         input_suggestions_model: ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         input_buffer_model: &ModelHandle<InputBufferModel>,
         ctx: &mut ViewContext<Self>,

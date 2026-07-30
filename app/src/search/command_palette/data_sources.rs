@@ -24,10 +24,8 @@ use crate::session_management::SessionSource;
 pub struct DataSourceStore {
     actions_data_source: ModelHandle<CommandBindingDataSource>,
     sessions_data_source: ModelHandle<navigation::DataSource>,
-    warp_drive_data_source: ModelHandle<warp_drive::DataSource>,
     launch_config_data_source: ModelHandle<launch_config::DataSource>,
     new_session_data_source: Option<ModelHandle<NewSessionDataSource>>,
-    all_conversation_data_source: ModelHandle<conversations::DataSource>,
     repo_data_source: ModelHandle<RepoDataSource>,
     tabs_data_source: Option<ModelHandle<tabs::DataSource>>,
 }

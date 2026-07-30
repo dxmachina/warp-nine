@@ -214,34 +214,24 @@ pub enum TerminalAction {
     /// is part of the specified [`crate::ai::blocklist::AIConversation`].
     OpenAIBlockAttachedBlocksMenu {
         ai_block_view_id: EntityId,
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
     },
     /// Open the overflow context menu for an AI block with copy options
     OpenAIBlockOverflowMenu {
         ai_block_view_id: EntityId,
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
         is_restored: bool,
     },
     /// Show the confirmation dialog before rewinding an AI conversation
     RewindAIConversation {
         ai_block_view_id: EntityId,
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
         /// The entrypoint from which this action was triggered (for telemetry).
         entrypoint: AgentModeRewindEntrypoint,
     },
     /// Actually execute the rewind (called after user confirms in the dialog)
     ExecuteRewindAIConversation {
         ai_block_view_id: EntityId,
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
     },
     /// Execute rewind from the inline menu (looks up ai_block_view_id from exchange_id)
     ExecuteRewindFromInlineMenu {
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
     },
     SelectAllBlocks,
     ExpandBlockSelectionAbove,
@@ -350,7 +340,6 @@ pub enum TerminalAction {
     WriteCodebaseIndex,
     ToggleAutoexecuteMode,
     ToggleQueueNextPrompt,
-    CodebaseIndexSpeedbumpBanner(CodebaseIndexSpeedbumpBannerAction),
     AgentModeSetupSpeedbumpBanner(AgentModeSetupSpeedbumpBannerAction),
     AnonymousUserAISignUpBanner(AnonymousUserLoginBannerAction),
     ResumeConversation,
@@ -396,7 +385,6 @@ pub enum TerminalAction {
     ExitAgentView,
     EnterCloudAgentView,
     StartNewAgentConversation {
-        origin: AgentViewEntryOrigin,
     },
     /// Toggle the cloud mode conversation details panel
     ToggleConversationDetailsPanel,
@@ -411,14 +399,12 @@ pub enum TerminalAction {
     ToggleUsageFooter,
     /// Reveal a hidden child agent pane from the orchestrator status card.
     RevealChildAgent {
-        conversation_id: AIConversationId,
     },
     /// Switch the active terminal view's agent view to display the given
     /// conversation in place, without spawning or revealing a separate pane.
     /// Used by the orchestration pill bar to navigate the current pane to a
     /// sibling/parent conversation.
     SwitchAgentViewToConversation {
-        conversation_id: AIConversationId,
     },
     /// Open a child agent conversation in a separate pane (split off from
     /// the orchestrator). Dispatched from the orchestration pill bar's
@@ -426,28 +412,24 @@ pub enum TerminalAction {
     /// a hidden pane in `child_agent_panes` this reveals the existing pane;
     /// for already-visible panes it focuses the existing pane.
     OpenChildAgentInNewPane {
-        conversation_id: AIConversationId,
     },
     /// Open a child agent conversation in a separate tab. V2-of-V2 stub:
     /// dispatched from the orchestration pill bar's 3-dot overflow menu
     /// ("Open in new tab"). For now this falls back to the same path as
     /// `OpenChildAgentInNewPane` until tab-level routing is wired through.
     OpenChildAgentInNewTab {
-        conversation_id: AIConversationId,
     },
     /// Stop a child agent conversation: cancel the in-flight ambient task
     /// (if any) and the local conversation's controller. The conversation
     /// itself stays alive so the user can still navigate to it. Dispatched
     /// from the orchestration pill bar's 3-dot overflow menu ("Stop agent").
     StopAgentConversation {
-        conversation_id: AIConversationId,
     },
     /// Kill a child agent conversation: stop it if running, best-effort cancel
     /// any backing cloud task, then remove the conversation from local history.
     /// Dispatched from the orchestration pill bar's 3-dot overflow menu
     /// ("Kill agent").
     KillAgentConversation {
-        conversation_id: AIConversationId,
     },
     /// Navigate to the previous child agent conversation in the active
     /// orchestration tree.

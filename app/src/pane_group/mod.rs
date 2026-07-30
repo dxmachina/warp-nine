@@ -490,7 +490,6 @@ pub enum Event {
     OpenAutoReloadModal {
         purchased_credits: i32,
     },
-    AskAIAssistant(AskAIType),
     /// Pass input sync event up from underlying TerminalViews
     /// to the Workspace to sync throughout the window.
     SyncInput(SyncEvent),
@@ -538,7 +537,6 @@ pub enum Event {
         source: CodeSource,
     },
     OpenCodeDiff {
-        view: ViewHandle<CodeDiffView>,
     },
     OpenCodeReviewPane(CodeReviewPanelArg),
     ToggleCodeReviewPane(CodeReviewPanelArg),
@@ -607,13 +605,10 @@ pub enum Event {
     /// fresh tab. Bubbled up by `TerminalView::Event::OpenChildAgentInNewTab`
     /// from the orchestration pill bar's 3-dot menu.
     OpenChildAgentInNewTab {
-        conversation_id: AIConversationId,
     },
     OpenSuggestedAgentModeWorkflowModal {
-        workflow_and_id: SuggestedAgentModeWorkflowAndId,
     },
     OpenSuggestedRuleModal {
-        rule_and_id: SuggestedRuleAndId,
     },
     OpenAIFactCollection {
         /// If set, open the fact collection to the specific rule.
@@ -663,7 +658,6 @@ pub enum Event {
     InvalidatedActiveConversation,
     OpenConversationHistory,
     OpenMCPSettingsPage {
-        page: Option<MCPServersSettingsPage>,
     },
     OpenAddPromptPane {
         /// The initial prompt body content.
@@ -696,14 +690,12 @@ pub enum Event {
         path: PathBuf,
     },
     OpenAgentProfileEditor {
-        profile_id: ExecutionProfileId,
     },
     RepoChanged,
     AttachPathAsContext {
         path: PathBuf,
     },
     AttachPlanAsContext {
-        ai_document_id: AIDocumentId,
     },
     CDToDirectory {
         path: PathBuf,
@@ -738,7 +730,6 @@ pub enum Event {
         variant: crate::workspace::view::cloud_agent_capacity_modal::CloudAgentCapacityModalVariant,
     },
     #[cfg(not(target_family = "wasm"))]
-    OpenPluginInstructionsPane(crate::terminal::CLIAgent, PluginModalKind),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -908,14 +899,12 @@ pub struct PaneGroup {
 
     /// Ambient agent panes whose task data was not yet cached at restoration time.
     /// Entries are removed as each task's data arrives and the pane is replaced.
-    pending_ambient_agent_conversation_restorations: HashMap<AmbientAgentTaskId, PaneId>,
 
     /// Hidden remote-child placeholders waiting on task data, keyed by
     /// task id; the value is the placeholder's canonical
     /// `child_agent_panes` key. Kept separate from
     /// `pending_ambient_agent_conversation_restorations` so the
     /// visible-tree `replace_pane` flow doesn't swap a hidden child pane.
-    pending_remote_child_hydrations: HashMap<AmbientAgentTaskId, AIConversationId>,
 
     /// Whether `ensure_pending_ambient_restoration_subscription` has been
     /// called; the subscription is shared by both pending maps.
@@ -923,7 +912,6 @@ pub struct PaneGroup {
 
     /// Maps child agent conversation IDs to their hidden pane IDs, so they can
     /// be revealed from the parent's status card.
-    child_agent_panes: HashMap<AIConversationId, PaneId>,
 
     /// Host pane id → child pane ids whose share was auto-created by
     /// `inherit_share_for_local_child`. Used by `StopSharingCurrentSession`
@@ -946,7 +934,6 @@ pub struct ChildAgentOrigin {
     /// Source pane group; weak so we don't keep the source tab alive.
     pub source_pane_group: WeakViewHandle<PaneGroup>,
     /// The child agent conversation hosted in this tab's lone pane.
-    pub conversation_id: AIConversationId,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -1467,7 +1454,6 @@ impl PaneGroup {
     #[allow(clippy::too_many_arguments)]
     fn restore_pane_tree(
         root: PaneNodeSnapshot,
-        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlockListItem>>>,
         resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
@@ -1475,7 +1461,6 @@ impl PaneGroup {
         view_size: Vector2F,
         model_event_sender: Option<SyncSender<ModelEvent>>,
         deferred_panes: &mut Vec<(PaneId, LeafSnapshot)>,
-        pending_ambient_restorations: &mut Vec<(AmbientAgentTaskId, PaneId)>,
     ) -> anyhow::Result<(PaneData, InitialFocus)> {
         match root {
             PaneNodeSnapshot::Leaf(leaf) => Self::restore_pane_leaf(
@@ -1547,7 +1532,6 @@ impl PaneGroup {
     #[allow(clippy::too_many_arguments)]
     fn restore_pane_leaf(
         leaf: LeafSnapshot,
-        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlockListItem>>>,
         resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
@@ -1556,7 +1540,6 @@ impl PaneGroup {
         model_event_sender: Option<SyncSender<ModelEvent>>,
         #[cfg_attr(not(feature = "local_fs"), allow(unused_variables, clippy::ptr_arg))]
         deferred_panes: &mut Vec<(PaneId, LeafSnapshot)>,
-        pending_ambient_restorations: &mut Vec<(AmbientAgentTaskId, PaneId)>,
     ) -> anyhow::Result<(PaneData, InitialFocus)> {
         let custom_vertical_tabs_title = leaf.custom_vertical_tabs_title.clone();
         let result = match leaf.contents {
@@ -2120,7 +2103,6 @@ impl PaneGroup {
                             is_active: visible_leaf_is_active_session,
                             is_read_only: false,
                             shell_launch_data: None,
-                            input_config: Some(InputConfig::new(app)),
                             llm_model_override: None,
                             active_profile_id: None,
                             conversation_ids_to_restore: Vec::new(),
@@ -3153,7 +3135,6 @@ impl PaneGroup {
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         server_api: Arc<ServerApi>,
         panes_layout: PanesLayout,
-        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlockListItem>>>,
         model_event_sender: Option<SyncSender<ModelEvent>>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
@@ -3343,8 +3324,6 @@ impl PaneGroup {
     fn load_data_into_transcript_viewer(
         &mut self,
         terminal_view: ViewHandle<TerminalView>,
-        cloud_conversation: CloudConversationData,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
         ctx: &mut ViewContext<Self>,
     ) {
         let terminal_manager = self
@@ -3640,7 +3619,6 @@ impl PaneGroup {
     #[cfg(not(target_family = "wasm"))]
     fn transitively_share_existing_local_children(
         &mut self,
-        host_conversation_id: AIConversationId,
         ctx: &mut ViewContext<Self>,
     ) {
         let Some(host_pane_id) = self.pane_id_for_owned_conversation(host_conversation_id, ctx)
@@ -5362,13 +5340,11 @@ impl PaneGroup {
         terminal_session_uuid: &[u8],
         is_shared_session: IsSharedSessionCreator,
         resources: TerminalViewResources,
-        restored_blocks: Option<&Vec<SerializedBlockListItem>>,
         conversation_restoration: Option<ConversationRestorationInNewPaneType>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         initial_size: Vector2F,
         model_event_sender: Option<SyncSender<ModelEvent>>,
         chosen_shell: Option<AvailableShell>,
-        initial_input_config: Option<InputConfig>,
         ctx: &mut ViewContext<Self>,
     ) -> (
         ViewHandle<TerminalView>,
@@ -5669,7 +5645,6 @@ impl PaneGroup {
     pub fn replace_loading_pane_with_terminal(
         &mut self,
         loading_pane_id: PaneId,
-        cloud_conversation: CloudConversationData,
         ctx: &mut ViewContext<Self>,
     ) -> bool {
         if FeatureFlag::HandoffCloudCloud.is_enabled()
@@ -6357,7 +6332,6 @@ impl PaneGroup {
     fn log_swap_resolution_failure(
         &self,
         focused_pane_id: PaneId,
-        conversation_id: AIConversationId,
         ctx: &AppContext,
     ) {
         let history_model = BlocklistAIHistoryModel::as_ref(ctx);

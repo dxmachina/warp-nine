@@ -276,7 +276,6 @@ impl PaneId {
 
     /// Creates a [`PaneId`] from a [`PaneView<CodeDiffView>`] entity ID.
     pub fn from_code_diff_pane_view(
-        code_diff_pane_view: &ViewHandle<PaneView<CodeDiffView>>,
     ) -> Self {
         Self::new(IPaneType::CodeDiff, code_diff_pane_view)
     }

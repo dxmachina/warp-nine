@@ -132,7 +132,6 @@ pub enum LeftPanelEvent {
     },
     NewConversationInNewTab,
     ShowDeleteConfirmationDialog {
-        conversation_id: AIConversationId,
         conversation_title: String,
         terminal_view_id: Option<warpui::EntityId>,
     },
@@ -211,7 +210,6 @@ pub struct LeftPanelView {
     mouse_state_handles: MouseStateHandles,
     close_button_mouse_state: MouseStateHandle,
     warp_drive_view: ViewHandle<DrivePanel>,
-    conversation_list_view: ViewHandle<ConversationListView>,
     active_view: active_view_state::ActiveViewState,
     toolbelt_buttons: Vec<ToolbeltButtonConfig>,
     active_pane_group: Option<WeakViewHandle<PaneGroup>>,

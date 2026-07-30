@@ -848,7 +848,6 @@ enum Indicator {
     /// We should show a shell indicator for the tab.
     Shell(ShellIndicatorType),
     Agent {
-        conversation_status: Option<ConversationStatus>,
     },
     AmbientAgent,
 }

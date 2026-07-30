@@ -54,7 +54,6 @@ pub struct TerminalViewZeroStateBlock {
 
 impl TerminalViewZeroStateBlock {
     pub fn new(
-        agent_view_controller: &ModelHandle<AgentViewController>,
         model_events_dispatcher: &ModelHandle<ModelEventDispatcher>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
@@ -184,9 +183,6 @@ impl View for TerminalViewZeroStateBlock {
                     ],
                     |ctx| {
                         ctx.dispatch_typed_action(TerminalAction::StartNewAgentConversation {
-                            origin: AgentViewEntryOrigin::Input {
-                                was_prompt_autodetected: false,
-                            },
                         });
                     },
                     self.state_handles.start_new_conversation.clone(),

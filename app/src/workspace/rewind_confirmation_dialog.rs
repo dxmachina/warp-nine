@@ -43,8 +43,6 @@ const DIALOG_WIDTH: f32 = 460.;
 #[derive(Clone)]
 pub struct RewindDialogSource {
     pub ai_block_view_id: EntityId,
-    pub exchange_id: AIAgentExchangeId,
-    pub conversation_id: AIConversationId,
 }
 
 pub struct RewindConfirmationDialog {

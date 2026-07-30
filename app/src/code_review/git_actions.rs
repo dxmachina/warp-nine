@@ -31,7 +31,6 @@ pub async fn run_commit_chain(
     message: &str,
     include_unstaged: bool,
     branch: &str,
-    ai_client: Option<&dyn AIClient>,
     path_env: Option<&str>,
 ) -> anyhow::Result<(Vec<Commit>, Option<String>, Option<PrInfo>)> {
     git::run_commit(repo_path, message, include_unstaged, path_env).await?;
@@ -67,11 +66,9 @@ pub async fn run_push(
 pub async fn create_pr(
     repo_path: &Path,
     branch: &str,
-    ai_client: Option<&dyn AIClient>,
     path_env: Option<&str>,
 ) -> anyhow::Result<PrInfo> {
     match ai_client {
-        Some(ai) => create_pr_with_ai_content(repo_path, branch, ai, path_env).await,
         None => git::create_pr(repo_path, None, None, path_env).await,
     }
 }
@@ -82,7 +79,6 @@ pub async fn generate_commit_message(
     repo_path: &Path,
     branch_name: &str,
     include_unstaged: bool,
-    ai_client: &dyn AIClient,
 ) -> anyhow::Result<String> {
     let diff = git::get_diff_for_commit_message(repo_path, include_unstaged).await?;
     // Skip the AI round trip when there's nothing to summarize.
@@ -91,7 +87,6 @@ pub async fn generate_commit_message(
     }
     let generated = ai_client
         .generate_code_review_content(GenerateCodeReviewContentRequest {
-            output_type: OutputType::CommitMessage,
             diff,
             branch_name: branch_name.to_string(),
             commit_messages: Vec::new(),

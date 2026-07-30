@@ -46,7 +46,6 @@ struct AutoWarpifySnippet {
 
     shell_type: ShellType,
     description: Cow<'static, str>,
-    code_snippet_handles: CodeSnippetButtonHandles,
     can_write_to_rc: bool,
 }
 

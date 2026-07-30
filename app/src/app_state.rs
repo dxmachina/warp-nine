@@ -24,7 +24,6 @@ use crate::workspace::view::left_panel::ToolPanelView;
 pub struct AppState {
     pub windows: Vec<WindowSnapshot>,
     pub active_window_index: Option<usize>,
-    pub block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlockListItem>>>,
     pub running_mcp_servers: Vec<uuid::Uuid>,
 }
 
@@ -34,7 +33,6 @@ pub struct PaneUuid(pub Vec<u8>);
 /// Wrapper for persisting agent management filters to restore.
 #[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersistedAgentManagementFilters {
-    pub filters: AgentManagementFilters,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -193,7 +191,6 @@ pub struct AmbientAgentPaneSnapshot {
     pub uuid: Vec<u8>,
     // `task_id` is purposefully optional,
     // as you can have a valid state (i.e. an empty cloud mode pane) where it is None.
-    pub task_id: Option<AmbientAgentTaskId>,
 }
 
 /// Snapshot of the contents of a terminal pane.
@@ -204,13 +201,10 @@ pub struct TerminalPaneSnapshot {
     pub shell_launch_data: Option<ShellLaunchData>,
     pub is_active: bool,
     pub is_read_only: bool,
-    pub input_config: Option<InputConfig>,
     pub llm_model_override: Option<String>,
     pub active_profile_id: Option<SyncId>,
-    pub conversation_ids_to_restore: Vec<AIConversationId>,
     /// The active conversation ID if the agent view was open in fullscreen mode.
     /// When `Some`, the agent view should be restored to fullscreen for this conversation.
-    pub active_conversation_id: Option<AIConversationId>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

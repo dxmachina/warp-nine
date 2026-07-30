@@ -112,8 +112,6 @@ pub struct AttachedReviewComment {
     pub content: String,
     pub target: AttachedReviewCommentTarget,
     pub last_update_time: DateTime<Local>,
-    pub base: Option<DiffBase>,
-    pub head: Option<CurrentHead>,
     pub outdated: bool,
     pub origin: CommentOrigin,
 }
@@ -211,8 +209,6 @@ impl AttachedReviewComment {
     pub(crate) fn from_editor_review_comment(
         comment: EditorReviewComment,
         absolute_file_path: LocalOrRemotePath,
-        base: Option<DiffBase>,
-        head: Option<CurrentHead>,
     ) -> AttachedReviewComment {
         AttachedReviewComment {
             id: comment.id,

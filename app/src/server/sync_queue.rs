@@ -178,37 +178,30 @@ pub enum QueueItem {
         revision: Option<Revision>,
     },
     UpdateAIFact {
-        model: Arc<CloudAIFactModel>,
         id: SyncId,
         revision: Option<Revision>,
     },
     UpdateMCPServer {
-        model: Arc<CloudMCPServerModel>,
         id: SyncId,
         revision: Option<Revision>,
     },
     UpdateAIExecutionProfile {
-        model: Arc<CloudAIExecutionProfileModel>,
         id: SyncId,
         revision: Option<Revision>,
     },
     UpdateTemplatableMCPServer {
-        model: Arc<CloudTemplatableMCPServerModel>,
         id: SyncId,
         revision: Option<Revision>,
     },
     UpdateCloudEnvironment {
-        model: Arc<CloudAmbientAgentEnvironmentModel>,
         id: SyncId,
         revision: Option<Revision>,
     },
     UpdateScheduledAmbientAgent {
-        model: Arc<CloudScheduledAmbientAgentModel>,
         id: SyncId,
         revision: Option<Revision>,
     },
     UpdateCloudAgentConfig {
-        model: Arc<CloudAgentConfigModel>,
         id: SyncId,
         revision: Option<Revision>,
     },

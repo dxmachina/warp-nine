@@ -86,7 +86,6 @@ pub enum DrivePanelEvent {
     OpenEnvVarCollection(EnvVarCollectionSource),
     OpenWorkflowInPane(WorkflowOpenSource, WorkflowViewMode),
     FocusWarpDrive,
-    AttachPlanAsContext(AIDocumentId),
 }
 
 impl DrivePanel {

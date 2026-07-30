@@ -88,7 +88,6 @@ pub fn create_lsp_server_selector(
 
 /// Renders the complete LSP server selector block with header and checkboxes.
 pub fn render_lsp_selector_block(
-    action_view: &ViewHandle<ToggleableItemsView<LSPServerInfo>>,
     repo_path: &std::path::Path,
     skip_mouse_state: &MouseStateHandle,
     enable_mouse_state: &MouseStateHandle,

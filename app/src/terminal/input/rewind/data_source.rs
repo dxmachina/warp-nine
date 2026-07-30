@@ -16,7 +16,6 @@ use crate::terminal::input::rewind::search_item::RewindSearchItem;
 #[derive(Clone, Debug)]
 pub struct SelectRewindPoint {
     /// The exchange ID to rewind to, or None for "Current" (dismiss without rewinding).
-    pub exchange_id: Option<AIAgentExchangeId>,
 }
 
 /// Information about file changes for a rewind point.
@@ -27,7 +26,6 @@ pub struct FileChangesInfo {
 }
 
 pub struct RewindDataSource {
-    conversation_id: AIConversationId,
 }
 
 impl RewindDataSource {

@@ -192,11 +192,6 @@ fn apply_ui_customization_settings(
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct OnboardingAutonomyPermissions {
-    apply_code_diffs: ActionPermission,
-    read_files: ActionPermission,
-    execute_commands: ActionPermission,
-    mcp_permissions: ActionPermission,
-    write_to_pty: WriteToPtyPermission,
 }
 
 

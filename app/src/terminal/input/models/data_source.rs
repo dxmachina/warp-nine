@@ -45,7 +45,6 @@ const AUTO_GEMINI_ENTERPRISE_AGENT_PLATFORM_TOOLTIP: &str = "Warp uses Gemini En
 
 #[derive(Clone, Debug)]
 pub struct AcceptModel {
-    pub id: LLMId,
 }
 
 impl InlineMenuAction for AcceptModel {
@@ -130,8 +129,6 @@ fn model_specs_width(app: &AppContext) -> f32 {
 /// Frontend-neutral model picker result shared by GUI and TUI surfaces.
 #[derive(Clone, Debug)]
 pub struct ModelPickerChoice {
-    pub llm: LLMInfo,
-    pub disable_reason: Option<DisableReason>,
     pub name_match_result: Option<FuzzyMatchResult>,
     pub score: OrderedFloat<f64>,
 }
@@ -148,8 +145,6 @@ impl ModelPickerChoice {
 
 /// Applies the GUI model picker's ordering, fuzzy filtering, and effective disabled state.
 pub fn query_model_picker_choices<'a>(
-    llm_preferences: &LLMPreferences,
-    choices: impl IntoIterator<Item = &'a LLMInfo>,
     query_text: &str,
     app: &AppContext,
 ) -> Vec<ModelPickerChoice> {
@@ -199,14 +194,12 @@ pub fn query_model_picker_choices<'a>(
 pub struct ModelSelectorDataSource {
     terminal_view_id: EntityId,
     window_id: WindowId,
-    ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
 }
 
 impl ModelSelectorDataSource {
     pub fn new(
         terminal_view_id: EntityId,
         window_id: WindowId,
-        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
     ) -> Self {
         Self {
             terminal_view_id,
@@ -224,8 +217,6 @@ impl ModelSelectorDataSource {
     }
 
     fn order_model_choices<'a>(
-        llm_preferences: &LLMPreferences,
-        choices: Vec<&'a LLMInfo>,
     ) -> Vec<&'a LLMInfo> {
         let mut auto_choices = Vec::new();
         let mut custom_router_choices = Vec::new();
@@ -318,19 +309,14 @@ impl Entity for ModelSelectorDataSource {
 
 #[derive(Clone)]
 struct ModelSearchItem {
-    id: LLMId,
     window_id: WindowId,
-    provider: LLMProvider,
-    spec: Option<LLMSpec>,
     leading_icon: Icon,
     credential_icon: Option<Icon>,
-    byo_key_source: Option<ByoKeySource>,
     display_text: String,
     is_selected: bool,
     is_custom_router: bool,
     /// Source/routing description for custom model routers (from `LLMInfo.description`).
     description: Option<String>,
-    disable_reason: Option<DisableReason>,
     is_auto: bool,
     is_using_bedrock: bool,
     is_using_gemini_enterprise_agent_platform: bool,
@@ -345,7 +331,6 @@ struct ModelSearchItem {
 impl ModelSearchItem {
     fn new(
         choice: ModelPickerChoice,
-        active_llm_id: &LLMId,
         window_id: WindowId,
         app: &AppContext,
     ) -> Self {

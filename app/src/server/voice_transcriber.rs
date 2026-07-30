@@ -25,7 +25,6 @@ impl Transcriber for ServerVoiceTranscriber {
         language: Option<String>,
     ) -> Result<String, TranscribeError> {
         let request = TranscribeRequest {
-            provider: Provider::Wispr,
             audio: Some(wav_base64),
             language,
             ..Default::default()

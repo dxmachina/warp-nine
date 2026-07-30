@@ -11,7 +11,6 @@ use crate::terminal::input::profiles::search_item::ProfileSearchItem;
 
 #[derive(Clone, Debug)]
 pub enum SelectProfileMenuItem {
-    Profile { profile_id: ExecutionProfileId },
     ManageProfiles,
 }
 

@@ -348,11 +348,9 @@ pub struct DisplayChip {
     quota_reset_popup: ViewHandle<FeaturePopup>,
     session_context: Option<SessionContext>,
     menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
-    agent_view_controller: ModelHandle<AgentViewController>,
     is_shared_session_viewer: bool,
     is_in_agent_view: bool,
     /// Optional because `DisplayChip` sometimes should be disabled, depending on if it is in an ambient agent view.
-    ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
     /// Cached display string for the code review keybinding.
     code_review_keybinding: Option<String>,
     /// The terminal view this chip belongs to, used to check CLI agent session state.
@@ -624,7 +622,6 @@ pub enum DisplayChipKind {
         popup: ViewHandle<crate::context_chips::node_version_popup::NodeVersionPopupView>,
     },
     AgentPlanAndTodoList {
-        plan_and_todo_list: ViewHandle<PlanAndTodoListView>,
     },
     GitBranch {
         menu_open: bool,
@@ -684,17 +681,13 @@ pub struct MenuItem {
 /// Configuration for creating a DisplayChip
 #[derive(Clone)]
 pub struct DisplayChipConfig {
-    pub ai_input_model: ModelHandle<BlocklistAIInputModel>,
-    pub ai_context_model: ModelHandle<BlocklistAIContextModel>,
     pub terminal_view_id: EntityId,
     pub menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
     pub session_context: Option<SessionContext>,
     pub current_repo_path: Option<PathBuf>,
     pub model_events: ModelHandle<ModelEventDispatcher>,
     pub is_shared_session_viewer: bool,
-    pub agent_view_controller: ModelHandle<AgentViewController>,
     /// Optional because `DisplayChip` sometimes should be disabled, depending on if it is in an ambient agent view.
-    pub ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
 }
 
 #[derive(Debug, Clone)]
@@ -2112,8 +2105,6 @@ pub enum PromptDisplayChipEvent {
     TryExecuteCommand(PromptChipShellCommand),
     RunAgentQuery(String),
     OpenAIDocument {
-        document_id: AIDocumentId,
-        document_version: AIDocumentVersion,
     },
 }
 

@@ -65,7 +65,6 @@ pub enum ReviewDestination {
     /// A Warp agent terminal is available (input box visible, not executing).
     Warp,
     /// A CLI agent (e.g. Claude Code, Gemini) is running in a terminal.
-    Cli(CLIAgent),
 }
 
 /// Result of attempting to submit review comments to a terminal.
@@ -1312,7 +1311,6 @@ impl RightPanelView {
     fn route_review_comments(
         &mut self,
         code_review_view: &ViewHandle<CodeReviewView>,
-        comments: AgentReviewCommentBatch,
         repo_path: &LocalOrRemotePath,
         ctx: &mut ViewContext<Self>,
     ) {

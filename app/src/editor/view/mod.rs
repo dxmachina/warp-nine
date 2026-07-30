@@ -1754,7 +1754,6 @@ impl ImageContextOptions {
 }
 
 pub struct AIContextMenuState {
-    ai_context_menu: ViewHandle<AIContextMenu>,
 
     /// The mouse handle for the at context menu icon.
     at_context_menu_button_mouse_handle: MouseStateHandle,
@@ -1795,7 +1794,6 @@ pub struct EditorView {
     cursor_display_override: Option<CursorDisplayType>,
     window_id: WindowId,
     autosuggestion_state: Option<Arc<AutosuggestionState>>,
-    next_command_model: Option<ModelHandle<NextCommandModel>>,
 
     /// The height of the editor at the last render.
     /// This is needed because autosuggestions soft wrap and can increase the height of the editor.
@@ -1889,7 +1887,6 @@ pub struct EditorView {
     #[cfg(feature = "voice_input")]
     voice_new_feature_popup: ViewHandle<FeaturePopup>,
 
-    context_model: Option<ModelHandle<BlocklistAIContextModel>>,
 
     /// Options for attaching image context.
     /// Made public to allow terminal input to access image attachment state and limits.
@@ -2969,7 +2966,6 @@ impl EditorView {
 
     pub fn with_next_command_model(
         self,
-        next_command_model: ModelHandle<NextCommandModel>,
     ) -> Self {
         Self {
             next_command_model: Some(next_command_model),
@@ -3507,7 +3503,6 @@ impl EditorView {
     /// If there's an empty buffer, populates the input with an intelligent autosuggestion for the input_type.
     pub fn maybe_populate_intelligent_autosuggestion(
         &mut self,
-        input_type: InputType,
         ctx: &mut ViewContext<Self>,
     ) {
         // If our existing autosuggestion is not meant for the current input type, clear it.
@@ -8300,8 +8295,6 @@ pub enum Event {
         operations: Rc<Vec<CrdtOperation>>,
     },
     SetAIContextMenuOpen(bool),
-    AcceptAIContextMenuItem(AIContextMenuSearchableAction),
-    SelectAIContextMenuCategory(AIContextMenuCategory),
     ProcessingAttachedImages(bool),
     VoiceStateUpdated {
         is_listening: bool,

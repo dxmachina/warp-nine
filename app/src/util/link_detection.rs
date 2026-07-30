@@ -27,12 +27,10 @@ pub const RICH_CONTENT_LINK_FIRST_CHAR_POSITION_ID: &str =
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct LinkLocation {
     pub(crate) link_range: Range<usize>,
-    pub(crate) location: TextLocation,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct DetectedLinksState {
-    pub(crate) detected_links_by_location: HashMap<TextLocation, DetectedLinksInTextLocation>,
     // The link that the mouse is currently hovered over.
     pub(crate) currently_hovered_link_location: Option<LinkLocation>,
     // The link that a tooltip is currently open for.
@@ -61,7 +59,6 @@ impl DetectedLinksState {
     /// Given a text location and char range, returns the detected link there if any.
     pub fn link_at(
         &self,
-        location: &TextLocation,
         range: &Range<usize>,
     ) -> Option<&DetectedLinkType> {
         Some(
@@ -79,7 +76,6 @@ impl DetectedLinksState {
         is_hovering: bool,
         is_selecting: bool,
         link_range: &Range<usize>,
-        location: &TextLocation,
     ) {
         if is_hovering && !is_selecting {
             self.currently_hovered_link_location = Some(LinkLocation {
@@ -99,7 +95,6 @@ impl DetectedLinksState {
     /// Replaces all detected links with the given background detection results.
     pub(crate) fn replace_all_links(
         &mut self,
-        all_links: HashMap<TextLocation, HashMap<Range<usize>, DetectedLinkType>>,
     ) {
         self.detected_links_by_location.clear();
         self.currently_hovered_link_location = None;
@@ -143,8 +138,6 @@ pub(crate) struct DetectedLinksInTextLocation {
 pub(crate) fn add_link_detection_mouse_interactions<T: PartialClickableElement, A: Action>(
     mut element: T,
     detected_links_state: &DetectedLinksState,
-    link_action_constructors: LinkActionConstructors<A>,
-    location: TextLocation,
 ) -> T {
     if let Some(detected_links) = detected_links_state
         .detected_links_by_location
@@ -583,7 +576,6 @@ type HyperlinksByLocation = Vec<(TextLocation, Vec<(Range<usize>, String)>)>;
 /// The returned data is designed to be fed into `detect_all_links` on a background thread.
 /// Returns raw text (no MD formatting) with location to run link detection on, and markdown hyperlinks.
 pub(crate) fn collect_output_data_for_link_detection(
-    output: &AIAgentOutput,
     current_working_directory: Option<&String>,
     shell_launch_data: Option<&ShellLaunchData>,
 ) -> (Vec<(String, TextLocation)>, HyperlinksByLocation) {
@@ -676,7 +668,6 @@ pub(crate) fn collect_output_data_for_link_detection(
 /// Runs URL and file path detection on the given texts and combines with pre-extracted markdown hyperlinks.
 /// Designed to run on a background thread (file path detection does filesystem I/O).
 pub(crate) fn detect_all_links(
-    texts: &[(String, TextLocation)],
     md_hyperlinks: HyperlinksByLocation,
     #[cfg_attr(not(feature = "local_fs"), allow(unused_variables))]
     current_working_directory: Option<&String>,
@@ -736,7 +727,6 @@ pub(crate) fn detect_all_links(
 pub(crate) fn detect_links(
     detected_links_state: &mut DetectedLinksState,
     text: &str,
-    text_location: TextLocation,
     #[cfg_attr(not(feature = "local_fs"), allow(unused_variables))]
     current_working_directory: Option<&String>,
     #[cfg_attr(not(feature = "local_fs"), allow(unused_variables))] shell_launch_data: Option<

@@ -45,7 +45,6 @@ pub struct InlineMenuPositioner {
     window_id: WindowId,
     should_render_below_input: bool,
     suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
-    agent_view_controller: ModelHandle<AgentViewController>,
     /// Per-menu custom content heights, set by resize.
     custom_content_heights: HashMap<InlineMenuType, f32>,
 }
@@ -53,7 +52,6 @@ pub struct InlineMenuPositioner {
 impl InlineMenuPositioner {
     pub fn new(
         suggestions_mode_model: &ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: &ModelHandle<AgentViewController>,
         terminal_content_position_id: String,
         input_save_position_id: String,
         size_info: SizeInfo,

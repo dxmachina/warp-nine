@@ -69,14 +69,12 @@ pub struct SkillSelectorDataSource {
     include_bundled: bool,
     /// Ambient agent view model for the pane, if it is a cloud pane. Used to detect when this
     /// is a disconnected cloud follow-up composer and skills should be hidden (they run locally).
-    ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
 }
 
 impl SkillSelectorDataSource {
     pub fn new(
         active_session: ModelHandle<ActiveSession>,
         terminal_view_id: EntityId,
-        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         ctx: &mut ModelContext<Self>,
     ) -> Self {
         ctx.subscribe_to_model(&active_session, |_, _, event, ctx| match event {

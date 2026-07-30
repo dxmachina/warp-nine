@@ -34,12 +34,10 @@ impl InlineSkillSelectorView {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         input_buffer_model: &ModelHandle<InputBufferModel>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         active_session: ModelHandle<ActiveSession>,
         terminal_view_id: EntityId,
-        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let data_source = ctx.add_model(|ctx| {

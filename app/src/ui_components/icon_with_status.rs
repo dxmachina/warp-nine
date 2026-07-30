@@ -130,13 +130,10 @@ pub(crate) enum IconWithStatusVariant {
     /// use a foreground/background pair that flips for light and dark themes; ambient
     /// (cloud) conversations retain the purple brand background and cloud status badge.
     OzAgent {
-        status: Option<ConversationStatus>,
         is_ambient: bool,
     },
     /// A CLI agent icon on the agent's brand color background.
     CLIAgent {
-        agent: CLIAgent,
-        status: Option<ConversationStatus>,
         is_ambient: bool,
     },
     /// A pre-rendered avatar with an optional status overlay (cloud lobe when
@@ -144,7 +141,6 @@ pub(crate) enum IconWithStatusVariant {
     /// overlay's overhang matches the other variants.
     CustomAvatar {
         avatar: Box<dyn Element>,
-        status: Option<ConversationStatus>,
         is_ambient: bool,
     },
 }
@@ -328,7 +324,6 @@ fn render_neutral_circle(
 #[allow(clippy::too_many_arguments)]
 fn attach_status_overlay(
     circle: Box<dyn Element>,
-    status: Option<&ConversationStatus>,
     is_ambient: bool,
     total_size: f32,
     overlay_extra_overhang_ratio: f32,
@@ -361,7 +356,6 @@ fn attach_status_overlay(
 /// the bottom-right of the base circle. Used for agents running in ambient/cloud mode.
 fn render_with_cloud_status_badge(
     circle: Box<dyn Element>,
-    status: Option<&ConversationStatus>,
     total_size: f32,
     overlay_extra_overhang_ratio: f32,
     theme: &WarpTheme,
@@ -429,7 +423,6 @@ fn render_with_cloud_status_badge(
 /// Adds a status badge with a cutout ring to the bottom-right of the circle.
 fn render_with_optional_status_badge(
     circle: Box<dyn Element>,
-    status: Option<&ConversationStatus>,
     total_size: f32,
     overlay_extra_overhang_ratio: f32,
     badge_style: StatusBadgeStyle,

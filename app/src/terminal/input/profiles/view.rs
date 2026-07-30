@@ -16,7 +16,6 @@ use crate::terminal::input::suggestions_mode_model::{
 
 #[derive(Debug, Clone)]
 pub enum InlineProfileSelectorEvent {
-    SelectedProfile { profile_id: ExecutionProfileId },
     ManageProfiles,
     Dismissed,
 }
@@ -33,7 +32,6 @@ impl InlineProfileSelectorView {
     pub fn new(
         terminal_view_id: EntityId,
         suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         input_buffer_model: &ModelHandle<InputBufferModel>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         ctx: &mut ViewContext<Self>,

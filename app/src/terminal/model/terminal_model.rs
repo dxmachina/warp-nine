@@ -97,7 +97,6 @@ pub enum ConversationTranscriptViewerStatus {
     /// Viewing a local conversation (not from ambient agent).
     ViewingLocalConversation,
     /// Viewing an ambient agent conversation with the associated task ID.
-    ViewingAmbientConversation(AmbientAgentTaskId),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1021,7 +1020,6 @@ impl TerminalModel {
 
     #[allow(clippy::too_many_arguments)]
     fn new_internal(
-        restored_blocks: Option<&[SerializedBlockListItem]>,
         sizes: BlockSize,
         colors: color::List,
         event_proxy: ChannelEventListener,
@@ -1107,7 +1105,6 @@ impl TerminalModel {
     /// Creates a terminal model for a local terminal session.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        restored_blocks: Option<&[SerializedBlockListItem]>,
         sizes: BlockSize,
         colors: color::List,
         event_proxy: ChannelEventListener,

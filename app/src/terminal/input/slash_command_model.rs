@@ -135,7 +135,6 @@ pub fn slash_command_composition_filter(input: &str) -> Option<&str> {
 
 pub struct SlashCommandModel {
     input_buffer_model: ModelHandle<InputBufferModel>,
-    ai_input_model: ModelHandle<BlocklistAIInputModel>,
     state: SlashCommandEntryState,
     lifecycle: InputDrivenInlineMenuLifecycle,
     data_source: ModelHandle<GuiSlashCommandDataSource>,
@@ -144,7 +143,6 @@ pub struct SlashCommandModel {
 impl SlashCommandModel {
     pub fn new(
         buffer_model: &ModelHandle<InputBufferModel>,
-        ai_input_model: &ModelHandle<BlocklistAIInputModel>,
         data_source: ModelHandle<GuiSlashCommandDataSource>,
         ctx: &mut ModelContext<Self>,
     ) -> Self {
@@ -214,7 +212,6 @@ impl SlashCommandModel {
             self.ai_input_model.update(ctx, |input_model, ctx| {
                 input_model.set_input_type(
                     InputType::Shell,
-                    Some(InputTypeAutoDetectionSource::SlashCommand),
                     ctx,
                 );
             });
@@ -324,7 +321,6 @@ impl SlashCommandModel {
                     self.ai_input_model.update(ctx, |input_model, ctx| {
                         input_model.set_input_type(
                             InputType::AI,
-                            Some(InputTypeAutoDetectionSource::SlashCommand),
                             ctx,
                         );
                     });
@@ -342,7 +338,6 @@ impl SlashCommandModel {
                 self.ai_input_model.update(ctx, |input_model, ctx| {
                     input_model.set_input_type(
                         InputType::AI,
-                        Some(InputTypeAutoDetectionSource::SlashCommand),
                         ctx,
                     );
                 });
@@ -374,7 +369,6 @@ impl SlashCommandModel {
                     self.ai_input_model.update(ctx, |input_model, ctx| {
                         input_model.set_input_type(
                             InputType::AI,
-                            Some(InputTypeAutoDetectionSource::SlashCommand),
                             ctx,
                         );
                     });

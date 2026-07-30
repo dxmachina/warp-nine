@@ -47,11 +47,9 @@ pub enum CommandPaletteItemAction {
     NavigateToConversation {
         pane_view_locator: Option<PaneViewLocator>,
         window_id: Option<WindowId>,
-        conversation_id: AIConversationId,
         terminal_view_id: Option<EntityId>,
     },
     ForkConversation {
-        conversation_id: AIConversationId,
     },
     OpenLaunchConfiguration {
         config: Arc<LaunchConfig>,
@@ -202,7 +200,6 @@ pub enum ItemSummary {
         path: String,
     },
     Conversation {
-        id: AIConversationId,
     },
     ForkConversation,
     NewConversation,

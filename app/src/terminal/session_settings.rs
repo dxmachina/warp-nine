@@ -194,8 +194,6 @@ pub enum AgentToolbarChipSelection {
     Default,
     #[schemars(description = "Use a custom arrangement of toolbar items.")]
     Custom {
-        left: Vec<AgentToolbarItemKind>,
-        right: Vec<AgentToolbarItemKind>,
     },
 }
 
@@ -244,8 +242,6 @@ pub enum CLIAgentToolbarChipSelection {
     Default,
     #[schemars(description = "Use a custom arrangement of toolbar items.")]
     Custom {
-        left: Vec<AgentToolbarItemKind>,
-        right: Vec<AgentToolbarItemKind>,
     },
 }
 

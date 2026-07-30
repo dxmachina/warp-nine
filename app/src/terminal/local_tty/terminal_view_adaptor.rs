@@ -75,8 +75,6 @@ pub(crate) struct TerminalViewSurfaceConfig {
     pub(crate) resources: TerminalViewResources,
     pub(crate) model_event_sender: Option<SyncSender<ModelEvent>>,
     pub(crate) window_id: WindowId,
-    pub(crate) initial_input_config: Option<InputConfig>,
-    pub(crate) conversation_restoration: Option<ConversationRestorationInNewPaneType>,
     pub(crate) has_conversation_restoration: bool,
     pub(crate) is_historical: bool,
     pub(crate) should_use_live_appearance: bool,
@@ -85,27 +83,11 @@ pub(crate) struct TerminalViewSurfaceConfig {
 
 /// Resolves the block list used by the GUI `TerminalView` surface.
 pub(crate) fn terminal_view_restored_blocks(
-    restored_blocks: Option<&Vec<SerializedBlockListItem>>,
-    conversation_restoration: &Option<ConversationRestorationInNewPaneType>,
 ) -> Option<Vec<SerializedBlockListItem>> {
     restored_blocks
         .filter(|blocks| !blocks.is_empty())
         .cloned()
         .or_else(|| match conversation_restoration {
-            Some(ConversationRestorationInNewPaneType::Historical { conversation, .. })
-            | Some(ConversationRestorationInNewPaneType::Forked { conversation, .. }) => {
-                Some(conversation.to_serialized_blocklist_items())
-            }
-            Some(ConversationRestorationInNewPaneType::Startup { conversations, .. }) => {
-                let mut items: Vec<_> = conversations
-                    .iter()
-                    .flat_map(|c| c.to_serialized_blocklist_items())
-                    .collect();
-                // Because there are multiple conversations that may have interleaved timestamps, we need to sort by start_ts
-                items.sort_by_key(|item| item.start_ts());
-                if items.is_empty() { None } else { Some(items) }
-            }
-            _ => None,
         })
 }
 

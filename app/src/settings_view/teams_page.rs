@@ -464,7 +464,6 @@ pub struct TeamsPageView {
     // Note that rather than storing just the current workspace, we're storing the entire
     // ModelHandle<UserWorkspaces>. That's because eventually we'll be handling more than one workspace.
     user_workspaces: ModelHandle<UserWorkspaces>,
-    ai_request_usage_model: ModelHandle<AIRequestUsageModel>,
     pricing_info_model: ModelHandle<PricingInfoModel>,
     cloud_model: ModelHandle<CloudModel>,
     invite_view: TeamsInviteOption,
@@ -850,7 +849,6 @@ impl TeamsPageView {
                 num_chips: 0,
             },
             user_workspaces,
-            ai_request_usage_model: AIRequestUsageModel::handle(ctx),
             pricing_info_model,
             cloud_model,
             invite_view: TeamsInviteOption::default(),
@@ -2220,7 +2218,6 @@ impl TeamsWidget {
         &self,
         team_metadata: &Team,
         cloud_model: &CloudModel,
-        ai_request_usage_model: &AIRequestUsageModel,
         view: &TeamsPageView,
         appearance: &Appearance,
         app: &AppContext,

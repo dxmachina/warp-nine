@@ -390,7 +390,6 @@ impl ServerApi {
     fn new(
         auth_state: Arc<AuthState>,
         event_sender: async_channel::Sender<AuthEvent>,
-        agent_source: Option<ai::AgentSource>,
         iap_state: Option<Arc<IapState>>,
         ctx: &mut ModelContext<ServerApiProvider>,
     ) -> Self {
@@ -419,7 +418,6 @@ impl ServerApi {
         client: Arc<http_client::Client>,
         auth_state: Arc<AuthState>,
         event_sender: async_channel::Sender<AuthEvent>,
-        agent_source: Option<ai::AgentSource>,
         iap_token_provider: Option<Arc<dyn http_client::iap::IapTokenProvider>>,
         telemetry_api: TelemetryApi,
     ) -> Self {
@@ -925,7 +923,6 @@ impl ServerApi {
 
     pub async fn get_relevant_files(
         &self,
-        request: &GetRelevantFiles,
     ) -> Result<GetRelevantFilesResponse, AIApiError> {
         let auth_token = self.get_or_refresh_access_token().await?;
 
@@ -952,7 +949,6 @@ impl ServerApi {
     /// Hits the /ai/generate_am_query_suggestions endpoint to get the predicted next query.
     pub async fn generate_am_query_suggestions(
         &self,
-        request: &GenerateAMQuerySuggestionsRequest,
     ) -> Result<generate_am_query_suggestions::GenerateAMQuerySuggestionsResponse, AIApiError> {
         let auth_token = self.get_or_refresh_access_token().await?;
 
@@ -988,7 +984,6 @@ impl ServerApi {
 
     pub async fn predict_am_queries(
         &self,
-        request: &PredictAMQueriesRequest,
     ) -> Result<PredictAMQueriesResponse, AIApiError> {
         let auth_token = self.get_or_refresh_access_token().await?;
         let request_builder = self.base_client.http_client().post(format!(
@@ -1013,7 +1008,6 @@ impl ServerApi {
     /// Hits the /ai/transcribe endpoint to get the transcription for the given audio.
     pub async fn transcribe(
         &self,
-        request: &TranscribeRequest,
     ) -> Result<TranscribeResponse, TranscribeError> {
         let auth_token = self.get_or_refresh_access_token().await?;
 
@@ -1182,7 +1176,6 @@ impl ServerApiProvider {
     #[cfg_attr(target_family = "wasm", allow(unused_variables))]
     pub fn new(
         auth_state: Arc<AuthState>,
-        agent_source: Option<ai::AgentSource>,
         iap_state: Option<Arc<IapState>>,
         ctx: &mut ModelContext<Self>,
     ) -> Self {

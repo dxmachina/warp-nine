@@ -536,7 +536,6 @@ pub enum InputSuggestionsMode {
         original_cursor_point: Option<BufferPoint>,
         search_mode: HistorySearchMode,
         /// The AI input mode when arrow-up is pressed.
-        original_input_type: InputType,
         /// The AI input's lock status when the arrow-up is pressed.
         original_input_was_locked: bool,
     },
@@ -620,12 +619,10 @@ pub enum InputSuggestionsMode {
     /// User query menu mode for selecting a query point (e.g., fork-from, rewind).
     UserQueryMenu {
         action: UserQueryMenuAction,
-        conversation_id: AIConversationId,
     },
 
     /// Inline history menu mode for selecting commands and conversations from history.
     InlineHistoryMenu {
-        original_input_config: Option<InputConfig>,
     },
 
     /// Indexed repos switcher menu mode.
@@ -633,7 +630,6 @@ pub enum InputSuggestionsMode {
 
     /// Plan menu mode for selecting among multiple AI document plans.
     PlanMenu {
-        conversation_id: AIConversationId,
     },
 
     /// Mode indicating that no suggestion UI is being shown.
@@ -993,15 +989,11 @@ pub enum Event {
     },
     TryHandlePassiveCodeDiff(CodeDiffAction),
     ToggleAIDocumentPane {
-        document_id: AIDocumentId,
-        document_version: AIDocumentVersion,
     },
     SubmitCLIAgentInput {
         text: String,
     },
     OpenAIDocumentPane {
-        document_id: AIDocumentId,
-        document_version: AIDocumentVersion,
     },
     OpenAutoReloadModal {
         purchased_credits: i32,
@@ -1016,8 +1008,6 @@ pub enum Event {
 
     EnterAgentView {
         initial_prompt: Option<String>,
-        conversation_id: Option<AIConversationId>,
-        origin: AgentViewEntryOrigin,
     },
     EnterCloudAgentView {
         initial_prompt: Option<String>,
@@ -1030,15 +1020,12 @@ pub enum Event {
         initial_prompt: Option<String>,
     },
     ScrollToExchange {
-        exchange_id: AIAgentExchangeId,
     },
     /// Trigger environment setup flow with optional repository arguments
     TriggerEnvironmentSetup {
         repos: Vec<String>,
     },
-    RegisterPluginListener(CLIAgent),
     #[cfg(not(target_family = "wasm"))]
-    OpenPluginInstructionsPane(CLIAgent, PluginModalKind),
     OpenShareSessionModal,
     StartRemoteControl,
     OpenHandoffEnvironmentCreationModal,
@@ -1076,7 +1063,6 @@ pub enum InputAction {
     ToggleConversationsMenu,
 
     StartNewAgentConversation {
-        origin: AgentViewEntryOrigin,
     },
 
     /// This is for toggling whether autodetection is enabled/disabled at the app-level,
@@ -1507,10 +1493,6 @@ pub struct Input {
     has_pending_command: bool,
     last_word_insertion: LastWordInsertion,
 
-    ai_controller: ModelHandle<BlocklistAIController>,
-    ai_context_model: ModelHandle<BlocklistAIContextModel>,
-    ai_input_model: ModelHandle<BlocklistAIInputModel>,
-    ai_action_model: ModelHandle<BlocklistAIActionModel>,
     /// The input is responsible for managing the lifetime
     /// of this mouse state handle.
     #[allow(dead_code)]
@@ -1562,7 +1544,6 @@ pub struct Input {
     /// Today, we only expect to use this for shared session viewers.
     deferred_remote_operations: DeferredRemoteOperations,
 
-    prompt_suggestions_banner_state: Option<PromptSuggestionBannerState>,
     /// Shared flag checked by the editor's keymap context modifier to determine whether
     /// to suppress the editor's ctrl-enter newline insertion when a prompt suggestion
     /// banner is pending.
@@ -1573,7 +1554,6 @@ pub struct Input {
     /// We store info about the last intelligent autosuggestion because we need it for
     /// data collection when the command completes, but state is cleared when the command is executed.
     last_intelligent_autosuggestion_result: Option<IntelligentAutosuggestionResult>,
-    next_command_model: ModelHandle<NextCommandModel>,
 
     /// The last block that the user ran. This is used for generating autosuggestions.
     #[cfg_attr(not(feature = "local_fs"), allow(dead_code))]
@@ -1597,8 +1577,6 @@ pub struct Input {
 
     terminal_input_message_bar: ViewHandle<TerminalInputMessageBar>,
 
-    agent_input_footer: ViewHandle<AgentInputFooter>,
-    prompt_suggestions_view: ViewHandle<PromptSuggestionsView>,
     handoff_compose_state: ModelHandle<HandoffComposeState>,
 
     inline_slash_commands_view: ViewHandle<InlineSlashCommandView>,
@@ -1607,10 +1585,8 @@ pub struct Input {
     cloud_mode_composer_slash_command_data_source: Option<ModelHandle<GuiSlashCommandDataSource>>,
 
     /// Inline conversation menu for selecting AI conversations.
-    inline_conversation_menu_view: ViewHandle<InlineConversationMenuView>,
 
     /// Inline plan menu for selecting among multiple plans.
-    inline_plan_menu_view: ViewHandle<InlinePlanMenuView>,
 
     /// Inline repos switcher menu.
     inline_repos_menu_view: ViewHandle<InlineReposMenuView>,
@@ -1630,7 +1606,6 @@ pub struct Input {
     inline_prompts_menu_view: ViewHandle<InlinePromptsMenuView>,
 
     /// Inline menu for selecting a query point when forking a conversation.
-    user_query_menu_view: ViewHandle<UserQueryMenuView>,
 
     /// Inline menu for selecting a rewind point in a conversation.
     rewind_menu_view: ViewHandle<RewindMenuView>,
@@ -1656,14 +1631,9 @@ pub struct Input {
     weak_view_handle: WeakViewHandle<Input>,
 
     buy_credits_banner: ViewHandle<BuyCreditsBanner>,
-    agent_status_view: ViewHandle<BlocklistAIStatusBar>,
     /// Optional queued-prompts panel rendered between `agent_status_view` and the input editor.
     /// Constructed in [`Input::new`] when [`FeatureFlag::QueueSlashCommand`] is enabled.
-    queued_prompts_panel: Option<ViewHandle<QueuedPromptsPanelView>>,
-    agent_view_controller: ModelHandle<AgentViewController>,
-    agent_shortcut_view_model: ModelHandle<AgentShortcutViewModel>,
     ambient_agent_view_state: Option<AmbientAgentViewState>,
-    ephemeral_message_model: ModelHandle<EphemeralMessageModel>,
 
     /// When a command is executed from a prompt chip (e.g. `cd` from the directory dropdown),
     /// we snapshot the current input contents here so we can restore them after the command
@@ -1672,12 +1642,7 @@ pub struct Input {
 }
 
 struct AmbientAgentViewState {
-    view_model: ModelHandle<AmbientAgentViewModel>,
     #[allow(dead_code)]
-    harness_selector: ViewHandle<HarnessSelector>,
-    host_selector: Option<ViewHandle<HostSelector>>,
-    auth_secret_selector: Option<ViewHandle<AuthSecretSelector>>,
-    auth_secret_ftux_view: Option<ViewHandle<AuthSecretFtuxView>>,
 }
 
 impl AmbientAgentViewState {
@@ -1690,7 +1655,6 @@ impl AmbientAgentViewState {
 struct AttachmentChip {
     file_name: String,
     mouse_state_handle: MouseStateHandle,
-    attachment_type: AttachmentType,
     /// Index into the unified pending_attachments list for deletion.
     index: usize,
 }
@@ -1759,9 +1723,7 @@ enum TaskAttachmentUploadOutcome {
 /// and individual HTTP failures are surfaced as [`TaskAttachmentUploadOutcome::Failed`]
 /// entries so each caller can choose its own error-handling policy (fail-fast vs. best-effort).
 async fn upload_pending_attachments_to_task(
-    ai_client: Arc<dyn AIClient>,
     server_api: Arc<ServerApi>,
-    pending_attachments: Vec<PendingAttachment>,
 ) -> anyhow::Result<Vec<TaskAttachmentUploadOutcome>> {
     let n = pending_attachments.len();
     // Reserve a slot for each input attachment; filled below in original order.
@@ -2028,9 +1990,6 @@ pub fn init(app: &mut AppContext) {
             START_NEW_CONVERSATION_KEYBINDING_NAME,
             "New agent conversation",
             InputAction::StartNewAgentConversation {
-                origin: AgentViewEntryOrigin::Input {
-                    was_prompt_autodetected: false,
-                },
             },
         )
         .with_enabled(|| !FeatureFlag::AgentView.is_enabled())
@@ -2169,7 +2128,6 @@ impl Input {
     /// [`Self::new`] and [`Self::attach_ambient_agent_view_model`] so construction and late
     /// attach produce the same selector wiring.
     fn build_harness_selector(
-        view_model: ModelHandle<AmbientAgentViewModel>,
         menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
         ctx: &mut ViewContext<Self>,
     ) -> ViewHandle<HarnessSelector> {
@@ -2200,7 +2158,6 @@ impl Input {
     /// [`Self::attach_ambient_agent_view_model`], which is the single wiring point for both the
     /// eager (`Input::new`) and lazy (`SessionJoined`) paths.
     fn build_host_selector(
-        view_model: ModelHandle<AmbientAgentViewModel>,
         menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
         ctx: &mut ViewContext<Self>,
     ) -> ViewHandle<HostSelector> {
@@ -2281,7 +2238,6 @@ impl Input {
     /// model. Composer-only. Shared by [`Self::attach_ambient_agent_view_model`], which is the
     /// single wiring point for both the eager (`Input::new`) and lazy (`SessionJoined`) paths.
     fn build_auth_secret_selector(
-        view_model: ModelHandle<AmbientAgentViewModel>,
         menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
         ctx: &mut ViewContext<Self>,
     ) -> (
@@ -2372,19 +2328,10 @@ impl Input {
         size_info: SizeInfo,
         menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
         current_prompt: ModelHandle<PromptType>,
-        ai_controller: ModelHandle<BlocklistAIController>,
-        ai_context_model: ModelHandle<BlocklistAIContextModel>,
-        ai_input_model: ModelHandle<BlocklistAIInputModel>,
-        ai_action_model: ModelHandle<BlocklistAIActionModel>,
-        conversation_selection: ConversationSelectionHandle,
-        cli_subagent_controller: ModelHandle<CLISubagentController>,
         terminal_view_id: EntityId,
         current_repo_path: Option<PathBuf>,
         model_events: ModelHandle<crate::terminal::model_events::ModelEventDispatcher>,
-        agent_view_controller: ModelHandle<AgentViewController>,
-        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         active_session: ModelHandle<ActiveSession>,
-        ephemeral_message_model: ModelHandle<EphemeralMessageModel>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let initial_session_context = {
@@ -2622,7 +2569,6 @@ impl Input {
                             WorkspaceAction::OpenLocalToCloudHandoffPane {
                                 launch: None,
                                 environment_id: None,
-                                entry_point: HandoffEntryPoint::FooterChip,
                             },
                         );
                     } else {
@@ -3135,7 +3081,6 @@ impl Input {
                     ai_input_model.set_input_config(
                         *input_config,
                         is_buffer_empty,
-                        Some(InputTypeAutoDetectionSource::RestoreSavedConfig),
                         ctx,
                     );
                 });
@@ -3260,7 +3205,6 @@ impl Input {
                             if is_auto_detection_enabled {
                                 ai_input_model.set_input_type(
                                     InputType::AI,
-                                    Some(InputTypeAutoDetectionSource::ConversationContextRender),
                                     ctx,
                                 );
                             }
@@ -3816,8 +3760,6 @@ impl Input {
     /// input. Shared by the row's send-now button and empty-buffer Enter.
     fn send_queued_row_immediately(
         &mut self,
-        conversation_id: AIConversationId,
-        query_id: QueuedQueryId,
         text: String,
         is_command: bool,
         trigger: QueuedPromptSendNowTrigger,
@@ -4660,7 +4602,6 @@ impl Input {
                 SkillTelemetryEvent::Opened {
                     reference: skill_reference.clone(),
                     name: Some(skill_name.clone()),
-                    origin: SkillOpenOrigin::OpenSkillCommand,
                 },
                 ctx
             );
@@ -4799,7 +4740,6 @@ impl Input {
 
     pub fn open_plan_menu(
         &mut self,
-        conversation_id: AIConversationId,
         ctx: &mut ViewContext<Self>,
     ) {
         self.suggestions_mode_model.update(ctx, |model, ctx| {
@@ -4869,7 +4809,6 @@ impl Input {
 
     fn handle_user_query_menu_event(
         &mut self,
-        event: &UserQueryMenuEvent,
         ctx: &mut ViewContext<Self>,
     ) {
         if !self.suggestions_mode_model.as_ref(ctx).is_user_query_menu() {
@@ -5029,18 +4968,12 @@ impl Input {
                 self.ai_input_model.update(ctx, |ai_input_model, ctx| {
                     if is_agent_view_fullscreen {
                         ai_input_model.set_input_config(
-                            InputConfig {
-                                input_type: InputType::Shell,
-                                is_locked: true,
-                            },
                             false,
-                            Some(InputTypeAutoDetectionSource::FullscreenInlineHistoryCycling),
                             ctx,
                         );
                     } else {
                         ai_input_model.set_input_type(
                             InputType::Shell,
-                            Some(InputTypeAutoDetectionSource::HistorySelection),
                             ctx,
                         );
                     }
@@ -5054,7 +4987,6 @@ impl Input {
                 self.ai_input_model.update(ctx, |ai_input_model, ctx| {
                     ai_input_model.set_input_type(
                         InputType::AI,
-                        Some(InputTypeAutoDetectionSource::HistorySelection),
                         ctx,
                     );
                 });
@@ -5271,11 +5203,9 @@ impl Input {
         &mut self,
         reference: SkillReference,
         user_query: Option<String>,
-        queued_query_id: Option<QueuedQueryId>,
         // The conversation a fired queued skill was queued on, used to route the send and resolve
         // the row's attachments instead of re-deriving from the current UI selection. `None` for
         // direct (non-queued) skill invocations.
-        conversation_id_override: Option<AIConversationId>,
         ctx: &mut ViewContext<Self>,
     ) -> bool {
         // The skills menu should be hiding skills that are not available in the remote context.
@@ -5781,7 +5711,6 @@ impl Input {
 
     fn handle_next_command_model_event(
         &mut self,
-        event: &NextCommandModelEvent,
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
@@ -5826,7 +5755,6 @@ impl Input {
         self.focus_input_box(ctx);
         self.ensure_agent_mode_for_ai_features(
             true,
-            Some(InputTypeAutoDetectionSource::AttachmentForcedAi),
             ctx,
         );
 
@@ -5851,7 +5779,6 @@ impl Input {
 
     fn handle_prompt_alert(
         &mut self,
-        prompt_alert: &PromptAlertEvent,
         ctx: &mut ViewContext<Self>,
     ) {
         match prompt_alert {
@@ -5912,7 +5839,6 @@ impl Input {
             // For empty buffer, immediately set to Shell mode with auto-detection enabled
             self.ai_input_model.update(ctx, |model, ctx| {
                 let new_config = InputConfig {
-                    input_type: InputType::Shell,
                     is_locked: false, // Set to auto-detection mode
                 };
                 model.set_input_config(new_config, buffer_text.is_empty(), None, ctx);
@@ -5976,7 +5902,6 @@ impl Input {
                         model.set_input_config(
                             new_config,
                             is_input_buffer_empty,
-                            Some(InputTypeAutoDetectionSource::ManualToggle),
                             ctx,
                         );
                         false
@@ -6022,7 +5947,6 @@ impl Input {
                 if !FeatureFlag::AgentView.is_enabled() {
                     self.ensure_agent_mode_for_ai_features(
                         false,
-                        Some(InputTypeAutoDetectionSource::SlashCommand),
                         ctx,
                     );
                 }
@@ -6411,7 +6335,6 @@ impl Input {
     pub(crate) fn execute_queued_command(
         &mut self,
         command: &str,
-        conversation_id: AIConversationId,
         ctx: &mut ViewContext<Self>,
     ) -> bool {
         let started = self.try_execute_command_with_options(command, true, ctx);
@@ -7012,7 +6935,6 @@ impl Input {
         self.ai_input_model.update(ctx, |input_model, ctx| {
             input_model.set_input_type(
                 input_type,
-                Some(InputTypeAutoDetectionSource::WorkflowInsertion),
                 ctx,
             );
         });
@@ -7573,7 +7495,6 @@ impl Input {
                             };
                             ai_input_model.set_input_type(
                                 input_type,
-                                Some(InputTypeAutoDetectionSource::HistorySelection),
                                 ctx,
                             );
                         });
@@ -7835,12 +7756,7 @@ impl Input {
             // whether it was locked to that mode.
             self.ai_input_model.update(ctx, |ai_input_model, ctx| {
                 ai_input_model.set_input_config(
-                    InputConfig {
-                        input_type: original_input_type,
-                        is_locked: original_input_was_locked,
-                    },
                     original_buffer.is_empty(),
-                    Some(InputTypeAutoDetectionSource::RestoreSavedConfig),
                     ctx,
                 );
             });
@@ -8334,7 +8250,6 @@ impl Input {
     /// in either direction.
     fn maybe_send_autodetection_telemetry_on_manual_toggle(
         &self,
-        new_input_type: InputType,
         ctx: &mut ViewContext<Self>,
     ) {
         let input_buffer_text = self.buffer_text(ctx);
@@ -9186,7 +9101,6 @@ impl Input {
                     if Self::buffer_contains_attachment_patterns(&buffer_text) {
                         self.ensure_agent_mode_for_ai_features(
                             false,
-                            Some(InputTypeAutoDetectionSource::AttachmentForcedAi),
                             ctx,
                         );
                     }
@@ -9368,12 +9282,7 @@ impl Input {
 
                             self.ai_input_model.update(ctx, |ai_input_model, ctx| {
                                 ai_input_model.set_input_config(
-                                    InputConfig {
-                                        input_type: InputType::AI,
-                                        is_locked: true,
-                                    },
                                     is_input_buffer_empty,
-                                    Some(InputTypeAutoDetectionSource::AgentModePrefix),
                                     ctx,
                                 );
                             });
@@ -9476,12 +9385,7 @@ impl Input {
 
                             self.ai_input_model.update(ctx, |ai_input_model, ctx| {
                                 ai_input_model.set_input_config(
-                                    InputConfig {
-                                        input_type: InputType::Shell,
-                                        is_locked: true,
-                                    },
                                     is_input_buffer_empty,
-                                    Some(InputTypeAutoDetectionSource::ShellPrefix),
                                     ctx,
                                 );
                             });
@@ -9863,7 +9767,6 @@ impl Input {
                         self.ai_input_model.update(ctx, |input_model, ctx| {
                             input_model.set_input_type(
                                 InputType::Shell,
-                                Some(InputTypeAutoDetectionSource::CommandAutosuggestionAccepted),
                                 ctx,
                             );
                         });
@@ -9905,7 +9808,6 @@ impl Input {
                         }
                         // Switch to AI input mode but preserve current lock state when accepting an Agent Mode query autosuggestion.
                         self.enter_ai_mode(
-                            Some(InputTypeAutoDetectionSource::AgentQueryAutosuggestionAccepted),
                             ctx,
                         );
                         self.ai_context_model.update(ctx, |context_model, ctx| {
@@ -9958,11 +9860,6 @@ impl Input {
 
                 self.ai_input_model.update(ctx, |ai_input_model, ctx| {
                     ai_input_model.set_input_config_for_classic_mode(
-                        InputConfig {
-                            input_type: InputType::Shell,
-                            is_locked: true,
-                        }
-                        .unlocked_if_autodetection_enabled(false, ctx),
                         ctx,
                     );
                 });
@@ -9976,11 +9873,6 @@ impl Input {
                     self.maybe_send_autodetection_telemetry_on_manual_toggle(new_input_type, ctx);
                     self.ai_input_model.update(ctx, |ai_input_model, ctx| {
                         ai_input_model.set_input_config_for_classic_mode(
-                            InputConfig {
-                                input_type: new_input_type,
-                                is_locked: true,
-                            }
-                            .unlocked_if_autodetection_enabled(false, ctx),
                             ctx,
                         );
                     });
@@ -10133,7 +10025,6 @@ impl Input {
                             .should_run_input_autodetection(ctx)
                         {
                             self.enter_ai_mode(
-                                Some(InputTypeAutoDetectionSource::AtContextMenuInsert),
                                 ctx,
                             );
                         }
@@ -12495,11 +12386,6 @@ impl Input {
                     // The default input state after executing a shell command is Shell mode with
                     // autodetection enabled.
                     input.set_input_config_for_classic_mode(
-                        InputConfig {
-                            input_type: InputType::Shell,
-                            is_locked: true,
-                        }
-                        .unlocked_if_autodetection_enabled(false, ctx),
                         ctx,
                     );
                 });
@@ -12858,7 +12744,6 @@ impl Input {
     fn upload_files_then_submit_cloud_followup(
         &mut self,
         prompt: String,
-        pending_attachments: Vec<PendingAttachment>,
         ctx: &mut ViewContext<Self>,
     ) -> SpawnedFutureHandle {
         let ai_client = ServerApiProvider::as_ref(ctx).get_ai_client();
@@ -12929,9 +12814,6 @@ impl Input {
         server_conversation_token: Option<ServerConversationToken>,
         prompt: String,
         base_attachments: Vec<AgentAttachment>,
-        images: Vec<ImageContext>,
-        files: Vec<PendingFile>,
-        queued_query_retry: Option<(AIConversationId, usize, QueuedQuery)>,
         ctx: &mut ViewContext<Self>,
     ) {
         let ambient_agent_task_id = self
@@ -12976,7 +12858,6 @@ impl Input {
         base_attachments: Vec<AgentAttachment>,
         pending_images: &[crate::ai::agent::ImageContext],
         pending_files: &[crate::ai::blocklist::PendingFile],
-        queued_query_retry: Option<(AIConversationId, usize, QueuedQuery)>,
         ctx: &mut ViewContext<Self>,
     ) {
         let ai_client = ServerApiProvider::as_ref(ctx).get_ai_client();
@@ -13171,13 +13052,11 @@ impl Input {
         let is_input_buffer_empty = self.editor.as_ref(ctx).buffer_text(ctx).is_empty();
         self.ai_input_model.update(ctx, |ai_input_model, ctx| {
             let new_config = InputConfig {
-                input_type: InputType::Shell,
                 is_locked: true,
             };
             ai_input_model.set_input_config(
                 new_config,
                 is_input_buffer_empty,
-                Some(InputTypeAutoDetectionSource::ManualToggle),
                 ctx,
             );
         });
@@ -13190,7 +13069,6 @@ impl Input {
     /// Applies an input config update from an external source (e.g., session sharing).
     pub fn apply_external_input_config_update(
         &mut self,
-        config: InputConfig,
         ctx: &mut ViewContext<Self>,
     ) {
         // do nothing if the config is the same as the current config
@@ -13203,7 +13081,6 @@ impl Input {
             model.set_input_config(
                 config,
                 is_input_buffer_empty,
-                Some(InputTypeAutoDetectionSource::SessionSharingApply),
                 ctx,
             );
         });
@@ -14351,7 +14228,6 @@ impl TypedActionView for Input {
                             .set_pending_query_state_for_new_conversation(origin.clone(), ctx);
                     });
                     self.enter_ai_mode(
-                        Some(InputTypeAutoDetectionSource::StartNewConversation),
                         ctx,
                     );
                 }

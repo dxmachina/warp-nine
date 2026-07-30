@@ -288,7 +288,6 @@ pub struct PersistedData {
     pub time_of_next_force_object_refresh: Option<DateTime<Utc>>,
     pub object_actions: Vec<ObjectAction>,
     pub experiments: Vec<ServerExperiment>,
-    pub ai_queries: Vec<PersistedAIInput>,
     pub nld_prompts: Vec<(String, DateTime<Local>)>,
     pub codebase_indices: Vec<CodeWorkspaceMetadata>,
     pub workspace_language_servers: HashMap<PathBuf, HashMap<LSPServerType, EnablementState>>,
@@ -296,7 +295,6 @@ pub struct PersistedData {
     pub projects: Vec<Project>,
     pub project_rules: Vec<ProjectRulePath>,
     pub ignored_suggestions: Vec<(String, SuggestionType)>,
-    pub mcp_server_installations: HashMap<Uuid, TemplatableMCPServerInstallation>,
     pub mcp_servers_to_restore: Vec<Uuid>,
     /// Conversation summaries derived at read time for pre-`summary`-column
     /// rows. Drained by `sqlite::initialize`, which hands them to the writer
@@ -413,7 +411,6 @@ pub enum ModelEvent {
     /// Close the SQLite writer thread when the app is about to quit.
     Terminate,
     UpsertAIQuery {
-        query: Arc<PersistedAIInput>,
     },
     /// Delete the AI query and related data for a given conversation.
     DeleteAIConversation {
@@ -467,7 +464,6 @@ pub enum ModelEvent {
         suggestion_type: SuggestionType,
     },
     UpsertMCPServerInstallation {
-        mcp_server_installation: TemplatableMCPServerInstallation,
     },
     DeleteMCPServerInstallations {
         installation_uuids: Vec<Uuid>,

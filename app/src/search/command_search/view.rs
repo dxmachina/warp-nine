@@ -118,7 +118,6 @@ pub struct CommandSearchView {
     handle: WeakViewHandle<Self>,
     menu_positioning: MenuPositioning,
     auth_state: Arc<AuthState>,
-    ai_client: Arc<dyn AIClient>,
     state: CommandSearchViewState,
     visible_results_range_sender: Sender<Range<usize>>,
     resizable_state_handle: ResizableStateHandle,
@@ -216,7 +215,6 @@ impl CommandSearchView {
         &mut self,
         session_id: SessionId,
         session_context: Option<SessionContext>,
-        ai_execution_context: Option<WarpAiExecutionContext>,
         ctx: &mut ViewContext<Self>,
     ) {
         let window_id = ctx.window_id();
@@ -350,7 +348,6 @@ impl CommandSearchView {
         initial_query: String,
         query_filter: Option<QueryFilter>,
         menu_positioning: MenuPositioning,
-        ai_execution_context: Option<WarpAiExecutionContext>,
         ctx: &mut ViewContext<Self>,
     ) {
         self.reset_command_search_mixer(session_id, session_context, ai_execution_context, ctx);

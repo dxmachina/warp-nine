@@ -38,19 +38,14 @@ pub enum RichContentInsertionPosition {
 #[derive(Clone, Debug)]
 pub struct AIBlockMetadata {
     /// The ID corresponding to the `AIAgentExchange` represented in this block.
-    pub exchange_id: AIAgentExchangeId,
     /// The ID of the conversation to which this block belongs.
-    pub conversation_id: AIConversationId,
     /// The ViewHandle for the AI block.
-    pub ai_block_handle: ViewHandle<AIBlock>,
 }
 
 /// Metadata for an agent view entry rich content.
 #[derive(Clone, Debug)]
 pub struct AgentViewEntryMetadata {
-    pub conversation_id: AIConversationId,
     /// The origin when this block was created (not the current session origin).
-    pub origin: AgentViewEntryOrigin,
 }
 
 /// Wrapper type to hold rich content views and allow generating typed `ChildView` instances
@@ -68,7 +63,6 @@ pub struct RichContent {
     /// This is used to determine visibility when switching between agent view conversations.
     /// Rich content created within an agent view should only be visible when that conversation
     /// is active.
-    agent_view_conversation_id: Option<AIConversationId>,
 }
 
 impl RichContent {
@@ -79,7 +73,6 @@ impl RichContent {
     /// being created within an agent view, or `None` if created in terminal mode.
     pub fn new<V: View>(
         handle: ViewHandle<V>,
-        agent_view_conversation_id: Option<AIConversationId>,
     ) -> Self {
         let view_id = handle.id();
         // By `move`ing the handle into the closure, the closure will own the handle and keep it
@@ -203,7 +196,6 @@ pub enum RichContentMetadata {
     AIBlock(AIBlockMetadata),
     AIOnboardingBlock {
         /// The ID corresponding to the `AIAgentExchange` represented in this block.
-        exchange_id: AIAgentExchangeId,
     },
     UsageFooter,
     InitStep {
@@ -233,14 +225,12 @@ pub enum RichContentMetadata {
     },
     AgentViewEntry(AgentViewEntryMetadata),
     AmbientAgentBlock {
-        block_handle: ViewHandle<AmbientAgentEntryBlock>,
     },
     InlineAgentViewHeader,
     AgentViewZeroState,
     TerminalViewZeroState,
     PluginInstructionsBlock,
     PendingUserQuery {
-        pending_user_query_block_handle: ViewHandle<PendingUserQueryBlock>,
     },
     HarnessSessionHeader,
 }

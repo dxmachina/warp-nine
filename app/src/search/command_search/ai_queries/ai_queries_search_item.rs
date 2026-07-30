@@ -28,7 +28,6 @@ pub struct AIQuerySearchResultItem {
     /// When the query was originally submitted by the user.
     pub start_time: DateTime<Local>,
     /// The output status of the [`crate::ai::blocklist::AIQueryHistory`].
-    pub output_status: AIQueryHistoryOutputStatus,
     /// The directory the AI query was submitted in.
     pub(crate) working_directory: Option<String>,
     // Match result on the [`crate::ai::blocklist::AIQueryHistory`]'s query text including its

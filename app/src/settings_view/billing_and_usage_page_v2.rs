@@ -173,7 +173,6 @@ struct UsageHistoryState {
 }
 
 struct GrantBucket {
-    grants: Vec<BonusGrant>,
 }
 
 impl GrantBucket {

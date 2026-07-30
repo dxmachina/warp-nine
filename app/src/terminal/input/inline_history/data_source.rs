@@ -26,7 +26,6 @@ use crate::terminal::model::session::active_session::ActiveSession;
 #[derive(Clone, Debug)]
 pub enum AcceptHistoryItem {
     Conversation {
-        conversation_id: AIConversationId,
         title: String,
     },
     Command {
@@ -65,14 +64,12 @@ impl InlineMenuAction for AcceptHistoryItem {
 pub struct InlineHistoryMenuDataSource {
     terminal_view_id: EntityId,
     active_session: ModelHandle<ActiveSession>,
-    agent_view_controller: ModelHandle<AgentViewController>,
 }
 
 impl InlineHistoryMenuDataSource {
     pub fn new(
         terminal_view_id: EntityId,
         active_session: ModelHandle<ActiveSession>,
-        agent_view_controller: ModelHandle<AgentViewController>,
     ) -> Self {
         Self {
             terminal_view_id,
@@ -152,9 +149,7 @@ struct MenuEntry {
 #[derive(Clone)]
 enum MenuItem {
     Conversation {
-        conversation_id: AIConversationId,
         title: String,
-        status: ConversationStatus,
         match_result: Option<FuzzyMatchResult>,
         display_timestamp: DateTime<Local>,
     },

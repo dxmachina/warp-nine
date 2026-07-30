@@ -31,7 +31,6 @@ use crate::workspace::WorkspaceAction;
 #[derive(Debug, Clone)]
 pub enum InlineHistoryMenuEvent {
     NavigateToConversation {
-        conversation_id: AIConversationId,
     },
     AcceptCommand {
         command: String,
@@ -60,7 +59,6 @@ pub enum InlineHistoryMenuEvent {
 /// Identifies a history item well enough to reselect the same logical item
 /// after rerunning the current query.
 enum HistoryItemIdentity {
-    Conversation(AIConversationId),
     Command(String),
     AIPrompt(String),
 }
@@ -168,7 +166,6 @@ impl InlineHistoryMenuView {
         terminal_view_id: EntityId,
         active_session: ModelHandle<ActiveSession>,
         input_suggestions_model: &ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         buffer_model: ModelHandle<InputBufferModel>,
         ctx: &mut ViewContext<Self>,
@@ -193,7 +190,6 @@ impl InlineHistoryMenuView {
         terminal_view_id: EntityId,
         active_session: ModelHandle<ActiveSession>,
         input_suggestions_model: &ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         buffer_model: ModelHandle<InputBufferModel>,
         tab_configs: Vec<InlineMenuTabConfig<HistoryTab>>,
@@ -217,7 +213,6 @@ impl InlineHistoryMenuView {
         terminal_view_id: EntityId,
         active_session: ModelHandle<ActiveSession>,
         input_suggestions_model: &ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         buffer_model: ModelHandle<InputBufferModel>,
         tab_configs: Vec<InlineMenuTabConfig<HistoryTab>>,

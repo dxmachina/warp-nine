@@ -156,24 +156,19 @@ enum StepState {
     Welcome,
     CodebaseContext {
         mouse_states: CodebaseContextMouseStateHandles,
-        keyboard_nav_buttons: Option<ViewHandle<KeyboardNavigableButtons>>,
     },
     LanguageServersSingle {
         mouse_states: LanguageServersMouseStateHandles,
-        keyboard_nav_buttons: Option<ViewHandle<KeyboardNavigableButtons>>,
     },
     LanguageServersMultiple {
         skip_mouse_state: MouseStateHandle,
         enable_mouse_state: MouseStateHandle,
-        lsp_selector: Option<ViewHandle<ToggleableItemsView<LSPServerInfo>>>,
     },
     ProjectRules {
         mouse_states: ProjectRulesMouseStateHandles,
-        keyboard_nav_buttons: Option<ViewHandle<KeyboardNavigableButtons>>,
     },
     CreateEnvironment {
         mouse_states: CreateEnvironmentMouseStateHandles,
-        keyboard_nav_buttons: Option<ViewHandle<KeyboardNavigableButtons>>,
     },
 }
 
@@ -275,7 +270,6 @@ impl InitStepBlock {
             ) => {
                 let buttons = Self::create_codebase_context_buttons(pwd_path, mouse_states);
                 *keyboard_nav_buttons =
-                    Some(ctx.add_typed_action_view(|_| KeyboardNavigableButtons::new(buttons)));
             }
             (
                 InitStepStatus::Ready(InitStepData::LanguageServers { servers, repo_path }),
@@ -286,7 +280,6 @@ impl InitStepBlock {
             ) if servers.len() == 1 => {
                 let buttons = Self::create_single_lsp_buttons(&servers[0], repo_path, mouse_states);
                 *keyboard_nav_buttons =
-                    Some(ctx.add_typed_action_view(|_| KeyboardNavigableButtons::new(buttons)));
             }
             (
                 InitStepStatus::Ready(InitStepData::LanguageServers { servers, repo_path }),
@@ -307,7 +300,6 @@ impl InitStepBlock {
             ) => {
                 let buttons = Self::create_project_rules_buttons(linkable_files, mouse_states);
                 *keyboard_nav_buttons =
-                    Some(ctx.add_typed_action_view(|_| KeyboardNavigableButtons::new(buttons)));
             }
             (
                 InitStepStatus::Ready(InitStepData::CreateEnvironment),
@@ -318,7 +310,6 @@ impl InitStepBlock {
             ) => {
                 let buttons = Self::create_environment_buttons(mouse_states);
                 *keyboard_nav_buttons =
-                    Some(ctx.add_typed_action_view(|_| KeyboardNavigableButtons::new(buttons)));
             }
             _ => {}
         }
@@ -469,7 +460,6 @@ impl InitStepBlock {
 
     /// Renders a "ready" state block with keyboard-navigable buttons and a header prompt.
     fn render_ready_with_buttons(
-        action_view: &ViewHandle<KeyboardNavigableButtons>,
         header_text: impl Into<std::borrow::Cow<'static, str>>,
         app: &AppContext,
     ) -> Box<dyn Element> {

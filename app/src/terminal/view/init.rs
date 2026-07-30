@@ -327,7 +327,6 @@ pub fn init(app: &mut AppContext) {
             id!("Terminal") & !id!("IMEOpen") & id!("LongRunningCommand") & id!("SubshellBanner"),
         ),
         EditableBinding::new(
-            ACCEPT_PROMPT_SUGGESTION_KEYBINDING,
             "Accept Prompt Suggestion",
             TerminalAction::ResolvePromptSuggestion(PromptSuggestionResolution::Accept {
                 interaction_source: InteractionSource::Keybinding,
@@ -1155,9 +1154,6 @@ fn register_input_mode_bindings(app: &mut AppContext) {
                 linux_and_windows: "ctrl-shift-enter",
             },
             TerminalAction::StartNewAgentConversation {
-                origin: AgentViewEntryOrigin::Keybinding(
-                    ENTER_AGENT_VIEW_NEW_CONVERSATION_KEYSTROKE.clone(),
-                ),
             },
             agent_conversation_predicate.clone() & !command_predicate.clone(),
         )

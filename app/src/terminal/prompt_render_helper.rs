@@ -106,7 +106,6 @@ pub fn should_render_prompt_on_same_line(
 /// The AI prompt is unconditionally rendered above the input.
 pub fn should_render_prompt_using_editor_decorator_elements(
     is_universal_developer_input: bool,
-    ai_input_model: &ModelHandle<BlocklistAIInputModel>,
     model: &TerminalModel,
     app: &AppContext,
 ) -> bool {
@@ -173,7 +172,6 @@ pub struct PromptRenderHelper {
     prompt_selection_state_handle: SelectionHandle,
     input_render_state_model_handle: ModelHandle<InputRenderStateModel>,
 
-    ai_input_model: ModelHandle<BlocklistAIInputModel>,
 }
 
 #[derive(Clone, Copy)]
@@ -198,7 +196,6 @@ impl PromptRenderHelper {
         prompt_selection_state_handle: SelectionHandle,
         parent_view_id: EntityId,
         input_render_state_model_handle: ModelHandle<InputRenderStateModel>,
-        ai_input_model: ModelHandle<BlocklistAIInputModel>,
     ) -> Self {
         Self {
             sessions,

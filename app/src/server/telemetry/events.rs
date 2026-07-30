@@ -970,8 +970,6 @@ pub enum AIAgentInput {
     ResumeConversation,
     InitProjectRules { display_query: Option<String> },
     CreateEnvironment { display_query: Option<String> },
-    TriggerSuggestPrompt { trigger: PassiveSuggestionTrigger },
-    ActionResult { action_id: AIAgentActionId },
     CreateNewProject { query: String },
     CloneRepository { url: String },
     CodeReview,
@@ -1411,10 +1409,8 @@ pub enum TelemetryEvent {
     OpenNewSessionFromFilePath,
     OpenTeamFromURI,
     ShowedSuggestedAgentModeWorkflowChip {
-        logging_id: SuggestedLoggingId,
     },
     ShowedSuggestedAgentModeWorkflowModal {
-        logging_id: SuggestedLoggingId,
     },
     SelectNavigationPaletteItem,
     SelectCommandPaletteOption(String),
@@ -1842,7 +1838,6 @@ pub enum TelemetryEvent {
         /// The server-generated output ID for the output in this block.
         ///
         /// This is only populated if the some part of the response was successfully received.
-        server_output_id: Option<ServerOutputId>,
 
         was_autodetected_ai_query: bool,
 
@@ -1860,7 +1855,6 @@ pub enum TelemetryEvent {
         cancelled: bool,
 
         /// The ID of the conversation this block belongs to.
-        conversation_id: AIConversationId,
 
         /// Whether or not Universal Developer Input mode is enabled
         is_udi_enabled: bool,
@@ -1868,11 +1862,8 @@ pub enum TelemetryEvent {
     /// Rated a blocklist AI response via thumbs up/down.
     AgentModeRatedResponse {
         /// The server-generated ID for the output corresponding to this rating.
-        server_output_id: Option<ServerOutputId>,
 
         /// The ID of the conversation to which the rated output belongs.
-        conversation_id: AIConversationId,
-        rating: AIBlockResponseRating,
     },
     AgentModeClickedEntrypoint {
         entrypoint: AgentModeEntrypoint,
@@ -1880,7 +1871,6 @@ pub enum TelemetryEvent {
 
     /// User clicked the continue conversation button from a block footer.
     AgentModeContinueConversationButtonClicked {
-        conversation_id: AIConversationId,
     },
 
     /// User opened the rewind confirmation dialog.
@@ -1921,7 +1911,6 @@ pub enum TelemetryEvent {
         input: Option<String>,
         buffer_length: usize,
         is_manually_changed: bool,
-        new_input_type: InputType,
         active_block_id: BlockId,
         /// Whether or not Universal Developer Input mode is enabled
         is_udi_enabled: bool,
@@ -1944,9 +1933,6 @@ pub enum TelemetryEvent {
         total_history_count: usize,
         // The below fields are only collected if telemetry is enabled.
         actual_next_command_run: Option<String>,
-        history_based_autosuggestion_state: Option<HistoryBasedAutosuggestionState>,
-        generate_ai_input_suggestions_request: Option<GenerateAIInputSuggestionsRequest>,
-        generate_ai_input_suggestions_response: Option<GenerateAIInputSuggestionsResponseV2>,
     },
 
     /// Keeps track of number of times the user is presented with a Prompt Suggestions banner.
@@ -1967,7 +1953,6 @@ pub enum TelemetryEvent {
         /// Exchange ID of the conversation that produced this diff.
         /// `None` on the MAA passive-suggestion code path, which does not
         /// create an exchange.
-        code_exchange_id: Option<AIAgentExchangeId>,
         block_id: Option<String>,
         request_duration_ms: u64,
         /// Server-assigned request token from the `/passive-suggestion`
@@ -2010,23 +1995,18 @@ pub enum TelemetryEvent {
 
     /// Keeps track of number of times the user uses a zero state prompt suggestion & the type of suggestion used.
     ZeroStatePromptSuggestionUsed {
-        suggestion_type: ZeroStatePromptSuggestionType,
-        triggered_from: ZeroStatePromptSuggestionTriggeredFrom,
     },
 
     UnitTestSuggestionShown {
-        identifiers: AIIdentifiers,
     },
 
     UnitTestSuggestionAccepted {
-        identifiers: AIIdentifiers,
         query: Option<String>,
         interaction_source: InteractionSource,
     },
 
     /// Keeps track of when the user cancels a suggested prompt.
     UnitTestSuggestionCancelled {
-        identifiers: AIIdentifiers,
         interaction_source: InteractionSource,
     },
 
@@ -2035,18 +2015,15 @@ pub enum TelemetryEvent {
     AgentModeCodeSuggestionEditedByUser {
         /// Server-generated unique ID associated with the AI API output that generated the
         /// suggestion. Used to join client-side telemetry with server-side logs.
-        output_id: ServerOutputId,
     },
 
     /// Emitted when a user switches between files while viewing a code diff suggestion from Agent
     /// Mode.
     AgentModeCodeFilesNavigated {
-        output_id: ServerOutputId,
         source: AgentModeCodeFileNavigationSource,
     },
 
     AgentModeCodeDiffHunksNavigated {
-        output_id: ServerOutputId,
     },
 
     /// Emitted when the user toggles the "Intelligent autosuggestions" setting in the AI settings page.
@@ -2184,14 +2161,10 @@ pub enum TelemetryEvent {
     AgentModeSurfacedCitations {
         citations: Vec<AgentModeCitation>,
         block_id: String,
-        conversation_id: AIConversationId,
-        server_output_id: Option<ServerOutputId>,
     },
     AgentModeOpenedCitation {
         citation: AgentModeCitation,
         block_id: String,
-        conversation_id: AIConversationId,
-        server_output_id: Option<ServerOutputId>,
     },
     OpenedSharingDialog(OpenedSharingDialogEvent),
     ToggleLigatureRendering {
@@ -2226,15 +2199,12 @@ pub enum TelemetryEvent {
     },
     ChangedAgentModeAskUserQuestionPermission {
         src: AutonomySettingToggleSource,
-        new: AskUserQuestionPermission,
     },
     FullEmbedCodebaseContextSearchSuccess {
-        action_id: AIAgentActionId,
         total_search_duration: Duration,
         out_of_sync_delay: Option<Duration>,
     },
     FullEmbedCodebaseContextSearchFailed {
-        action_id: AIAgentActionId,
         error: String,
     },
     RepoOutlineConstructionSuccess {
@@ -2245,7 +2215,6 @@ pub enum TelemetryEvent {
         error: String,
     },
     AutoexecutedAgentModeRequestedCommand {
-        reason: CommandExecutionPermissionAllowedReason,
     },
     KnowledgePaneOpened {
         entrypoint: KnowledgePaneEntrypoint,
@@ -2264,17 +2233,13 @@ pub enum TelemetryEvent {
     #[cfg(feature = "local_fs")]
     PreviewPanePromoted,
     AISuggestedRuleAdded {
-        rule_id: SuggestedLoggingId,
     },
     AISuggestedRuleEdited {
-        rule_id: SuggestedLoggingId,
     },
     AISuggestedRuleContentChanged {
-        rule_id: SuggestedLoggingId,
         is_saved: bool,
     },
     AISuggestedAgentModeWorkflowAdded {
-        logging_id: SuggestedLoggingId,
     },
     AttachedImagesToAgentModeQuery {
         num_images: usize,
@@ -2305,10 +2270,8 @@ pub enum TelemetryEvent {
     },
     /// A file from the result of an AI Agent Action exceeded the context limit.
     FileExceededContextLimit {
-        identifiers: AIIdentifiers,
     },
     AgentModeError {
-        identifiers: AIIdentifiers,
         error: String,
         /// Some errors are retried internally without showing to the user.
         is_user_visible: bool,
@@ -2317,7 +2280,6 @@ pub enum TelemetryEvent {
     },
     /// Emitted when a MultiAgent request that initially failed is successfully completed after retries.
     AgentModeRequestRetrySucceeded {
-        identifiers: AIIdentifiers,
         /// The number of retry attempts that were made before success
         retry_count: usize,
         /// The original error that was retried
@@ -2333,11 +2295,9 @@ pub enum TelemetryEvent {
         command: Option<String>,
         output: Option<String>,
         error: String,
-        server_output_id: Option<ServerOutputId>,
     },
     FileGlobToolSucceeded,
     FileGlobToolFailed {
-        server_output_id: Option<ServerOutputId>,
     },
     MCPServerCollectionPaneOpened {
         entrypoint: MCPServerCollectionPaneEntrypoint,
@@ -2347,7 +2307,6 @@ pub enum TelemetryEvent {
     },
     MCPTemplateCreated {
         source: MCPTemplateCreationSource,
-        variables: Vec<TemplateVariable>,
         name: String,
     },
     MCPTemplateInstalled {
@@ -2360,7 +2319,6 @@ pub enum TelemetryEvent {
         server_model: MCPServerModel,
     },
     MCPToolCallAccepted {
-        server_output_id: Option<ServerOutputId>,
         tool_call: String,
         error: Option<MCPServerTelemetryError>,
     },
@@ -2374,12 +2332,9 @@ pub enum TelemetryEvent {
         exit_reason: Option<String>,
     },
     SearchCodebaseRequested {
-        action_id: AIAgentActionId,
-        server_output_id: Option<ServerOutputId>,
         is_cross_repo: bool,
     },
     SearchCodebaseRepoUnavailable {
-        action_id: AIAgentActionId,
         error: String,
     },
     /// User changed the input UX mode (e.g. Universal Developer Input, UDI, mode or Classic)
@@ -2395,7 +2350,6 @@ pub enum TelemetryEvent {
         /// Whether or not Universal Developer Input mode is enabled
         is_udi_enabled: bool,
         /// Current input mode when voice was used
-        current_input_mode: InputType,
     },
     /// User interacted with @-menu for context attachment
     AtMenuInteracted {
@@ -2408,13 +2362,11 @@ pub enum TelemetryEvent {
         /// Whether or not Universal Developer Input mode is enabled
         is_udi_enabled: bool,
         /// Current input mode when @ menu was used
-        current_input_mode: InputType,
     },
     TabCloseButtonPositionUpdated {
         position: TabCloseButtonPosition,
     },
     ExpandedCodeSuggestions {
-        identifiers: AIIdentifiers,
     },
     AIExecutionProfileCreated,
     AIExecutionProfileDeleted,
@@ -2448,10 +2400,7 @@ pub enum TelemetryEvent {
     },
     /// The AI input was not sent because there was already an in-flight request.
     AIInputNotSent {
-        entrypoint: Option<EntrypointType>,
         inputs: Vec<AIAgentInput>,
-        active_server_conversation_id: Option<ServerConversationToken>,
-        active_client_conversation_id: Option<AIConversationId>,
     },
     OpenSlashMenu {
         source: SlashMenuSource,
@@ -2480,7 +2429,6 @@ pub enum TelemetryEvent {
     InputBufferSubmitted {
         input_type: input_classifier::InputType,
         is_locked: bool,
-        input_type_decision_source: Option<InputTypeAutoDetectionSource>,
         was_lock_set_with_empty_buffer: bool,
         block_id: BlockId,
     },
@@ -2543,30 +2491,25 @@ pub enum TelemetryEvent {
 
     /// Emitted when the control state of the CLI subagent changes.
     CLISubagentControlStateChanged {
-        conversation_id: Option<AIConversationId>,
         block_id: BlockId,
         control_state: CLISubagentControlState,
     },
     /// Emitted when user toggles the visibility of agent responses.
     CLISubagentResponsesToggled {
-        conversation_id: AIConversationId,
         block_id: BlockId,
         is_hidden: bool,
     },
     /// Emitted when user dismisses the input in the CLI subagent.
     CLISubagentInputDismissed {
-        conversation_id: AIConversationId,
         block_id: BlockId,
     },
     /// Emitted when user approves a blocked action from the CLI subagent.
     CLISubagentActionExecuted {
-        conversation_id: AIConversationId,
         block_id: BlockId,
         is_autoexecuted: bool,
     },
     /// Emitted when user rejects a blocked action from the CLI subagent.
     CLISubagentActionRejected {
-        conversation_id: AIConversationId,
         block_id: BlockId,
         user_took_over: bool,
     },
@@ -2593,7 +2536,6 @@ pub enum TelemetryEvent {
     /// Emitted when an agent-requested command causes the shell to exit.
     AgentExitedShellProcess {
         command: String,
-        server_output_id: Option<ServerOutputId>,
     },
     /// Emitted when the user uses voice input from the CLI agent footer.
     CLIAgentToolbarVoiceInputUsed {
@@ -2615,14 +2557,12 @@ pub enum TelemetryEvent {
         /// The CLI agent being used.
         cli_agent: CLIAgentType,
         /// How the editor was opened (Ctrl-G or footer button).
-        entrypoint: CLIAgentInputEntrypoint,
     },
     /// Emitted when the CLI agent rich input editor is closed.
     CLIAgentRichInputClosed {
         /// The CLI agent being used.
         cli_agent: CLIAgentType,
         /// Why the editor was closed.
-        reason: CLIAgentRichInputCloseReason,
     },
     /// Emitted when the user submits a prompt via the CLI agent rich input editor.
     CLIAgentRichInputSubmitted {
@@ -2720,16 +2660,12 @@ pub enum TelemetryEvent {
     CloudAgentCapacityModalUpgradeClicked,
     /// Emitted when a RequestComputerUse action is approved (manually or auto-executed).
     ComputerUseApproved {
-        client_conversation_id: AIConversationId,
         server_conversation_id: Option<String>,
         is_autoexecuted: bool,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
     },
     /// Emitted when a RequestComputerUse action is cancelled/rejected.
     ComputerUseCancelled {
-        client_conversation_id: AIConversationId,
         server_conversation_id: Option<String>,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
     },
     /// Emitted when a warp://linear deeplink is opened.
     LinearIssueLinkOpened,

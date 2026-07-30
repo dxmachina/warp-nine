@@ -66,7 +66,6 @@ pub struct CommonCommandGates {
 /// availability. The callback remains concrete, so this helper does not require a surface trait.
 pub(super) fn subscribe_to_shared_dependencies<T>(
     active_session: &ModelHandle<ActiveSession>,
-    cli_subagent_controller: &ModelHandle<CLISubagentController>,
     terminal_view_id: EntityId,
     recompute_active_commands: fn(&mut T, &mut ModelContext<T>),
     ctx: &mut ModelContext<T>,
@@ -163,7 +162,6 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
 /// the wrapping surface types.
 pub struct SlashCommandDataSourceState {
     active_session: ModelHandle<ActiveSession>,
-    cli_subagent_controller: ModelHandle<CLISubagentController>,
     terminal_view_id: EntityId,
     active_commands_by_id: HashMap<SlashCommandId, StaticCommand>,
     active_repo_root: Option<PathBuf>,
@@ -171,7 +169,6 @@ pub struct SlashCommandDataSourceState {
 impl SlashCommandDataSourceState {
     pub(super) fn new(
         active_session: ModelHandle<ActiveSession>,
-        cli_subagent_controller: ModelHandle<CLISubagentController>,
         terminal_view_id: EntityId,
     ) -> Self {
         Self {

@@ -46,7 +46,6 @@ pub struct ModelSpecScoresLayout {
 }
 
 pub fn render_model_spec_scores(
-    spec: Option<&LLMSpec>,
     cost_row: CostRow,
     layout: ModelSpecScoresLayout,
     app: &AppContext,

@@ -11,7 +11,6 @@ use crate::themes::theme::Fill;
 #[derive(Clone)]
 pub struct WarpDriveMCPServer {
     id: CloudObjectTypeAndId,
-    mcp_server: CloudMCPServer,
 }
 
 impl WarpDriveMCPServer {

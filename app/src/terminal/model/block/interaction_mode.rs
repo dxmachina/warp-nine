@@ -107,9 +107,6 @@ impl Block {
             && let Some(state) = &mut metadata.long_running_control_state
         {
             *state = LongRunningCommandControlState::User {
-                reason: UserTakeOverReason::Stop {
-                    should_auto_resume: false,
-                },
             };
         }
     }
@@ -179,7 +176,6 @@ impl Block {
 
     pub fn take_over_control_for_user(
         &mut self,
-        reason: UserTakeOverReason,
     ) -> Result<(), UpdateInteractionModeError> {
         self.interaction_mode.take_over_for_user(reason)
     }
@@ -286,7 +282,6 @@ impl InteractionMode {
 
     fn take_over_for_user(
         &mut self,
-        reason: UserTakeOverReason,
     ) -> Result<(), UpdateInteractionModeError> {
         let Self::Agent(AgentInteractionMetadata {
             long_running_control_state,
@@ -322,16 +317,12 @@ impl Default for InteractionMode {
 pub struct AgentInteractionMetadata {
     /// The ID of the `AIAgentAction` associated with this block's requested command execution.
     /// This is optional because not all AI-related blocks are associated with a requested command.
-    requested_command_action_id: Option<AIAgentActionId>,
 
     /// The ID of the conversation to which this action belongs.
-    conversation_id: AIConversationId,
 
     /// The task ID for the CLI subagent interaction with this block if any.
-    subagent_task_id: Option<TaskId>,
 
     /// State governing user/agent interaction with the command in this block.
-    long_running_control_state: Option<LongRunningCommandControlState>,
 
     /// `true` if the agent has previously written to this block.
     has_agent_written_to_block: bool,
@@ -344,10 +335,6 @@ pub struct AgentInteractionMetadata {
 impl AgentInteractionMetadata {
     /// Creates a new metadata instance with fully specified fields.
     pub fn new(
-        requested_command_action_id: Option<AIAgentActionId>,
-        conversation_id: AIConversationId,
-        subagent_task_id: Option<TaskId>,
-        long_running_control_state: Option<LongRunningCommandControlState>,
         has_agent_written_to_block: bool,
         should_hide_block: bool,
     ) -> Self {
@@ -363,8 +350,6 @@ impl AgentInteractionMetadata {
 
     /// Convenience constructor for the common "hidden by default" case used for requested commands.
     pub fn new_hidden(
-        requested_command_action_id: AIAgentActionId,
-        conversation_id: AIConversationId,
     ) -> Self {
         Self::new(
             Some(requested_command_action_id),

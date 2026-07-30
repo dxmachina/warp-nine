@@ -733,10 +733,8 @@ pub struct TabPaneGroupIdentifiers {
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LocalToCloudHandoffIntent {
-    UserInitiated(HandoffEntryPoint),
     Automatic {
         trigger: AutoCloudHandoffTrigger,
-        conversation_id: AIConversationId,
     },
 }
 
@@ -867,7 +865,6 @@ struct RightPanelUpdateParams<'a> {
     pane_group: &'a ViewHandle<PaneGroup>,
     target_open_state: bool,
     entrypoint: Option<CodeReviewPaneEntrypoint>,
-    cli_agent: Option<crate::terminal::CLIAgent>,
     review_pane_context: Option<&'a CodeReviewPaneContext>,
 }
 
@@ -1018,21 +1015,17 @@ pub struct Workspace {
     reauth_banner_dismissed: bool,
     settings_file_error: Option<crate::settings::SettingsFileError>,
     settings_error_banner_dismissed: bool,
-    ai_assistant_panel: ViewHandle<AIAssistantPanelView>,
     should_show_ai_assistant_warm_welcome: bool,
     ai_assistant_close_warm_welcome_mouse_state_handle: MouseStateHandle,
     auth_override_warning_modal: ViewHandle<AuthOverrideWarningModal>,
     require_login_modal: ViewHandle<AuthView>,
     workflow_modal: ViewHandle<WorkflowModal>,
     prompt_editor_modal: ViewHandle<PromptEditorModal>,
-    agent_toolbar_editor_modal: ViewHandle<AgentToolbarEditorModal>,
     header_toolbar_editor_modal: ViewHandle<HeaderToolbarEditorModal>,
     header_toolbar_context_menu: ViewHandle<Menu<WorkspaceAction>>,
     show_header_toolbar_context_menu: Option<Vector2F>,
     theme_creator_modal: ViewHandle<ThemeCreatorModal>,
     theme_deletion_modal: ViewHandle<ThemeDeletionModal>,
-    suggested_agent_mode_workflow_modal: ViewHandle<SuggestedAgentModeWorkflowModal>,
-    suggested_rule_modal: ViewHandle<SuggestedRuleModal>,
     oz_launch_modal: ModalWithTab<LaunchModal<OzLaunchSlide>>,
     openwarp_launch_modal: ViewHandle<OpenWarpLaunchModal>,
     orchestration_launch_modal: ViewHandle<OrchestrationLaunchModal>,
@@ -1079,7 +1072,6 @@ pub struct Workspace {
     transcript_details_panel: ViewHandle<ConversationDetailsPanel>,
 
     file_upload_sessions: FileUploadSessions,
-    ai_fact_view: ViewHandle<AIFactView>,
     left_panel_open: bool,
     vertical_tabs_panel_open: bool,
     vertical_tabs_panel: VerticalTabsPanelState,
@@ -1087,9 +1079,6 @@ pub struct Workspace {
     left_panel_views: Vec<ToolPanelView>,
     right_panel_view: ViewHandle<RightPanelView>,
     working_directories_model: ModelHandle<pane_group::WorkingDirectoriesModel>,
-    agent_management_view: ViewHandle<AgentManagementView>,
-    notification_mailbox_view: Option<ViewHandle<NotificationMailboxView>>,
-    notification_toast_stack: Option<ViewHandle<AgentNotificationToastStack>>,
     lightbox_view: Option<ViewHandle<LightboxView>>,
     hoa_onboarding_flow: Option<ViewHandle<HoaOnboardingFlow>>,
     /// Pinned position for the vertical tabs callout so it doesn't move when
@@ -1127,7 +1116,6 @@ pub struct Workspace {
     /// Workspace-level modal hosting `AuthSecretFtuxView` for the
     /// orchestration cards' "New API key…" flow. Cloud mode renders the
     /// FTUX view inline and does not use this.
-    create_auth_secret_modal: Option<ViewHandle<Modal<AuthSecretFtuxView>>>,
 }
 
 impl Workspace {
@@ -1718,7 +1706,6 @@ impl Workspace {
     }
 
     fn build_workflow_modal(
-        ai_client: Arc<dyn AIClient>,
         ctx: &mut ViewContext<Self>,
     ) -> ViewHandle<WorkflowModal> {
         let workflow_modal =
@@ -1760,7 +1747,6 @@ impl Workspace {
 
     fn handle_suggested_rule_modal_event(
         &mut self,
-        event: &SuggestedRuleModalEvent,
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
@@ -3435,7 +3421,6 @@ impl Workspace {
     fn handle_history_model_event(
         &mut self,
         _: ModelHandle<BlocklistAIHistoryModel>,
-        event: &BlocklistAIHistoryEvent,
         ctx: &mut ViewContext<Self>,
     ) {
         #[cfg(target_family = "wasm")]
@@ -4865,7 +4850,6 @@ impl Workspace {
     fn notify_terminal_focus_change(
         &self,
         focused_terminal_view_id: Option<EntityId>,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
         ctx: &mut ViewContext<Self>,
     ) {
         let window_id = ctx.window_id();
@@ -7465,7 +7449,6 @@ impl Workspace {
 
     fn open_suggested_rule_modal(
         &mut self,
-        rule_and_id: &SuggestedRuleAndId,
         ctx: &mut ViewContext<Self>,
     ) {
         self.current_workspace_state.is_suggested_rule_modal_open = true;
@@ -8779,7 +8762,6 @@ impl Workspace {
         context: &CodeReviewPaneContext,
         pane_group_handle: &ViewHandle<PaneGroup>,
         entrypoint: CodeReviewPaneEntrypoint,
-        cli_agent: Option<crate::terminal::CLIAgent>,
         ctx: &mut ViewContext<Self>,
     ) {
         if pane_group_handle.as_ref(ctx).right_panel_open {
@@ -11806,7 +11788,6 @@ impl Workspace {
     pub fn add_tab_with_pane_layout(
         &mut self,
         panes_layout: PanesLayout,
-        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlockListItem>>>,
         custom_tab_title: Option<String>,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -12195,7 +12176,6 @@ impl Workspace {
 
     fn set_pending_query_state_for_terminal_view(
         terminal_view_id: EntityId,
-        pending_query_state: PendingQueryState,
         ctx: &mut AppContext,
     ) {
         let terminal_view = ctx.window_ids().find_map(|window_id| {
@@ -12230,13 +12210,10 @@ impl Workspace {
     #[allow(clippy::too_many_arguments)]
     fn create_local_fork(
         &mut self,
-        source_conversation: Box<AIConversation>,
-        conversation_id: AIConversationId,
         fork_from_exchange: Option<ForkFromExchange>,
         summarize_after_fork: bool,
         summarization_prompt: Option<String>,
         initial_prompt: Option<String>,
-        initial_attachments: Vec<PendingAttachment>,
         destination: ForkedConversationDestination,
         has_initial_query: bool,
         source_terminal_view_id: Option<EntityId>,
@@ -12251,14 +12228,12 @@ impl Workspace {
                     &source_conversation,
                     fork_from.exchange_id,
                     fork_from.fork_from_exact_exchange,
-                    FORK_PREFIX,
                     None,
                     ctx,
                 )
             } else {
                 history_model.fork_conversation(
                     &source_conversation,
-                    FORK_PREFIX,
                     true, /* preserve_task_ids */
                     None,
                     ctx,
@@ -12445,7 +12420,6 @@ impl Workspace {
 
     /// Show a toast notification for a forked conversation.
     fn show_fork_toast(
-        conversation_id: AIConversationId,
         window_id: WindowId,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -13995,7 +13969,6 @@ impl Workspace {
                 // Open the AI Fact Collection pane directly with the Rule Editor page for adding a new rule
                 self.open_ai_fact_collection_pane(
                     None,
-                    Some(AIFactPage::RuleEditor { sync_id: None }),
                     ctx,
                 );
                 send_telemetry_from_ctx!(
@@ -16950,8 +16923,6 @@ impl Workspace {
     #[cfg(not(target_family = "wasm"))]
     fn open_plugin_instructions_pane(
         &mut self,
-        agent: crate::terminal::CLIAgent,
-        kind: PluginModalKind,
         ctx: &mut ViewContext<Self>,
     ) {
         use crate::terminal::model::rich_content::RichContentType;
@@ -21702,7 +21673,6 @@ impl TypedActionView for Workspace {
                     };
                     let launch = Some(PendingCloudLaunch {
                         prompt: AUTO_CLOUD_HANDOFF_PROMPT.to_owned(),
-                        attachments: HandoffLaunchAttachments::default(),
                     });
                     match self.terminal_view(*terminal_view_id, ctx) {
                         Some(source_view) => {
@@ -23639,7 +23609,6 @@ impl TypedActionView for Workspace {
                     }
                 }
 
-                conversation_utils::delete_conversation(*conversation_id, *terminal_view_id, ctx);
 
                 send_telemetry_from_ctx!(TelemetryEvent::ConversationListItemDeleted, ctx);
                 ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {

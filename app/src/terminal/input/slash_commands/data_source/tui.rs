@@ -28,7 +28,6 @@ use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 
 pub struct TuiDataSourceArgs {
     pub active_session: ModelHandle<ActiveSession>,
-    pub cli_subagent_controller: ModelHandle<CLISubagentController>,
     pub terminal_view_id: EntityId,
     pub terminal_model: Arc<FairMutex<TerminalModel>>,
 }

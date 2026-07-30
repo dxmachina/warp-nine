@@ -56,7 +56,6 @@ pub enum SshRemoteServerChoiceViewEvent {
 /// Choice block prompting the user to install the remote-server binary on the remote host or skip.
 pub struct SshRemoteServerChoiceView {
     session_id: SessionId,
-    buttons: ViewHandle<KeyboardNavigableButtons>,
     do_not_ask_again_mouse_state: MouseStateHandle,
     do_not_ask_again_label_mouse_state: MouseStateHandle,
     manage_settings_mouse_state: MouseStateHandle,

@@ -785,46 +785,16 @@ impl ObjectClient for ServerApi {
                                 );
                             }
                             warp_graphql::generic_string_object::GenericStringObjectFormat::JsonAIFact => {
-                                parse_server_gso::<AIFact, JsonSerializer>(
-                                    &mut updated_generic_string_objects,
-                                    GenericStringObjectFormat::Json(JsonObjectType::AIFact),
-                                    gso,
-                                );
                             }
                             warp_graphql::generic_string_object::GenericStringObjectFormat::JsonMCPServer => {
-                                parse_server_gso::<MCPServer, JsonSerializer>(
-                                    &mut updated_generic_string_objects,
-                                    GenericStringObjectFormat::Json(JsonObjectType::MCPServer),
-                                    gso,
-                                );
                             }
                             warp_graphql::generic_string_object::GenericStringObjectFormat::JsonAIExecutionProfile => {
-                                parse_server_gso::<AIExecutionProfile, JsonSerializer>(
-                                    &mut updated_generic_string_objects,
-                                    GenericStringObjectFormat::Json(JsonObjectType::AIExecutionProfile),
-                                    gso,
-                                );
                             }
                             warp_graphql::generic_string_object::GenericStringObjectFormat::JsonTemplatableMCPServer => {
-                                parse_server_gso::<TemplatableMCPServer, JsonSerializer>(
-                                    &mut updated_generic_string_objects,
-                                    GenericStringObjectFormat::Json(JsonObjectType::TemplatableMCPServer),
-                                    gso,
-                                );
                             }
                             warp_graphql::generic_string_object::GenericStringObjectFormat::JsonCloudEnvironment => {
-                                parse_server_gso::<AmbientAgentEnvironment, JsonSerializer>(
-                                    &mut updated_generic_string_objects,
-                                    GenericStringObjectFormat::Json(JsonObjectType::CloudEnvironment),
-                                    gso,
-                                );
                             }
                             warp_graphql::generic_string_object::GenericStringObjectFormat::JsonScheduledAmbientAgent => {
-                                parse_server_gso::<ScheduledAmbientAgent, JsonSerializer>(
-                                    &mut updated_generic_string_objects,
-                                    GenericStringObjectFormat::Json(JsonObjectType::ScheduledAmbientAgent),
-                                    gso,
-                                );
                             }
                             // GSO formats unknown to this client build (e.g. the
                             // server-only `JsonRunner`) are skipped so syncing of

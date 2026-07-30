@@ -10,7 +10,6 @@ use crate::server::server_api::ServerApiProvider;
 const PAGE_SIZE: i32 = 20;
 
 pub struct UsageHistoryModel {
-    ai_client: Arc<dyn AIClient>,
     entries: Vec<warp_graphql::queries::get_conversation_usage::ConversationUsage>,
     is_loading: bool,
     // Whether the server indicated that there may be more entries to load.

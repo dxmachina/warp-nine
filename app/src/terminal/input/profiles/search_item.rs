@@ -18,7 +18,6 @@ const MANAGE_PROFILES_LABEL: &str = "Manage profiles";
 #[derive(Debug, Clone)]
 enum ProfileSearchItemKind {
     Profile {
-        profile_id: ExecutionProfileId,
         profile_name: String,
         is_selected: bool,
     },
@@ -34,7 +33,6 @@ pub(super) struct ProfileSearchItem {
 
 impl ProfileSearchItem {
     pub fn new_profile_item(
-        profile_id: ExecutionProfileId,
         profile_name: String,
         is_selected: bool,
     ) -> Self {

@@ -110,7 +110,6 @@ pub enum CodeSource {
         range_end: Option<LineAndColumnArg>,
     },
     /// Opened from an active AI agent conversation.
-    AIAction { id: AIAgentActionId },
     /// Opened from project rules (WARP.md) file.
     ProjectRules { location: LocalOrRemotePath },
     /// Opened from file tree (local or remote).
@@ -123,7 +122,6 @@ pub enum CodeSource {
     Skill {
         reference: SkillReference,
         location: LocalOrRemotePath,
-        origin: SkillOpenOrigin,
     },
 }
 
@@ -265,7 +263,6 @@ struct CodePaneData {
 // Allow dead_code here for wasm compilation
 #[allow(dead_code)]
 pub enum CodeManagerEvent {
-    EditCompleted { action_id: AIAgentActionId },
 }
 
 /// Singleton model for managing the state of open code panes. It is responsible for

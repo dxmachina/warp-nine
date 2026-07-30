@@ -120,7 +120,6 @@ impl ConfigurableItem {
 /// voice input, image attach, file explorer, view changes, compose, etc.)
 /// inside the configurator.
 pub struct ControlItemRenderer {
-    kind: Option<AgentToolbarItemKind>,
     custom_label: Option<String>,
     custom_icon: Option<crate::ui_components::icons::Icon>,
     /// An opaque string identifier for round-tripping items through the configurator.
@@ -383,9 +382,6 @@ impl ChipConfigurator {
     /// Initialize for `LeftRightZones` layout with `AgentToolbarItemKind` lists.
     pub fn open_left_right_zones_with_items(
         &mut self,
-        left_items: Vec<AgentToolbarItemKind>,
-        right_items: Vec<AgentToolbarItemKind>,
-        available: Vec<AgentToolbarItemKind>,
         appearance: &Appearance,
     ) {
         self.reset();

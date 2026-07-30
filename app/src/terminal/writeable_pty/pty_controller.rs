@@ -56,7 +56,6 @@ enum PtyWrite {
         /// The bytes to be written.
         bytes: Cow<'static, [u8]>,
         /// The `mode` for the agent's write.
-        mode: AIAgentPtyWriteMode,
     },
     RunNativeShellCompletions(NativeShellCompletionsState),
 }

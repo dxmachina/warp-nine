@@ -26,7 +26,6 @@ pub enum InitEnvironmentBlockEvent {
 
 enum SetupState {
     Pending {
-        action_view: ViewHandle<KeyboardNavigableButtons>,
     },
     Skipped,
 }
@@ -94,7 +93,6 @@ impl InitEnvironmentBlock {
 
     fn render_pending_step(
         &self,
-        action_view: &ViewHandle<KeyboardNavigableButtons>,
         app: &AppContext,
     ) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);

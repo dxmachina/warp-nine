@@ -435,7 +435,6 @@ pub enum CodeReviewViewEvent {
     /// Emitted when review comments are ready to be submitted.
     /// A higher-level view (RightPanelView) handles routing to an available terminal.
     SubmitReviewComments {
-        comments: AgentReviewCommentBatch,
         repo_path: LocalOrRemotePath,
     },
     /// Request to open a file in a new tab (e.g. goto-definition).
@@ -5980,7 +5979,6 @@ impl CodeReviewView {
             DiffMode::MainBranch => {
                 let main_branch_name = self.diff_state_model.as_ref(ctx).get_main_branch_name(ctx);
                 match main_branch_name {
-                    Some(name) => Ok(DiffBase::BranchName(name)),
                     None => Err(anyhow::anyhow!("unable to determine main branch name")),
                 }
             }
@@ -6118,7 +6116,6 @@ impl CodeReviewView {
                             .read(ctx, |model, ctx| model.get_main_branch_name(ctx));
 
                         match main_branch_name {
-                            Some(name) => DiffBase::BranchName(name),
                             None => {
                                 log::warn!(
                                     "Unable to determine main branch name when inserting diff hunk context."

@@ -65,7 +65,6 @@ pub(super) enum ActiveBlockCompletion {
 
 #[derive(Clone, Copy, Debug)]
 struct ActiveConversationContext {
-    conversation_id: AIConversationId,
     is_cloud: bool,
 }
 
@@ -77,7 +76,6 @@ pub struct RichContentItem {
     pub view_id: EntityId,
     pub last_laid_out_height: BlockHeight,
     /// The conversation ID of the active agent view when this rich content was created, if any.
-    pub agent_view_conversation_id: Option<AIConversationId>,
     pub should_hide: bool,
 }
 
@@ -85,7 +83,6 @@ impl RichContentItem {
     pub fn new(
         content_type: Option<RichContentType>,
         view_id: EntityId,
-        agent_view_conversation_id: Option<AIConversationId>,
         should_hide: bool,
     ) -> Self {
         Self {
@@ -572,7 +569,6 @@ impl<'a> SharedSessionScrollbackBlocks<'a> {
 impl BlockList {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        restored_blocks: Option<&[SerializedBlockListItem]>,
         sizes: BlockSize,
         event_proxy: ChannelEventListener,
         background_executor: Arc<Background>,
@@ -1367,7 +1363,6 @@ impl BlockList {
     pub fn finish_oz_environment_startup_commands_at_block(
         &mut self,
         block_id: &BlockId,
-        conversation_id: Option<AIConversationId>,
     ) {
         self.is_executing_oz_environment_startup_commands = false;
         if let Some(block_index) = self.block_index_for_id(block_id) {
@@ -1620,7 +1615,6 @@ impl BlockList {
     pub fn remove_pending_context_assocation_for_blocks<'a>(
         &mut self,
         block_ids: impl Iterator<Item = &'a BlockId>,
-        conversation_id: AIConversationId,
     ) -> Vec<(BlockId, AgentViewVisibility)> {
         let mut modified_blocks = Vec::new();
         for block_id in block_ids {

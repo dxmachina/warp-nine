@@ -97,11 +97,7 @@ pub fn create_attachment_reference_and_key(
 /// This encapsulates the common logic for creating and registering diff attachments
 #[cfg(feature = "local_fs")]
 pub fn register_diffset_attachment(
-    ai_context_model: &ModelHandle<BlocklistAIContextModel>,
     attachment_key: String,
-    file_diffs: HashMap<String, Vec<DiffSetHunk>>,
-    current: Option<CurrentHead>,
-    base: DiffBase,
     ctx: &mut AppContext,
 ) {
     // Create the DiffSet attachment

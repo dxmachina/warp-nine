@@ -1126,7 +1126,6 @@ impl PartialOrd for HistoryOrder {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum HistoryInputSuggestion<'a> {
     Command { entry: &'a HistoryEntry },
-    AIQuery { entry: AIQueryHistory },
 }
 
 impl HistoryInputSuggestion<'_> {
@@ -1228,7 +1227,6 @@ pub struct AIQueryHistoryEntryDetails {
     pub(crate) start_time: DateTime<Local>,
 
     /// The status of the output streaming from the AI API.
-    pub(crate) output_status: AIQueryHistoryOutputStatus,
 
     /// The working directory when the AI query was submitted.
     pub(crate) working_directory: Option<String>,

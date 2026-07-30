@@ -803,7 +803,6 @@ pub struct LlmHostSettings {
 pub struct LlmSettings {
     pub enabled: bool,
     #[serde(default)]
-    pub host_configs: std::collections::HashMap<LLMModelHost, LlmHostSettings>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -846,14 +845,9 @@ pub struct AiPermissionsSettings {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AiAutonomySettings {
-    pub apply_code_diffs_setting: Option<ActionPermission>,
-    pub read_files_setting: Option<ActionPermission>,
     pub read_files_allowlist: Option<Vec<PathBuf>>,
-    pub execute_commands_setting: Option<ActionPermission>,
     pub execute_commands_allowlist: Option<Vec<AgentModeCommandExecutionPredicate>>,
     pub execute_commands_denylist: Option<Vec<AgentModeCommandExecutionPredicate>>,
-    pub write_to_pty_setting: Option<WriteToPtyPermission>,
-    pub computer_use_setting: Option<ComputerUsePermission>,
 }
 
 impl AiAutonomySettings {
@@ -979,7 +973,6 @@ pub struct TeamByoSettings {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ByoFirstPartyKey {
-    pub provider: LLMProvider,
     pub credential_uid: String,
 }
 

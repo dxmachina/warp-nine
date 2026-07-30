@@ -60,7 +60,6 @@ pub enum InlineModelSelectorTab {
 #[derive(Debug, Clone)]
 pub enum InlineModelSelectorEvent {
     SelectedModel {
-        id: LLMId,
         selected_tab: InlineModelSelectorTab,
         set_as_default: bool,
     },
@@ -85,7 +84,6 @@ static TAB_CONFIGS: LazyLock<Vec<InlineMenuTabConfig<InlineModelSelectorTab>>> =
     });
 
 struct TabSwitchSelection {
-    model_id: Option<LLMId>,
     index: Option<usize>,
 }
 
@@ -115,11 +113,8 @@ impl InlineModelSelectorView {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         terminal_view_id: EntityId,
-        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         input_buffer_model: &ModelHandle<InputBufferModel>,
-        cli_subagent_controller: ModelHandle<CLISubagentController>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {

@@ -89,7 +89,6 @@ pub struct TerminalManager {
     /// ambient session join. `Arc<FairMutex<Option<...>>>` matches
     /// `current_network` so the network-event closure can write into it
     /// without `&mut self`.
-    orchestration_viewer_model: Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
     /// `true` for the root viewer pane of an orchestrator, `false` for
     /// per-child viewer panes. Skipping polling on children avoids
     /// duplicated REST traffic and grandchild double-registration via the
@@ -728,7 +727,6 @@ impl TerminalManager {
         current_network: Arc<FairMutex<Option<ModelHandle<Network>>>>,
         prompt_type: ModelHandle<PromptType>,
         viewer_remote_update_guard: RemoteUpdateGuard,
-        orchestration_viewer_model: Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
         enable_orchestration_polling: bool,
         ctx: &mut AppContext,
     ) {
@@ -1679,7 +1677,6 @@ impl TerminalManager {
         model: Arc<FairMutex<TerminalModel>>,
         current_network: &Arc<FairMutex<Option<ModelHandle<Network>>>>,
         ended_network: &ModelHandle<Network>,
-        orchestration_viewer_model: &Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
         is_ambient_agent: bool,
         ctx: &mut AppContext,
     ) -> bool {

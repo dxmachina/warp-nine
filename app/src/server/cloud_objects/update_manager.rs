@@ -136,7 +136,6 @@ pub enum UpdateManagerEvent {
         templates: Vec<MCPGalleryTemplate>,
     },
     AmbientTaskUpdated {
-        task_id: AmbientAgentTaskId,
         timestamp: DateTime<Utc>,
     },
 }

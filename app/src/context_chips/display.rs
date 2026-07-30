@@ -47,8 +47,6 @@ impl RowBuilder {
 pub struct PromptDisplay {
     prompt: ModelHandle<PromptType>,
     display_chips: Vec<ViewHandle<DisplayChip>>,
-    ai_input_model: ModelHandle<BlocklistAIInputModel>,
-    ai_context_model: ModelHandle<BlocklistAIContextModel>,
     terminal_view_id: EntityId,
     menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
     session_context: Option<SessionContext>,
@@ -61,7 +59,6 @@ pub struct PromptDisplay {
     /// Whether this terminal is viewing a shared session.
     is_shared_session_viewer: bool,
 
-    agent_view_controller: ModelHandle<AgentViewController>,
 }
 
 const PROMPT_CHIP_DISPLAY_ID: &str = "PromptChipDisplay";
@@ -83,8 +80,6 @@ pub enum PromptDisplayEvent {
     RunAgentQuery(String),
     TryExecuteCommand(PromptChipShellCommand),
     OpenAIDocument {
-        document_id: AIDocumentId,
-        document_version: AIDocumentVersion,
     },
 }
 
@@ -92,14 +87,11 @@ impl PromptDisplay {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         prompt: ModelHandle<PromptType>,
-        ai_input_model: ModelHandle<BlocklistAIInputModel>,
-        ai_context_model: ModelHandle<BlocklistAIContextModel>,
         terminal_view_id: EntityId,
         menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
         session_context: Option<SessionContext>,
         current_repo_path: Option<PathBuf>,
         model_events: ModelHandle<ModelEventDispatcher>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         is_shared_session_viewer: bool,
         ctx: &mut ViewContext<Self>,
     ) -> Self {

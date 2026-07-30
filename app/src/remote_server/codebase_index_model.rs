@@ -218,7 +218,6 @@ impl RemoteCodebaseIndexModel {
 
     pub fn active_repo_availability(
         &self,
-        session_context: &SessionContext,
         explicit_repo_path: Option<&str>,
     ) -> RemoteCodebaseSearchAvailability {
         let Some(host_id) = session_context.host_id() else {
@@ -234,7 +233,6 @@ impl RemoteCodebaseIndexModel {
 
     pub fn active_repo_path(
         &self,
-        session_context: &SessionContext,
         explicit_repo_path: Option<&str>,
     ) -> Option<String> {
         self.active_repo_availability(session_context, explicit_repo_path)
@@ -244,7 +242,6 @@ impl RemoteCodebaseIndexModel {
 
     pub fn request_active_repo_index(
         &self,
-        session_context: &SessionContext,
         explicit_repo_path: Option<&str>,
         ctx: &mut ModelContext<Self>,
     ) -> bool {

@@ -174,7 +174,6 @@ impl ReportShutdownRequest {
 pub trait HarnessSupportClient: 'static + Send + Sync {
     pub(crate) async fn get_public_api_response_for_task(
         &self,
-        task_id: &AmbientAgentTaskId,
         path: &str,
     ) -> Result<http_client::Response> {
         let auth_token = self
@@ -207,7 +206,6 @@ pub trait HarnessSupportClient: 'static + Send + Sync {
 
     pub(crate) async fn post_public_api_response_for_task<B>(
         &self,
-        task_id: &AmbientAgentTaskId,
         path: &str,
         body: &B,
     ) -> Result<http_client::Response>
@@ -244,7 +242,6 @@ pub trait HarnessSupportClient: 'static + Send + Sync {
 
     pub(crate) async fn resolve_prompt_for_task(
         &self,
-        task_id: &AmbientAgentTaskId,
         request: ResolvePromptRequest,
     ) -> Result<ResolvedHarnessPrompt> {
         let response = self
@@ -259,7 +256,6 @@ pub trait HarnessSupportClient: 'static + Send + Sync {
 
     pub(crate) async fn fetch_transcript_for_task(
         &self,
-        task_id: &AmbientAgentTaskId,
     ) -> Result<bytes::Bytes> {
         #[cfg(not(target_family = "wasm"))]
         {
@@ -290,7 +286,6 @@ impl HarnessSupportClient for ServerApi {
 
     async fn get_transcript_upload_target(
         &self,
-        conversation_id: &AIConversationId,
     ) -> Result<UploadTarget> {
         self.post_public_api(
             "harness-support/transcript",
@@ -303,7 +298,6 @@ impl HarnessSupportClient for ServerApi {
 
     async fn get_block_snapshot_upload_target(
         &self,
-        conversation_id: &AIConversationId,
     ) -> Result<UploadTarget> {
         self.post_public_api(
             "harness-support/block-snapshot",

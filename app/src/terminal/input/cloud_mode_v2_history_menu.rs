@@ -51,7 +51,6 @@ impl CloudModeV2HistoryMenuView {
         terminal_view_id: EntityId,
         active_session: ModelHandle<ActiveSession>,
         input_suggestions_model: &ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         buffer_model: ModelHandle<InputBufferModel>,
         ctx: &mut ViewContext<Self>,

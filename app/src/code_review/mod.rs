@@ -44,7 +44,6 @@ pub struct CodeReviewPanelArg {
     pub terminal_view: WeakViewHandle<TerminalView>,
     pub entrypoint: CodeReviewPaneEntrypoint,
     pub focus_new_pane: bool,
-    pub cli_agent: Option<CLIAgent>,
 }
 
 /// Scope for diff set context attachment

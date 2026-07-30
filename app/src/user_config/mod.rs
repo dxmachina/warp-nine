@@ -66,7 +66,6 @@ pub enum WarpConfigUpdateEvent {
     ModelConfigs,
     /// Emitted when one or more `custom_model_routers/` files failed to parse.
     #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    ModelConfigErrors(Vec<ModelConfigError>),
     /// The settings file (`settings.toml`) was created, modified, or deleted.
     #[cfg_attr(not(feature = "local_fs"), expect(dead_code))]
     Settings,
@@ -95,10 +94,8 @@ pub struct WarpConfig {
     local_user_workflows: Vec<Workflow>,
     /// User-defined custom model routers loaded from `~/.warp/custom_model_routers/`.
     #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    custom_model_routers: Vec<CustomModelRouter>,
     /// Errors for `custom_model_routers/` files that failed to parse.
     #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    custom_model_router_errors: Vec<ModelConfigError>,
 }
 
 /// Platform-independent parts of WarpConfig.

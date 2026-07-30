@@ -448,8 +448,6 @@ impl Input {
         argument: Option<&String>,
         trigger: SlashCommandTrigger,
         is_queued_prompt: bool,
-        queued_conversation_id: Option<AIConversationId>,
-        queued_query_id: Option<QueuedQueryId>,
         ctx: &mut ViewContext<Self>,
     ) -> bool {
         fn show_error_toast(message: String, ctx: &mut ViewContext<Input>) {
@@ -530,7 +528,6 @@ impl Input {
                 ctx.emit(Event::EnterAgentView {
                     initial_prompt: prompt,
                     conversation_id: None,
-                    origin: AgentViewEntryOrigin::SlashCommand { trigger },
                 });
             }
             SlashCommandKind::CloudAgent => {
@@ -1008,7 +1005,6 @@ impl Input {
                         WorkspaceAction::OpenLocalToCloudHandoffPane {
                             launch: Some(launch),
                             environment_id: None,
-                            entry_point: HandoffEntryPoint::SlashCommand,
                         },
                     );
                 } else if self.source_conversation_has_content(ctx) {
@@ -1020,7 +1016,6 @@ impl Input {
                         WorkspaceAction::OpenLocalToCloudHandoffPane {
                             launch: None,
                             environment_id: None,
-                            entry_point: HandoffEntryPoint::SlashCommand,
                         },
                     );
                 } else {
@@ -1474,8 +1469,6 @@ impl Input {
     /// Sends a queued `/compact-and` summary and stores its follow-up on the original conversation.
     pub(super) fn execute_queued_compact_and(
         &mut self,
-        conversation_id: AIConversationId,
-        queued_query_id: QueuedQueryId,
         initial_prompt: Option<String>,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -1539,7 +1532,6 @@ pub(crate) struct ForkButtonAction {
 /// is unavailable in the current cloud-agent context, and `/fork` otherwise.
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn fork_button_action(
-    conversation_id: Option<AIConversationId>,
     is_cloud_agent_context: bool,
     ctx: &AppContext,
 ) -> ForkButtonAction {

@@ -23,16 +23,11 @@ use crate::util::extensions::TrimStringExt;
 pub enum SerializedAgentViewVisibility {
     Terminal {
         #[serde(default)]
-        pending_conversation_ids: HashSet<AIConversationId>,
-        conversation_ids: HashSet<AIConversationId>,
     },
     Agent {
         #[serde(alias = "conversation_id")]
-        origin_conversation_id: AIConversationId,
         #[serde(default)]
-        pending_other_conversation_ids: HashSet<AIConversationId>,
         #[serde(default)]
-        other_conversation_ids: HashSet<AIConversationId>,
     },
 }
 
@@ -92,15 +87,11 @@ pub struct SerializedAIMetadata {
     /// The ID of the `AIAgentAction` associated with this block's requested command execution.
     /// This is optional because not all AI-related blocks are associated with a requested command.
     #[serde(alias = "action_id")]
-    requested_command_action_id: Option<AIAgentActionId>,
 
     /// The ID of the conversation to which this action belongs.
-    conversation_id: AIConversationId,
 
-    subagent_task_id: Option<TaskId>,
 
     /// State governing user/agent interaction with the command in this block.
-    long_running_control_state: Option<LongRunningCommandControlState>,
 
     /// `true` if the agent has previously written to this block.
     has_agent_written_to_block: bool,

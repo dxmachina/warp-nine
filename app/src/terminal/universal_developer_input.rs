@@ -99,7 +99,6 @@ impl AtContextMenuDisabledReason {
     pub fn get_disable_reason(
         active_block_metadata: Option<&BlockMetadata>,
         sessions: &Sessions,
-        input_config: &InputConfig,
         ctx: &AppContext,
     ) -> Option<AtContextMenuDisabledReason> {
         // Derive session information from block metadata and sessions
@@ -278,10 +277,7 @@ pub struct UniversalDeveloperInputButtonBar {
     at_button: ViewHandle<ActionButton>,
     file_button: ViewHandle<ActionButton>,
     slash_command_button: ViewHandle<ActionButton>,
-    profile_model_selector_full: ViewHandle<ProfileModelSelector>,
-    profile_model_selector_compact: ViewHandle<ProfileModelSelector>,
     segmented_control: ViewHandle<SegmentedControl<InputToggleMode>>,
-    prompt_alert: ViewHandle<PromptAlertView>,
 
     cached_ui_state: Rc<RefCell<CachedUIState>>,
     terminal_model: std::sync::Arc<parking_lot::FairMutex<crate::terminal::TerminalModel>>,
@@ -299,11 +295,9 @@ pub enum UniversalDeveloperInputButtonBarAction {
 pub enum UniversalDeveloperInputButtonBarEvent {
     #[cfg(feature = "voice_input")]
     ToggleVoiceInput(voice_input::VoiceInputToggledFrom),
-    InputTypeSelected(InputType),
     EnableAutoDetection,
     SelectFile,
     SetAIContextMenuOpen(bool),
-    PromptAlert(PromptAlertEvent),
     ModelSelectorOpened,
     ModelSelectorClosed,
     OpenSettings(SettingsSection),
@@ -314,9 +308,6 @@ impl UniversalDeveloperInputButtonBar {
     pub fn new(
         menu_positioning_provider: Arc<dyn MenuPositioningProvider>,
         terminal_view_id: EntityId,
-        input_model: ModelHandle<BlocklistAIInputModel>,
-        cli_subagent_controller: ModelHandle<CLISubagentController>,
-        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         terminal_model: std::sync::Arc<parking_lot::FairMutex<crate::terminal::TerminalModel>>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
@@ -619,7 +610,6 @@ impl UniversalDeveloperInputButtonBar {
 
     fn handle_profile_model_selector_event(
         &mut self,
-        event: &ProfileModelSelectorEvent,
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
@@ -928,7 +918,6 @@ fn segmented_control_styles(app: &AppContext) -> UiComponentStyles {
 fn build_renderable_option_config(
     option: InputToggleMode,
     is_selected: bool,
-    input_model: &ModelHandle<BlocklistAIInputModel>,
     ui_state: &CachedUIState,
     app: &AppContext,
 ) -> Option<RenderableOptionConfig> {

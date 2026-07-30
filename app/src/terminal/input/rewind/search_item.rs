@@ -29,7 +29,6 @@ const ICON_PADDING: f32 = 4.;
 #[derive(Debug, Clone)]
 pub struct RewindSearchItem {
     /// The exchange ID to rewind to, or None for "Current".
-    exchange_id: Option<AIAgentExchangeId>,
     query_text: String,
     file_changes: FileChangesInfo,
     query_match_result: Option<FuzzyMatchResult>,
@@ -52,7 +51,6 @@ impl RewindSearchItem {
 
     /// Create a rewind point item.
     pub fn new_rewind_point(
-        exchange_id: AIAgentExchangeId,
         query_text: String,
         file_changes: FileChangesInfo,
     ) -> Self {

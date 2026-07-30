@@ -27,9 +27,7 @@ use crate::util::bindings::keybinding_name_to_keystroke;
 /// is enabled.
 pub struct TerminalInputMessageBar {
     terminal_model: Arc<FairMutex<TerminalModel>>,
-    ai_input_model: ModelHandle<BlocklistAIInputModel>,
     input_buffer_model: ModelHandle<InputBufferModel>,
-    context_model: ModelHandle<BlocklistAIContextModel>,
     suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
     inline_history_model: ModelHandle<InlineMenuModel<AcceptHistoryItem, HistoryTab>>,
 }
@@ -41,9 +39,7 @@ impl Entity for TerminalInputMessageBar {
 impl TerminalInputMessageBar {
     pub fn new(
         terminal_model: Arc<FairMutex<TerminalModel>>,
-        ai_input_model: ModelHandle<BlocklistAIInputModel>,
         input_buffer_model: ModelHandle<InputBufferModel>,
-        context_model: ModelHandle<BlocklistAIContextModel>,
         suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
         inline_history_model: ModelHandle<InlineMenuModel<AcceptHistoryItem, HistoryTab>>,
         ctx: &mut ViewContext<Self>,
@@ -143,8 +139,6 @@ impl View for TerminalInputMessageBar {
 pub struct TerminalMessageArgs<'a> {
     current_input: &'a str,
     terminal_model: &'a TerminalModel,
-    context_model: &'a BlocklistAIContextModel,
-    input_model: &'a BlocklistAIInputModel,
     app: &'a AppContext,
 }
 

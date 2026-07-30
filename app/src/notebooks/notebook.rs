@@ -258,7 +258,6 @@ pub enum NotebookEvent {
         invitee_email: Option<String>,
         source: SharingDialogSource,
     },
-    AttachPlanAsContext(AIDocumentId),
 }
 
 impl From<PaneEvent> for NotebookEvent {
@@ -291,7 +290,6 @@ pub enum NotebookAction {
     CopyLink(String),
     OpenLinkOnDesktop(Url),
     Export,
-    AttachPlanAsContext(AIDocumentId),
 }
 
 impl From<ContextMenuAction> for NotebookAction {

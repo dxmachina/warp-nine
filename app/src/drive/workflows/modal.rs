@@ -146,7 +146,6 @@ pub struct WorkflowModal {
     pub(super) arguments_rows: Vec<ArgumentEditorRow>,
     show_unsaved_changes_dialog: bool,
     revision_ts: Option<Revision>,
-    pub(super) ai_client: Arc<dyn AIClient>,
     pub(super) ai_metadata_assist_state: AiAssistState,
     breadcrumbs: Option<Vec<BreadcrumbState<ContainingObject>>>,
     /// ID of the breadcrumb space/folder a user clicked on before the unsaved dialog popped up

@@ -84,7 +84,6 @@ pub fn init(app: &mut AppContext) {
 pub struct EnvironmentFormValues {
     pub name: String,
     pub description: String,
-    pub selected_repos: Vec<GithubRepo>,
     pub docker_image: String,
     pub setup_commands: Vec<String>,
 }
@@ -121,12 +120,10 @@ pub enum EnvironmentFormMode {
 #[derive(Debug, Clone)]
 pub enum UpdateEnvironmentFormEvent {
     Created {
-        environment: AmbientAgentEnvironment,
         share_with_team: bool,
     },
     Updated {
         env_id: SyncId,
-        environment: AmbientAgentEnvironment,
     },
     DeleteRequested {
         env_id: SyncId,
@@ -163,7 +160,6 @@ pub enum UpdateEnvironmentFormAction {
 /// State for the GitHub repos dropdown.
 #[derive(Clone, Default)]
 pub struct GithubReposDropdownState {
-    pub available_repos: Vec<GithubRepo>,
     pub is_loading: bool,
     pub is_expanded: bool,
     pub auth_url: Option<String>,
@@ -259,7 +255,6 @@ pub struct UpdateEnvironmentForm {
     mode: EnvironmentFormMode,
     form_state: EnvironmentFormValues,
     repos_input: String,
-    github_auth_redirect_target: GithubAuthRedirectTarget,
     copy: EnvironmentFormCopy,
     field_max_width: f32,
     field_spacing: f32,
@@ -328,7 +323,6 @@ pub struct UpdateEnvironmentForm {
 
     /// Indicates where the GitHub authorization flow was initiated from.
     /// Affects the redirect URL used after auth completes.
-    auth_source: AuthSource,
 }
 
 const DESCRIPTION_MAX_CHARS: usize = 240;
@@ -587,7 +581,6 @@ impl UpdateEnvironmentForm {
             mode,
             form_state: EnvironmentFormValues::default(),
             repos_input: String::new(),
-            github_auth_redirect_target: GithubAuthRedirectTarget::SettingsEnvironments,
             copy,
             field_max_width: DROPDOWN_MAX_WIDTH,
             field_spacing: FORM_FIELD_SPACING,
@@ -629,7 +622,6 @@ impl UpdateEnvironmentForm {
             show_footer_cancel_button: false,
             show_share_with_team_controls: true,
             should_handle_escape_from_editor: false,
-            auth_source: AuthSource::default(),
         };
 
         // Initialize based on init args

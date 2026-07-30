@@ -27,16 +27,11 @@ use crate::terminal::model::session::active_session::ActiveSession;
 
 pub struct GuiDataSourceArgs {
     pub active_session: ModelHandle<ActiveSession>,
-    pub agent_view_controller: ModelHandle<AgentViewController>,
-    pub cli_subagent_controller: ModelHandle<CLISubagentController>,
     pub terminal_view_id: EntityId,
-    pub ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
 }
 
 pub struct GuiSlashCommandDataSource {
     state: SlashCommandDataSourceState,
-    agent_view_controller: ModelHandle<AgentViewController>,
-    ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
     is_cloud_mode_v2: bool,
 }
 

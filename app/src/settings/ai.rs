@@ -1436,8 +1436,6 @@ define_settings_group!(AISettings, settings: [
     // GUI cloud synchronization respects the user's settings-sync preference;
     // TUI settings mode keeps this value local.
     execution_profiles: ExecutionProfiles {
-        type: ExecutionProfilesConfig,
-        default: ExecutionProfilesConfig::default(),
         supported_platforms: SupportedPlatforms::ALL,
         sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
         surface: settings::SettingSurfaces::ALL,
@@ -2386,7 +2384,6 @@ impl AISettings {
     /// request_limit_info's next refresh time and updates its fields accordingly.
     pub fn update_quota_info(
         &mut self,
-        request_limit_info: &RequestLimitInfo,
         ctx: &mut ModelContext<Self>,
     ) {
         // Convert ServerTimestamp to DateTime<Utc>

@@ -21,7 +21,6 @@ use crate::ui_components::icons::Icon;
 pub enum SessionType {
     Terminal,
     Oz,
-    CliAgent(CLIAgent),
 }
 
 impl SessionType {

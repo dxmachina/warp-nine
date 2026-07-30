@@ -507,14 +507,12 @@ pub enum WorkspaceAction {
         /// The entrypoint that triggered this action.
         entrypoint: AgentModeEntrypoint,
         /// The type of zero state prompt suggestion to start with (optional).
-        zero_state_prompt_suggestion_type: Option<ZeroStatePromptSuggestionType>,
     },
     /// Open a new pane with its input in AI mode.
     NewPaneInAgentMode {
         /// The entrypoint that triggered this action.
         entrypoint: AgentModeEntrypoint,
         /// The type of zero state prompt suggestion to start with (optional).
-        zero_state_prompt_suggestion_type: Option<ZeroStatePromptSuggestionType>,
     },
     OpenCloudAgentSetupGuide,
     AttemptLoginGatedAIUpgrade,
@@ -534,15 +532,11 @@ pub enum WorkspaceAction {
     /// Open the Environment Management pane in Create mode.
     OpenEnvironmentManagementPane,
     ToggleAIDocumentPane {
-        document_id: AIDocumentId,
-        document_version: AIDocumentVersion,
     },
     /// Closes all visible AI document panes in the active pane group.
     HideAIDocumentPanes,
     /// Closes any other ai document panes in the active pane group, and opens the specified document_id.
     OpenAIDocumentPane {
-        document_id: AIDocumentId,
-        document_version: AIDocumentVersion,
     },
     FocusTerminalViewInWorkspace {
         terminal_view_id: EntityId,
@@ -580,7 +574,6 @@ pub enum WorkspaceAction {
     RestoreOrNavigateToConversation {
         pane_view_locator: Option<PaneViewLocator>,
         window_id: Option<WindowId>,
-        conversation_id: AIConversationId,
         terminal_view_id: Option<EntityId>,
         /// If provided, use this layout to restore the conversation.
         /// Otherwise, fall back to the user's setting.
@@ -589,7 +582,6 @@ pub enum WorkspaceAction {
     /// Fork an existing AI conversation.
     /// Optionally summarizes the conversation after forking and/or sends an initial prompt.
     ForkAIConversation {
-        conversation_id: AIConversationId,
         /// When Some, fork from the given response (or exchange if `fork_from_exact_exchange`
         /// is true). When None, fork from the last exchange.
         fork_from_exchange: Option<ForkFromExchange>,
@@ -600,7 +592,6 @@ pub enum WorkspaceAction {
         /// Initial prompt to send in the forked conversation (sent after summarization if enabled).
         initial_prompt: Option<String>,
         /// Attachments (images/files) to send along with the initial prompt in the forked pane.
-        initial_attachments: Vec<PendingAttachment>,
         /// Where to open the forked conversation.
         destination: ForkedConversationDestination,
     },
@@ -608,13 +599,10 @@ pub enum WorkspaceAction {
     /// continuation command (selecting all text).
     #[cfg(not(target_family = "wasm"))]
     ContinueConversationLocally {
-        conversation_id: AIConversationId,
     },
     /// Continue a completed third-party cloud harness run in a local split pane.
     #[cfg(not(target_family = "wasm"))]
     ContinueThirdPartyConversationLocally {
-        task_id: AmbientAgentTaskId,
-        harness: AIAgentHarness,
     },
     /// Insert the /fork slash command into the active terminal's input.
     InsertForkSlashCommand,
@@ -637,7 +625,6 @@ pub enum WorkspaceAction {
     /// given terminal view to Cloud Mode.
     AutoHandoffActiveAgentToCloud {
         terminal_view_id: EntityId,
-        conversation_id: AIConversationId,
         trigger: AutoCloudHandoffTrigger,
     },
     /// Show the environment creation modal during `&` handoff compose when no
@@ -775,30 +762,22 @@ pub enum WorkspaceAction {
     /// Show the rewind confirmation dialog before rewinding an AI conversation
     ShowRewindConfirmationDialog {
         ai_block_view_id: EntityId,
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
     },
     /// Execute the actual rewind after confirmation
     ExecuteRewindAIConversation {
         ai_block_view_id: EntityId,
-        exchange_id: AIAgentExchangeId,
-        conversation_id: AIConversationId,
     },
     /// Execute the actual deletion of a conversation after confirmation
     ExecuteDeleteConversation {
-        conversation_id: AIConversationId,
         terminal_view_id: Option<EntityId>,
     },
     /// Open the canonical ambient agent conversation pane and attach it to a live session.
     OpenOrAttachAmbientAgentConversation {
         session_id: SessionId,
-        task_id: AmbientAgentTaskId,
     },
     /// Load cloud conversation data into a transcript viewer.
     /// Used when CloudConversations is enabled and the sandbox is not running.
     OpenConversationTranscriptViewer {
-        conversation_id: ServerConversationToken,
-        ambient_agent_task_id: Option<AmbientAgentTaskId>,
     },
     /// Toggle the conversation transcript details panel (WASM-only).
     #[cfg(target_family = "wasm")]

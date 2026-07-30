@@ -27,7 +27,6 @@ pub enum PtyIntent {
     WriteBytes(Cow<'static, [u8]>),
     WriteAgentInput {
         bytes: Cow<'static, [u8]>,
-        mode: AIAgentPtyWriteMode,
     },
     Resize(SizeUpdate),
     ExecuteCommand(ExecuteCommandEvent),

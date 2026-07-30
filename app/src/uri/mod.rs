@@ -1134,14 +1134,6 @@ impl Action {
                 let focused_conversation = primary_window_id
                     .and_then(|wid| active_agent_views.get_focused_conversation(wid));
                 let mut terminal_view_id = match focused_conversation {
-                    Some(ConversationOrTaskId::TaskId(task_id)) => {
-                        active_agent_views.get_terminal_view_id_for_ambient_task(task_id)
-                    }
-                    Some(ConversationOrTaskId::ConversationId(conversation_id)) => {
-                        active_agent_views
-                            .get_terminal_view_id_for_conversation(conversation_id, ctx)
-                    }
-                    None => None,
                 };
                 if terminal_view_id.is_none() {
                     terminal_view_id = find_cloud_mode_terminal_view_id(primary_window_id, ctx);

@@ -18,7 +18,6 @@ pub struct HandoffComposeState {
     active: bool,
     selected_environment_id: Option<SyncId>,
     has_explicit_environment_selection: bool,
-    entry_point: HandoffEntryPoint,
 }
 
 impl HandoffComposeState {
@@ -28,7 +27,6 @@ impl HandoffComposeState {
 
     pub(crate) fn activate(
         &mut self,
-        entry_point: HandoffEntryPoint,
         ctx: &mut ModelContext<Self>,
     ) {
         self.active = true;

@@ -41,7 +41,6 @@ pub trait BlockClient: 'static + Send + Sync {
 
     async fn generate_shared_block_title(
         &self,
-        request: GenerateBlockTitleRequest,
     ) -> Result<GenerateBlockTitleResponse, anyhow::Error>;
 }
 
@@ -139,7 +138,6 @@ impl BlockClient for ServerApi {
 
     async fn generate_shared_block_title(
         &self,
-        request: GenerateBlockTitleRequest,
     ) -> Result<GenerateBlockTitleResponse, anyhow::Error> {
         let auth_token = self.get_or_refresh_access_token().await?;
         let request_builder = self.base_client.http_client().post(format!(

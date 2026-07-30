@@ -1172,7 +1172,6 @@ impl BlockListElement {
             } else {
                 (
                     Some(TerminalAction::AskAIAssistant { block_index }),
-                    ASK_AI_ASSISTANT_TEXT,
                 )
             };
 

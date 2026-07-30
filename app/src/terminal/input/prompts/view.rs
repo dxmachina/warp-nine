@@ -26,7 +26,6 @@ pub struct InlinePromptsMenuView {
 impl InlinePromptsMenuView {
     pub fn new(
         suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         input_buffer_model: &ModelHandle<InputBufferModel>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         ctx: &mut ViewContext<Self>,

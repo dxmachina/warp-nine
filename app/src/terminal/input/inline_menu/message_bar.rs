@@ -13,14 +13,12 @@ use crate::terminal::input::message_bar::{EmptyMessageProducer, MessageProvider}
 
 pub struct InlineMenuMessageBarArgs<A: InlineMenuAction, T: 'static + Send + Sync = ()> {
     pub inline_menu_model: ModelHandle<InlineMenuModel<A, T>>,
-    pub agent_view_controller: ModelHandle<AgentViewController>,
     pub positioner: ModelHandle<InlineMenuPositioner>,
 }
 
 /// Renders contextual hint text at the bottom of the agent view status bar.
 pub struct InlineMenuMessageBar<A: InlineMenuAction, T: 'static + Send + Sync = ()> {
     inline_menu_model: ModelHandle<InlineMenuModel<A, T>>,
-    agent_view_controller: ModelHandle<AgentViewController>,
     positioner: ModelHandle<InlineMenuPositioner>,
 }
 

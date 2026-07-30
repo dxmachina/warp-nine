@@ -90,7 +90,6 @@ pub(in crate::pane_group) fn host_terminal_shared_session_source_type(
 #[cfg(not(target_family = "wasm"))]
 pub(in crate::pane_group) fn inherit_share_for_local_child(
     host_source: Option<&SharedSessionSource>,
-    child_task_id: AmbientAgentTaskId,
 ) -> IsSharedSessionCreator {
     let Some(host_source) = host_source else {
         return IsSharedSessionCreator::No;
@@ -599,7 +598,6 @@ fn retrieve_shared_session_link(manager: &Manager, terminal_view_id: &EntityId) 
 #[derive(Clone, Copy)]
 struct AgentConversationActionState {
     owner_terminal_view_id: EntityId,
-    task_id: Option<AmbientAgentTaskId>,
     is_in_progress: bool,
     is_cloud_cancel_candidate: bool,
 }
@@ -637,7 +635,6 @@ fn pane_group_and_terminal_view_for_owner(
 
 
 fn pane_group_hosting_split_off_child(
-    conversation_id: AIConversationId,
     ctx: &AppContext,
 ) -> Option<ViewHandle<PaneGroup>> {
     WorkspaceRegistry::as_ref(ctx)
@@ -1303,7 +1300,6 @@ fn handle_terminal_view_event(
 fn launch_local_no_harness_child(
     group: &mut PaneGroup,
     parent_pane_id: PaneId,
-    request: StartAgentRequest,
     model_id: Option<String>,
     ctx: &mut ViewContext<PaneGroup>,
 ) {
@@ -1332,18 +1328,6 @@ fn launch_local_no_harness_child(
 
             match create_hidden_child_agent_conversation(
                 group,
-                HiddenChildAgentConversationRequest {
-                    parent_pane_id,
-                    name: prepared.conversation_name.clone(),
-                    parent_conversation_id,
-                    orchestration_harness: Some(Harness::Oz),
-                    env_vars: HashMap::new(),
-                    task_context: Some(HiddenChildAgentTaskContext {
-                        task_id: child_task_id,
-                        working_dir: None,
-                    }),
-                    is_shared_session_creator,
-                },
                 ctx,
             ) {
                 Some(HiddenChildAgentConversation {
@@ -1393,16 +1377,6 @@ fn launch_local_no_harness_child(
                 _ => {
                     let _ = create_error_child_agent_conversation(
                         group,
-                        ErrorChildAgentConversationRequest {
-                            parent_pane_id,
-                            name: prepared.conversation_name,
-                            parent_conversation_id,
-                            request_id: Some(request_id),
-                            orchestration_harness: Some(Harness::Oz),
-                            error_message:
-                                "Failed to create a hidden pane for the local child agent."
-                                    .to_string(),
-                        },
                         ctx,
                     );
                 }
@@ -1411,14 +1385,6 @@ fn launch_local_no_harness_child(
         Err(error) => {
             let _ = create_error_child_agent_conversation(
                 group,
-                ErrorChildAgentConversationRequest {
-                    parent_pane_id,
-                    name: normalize_orchestrator_agent_name(&request.name).unwrap_or_default(),
-                    parent_conversation_id,
-                    request_id: Some(request_id),
-                    orchestration_harness: Some(Harness::Oz),
-                    error_message: format!("Failed to create local child task: {error}"),
-                },
                 ctx,
             );
         }
@@ -1442,8 +1408,6 @@ fn launch_local_no_harness_child(
 fn launch_remote_child(
     group: &mut PaneGroup,
     parent_pane_id: PaneId,
-    request: StartAgentRequest,
-    config: RemoteChildLaunchConfig,
     ctx: &mut ViewContext<PaneGroup>,
 ) -> Option<AIConversationId> {
     let request_id = request.id;
@@ -1502,7 +1466,6 @@ fn launch_remote_child(
                     terminal_view_id,
                     conversation_id,
                     ConversationStatus::Error,
-                    Some(RenderableAIError::other(error_message, false)),
                     ctx,
                 );
             });

@@ -1,0 +1,43 @@
+use warp_completion_metadata::{
+    CommandBuilder, CommandSignatureGenerators, Generator, GeneratorResultsCollector, Suggestion,
+};
+
+pub fn generator() -> CommandSignatureGenerators {
+    CommandSignatureGenerators::new("conda")
+        .add_generator(
+            "get_installed_packages",
+            Generator::script(CommandBuilder::single_command("conda list"), |output| {
+                output
+                    .trim()
+                    .split('\n')
+                    .skip(2)
+                    .map(Suggestion::new)
+                    .collect_unordered_results()
+            }),
+        )
+        .add_generator(
+            "get_conda_environments",
+            Generator::script(CommandBuilder::single_command("conva env list"), |output| {
+                output
+                    .trim()
+                    .split('\n')
+                    .skip(2)
+                    .filter_map(|line| line.split(' ').next().map(Suggestion::new))
+                    .collect_unordered_results()
+            }),
+        )
+        .add_generator(
+            "get_conda_configs",
+            Generator::script(
+                CommandBuilder::single_command("conda config --show"),
+                |output| {
+                    output
+                        .trim()
+                        .split('\n')
+                        .skip(2)
+                        .filter_map(|line| line.split(':').next().map(Suggestion::new))
+                        .collect_unordered_results()
+                },
+            ),
+        )
+}

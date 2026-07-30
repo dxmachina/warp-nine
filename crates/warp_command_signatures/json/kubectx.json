@@ -1,0 +1,56 @@
+{
+    "name": "kubectx",
+    "description": "Switch between Kubernetes-contexts",
+    "additionalSuggestions": [
+        {
+            "name": "-",
+            "priority": 85,
+            "description": "Switch to previous context",
+            "icon": "fig://icon?type=asterisk"
+        }
+    ],
+    "parserDirectives": {
+        "flagsArePosixNoncompliant": true
+    },
+    "options": [
+        {
+            "name": [
+                "--help",
+                "-h"
+            ],
+            "description": "Show help for kubectx"
+        },
+        {
+            "name": [
+                "--current",
+                "-c"
+            ],
+            "description": "Show current context"
+        },
+        {
+            "name": [
+                "--unset",
+                "-u"
+            ],
+            "description": "Unset the current context"
+        },
+        {
+            "name": "-d",
+            "description": "Delete context",
+            "isDangerous": true,
+            "args": {
+                "name": "context",
+                "isVariadic": true,
+                "generatorName": "delete_context"
+            }
+        }
+    ],
+    "args": {
+        "name": "context",
+        "generatorName": [
+            "kubectx_context",
+            "context"
+        ],
+        "isOptional": true
+    }
+}

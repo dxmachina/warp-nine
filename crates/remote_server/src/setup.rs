@@ -339,7 +339,7 @@ pub fn parse_uname_output(
 /// - dev:         `~/.warp-dev/remote-server`
 /// - local:       `~/.warp-local/remote-server`
 /// - integration: `~/.warp-dev/remote-server`
-/// - warp-oss:    `~/.warp-oss/remote-server`
+/// - warp-nine:   `~/.warp-nine/remote-server`
 pub fn remote_server_dir() -> String {
     let warp_dir = match ChannelState::channel() {
         Channel::Stable => ".warp",

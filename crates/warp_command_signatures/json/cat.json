@@ -1,0 +1,9 @@
+{
+    "name": "cat",
+    "description": "Concatenate and print files",
+    "args": {
+        "isVariadic": true,
+        "template": "filepaths",
+        "skipGeneratorValidation": false
+    }
+}

@@ -189,6 +189,29 @@ function notarize_artifact() {
 UNIVERSAL_BINARY=false
 BUILD_BINARY=true
 TARGET_ARCH="aarch64"
+
+# LOCAL FORK: stamp a version so "About" shows something real.
+#
+# `ChannelState::app_version()` reads `option_env!("GIT_RELEASE_TAG")`, which only
+# upstream CI ever set (from the release tag). Locally it was None, so the About
+# page fell back to rendering its literal placeholder, `v#.##.###`.
+#
+# The shape mirrors upstream's `v0.YYYY.MM.DD.HH.MM.<channel>_NN`, with a leading
+# 9 for WarpNine, and carries the short commit so a build is traceable back to the
+# tree that produced it. Nothing on macOS parses this -- the plist version is set
+# separately by `script/update_plist`, and the one place that formats a version
+# into a path is Windows-only -- so it only has to be readable.
+#
+# Derived from HEAD's *commit* date rather than the wall clock on purpose: cargo
+# tracks the env vars read by `option_env!`, so a value containing the current
+# minute would invalidate warp_core and force a fresh fat-LTO relink on every
+# single build. Keyed to the commit, it only changes when the tree does.
+if [[ -z "${GIT_RELEASE_TAG:-}" ]]; then
+  _fork_commit_date="$(git show -s --format=%cd --date=format:%Y.%m.%d.%H.%M HEAD 2>/dev/null || echo 0.0.0.0.0)"
+  GIT_RELEASE_TAG="v9.${_fork_commit_date}.$(git rev-parse --short HEAD 2>/dev/null || echo nogit)"
+  export GIT_RELEASE_TAG
+  echo "Stamping GIT_RELEASE_TAG=$GIT_RELEASE_TAG"
+fi
 DMG_NAME_SUFFIX=""
 # By default we build dev bundles.
 RELEASE_CHANNEL="dev"
@@ -414,17 +437,19 @@ elif [[ $RELEASE_CHANNEL = "stable" ]]; then
     # Enable heap usage tracking & profiling using jemalloc through pprof.
     FEATURES="$FEATURES,jemalloc_pprof,heap_usage_tracking"
 elif [[ $RELEASE_CHANNEL = "oss" ]]; then
-    WARP_BIN="warp-oss"
-    BUNDLE_ID="dev.warp.WarpOss"
-    WARP_APP_NAME="WarpOss"
-    WARP_SCHEME_NAME="warposs"
+    # LOCAL FORK: this channel builds WarpNine. The `oss` channel name is kept as
+    # the build-script selector because it threads through cargo features, plist
+    # templates and `Channel::Oss` in warp_core; only the shipped identity changed.
+    WARP_BIN="warp-nine"
+    BUNDLE_ID="dev.warp.WarpNine"
+    WARP_APP_NAME="WarpNine"
+    WARP_SCHEME_NAME="warpnine"
     # The OSS channel does not ship Sentry, so drop the cocoa_sentry feature
     # (which would otherwise pull in the Sentry framework dependency).
     FEATURES="release_bundle,extern_plist"
 fi
 
 OUT_DIR="target/$TARGET_PROFILE_DIR/bundle/osx"
-DOCK_TILE_PLUGIN_DIR="target/$TARGET_PROFILE_DIR/WarpDockTilePlugin.docktileplugin"
 
 # Handle specific architecture targeting
 if [[ -n "$TARGET_ARCH" ]]; then
@@ -646,14 +671,18 @@ if [[ "$ARTIFACT" == "app" ]]; then
     cp -HR "target/$DEFAULT_TARGET/$TARGET_PROFILE_DIR/$WARP_BIN.dSYM" "$OUT_DIR/"
   fi
 
-  # Note that the dock tile plugin is pre-built for both arm64 and x86_64 so we don't need to run lipo on it.
-  echo "Creating PlugIns directory and copying pre-built DockTilePlugin..."
-  mkdir -p "$BUNDLE_DIR/$WARP_APP_NAME.app/Contents/PlugIns"
-  cp -R "$DOCK_TILE_PLUGIN_DIR" "$BUNDLE_DIR/$WARP_APP_NAME.app/Contents/PlugIns/"
-
-  echo "Updating plist with dock tile plugin entries"
-  plutil -insert NSDockTilePlugIn -string "WarpDockTilePlugin.docktileplugin" "$BUNDLE_DIR"/$WARP_APP_NAME.app/Contents/Info.plist
-  plutil -insert MainAppBundleIdentifier -string "$BUNDLE_ID" "$BUNDLE_DIR"/$WARP_APP_NAME.app/Contents/PlugIns/WarpDockTilePlugin.docktileplugin/Contents/Info.plist
+  # LOCAL FORK: no dock tile plugin.
+  #
+  # Upstream ships an NSDockTilePlugIn whose only job is swapping the Dock icon
+  # for one of a set of alternates (the `app_icon` setting) and keeping that icon
+  # in place while the app is not running -- the reason it has to be a separate
+  # plugin bundle at all. It cost 4.4MB, almost all of it alternate-icon PNGs,
+  # shipped as a universal binary regardless of the target arch, and wrote a fresh
+  # log to /tmp/warp_docktile_<timestamp>.log on every init.
+  #
+  # This fork ships one icon, so none of that is needed. `compile_icon` below
+  # still installs the real AppIcon; dropping the plugin only removes the ability
+  # to swap it for an alternate.
 
   BUNDLED_RESOURCES_DIR="$BUNDLE_DIR/$WARP_APP_NAME.app/Contents/Resources"
   echo "Preparing bundled resources..."
@@ -884,6 +913,24 @@ elif [[ $CODESIGN = true ]]; then
     # https://developer.apple.com/documentation/security/customizing-the-notarization-workflow?language=objc#Staple-the-ticket-to-your-distribution
     STAPLE_TICKET=false
   fi
+elif [[ "$ARTIFACT" == app ]]; then
+  # LOCAL FORK: ad-hoc sign local builds.
+  #
+  # Both `--selfsign` and full codesigning are off by default, so a plain
+  # `script/macos/bundle` produced a bundle that was never signed as a bundle.
+  # The executable still carried the ad-hoc signature the linker applies on
+  # arm64, and that combination is inconsistent rather than merely unsigned:
+  # `codesign -dv` reported `Sealed Resources=none` while `spctl` rejected the
+  # app with "code has no resources but signature indicates they must be
+  # present". macOS is unhappy about that at launch.
+  #
+  # Signing ad-hoc here makes the bundle internally consistent. It is not
+  # notarized and Gatekeeper will still gate first launch, but it no longer looks
+  # corrupt. Mirrors the `-` fallback the `--selfsign` path above already uses
+  # when no Apple Development certificate is present.
+  echo "Ad-hoc signing $BUNDLE_DIR/$WARP_APP_NAME.app (no signing identity configured)..."
+  codesign --force --deep --sign - "$BUNDLE_DIR/$WARP_APP_NAME.app" \
+    --entitlements script/Debug-Entitlements.plist
 fi
 
 ########################
@@ -1012,7 +1059,6 @@ if [ "${GITHUB_ACTIONS}" == "true" ]; then
     fi
   fi
 
-  echo "dock_tile_plugin_dir=$DOCK_TILE_PLUGIN_DIR" >> "$GITHUB_OUTPUT"
   echo "frameworks_dir=app/frameworks/${FRAMEWORK_OVERRIDE:-default}" >> "$GITHUB_OUTPUT"
   
   # For full bundles, output DMG information

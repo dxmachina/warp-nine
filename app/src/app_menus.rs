@@ -152,11 +152,11 @@ fn make_new_app_menu(ctx: &AppContext) -> Menu {
         ))
     }
 
-    menu_items.extend([
-        MenuItem::Separator,
-        updateable_custom_item_without_checkmark(CustomAction::ReferAFriend, ctx),
-        MenuItem::Separator,
-    ]);
+    // LOCAL FORK: `ReferAFriend` removed. It rendered as `<NO DESCRIPTION>`
+    // because its label is looked up from the keybinding description table and
+    // this fork no longer registers one -- it was a referral/growth feature tied
+    // to the account system.
+    menu_items.push(MenuItem::Separator);
 
     let preferences_menu_items = vec![
         updateable_custom_item_without_checkmark(CustomAction::ShowSettings, ctx),
@@ -176,12 +176,8 @@ fn make_new_app_menu(ctx: &AppContext) -> Menu {
         preferences_menu_items,
     )));
 
-    if FeatureFlag::Changelog.is_enabled() {
-        menu_items.push(updateable_custom_item_without_checkmark(
-            CustomAction::ViewChangelog,
-            ctx,
-        ));
-    }
+    // LOCAL FORK: "View Latest Changelog" removed. It opened the hosted release
+    // notes for upstream Warp, which say nothing about this build.
 
     #[cfg(target_os = "macos")]
     {

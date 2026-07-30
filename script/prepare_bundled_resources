@@ -101,6 +101,25 @@ ADDITIONAL_LICENSES=(
 )
 
 # Build the third-party licenses file unless the NO_LICENSES envvar is set.
+#
+# LOCAL FORK: skip with a warning when cargo-about is not installed, rather than
+# aborting. `cargo about` failing here used to kill the whole bundle script, and
+# because license generation runs *before* the codesigning steps, every local
+# build silently ended up unsigned — the executable kept the ad-hoc signature the
+# linker applies on arm64 while the bundle had no sealed resources, which macOS
+# treats as corrupt and refuses to launch cleanly. A missing attribution file is
+# not a good reason to produce an unlaunchable app.
+#
+# Install it with `script/install_cargo_release_deps` (or
+# `cargo install --locked cargo-about@0.8.4`). Attribution is required for
+# redistribution, so this is a local-convenience fallback, not a licence to ship
+# without it.
+if [ -z "$NO_LICENSES" ] && ! cargo about --version >/dev/null 2>&1; then
+  echo "WARNING: cargo-about is not installed; skipping THIRD_PARTY_LICENSES.txt." >&2
+  echo "         Install it with script/install_cargo_release_deps before distributing." >&2
+  NO_LICENSES=1
+fi
+
 if [ -z "$NO_LICENSES" ]; then
   LICENSES_OUTPUT="$DEST_DIR/THIRD_PARTY_LICENSES.txt"
   echo "Generating third-party licenses at $LICENSES_OUTPUT"

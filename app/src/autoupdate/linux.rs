@@ -674,7 +674,7 @@ fn package_name(channel: Channel) -> &'static str {
         Channel::Dev => "warp-terminal-dev",
         Channel::Integration => "warp-terminal-integration",
         Channel::Local => "warp-terminal-local",
-        Channel::Oss => "warp-oss",
+        Channel::Oss => "warp-nine",
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 authors = ["Warp Team <dev@warp.dev>"]
-default-run = "warp-oss"
+default-run = "warp-nine"
 description = "The cloud-backed terminal for individuals and teams"
 edition = "2024"
 autobins = false
@@ -18,7 +18,7 @@ path = "src/lib.rs"
 # flag overrides). Otherwise these binaries are exactly identical to our main binary.
 
 [[bin]]
-name = "warp-oss"
+name = "warp-nine"
 path = "src/bin/oss.rs"
 test = false
 
@@ -518,7 +518,11 @@ default = [
     "external_agent_mode_context",
     "shell_selector",
     "minimalist_ui",
-    "avatar_in_tab_bar",
+    # LOCAL FORK: `avatar_in_tab_bar` dropped. It put the account avatar/gear
+    # button in the tab bar, whose menu was Sign up / Upgrade / What's new /
+    # Feedback / Slack -- all upstream-account surface this fork has no use for.
+    # Upstream keeps working `!AvatarInTabBar` branches for the pre-avatar UI, so
+    # turning it off is a supported configuration rather than a hole.
     "full_screen_zen_mode",
     "workflow_aliases",
     "ligatures",
@@ -665,7 +669,8 @@ default = [
     "agent_toolbar_editor",
     "configurable_toolbar",
     "transfer_control_tool",
-    "hoa_notifications",
+    # LOCAL FORK: `hoa_notifications` dropped -- this is the agent notification
+    # inbox (the mailbox icon), backed by AgentNotificationsModel.
     "open_code_notifications",
     "cli_agent_rich_input",
     "vertical_tabs",
@@ -1040,14 +1045,14 @@ git_credential_refresh = []
 prompt_cache_expiry_warning = []
 osc_hyperlinks = []
 
-[package.metadata.bundle.bin.warp-oss]
+[package.metadata.bundle.bin.warp-nine]
 category = "public.app-category.developer-tools"
-copyright = "© 2025, Denver Technologies, Inc"
-identifier = "dev.warp.WarpOss"
-name = "WarpOss"
+copyright = "© 2025 Denver Technologies, Inc. Fork © 2026 Sebastian Katz"
+identifier = "dev.warp.WarpNine"
+name = "WarpNine"
 resources = ["assets/onboarding"]
 icon = ["channels/oss/icon/no-padding/512x512.png", "channels/oss/icon/no-padding/icon.ico"]
-short_description = "The open-source, cloud-backed terminal for individuals and teams."
+short_description = "A local-only, Apple-Silicon Warp fork with no account, telemetry, or agent."
 
 [package.metadata.bundle.bin.stable]
 category = "public.app-category.developer-tools"

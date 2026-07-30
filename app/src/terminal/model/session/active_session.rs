@@ -122,7 +122,6 @@ impl ActiveSession {
         let cwd = self.current_working_directory()?;
         self.location_for_path(cwd.as_str(), app)
     }
-
 }
 
 pub enum ActiveSessionEvent {

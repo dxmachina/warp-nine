@@ -10,8 +10,6 @@ use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::auth::auth_state::AuthState;
 use crate::settings::input::InputBoxType;
-use crate::settings::{
-};
 use crate::terminal::session_settings::SessionSettings;
 use crate::themes::theme::ThemeKind;
 

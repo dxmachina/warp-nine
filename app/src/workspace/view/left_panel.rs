@@ -1092,7 +1092,11 @@ impl LeftPanelView {
         }
     }
 
-    pub fn on_left_panel_visibility_changed(&self, _is_now_open: bool, ctx: &mut ViewContext<Self>) {
+    pub fn on_left_panel_visibility_changed(
+        &self,
+        _is_now_open: bool,
+        ctx: &mut ViewContext<Self>,
+    ) {
         self.update_active_file_tree_subscription_state(ctx);
     }
 

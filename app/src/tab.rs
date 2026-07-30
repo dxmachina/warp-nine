@@ -1096,7 +1096,6 @@ impl<'a> TabComponent<'a> {
         self
     }
 
-
     /// Determine if this tab is the active tab.
     fn is_active_tab(&self) -> bool {
         Some(self.tab_index) == self.tab_bar.active_tab_index
@@ -1149,7 +1148,6 @@ impl<'a> TabComponent<'a> {
 
         None
     }
-
 
     /// Check if the given indicator is an agent task indicator
     fn is_agent_task_indicator(indicator: &Indicator) -> bool {

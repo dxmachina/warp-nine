@@ -606,7 +606,6 @@ impl<T: EventLoopSender> PtyController<T> {
         }
     }
 
-
     /// Writes agent input to the PTY.
     ///
     /// LOCAL FORK: this took an `AIAgentPtyWriteMode` that decorated the bytes (line

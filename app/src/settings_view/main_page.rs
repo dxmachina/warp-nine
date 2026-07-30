@@ -281,7 +281,6 @@ impl MainSettingsPageView {
 
         widgets.push(Box::new(SettingsSyncWidget::default()));
 
-
         #[cfg(not(target_family = "wasm"))]
         if IapManager::as_ref(ctx).is_enabled() {
             widgets.push(Box::new(IapCredentialsWidget::default()));

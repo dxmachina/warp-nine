@@ -83,6 +83,8 @@ mod tips;
 mod tracing;
 // LOCAL FORK: `tui`, `tui_export` and `tui_test_support` removed with the
 // `tui` feature — they existed only for the deleted `warp_tui` agent CLI.
+mod diff_validation;
+mod skills;
 mod ui_components;
 mod undo_close;
 mod uri;
@@ -97,8 +99,6 @@ mod warp_managed_paths_watcher;
 mod wasm_nux_dialog;
 mod window_settings;
 mod word_block_editor;
-mod diff_validation;
-mod skills;
 mod workspace_metadata;
 mod workspaces;
 
@@ -328,7 +328,6 @@ pub(crate) enum LaunchMode {
         /// directory on the remote host.
         identity_key: String,
     },
-
     // LOCAL FORK: LaunchMode::Tui and TuiEntryPoint drove the headless TUI
     // front-end, which lived in the deleted `warp_tui` crate (the agent CLI).
 }
@@ -499,8 +498,9 @@ impl LaunchMode {
     fn log_frontend(&self) -> LogFrontend {
         match self {
             LaunchMode::App { .. } | LaunchMode::Test { .. } => LogFrontend::Gui,
-            LaunchMode::RemoteServerProxy
-            | LaunchMode::RemoteServerDaemon { .. } => LogFrontend::Cli,
+            LaunchMode::RemoteServerProxy | LaunchMode::RemoteServerDaemon { .. } => {
+                LogFrontend::Cli
+            }
         }
     }
 
@@ -626,8 +626,7 @@ pub fn run() -> Result<()> {
     //
     // LOCAL FORK: upstream also matched a binary named `oz`, the agent CLI's
     // symlink. That CLI is gone, so the name carries no meaning here.
-    let is_cli_binary =
-        cfg!(feature = "standalone") || std::env::var_os("WARP_CLI_MODE").is_some();
+    let is_cli_binary = cfg!(feature = "standalone") || std::env::var_os("WARP_CLI_MODE").is_some();
     if is_cli_binary {
         warp_cli::Args::clap_command().print_help()?;
         return Ok(());
@@ -1225,9 +1224,9 @@ pub(crate) fn initialize_app(
         }
         // The TUI keeps its own database so GUI/TUI version skew can never
         // migrate a shared database out from under the older binary.
-        LaunchMode::App { .. }
-        | LaunchMode::RemoteServerProxy
-        | LaunchMode::Test { .. } => persistence::PersistenceScope::App,
+        LaunchMode::App { .. } | LaunchMode::RemoteServerProxy | LaunchMode::Test { .. } => {
+            persistence::PersistenceScope::App
+        }
     };
     // Only read the subsets of persisted data this launch mode actually
     // consumes; loading everything is expensive on large databases.
@@ -1235,9 +1234,9 @@ pub(crate) fn initialize_app(
         LaunchMode::RemoteServerDaemon { .. } => {
             persistence::PersistedDataScope::CodebaseIndicesOnly
         }
-        LaunchMode::App { .. }
-        | LaunchMode::RemoteServerProxy
-        | LaunchMode::Test { .. } => persistence::PersistedDataScope::Full,
+        LaunchMode::App { .. } | LaunchMode::RemoteServerProxy | LaunchMode::Test { .. } => {
+            persistence::PersistedDataScope::Full
+        }
     };
     let (sqlite_data, writer_handles) =
         persistence::initialize(ctx, persistence_scope, persisted_data_scope);

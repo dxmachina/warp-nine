@@ -288,7 +288,6 @@ impl TerminalView {
         (right_row.finish(), min_width)
     }
 
-
     // LOCAL FORK: fn maybe_add_parent_navigation_card removed with the agent — the
     // orchestration pill bar and the parent conversation card were both agent chrome.
 

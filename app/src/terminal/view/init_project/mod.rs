@@ -22,6 +22,13 @@ use warpui::{
 };
 
 use crate::appearance::Appearance;
+use crate::code::lsp_telemetry::{LspEnablementSource, LspTelemetryEvent};
+use crate::persisted_workspace::PersistedWorkspace;
+use crate::server::telemetry::{
+    AgentModeSetupCodebaseContextActionType, AgentModeSetupCreateEnvironmentActionType,
+    AgentModeSetupProjectScopedRulesActionType,
+};
+use crate::ui_components::icons::Icon;
 use crate::ui_components::inline_action::inline_action_header::{
     HeaderConfig, INLINE_ACTION_HORIZONTAL_PADDING, INLINE_ACTION_VERTICAL_PADDING,
 };
@@ -29,16 +36,9 @@ use crate::ui_components::inline_action::status_icons::{in_progress_icon, yellow
 use crate::ui_components::keyboard_navigable_buttons::{
     KeyboardNavigableButtonBuilder, KeyboardNavigableButtons, simple_navigation_button,
 };
-use crate::code::lsp_telemetry::{LspEnablementSource, LspTelemetryEvent};
-use crate::server::telemetry::{
-    AgentModeSetupCodebaseContextActionType, AgentModeSetupCreateEnvironmentActionType,
-    AgentModeSetupProjectScopedRulesActionType,
-};
-use crate::ui_components::icons::Icon;
 use crate::view_components::DismissibleToast;
 use crate::workspace::ToastStack;
 use crate::{TelemetryEvent, send_telemetry_from_ctx};
-use crate::persisted_workspace::PersistedWorkspace;
 
 const ONBOARDING_TEXT: &str = "Great - let's begin setting up this project! Would you like to give me permission to index this codebase? It allows me to quickly understand context and provide more targeted solutions when working in this codebase. No code is stored on Warp servers.";
 const ALREADY_SETUP_TEXT: &str = "It looks like this project has already been initialized. You can re-generate the AGENTS.md for this codebase by clicking the button below.";
@@ -558,7 +558,12 @@ impl InitStepBlock {
 
     /// Renders a skipped/cancelled completion state with X icon.
     fn render_skipped_completion(text: &str, app: &AppContext) -> Box<dyn Element> {
-        Self::render_completion(text, Icon::X.to_warpui_icon(Fill::error()).finish(), None, app)
+        Self::render_completion(
+            text,
+            Icon::X.to_warpui_icon(Fill::error()).finish(),
+            None,
+            app,
+        )
     }
 
     /// Creates a regenerate AGENTS.md button.
@@ -914,9 +919,8 @@ impl InitStepBlock {
         appearance: &Appearance,
         app: &AppContext,
     ) -> Box<dyn Element> {
-        let action_button = init_completed.then(|| {
-            Self::regenerate_button(regenerate_mouse_state, button_disabled, appearance)
-        });
+        let action_button = init_completed
+            .then(|| Self::regenerate_button(regenerate_mouse_state, button_disabled, appearance));
         Self::render_completion_with_button(text, action_button, app)
     }
 

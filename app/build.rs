@@ -54,7 +54,6 @@ fn main() -> Result<()> {
         // `app/DockTilePlugin/` rather than deleted, so re-enabling is just
         // restoring this block.
 
-
         // In standalone mode, embed the Info.plist file. We don't use embed_plist! for this
         // because the plist file is dynamically generated.
         if env::var("CARGO_FEATURE_STANDALONE").is_ok() {

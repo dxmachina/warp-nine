@@ -68,7 +68,6 @@ impl Body {
             has_agent_conversations: false,
         }
     }
-
 }
 
 impl Body {

@@ -238,7 +238,6 @@ impl ActiveNotebookData {
         }
     }
 
-
     pub fn active_notebook(&self) -> ActiveNotebook {
         self.active_notebook.clone()
     }

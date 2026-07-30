@@ -43,7 +43,6 @@ use super::link::{NotebookLinks, SessionSource};
 use super::manager::NotebookManager;
 use super::telemetry::NotebookTelemetryAction;
 use super::{CloudNotebookModel, NotebookId, NotebookLocation, styles};
-use crate::terminal::model::secret_detection::find_secrets_in_text;
 use crate::appearance::Appearance;
 use crate::cloud_object::grab_edit_access_modal::{GrabEditAccessModal, GrabEditAccessModalEvent};
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent, UpdateSource};
@@ -80,6 +79,7 @@ use crate::settings::{
     FontSettings, FontSettingsChangedEvent, NotebookFontSize, decrease_notebook_font_size,
     increase_notebook_font_size,
 };
+use crate::terminal::model::secret_detection::find_secrets_in_text;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
 use crate::throttle::throttle;
 use crate::ui_components::icons::{self, Icon};

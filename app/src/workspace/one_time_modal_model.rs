@@ -487,7 +487,6 @@ impl OneTimeModalModel {
     /// re-evaluate. The modal can still be opened explicitly in debug builds.
     fn maybe_recheck_free_ai_removal_modal(&mut self, _ctx: &mut ModelContext<Self>) {}
 
-
     fn set_hoa_onboarding_open(&mut self, is_open: bool, ctx: &mut ModelContext<Self>) -> bool {
         if self.is_hoa_onboarding_open != is_open {
             self.is_hoa_onboarding_open = is_open;
@@ -711,7 +710,6 @@ impl OneTimeModalModel {
         self.set_build_plan_migration_modal_open(true, ctx)
     }
 }
-
 
 /// Marks the free-AI-removal notice as seen without showing it.
 pub fn mark_free_ai_removal_notice_seen(app: &mut AppContext) {

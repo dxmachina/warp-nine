@@ -231,8 +231,7 @@ pub enum TerminalAction {
         ai_block_view_id: EntityId,
     },
     /// Execute rewind from the inline menu (looks up ai_block_view_id from exchange_id)
-    ExecuteRewindFromInlineMenu {
-    },
+    ExecuteRewindFromInlineMenu {},
     SelectAllBlocks,
     ExpandBlockSelectionAbove,
     ExpandBlockSelectionBelow,
@@ -384,8 +383,7 @@ pub enum TerminalAction {
     ToggleHideCliResponses,
     ExitAgentView,
     EnterCloudAgentView,
-    StartNewAgentConversation {
-    },
+    StartNewAgentConversation {},
     /// Toggle the cloud mode conversation details panel
     ToggleConversationDetailsPanel,
     /// Cancel the ambient agent task while it's loading
@@ -398,39 +396,33 @@ pub enum TerminalAction {
     /// Toggle the usage footer on the last AI block in the active conversation.
     ToggleUsageFooter,
     /// Reveal a hidden child agent pane from the orchestrator status card.
-    RevealChildAgent {
-    },
+    RevealChildAgent {},
     /// Switch the active terminal view's agent view to display the given
     /// conversation in place, without spawning or revealing a separate pane.
     /// Used by the orchestration pill bar to navigate the current pane to a
     /// sibling/parent conversation.
-    SwitchAgentViewToConversation {
-    },
+    SwitchAgentViewToConversation {},
     /// Open a child agent conversation in a separate pane (split off from
     /// the orchestrator). Dispatched from the orchestration pill bar's
     /// 3-dot overflow menu ("Open in new pane"). For child agents that have
     /// a hidden pane in `child_agent_panes` this reveals the existing pane;
     /// for already-visible panes it focuses the existing pane.
-    OpenChildAgentInNewPane {
-    },
+    OpenChildAgentInNewPane {},
     /// Open a child agent conversation in a separate tab. V2-of-V2 stub:
     /// dispatched from the orchestration pill bar's 3-dot overflow menu
     /// ("Open in new tab"). For now this falls back to the same path as
     /// `OpenChildAgentInNewPane` until tab-level routing is wired through.
-    OpenChildAgentInNewTab {
-    },
+    OpenChildAgentInNewTab {},
     /// Stop a child agent conversation: cancel the in-flight ambient task
     /// (if any) and the local conversation's controller. The conversation
     /// itself stays alive so the user can still navigate to it. Dispatched
     /// from the orchestration pill bar's 3-dot overflow menu ("Stop agent").
-    StopAgentConversation {
-    },
+    StopAgentConversation {},
     /// Kill a child agent conversation: stop it if running, best-effort cancel
     /// any backing cloud task, then remove the conversation from local history.
     /// Dispatched from the orchestration pill bar's 3-dot overflow menu
     /// ("Kill agent").
-    KillAgentConversation {
-    },
+    KillAgentConversation {},
     /// Navigate to the previous child agent conversation in the active
     /// orchestration tree.
     CyclePreviousOrchestrationChildAgent,

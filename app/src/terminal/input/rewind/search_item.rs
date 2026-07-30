@@ -49,10 +49,7 @@ impl RewindSearchItem {
     }
 
     /// Create a rewind point item.
-    pub fn new_rewind_point(
-        query_text: String,
-        file_changes: FileChangesInfo,
-    ) -> Self {
+    pub fn new_rewind_point(query_text: String, file_changes: FileChangesInfo) -> Self {
         Self {
             query_text,
             file_changes,

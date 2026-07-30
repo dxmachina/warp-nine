@@ -689,9 +689,6 @@ impl TryFrom<&BillingMetadata> for StripeSubscriptionPlan {
     }
 }
 
-
-
-
 trait ToAgentModeCommandExecutionPredicates {
     fn to_predicates(self) -> Vec<AgentModeCommandExecutionPredicate>;
 }

@@ -99,7 +99,6 @@ impl Block {
         self.interaction_mode.agent_interaction_metadata()
     }
 
-
     // LOCAL FORK: fns requested_command_action_id and long_running_control_state
     // removed with the agent; both returned agent-owned types.
 
@@ -123,8 +122,6 @@ impl Block {
     pub fn set_should_hide(&mut self, value: bool) {
         self.interaction_mode.set_should_hide_block(value);
     }
-
-
 
     pub fn set_agent_interaction_mode(
         &mut self,
@@ -193,7 +190,6 @@ pub enum InteractionMode {
 }
 
 impl InteractionMode {
-
     fn new_agent(metadata: AgentInteractionMetadata) -> Self {
         Self::Agent(metadata)
     }
@@ -258,10 +254,7 @@ pub struct AgentInteractionMetadata {
 
 impl AgentInteractionMetadata {
     /// Creates a new metadata instance with fully specified fields.
-    pub fn new(
-        has_agent_written_to_block: bool,
-        should_hide_block: bool,
-    ) -> Self {
+    pub fn new(has_agent_written_to_block: bool, should_hide_block: bool) -> Self {
         AgentInteractionMetadata {
             has_agent_written_to_block,
             should_hide_block,

@@ -40,9 +40,8 @@ impl InlineSkillSelectorView {
         terminal_view_id: EntityId,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
-        let data_source = ctx.add_model(|ctx| {
-            SkillSelectorDataSource::new(active_session, terminal_view_id, ctx)
-        });
+        let data_source = ctx
+            .add_model(|ctx| SkillSelectorDataSource::new(active_session, terminal_view_id, ctx));
 
         let mixer = ctx.add_model(|_| {
             let mut mixer = SearchMixer::<AcceptSkill>::new();
@@ -126,7 +125,6 @@ impl InlineSkillSelectorView {
             input_buffer_model: input_buffer_model.clone(),
         }
     }
-
 
     /// Sets whether bundled skills are included in results.
     /// Should be called before opening the menu.

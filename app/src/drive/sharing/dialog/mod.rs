@@ -357,7 +357,6 @@ impl SharingDialog {
         }
     }
 
-
     /// Sets the target object whose ACLs are shown.
     pub fn set_target(&mut self, target: Option<ShareableObject>, ctx: &mut ViewContext<Self>) {
         self.target = target;
@@ -385,7 +384,6 @@ impl SharingDialog {
             ctx.notify();
         }
     }
-
 
     /// The Warp Drive server ID for the target object. `None` if the target is not a Warp Drive
     /// object or AI conversation.
@@ -716,7 +714,6 @@ impl SharingDialog {
             return;
         }
 
-
         match self.target_cloud_object(ctx) {
             Some(object) => {
                 let object_id = object.sync_id();
@@ -1045,9 +1042,6 @@ impl SharingDialog {
 
         self.set_open_menu(OpenMenuState::None, ctx);
     }
-
-
-
 
     /// Create the access level selector dropdown for the email invitation form.
     fn build_invite_access_level_menu(

@@ -529,13 +529,11 @@ pub enum WorkspaceAction {
     OpenMCPServerCollection,
     /// Open the Environment Management pane in Create mode.
     OpenEnvironmentManagementPane,
-    ToggleAIDocumentPane {
-    },
+    ToggleAIDocumentPane {},
     /// Closes all visible AI document panes in the active pane group.
     HideAIDocumentPanes,
     /// Closes any other ai document panes in the active pane group, and opens the specified document_id.
-    OpenAIDocumentPane {
-    },
+    OpenAIDocumentPane {},
     FocusTerminalViewInWorkspace {
         terminal_view_id: EntityId,
     },
@@ -596,12 +594,10 @@ pub enum WorkspaceAction {
     /// Fork an existing AI conversation into a new pane and prefill the input with a local
     /// continuation command (selecting all text).
     #[cfg(not(target_family = "wasm"))]
-    ContinueConversationLocally {
-    },
+    ContinueConversationLocally {},
     /// Continue a completed third-party cloud harness run in a local split pane.
     #[cfg(not(target_family = "wasm"))]
-    ContinueThirdPartyConversationLocally {
-    },
+    ContinueThirdPartyConversationLocally {},
     /// Insert the /fork slash command into the active terminal's input.
     InsertForkSlashCommand,
     /// Open a local-to-cloud handoff pane next to the active conversation
@@ -773,8 +769,7 @@ pub enum WorkspaceAction {
     },
     /// Load cloud conversation data into a transcript viewer.
     /// Used when CloudConversations is enabled and the sandbox is not running.
-    OpenConversationTranscriptViewer {
-    },
+    OpenConversationTranscriptViewer {},
     /// Toggle the conversation transcript details panel (WASM-only).
     #[cfg(target_family = "wasm")]
     ToggleConversationTranscriptDetailsPanel,

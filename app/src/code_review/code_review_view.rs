@@ -728,7 +728,6 @@ impl CodeReviewView {
             // UI after LSP installation succeeds or fails.
             #[cfg(feature = "local_fs")]
             {
-
                 // PersistedWorkspace handles spawning the server after install;
                 // we only subscribe to refresh the footer UI.
                 ctx.subscribe_to_model(&PersistedWorkspace::handle(ctx), |me, _, event, ctx| {
@@ -862,7 +861,6 @@ impl CodeReviewView {
         server_type: Option<lsp::supported_servers::LSPServerType>,
         ctx: &mut ViewContext<Self>,
     ) {
-
         let server_type =
             server_type.or_else(|| lsp::LanguageId::from_path(path).map(|id| id.server_type()));
         let Some(server_type) = server_type else {
@@ -906,7 +904,6 @@ impl CodeReviewView {
         server_type: Option<lsp::supported_servers::LSPServerType>,
         ctx: &mut ViewContext<Self>,
     ) {
-
         let server_type =
             server_type.or_else(|| lsp::LanguageId::from_path(path).map(|id| id.server_type()));
         let Some(server_type) = server_type else {
@@ -3216,8 +3213,10 @@ impl CodeReviewView {
                     );
                     return;
                 };
-                let comment_with_file_context =
-                    AttachedReviewComment::from_editor_review_comment(comment.clone(), file_location);
+                let comment_with_file_context = AttachedReviewComment::from_editor_review_comment(
+                    comment.clone(),
+                    file_location,
+                );
                 self.update_review_comment(comment_with_file_context, ctx);
                 ctx.notify();
             }
@@ -5577,8 +5576,7 @@ impl CodeReviewView {
     }
 
     // LOCAL FORK: attaching a diff set as context targeted the agent, which is gone.
-    fn insert_diff_as_context(&mut self, _scope: DiffSetScope, _ctx: &mut ViewContext<Self>) {
-    }
+    fn insert_diff_as_context(&mut self, _scope: DiffSetScope, _ctx: &mut ViewContext<Self>) {}
 
     // LOCAL FORK: fn get_current_head removed with the agent.
     // LOCAL FORK: fn get_diff_base removed with the agent.
@@ -7172,10 +7170,10 @@ use scroll_preservation::RelocatableScrollContext;
 #[path = "code_review_view_integration.rs"]
 mod code_review_view_integration;
 
+use crate::persisted_workspace::{LspTask, PersistedWorkspace, PersistedWorkspaceEvent};
 #[cfg(feature = "integration_tests")]
 pub use code_review_view_integration::CodeReviewVisibleAnchorForTest;
 use warp_errors::report_error;
-use crate::persisted_workspace::{LspTask, PersistedWorkspace, PersistedWorkspaceEvent};
 
 #[cfg(test)]
 #[path = "code_review_view_tests.rs"]

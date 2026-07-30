@@ -12,6 +12,7 @@ use warpui::SingletonEntity;
 use warpui::elements::ChildView;
 use warpui::{Element, Entity, ModelHandle, View, ViewContext, ViewHandle};
 
+use crate::persisted_workspace::PersistedWorkspace;
 #[cfg(feature = "local_fs")]
 use crate::search::data_source::{Query, QueryFilter};
 use crate::search::mixer::{AddAsyncSourceOptions, SearchMixer};
@@ -24,7 +25,6 @@ use crate::terminal::input::repos::data_source::RepoMenuDataSource;
 use crate::terminal::input::suggestions_mode_model::{
     InputSuggestionsModeEvent, InputSuggestionsModeModel,
 };
-use crate::persisted_workspace::PersistedWorkspace;
 
 /// Events emitted by InlineReposMenuView.
 #[derive(Debug, Clone)]

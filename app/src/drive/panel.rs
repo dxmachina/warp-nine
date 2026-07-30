@@ -336,9 +336,8 @@ impl DrivePanel {
             // LOCAL FORK: AI facts were agent rules and CloudAIFactModel went
             // with the agent, so there is nothing to create. The arm stays
             // because DriveIndexEvent still carries the variant.
-            DriveIndexEvent::CreateAIFact { .. } => {}
-            // LOCAL FORK: the AttachPlanAsContext arm went out with the agent;
-            // neither DriveIndexEvent nor DrivePanelEvent carries the variant now.
+            DriveIndexEvent::CreateAIFact { .. } => {} // LOCAL FORK: the AttachPlanAsContext arm went out with the agent;
+                                                       // neither DriveIndexEvent nor DrivePanelEvent carries the variant now.
         }
     }
 

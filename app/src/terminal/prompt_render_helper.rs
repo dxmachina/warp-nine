@@ -169,7 +169,6 @@ pub struct PromptRenderHelper {
     prompt_view: ViewHandle<PromptDisplay>,
     prompt_selection_state_handle: SelectionHandle,
     input_render_state_model_handle: ModelHandle<InputRenderStateModel>,
-
 }
 
 #[derive(Clone, Copy)]

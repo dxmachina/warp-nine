@@ -16,8 +16,7 @@ use crate::terminal::input::inline_menu::{
 use crate::terminal::input::message_bar::{Message, MessageItem};
 
 #[derive(Clone, Debug)]
-pub struct AcceptModel {
-}
+pub struct AcceptModel {}
 
 impl InlineMenuAction for AcceptModel {
     const MENU_TYPE: InlineMenuType = InlineMenuType::ModelSelector;
@@ -114,10 +113,7 @@ impl ModelPickerChoice {
 
 /// LOCAL FORK: the choices came from the agent's `LLMPreferences` catalog, so
 /// the picker is always empty. Kept so the GUI and TUI surfaces still compile.
-pub fn query_model_picker_choices(
-    _query_text: &str,
-    _app: &AppContext,
-) -> Vec<ModelPickerChoice> {
+pub fn query_model_picker_choices(_query_text: &str, _app: &AppContext) -> Vec<ModelPickerChoice> {
     Vec::new()
 }
 

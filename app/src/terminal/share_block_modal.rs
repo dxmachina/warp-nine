@@ -46,8 +46,6 @@ use crate::send_telemetry_from_ctx;
 use crate::server::block::{Block as ServerBlock, DisplaySetting};
 use crate::server::server_api::block::BlockClient;
 use crate::server::telemetry::TelemetryEvent;
-use crate::settings::{
-};
 use crate::settings_view::SettingsSection;
 use crate::terminal::TerminalModel;
 use crate::terminal::grid_renderer::{self};

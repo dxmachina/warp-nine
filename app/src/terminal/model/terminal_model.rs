@@ -1389,7 +1389,6 @@ impl TerminalModel {
         )
     }
 
-
     /// Model-only portion of the "is this a cloud agent conversation?" check used for display
     /// purposes (e.g. the cloud agent icon). Callers holding a [`TerminalView`] should use
     /// [`TerminalView::is_cloud_agent_session`], which also accounts for the ambient agent view

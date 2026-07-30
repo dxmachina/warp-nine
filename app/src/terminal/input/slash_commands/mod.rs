@@ -895,8 +895,6 @@ impl Input {
             | SlashCommandEntryState::Composing { .. } => false,
         }
     }
-
-
 }
 
 /// Whether executing the static slash `command` submits its text to the conversation as an AI
@@ -915,7 +913,6 @@ pub fn slash_command_is_submitted_as_prompt(command: &StaticCommand) -> bool {
         SlashCommandKind::Compact | SlashCommandKind::Plan | SlashCommandKind::Orchestrate
     )
 }
-
 
 // LOCAL FORK: ForkButtonAction / fork_button_action / conversation_is_cloud_oz_for_slash_command
 // removed with the agent; they described the `/fork` vs `/continue-locally` choice for an

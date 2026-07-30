@@ -1160,8 +1160,7 @@ fn register_input_mode_bindings(app: &mut AppContext) {
                 mac: "cmd-enter",
                 linux_and_windows: "ctrl-shift-enter",
             },
-            TerminalAction::StartNewAgentConversation {
-            },
+            TerminalAction::StartNewAgentConversation {},
             agent_conversation_predicate.clone() & !command_predicate.clone(),
         )
         .with_enabled(|| FeatureFlag::AgentView.is_enabled()),

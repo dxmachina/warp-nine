@@ -1183,7 +1183,6 @@ impl CloudModel {
             .and_then(|object| object.into())
     }
 
-
     pub fn get_workflow_enum_mut(&mut self, enum_id: &SyncId) -> Option<&mut CloudWorkflowEnum> {
         self.objects_by_id
             .get_mut(&enum_id.uid())

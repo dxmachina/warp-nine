@@ -28,15 +28,13 @@ use crate::editor::{
     TextOptions,
 };
 use crate::referral_theme_status::ReferralThemeStatus;
-use crate::tips::{
-    Tip, TipAction, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
-};
 use crate::send_telemetry_from_ctx;
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings::{ThemeSettings, respect_system_theme};
 use crate::themes::theme::{
     RespectSystemTheme, SelectedSystemThemes, ThemeKind, WarpTheme, WarpThemeConfig,
 };
+use crate::tips::{Tip, TipAction, TipsCompleted, mark_feature_used_and_write_to_user_defaults};
 use crate::ui_components::buttons::{close_button, icon_button};
 use crate::ui_components::icons;
 use crate::ui_components::window_focus_dimming::WindowFocusDimming;

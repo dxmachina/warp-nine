@@ -133,7 +133,6 @@ use super::{History, HistoryEntry, SizeInfo, TerminalModel, UpArrowHistoryConfig
 use crate::ASSETS;
 // LOCAL FORK: the agent's conversation, attachment, prompt-suggestion, model-preference
 // and skill machinery all came out with it. Only the terminal's own input editor is kept.
-use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::channel::{Channel, ChannelState};
 use crate::cloud_object::model::actions::ObjectActionType;
@@ -171,9 +170,6 @@ use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::persistence::{database_file_path_for_current_scope, establish_ro_connection};
 use crate::prefix::longest_common_prefix;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
-use crate::tips::{
-    Tip, TipAction, TipHint, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
-};
 use crate::search::QueryFilter;
 use crate::search::slash_command_menu::static_commands::commands::{self, COMMAND_REGISTRY};
 use crate::server::cloud_objects::update_manager::UpdateManager;
@@ -219,7 +215,11 @@ use crate::terminal::model::session::active_session::ActiveSession;
 use crate::terminal::model::session::shell_quote_arg;
 use crate::terminal::package_installers::command_at_cursor_has_common_package_installer_prefix;
 use crate::terminal::prompt_render_helper::should_render_ps1_prompt;
+use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
 use crate::terminal::universal_developer_input::AtContextMenuDisabledReason;
+use crate::tips::{
+    Tip, TipAction, TipHint, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
+};
 // LOCAL FORK: AIQueryRouting / resolve_ai_query_routing routed a prompt to a cloud or
 // remote agent; they went with the agent.
 use crate::terminal::view::CodeDiffAction;
@@ -1023,7 +1023,6 @@ pub enum InputAction {
     ToggleConversationsMenu,
 
     // LOCAL FORK: StartNewAgentConversation removed with the agent.
-
     /// This is for toggling whether autodetection is enabled/disabled at the app-level,
     /// not for whether its enabled/disabled for the current input
     ToggleInputAutoDetection,
@@ -1035,7 +1034,6 @@ pub enum InputAction {
     CycleNextCommandSuggestion,
 
     // LOCAL FORK: InsertZeroStatePromptSuggestion removed with the agent.
-
     /// A passive code diff action.
     TryHandlePassiveCodeDiff(CodeDiffAction),
 
@@ -1492,7 +1490,6 @@ pub struct Input {
 
     // LOCAL FORK: the AI controller / context / input / action models and the follow-up
     // icon mouse state all came out with the agent.
-
     /// To ensure we only have one run of completions-as-you-type at any given time,
     /// we keep an abort handle of the current run. If we have reason to start a new run
     /// (e.g. new input), we simply abort the existing run. The same applies to the
@@ -1551,7 +1548,6 @@ pub struct Input {
     /// data collection when the command completes, but state is cleared when the command is executed.
     last_intelligent_autosuggestion_result: Option<IntelligentAutosuggestionResult>,
     // LOCAL FORK: next_command_model removed with the agent.
-
     /// The last block that the user ran. This is used for generating autosuggestions.
     #[cfg_attr(not(feature = "local_fs"), allow(dead_code))]
     last_user_block_completed: Option<UserBlockCompleted>,
@@ -1579,7 +1575,6 @@ pub struct Input {
 
     // LOCAL FORK: the inline conversation menu and the inline plan menu came out with the
     // agent; both browsed agent conversations.
-
     /// Inline repos switcher menu.
     inline_repos_menu_view: ViewHandle<InlineReposMenuView>,
 
@@ -1592,12 +1587,10 @@ pub struct Input {
     inline_skill_selector_view: ViewHandle<InlineSkillSelectorView>,
 
     // LOCAL FORK: skill_selector_should_invoke removed with the agent.
-
     /// Inline prompts menu for /prompts command.
     inline_prompts_menu_view: ViewHandle<InlinePromptsMenuView>,
 
     // LOCAL FORK: the fork-from query menu came out with the agent.
-
     /// Inline menu for selecting a rewind point in a conversation.
     rewind_menu_view: ViewHandle<RewindMenuView>,
 
@@ -1625,7 +1618,6 @@ pub struct Input {
     // LOCAL FORK: the agent status bar, the queued-prompts panel, the agent view
     // controller, the agent shortcut overlay, the ambient (cloud) agent state and the
     // ephemeral message model all came out with the agent.
-
     /// When a command is executed from a prompt chip (e.g. `cd` from the directory dropdown),
     /// we snapshot the current input contents here so we can restore them after the command
     /// completes and the buffer would normally be cleared.
@@ -1962,11 +1954,6 @@ impl Input {
         self.has_pending_command = true;
         self.execute_pending_command(ctx);
     }
-
-
-
-
-
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
@@ -2624,9 +2611,7 @@ impl Input {
         // LOCAL FORK: the input is always a shell input now, so voice transcription
         // follows the setting alone and never renders its own button.
         let voice_transcription_options = if AISettings::as_ref(ctx).is_voice_input_enabled(ctx) {
-            crate::editor::VoiceTranscriptionOptions::Enabled {
-                show_button: false,
-            }
+            crate::editor::VoiceTranscriptionOptions::Enabled { show_button: false }
         } else {
             crate::editor::VoiceTranscriptionOptions::Disabled
         };
@@ -2637,42 +2622,6 @@ impl Input {
         });
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     fn check_slash_menu_disabled_state(&mut self, ctx: &mut ViewContext<Self>) {
         // LOCAL FORK: the AI input lock no longer gates the slash button.
         let should_disable = !self.editor().as_ref(ctx).is_empty(ctx);
@@ -2681,11 +2630,6 @@ impl Input {
                 button_bar.set_slash_button_disabled(should_disable, ctx);
             });
     }
-
-
-
-
-
 
     fn open_slash_commands_menu(&mut self, ctx: &mut ViewContext<Self>) {
         // Don't open the menu if there's a long-running command.
@@ -2730,7 +2674,6 @@ impl Input {
         }
     }
 
-
     fn handle_repos_menu_event(
         &mut self,
         event: &InlineReposMenuEvent,
@@ -2760,26 +2703,12 @@ impl Input {
         }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
     fn open_repos_menu(&mut self, ctx: &mut ViewContext<Self>) {
         self.suggestions_mode_model.update(ctx, |model, ctx| {
             model.set_mode(InputSuggestionsMode::IndexedReposMenu, ctx);
         });
         ctx.notify();
     }
-
 
     fn handle_inline_history_menu_event(
         &mut self,
@@ -2905,7 +2834,6 @@ impl Input {
         ctx.notify();
     }
 
-
     fn open_rewind_menu(&mut self, ctx: &mut ViewContext<Self>) {
         // Don't reopen if already open.
         if self.suggestions_mode_model.as_ref(ctx).is_rewind_menu() {
@@ -2992,22 +2920,12 @@ impl Input {
         ctx.notify();
     }
 
-
-
-
     pub fn set_shared_session_presence_manager(
         &mut self,
         presence_manager: ModelHandle<PresenceManager>,
     ) {
         self.shared_session_presence_manager = Some(presence_manager);
     }
-
-
-
-
-
-
-
 
     fn handle_prompt_event(&mut self, event: &PromptDisplayEvent, ctx: &mut ViewContext<Self>) {
         match event {
@@ -3189,7 +3107,6 @@ impl Input {
         &self.editor
     }
 
-
     pub fn buffer_text(&self, ctx: &AppContext) -> String {
         self.editor.as_ref(ctx).buffer_text(ctx)
     }
@@ -3289,7 +3206,6 @@ impl Input {
         }
     }
 
-
     #[cfg(feature = "voice_input")]
     pub(super) fn toggle_voice_input(
         &mut self,
@@ -3322,8 +3238,6 @@ impl Input {
             editor.user_initiated_insert(text, PlainTextEditorViewAction::Paste, ctx);
         });
     }
-
-
 
     fn handle_universal_developer_input_button_bar_event(
         &mut self,
@@ -3358,10 +3272,6 @@ impl Input {
             }
         }
     }
-
-
-
-
 
     /// Clear the cached hint text to generate a new one on next render
     pub fn clear_cached_hint_text(&mut self) {
@@ -3943,10 +3853,6 @@ impl Input {
         }
         shared_session_input_state.pending_command_execution_request = None;
     }
-
-
-
-
 
     fn clear_selected_env_var_collection(&mut self) {
         self.env_var_collection_state.selected_env_vars = None;
@@ -5110,7 +5016,6 @@ impl Input {
         ctx.focus_self();
     }
 
-
     pub fn handle_command_search_closed(
         &mut self,
         _query_when_closed: &str,
@@ -5395,7 +5300,6 @@ impl Input {
             ctx.emit(Event::Escape);
         }
     }
-
 
     /// Takes the current collpased/expanded state of the info box and saves it to the user's settings so that last value can be
     /// reused the next time the user opens a workflow.
@@ -5862,8 +5766,6 @@ impl Input {
                 | EditorEvent::MiddleClickPaste
         )
     }
-
-
 
     fn handle_editor_event(&mut self, event: &EditorEvent, ctx: &mut ViewContext<Self>) {
         // We want to clear the token description hover on any editor action
@@ -6671,7 +6573,6 @@ impl Input {
     ) {
     }
 
-
     /// Display an error toast for image paste operation failures.
     fn show_image_paste_error(&self, ctx: &mut ViewContext<Self>, message: String) {
         let window_id = ctx.window_id();
@@ -7039,7 +6940,6 @@ impl Input {
             .completions_open_while_typing
             .value()
     }
-
 
     fn is_classic_completions_enabled(&self, ctx: &AppContext) -> bool {
         (FeatureFlag::ClassicCompletions.is_enabled()
@@ -8091,8 +7991,6 @@ impl Input {
         })
     }
 
-
-
     /// Handles the user's 'Enter' keypress.
     ///
     /// Depending on input state, this method may either execute a command, accept an input
@@ -8346,29 +8244,12 @@ impl Input {
         }
     }
 
-
-
-
-
-
-
-
-
     // LOCAL FORK: fn upload_files_then_submit_cloud_followup removed with the agent.
 
     // LOCAL FORK: fn emit_input_buffer_submitted_telemetry removed with the agent; every
     // field it reported described the AI input mode.
 
-
     // LOCAL FORK: fn upload_files_then_send_prompt removed with the agent.
-
-
-
-
-
-
-
-
 
     fn get_command(&mut self, ctx: &mut ViewContext<Self>) -> String {
         // Expand valid abbreviations or aliases, if any
@@ -8925,7 +8806,6 @@ impl Input {
         })
     }
 
-
     /// Renders a banner that should stay next to the input box.
     ///
     /// LOCAL FORK: the only banner was the agent's zero-state prompt suggestions, which
@@ -8939,8 +8819,6 @@ impl Input {
     ) -> Option<Box<dyn Element>> {
         None
     }
-
-
 
     fn render_input_box(
         &self,
@@ -9105,7 +8983,6 @@ impl Input {
     pub fn is_cloud_mode_input_v2_composing(&self, _app: &AppContext) -> bool {
         false
     }
-
 
     /// Returns whether the input box is currently pinned to the top of the screen.
     fn is_input_at_top(&self, model: &TerminalModel, ctx: &AppContext) -> bool {

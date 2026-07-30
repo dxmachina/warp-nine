@@ -30,8 +30,7 @@ use crate::workspace::WorkspaceAction;
 
 #[derive(Debug, Clone)]
 pub enum InlineHistoryMenuEvent {
-    NavigateToConversation {
-    },
+    NavigateToConversation {},
     AcceptCommand {
         command: String,
         linked_workflow_data: Option<LinkedWorkflowData>,
@@ -217,9 +216,8 @@ impl InlineHistoryMenuView {
         caller_supplied_tabs: bool,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
-        let data_source = ctx.add_model(|_| {
-            InlineHistoryMenuDataSource::new(terminal_view_id, active_session)
-        });
+        let data_source =
+            ctx.add_model(|_| InlineHistoryMenuDataSource::new(terminal_view_id, active_session));
 
         let initial_filters = tab_configs
             .first()

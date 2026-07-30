@@ -89,7 +89,6 @@ impl SkillSelectorDataSource {
         }
     }
 
-
     /// LOCAL FORK: this reported whether the pane was a cloud agent pane, which
     /// it read off the ambient agent view model. No pane is one any more.
     fn is_cloud_pane(&self) -> bool {

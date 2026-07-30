@@ -122,10 +122,7 @@ impl TerminalView {
         false
     }
 
-
-
     // LOCAL FORK: fn enable_cloud_followup_input removed with the agent.
-
 
     pub(super) fn handle_viewer_role_change_menu_event(
         &mut self,
@@ -739,7 +736,6 @@ impl TerminalView {
     /// followup input, the details panel — went with the agent. Kept as a no-op because
     /// the shared-session viewer terminal manager still signals it.
     pub fn on_ambient_agent_execution_ended(&mut self, _ctx: &mut ViewContext<Self>) {}
-
 
     // LOCAL FORK: fn start_cloud_followup_from_tombstone removed with the agent.
 
@@ -1547,8 +1543,6 @@ impl TerminalView {
 
         ctx.notify();
     }
-
-
 
     // LOCAL FORK: fn remove_conversation_ended_tombstone removed with the agent. Its
     // only callers inserted the tombstone in the first place.

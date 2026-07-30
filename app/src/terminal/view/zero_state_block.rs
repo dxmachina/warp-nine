@@ -157,24 +157,22 @@ impl View for TerminalViewZeroStateBlock {
             );
 
         // LOCAL FORK: the two "start a conversation" entries went away with the agent view.
-        let mut items = vec![
-            render_standard_message(
-                Message::new(vec![MessageItem::clickable(
-                    vec![
-                        MessageItem::keystroke(Keystroke {
-                            key: "up".to_owned(),
-                            ..Default::default()
-                        }),
-                        MessageItem::text("cycle past commands and conversations"),
-                    ],
-                    |ctx| {
-                        ctx.dispatch_typed_action(TerminalAction::OpenInlineHistoryMenu);
-                    },
-                    self.state_handles.open_history_menu.clone(),
-                )]),
-                app,
-            ),
-        ];
+        let mut items = vec![render_standard_message(
+            Message::new(vec![MessageItem::clickable(
+                vec![
+                    MessageItem::keystroke(Keystroke {
+                        key: "up".to_owned(),
+                        ..Default::default()
+                    }),
+                    MessageItem::text("cycle past commands and conversations"),
+                ],
+                |ctx| {
+                    ctx.dispatch_typed_action(TerminalAction::OpenInlineHistoryMenu);
+                },
+                self.state_handles.open_history_menu.clone(),
+            )]),
+            app,
+        )];
 
         if *TabSettings::as_ref(app).show_code_review_button
             && let Some(keystroke) =

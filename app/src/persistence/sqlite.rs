@@ -84,6 +84,7 @@ use crate::cloud_object::{CloudObject, ObjectIdType};
 use crate::code::editor_management::CodeSource;
 use crate::drive::OpenWarpDriveObjectSettings;
 use crate::notebooks::NotebookId;
+use crate::persisted_workspace::EnablementState;
 use crate::persistence::model::{
     CODE_REVIEW_PANE_KIND, GET_STARTED_PANE_KIND, NewPersistedObjectAction, NewTeamSettings,
     UserProfile,
@@ -103,7 +104,6 @@ use crate::workspaces::team::Team as TeamMetadata;
 use crate::workspaces::user_profiles::{UserProfileWithUID, user_profile_from_persistence};
 use crate::workspaces::workspace::{Workspace as WorkspaceMetadata, WorkspaceUid};
 use crate::{safe_info, send_telemetry_from_app_ctx};
-use crate::persisted_workspace::EnablementState;
 
 diesel::define_sql_function! {
     fn json_extract(target: diesel::sql_types::Text, path: diesel::sql_types::Text) -> diesel::sql_types::Text;
@@ -1508,7 +1508,10 @@ fn get_all_codebase_index_metadata(
 
     Ok(workspace_metadata
         .load_iter::<WorkspaceMetadataModel, DefaultLoadingMode>(conn)?
-        .filter_map(|item| item.ok().map(crate::workspace_metadata::WorkspaceMetadata::from))
+        .filter_map(|item| {
+            item.ok()
+                .map(crate::workspace_metadata::WorkspaceMetadata::from)
+        })
         .collect_vec())
 }
 
@@ -1653,8 +1656,6 @@ fn get_all_ignored_suggestions(
         })
         .collect())
 }
-
-
 
 fn delete_mcp_server_installations(conn: &mut SqliteConnection, uuids: Vec<Uuid>) -> Result<()> {
     use schema::mcp_server_installations::dsl::*;
@@ -2018,7 +2019,6 @@ fn upsert_generic_string_objects(
         .collect();
     upsert_generic_string_object_rows(conn, objects)
 }
-
 
 fn read_root_node(conn: &mut SqliteConnection, tab_id_val: i32) -> Result<PaneNodeSnapshot> {
     use schema::pane_nodes::dsl::*;

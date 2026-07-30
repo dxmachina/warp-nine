@@ -446,7 +446,6 @@ impl EnvironmentsPageView {
             .then_some(&self.environment_setup_mode_selector)
     }
 
-
     /// Returns the pane configuration for BackingView support.
     pub fn pane_configuration(&self) -> ModelHandle<crate::pane_group::pane::PaneConfiguration> {
         self.pane_configuration.clone()

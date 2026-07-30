@@ -170,8 +170,6 @@ impl InputSuggestionsModeModel {
         )
     }
 
-
-
     pub fn is_inline_history_menu(&self) -> bool {
         matches!(self.mode, InputSuggestionsMode::InlineHistoryMenu { .. })
     }
@@ -183,7 +181,6 @@ impl InputSuggestionsModeModel {
     pub fn is_plan_menu(&self) -> bool {
         matches!(self.mode, InputSuggestionsMode::PlanMenu { .. })
     }
-
 
     pub fn inline_menu_type(&self) -> Option<InlineMenuType> {
         InlineMenuType::from_suggestions_mode(&self.mode)

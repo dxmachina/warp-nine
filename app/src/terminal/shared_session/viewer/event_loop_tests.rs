@@ -43,7 +43,6 @@ fn terminal_view(app: &mut App) -> ViewHandle<TerminalView> {
     add_window_with_terminal(app, None)
 }
 
-
 fn completed_block(command: &str, output: &str) -> SerializedBlock {
     let mut block =
         SerializedBlock::new_for_test(command.as_bytes().into(), output.as_bytes().into());
@@ -651,7 +650,6 @@ fn test_out_of_order_buffering() {
 // agent's queued-query bookkeeping (`QueuedQueryModel` / `BlocklistAIHistoryModel`).
 // The viewer no longer special-cases queued agent commands — `CommandExecutionStarted`
 // now always clears the input — so there is no behavior left to protect.
-
 
 #[test]
 fn test_pty_bytes_buffered_before_command_execution_started() {

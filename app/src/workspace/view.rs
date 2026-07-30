@@ -14119,9 +14119,8 @@ impl Workspace {
             }
             DrivePanelEvent::OpenSharedObjectsCreationDeniedModal(object_type, team_uid) => {
                 self.open_shared_objects_creation_denied_modal(*object_type, *team_uid, ctx)
-            }
-            // LOCAL FORK: `DrivePanelEvent::AttachPlanAsContext` attached a plan to an
-            // agent conversation; removed with the agent.
+            } // LOCAL FORK: `DrivePanelEvent::AttachPlanAsContext` attached a plan to an
+              // agent conversation; removed with the agent.
         }
     }
 

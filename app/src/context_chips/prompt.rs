@@ -10,8 +10,6 @@ use warpui::{
 };
 
 pub use super::ContextChipKind;
-use crate::settings::{
-};
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 
 #[cfg(test)]

@@ -77,8 +77,6 @@ use crate::search::command_search::settings::{
 };
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings::native_preference::{NativePreferenceSettings, UserNativePreference};
-use crate::settings::{
-};
 use crate::terminal::alt_screen_reporting::{
     AltScreenReporting, FocusReportingEnabled, MouseReportingEnabled, ScrollReportingEnabled,
 };

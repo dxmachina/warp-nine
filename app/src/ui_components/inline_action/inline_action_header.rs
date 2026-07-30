@@ -14,8 +14,8 @@ use warpui::fonts::FamilyId;
 use warpui::platform::Cursor;
 use warpui::{AppContext, Element, EventContext, SingletonEntity};
 
-use crate::ui_components::inline_action::inline_action_icons::icon_size;
 use crate::ui_components::blended_colors;
+use crate::ui_components::inline_action::inline_action_icons::icon_size;
 use crate::view_components::compactible_action_button::{
     RenderCompactibleActionButton, render_compact_and_regular_button_rows, render_expansion_icon,
 };

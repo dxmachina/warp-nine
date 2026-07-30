@@ -34,7 +34,6 @@ pub mod ssh_transport;
 #[cfg(unix)]
 pub mod unix;
 
-
 /// Run the `remote-server-proxy` subcommand.
 #[cfg(unix)]
 pub fn run_proxy(identity_key: String) -> anyhow::Result<()> {

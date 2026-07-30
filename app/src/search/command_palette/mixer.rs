@@ -49,8 +49,7 @@ pub enum CommandPaletteItemAction {
         window_id: Option<WindowId>,
         terminal_view_id: Option<EntityId>,
     },
-    ForkConversation {
-    },
+    ForkConversation {},
     OpenLaunchConfiguration {
         config: Arc<LaunchConfig>,
         /// See [`OpenLaunchConfigArg::open_in_active_window`].
@@ -195,8 +194,7 @@ pub enum ItemSummary {
     Project {
         path: String,
     },
-    Conversation {
-    },
+    Conversation {},
     ForkConversation,
     NewConversation,
     /// No-op action (used for non-interactable separator items that don't do anything on click).

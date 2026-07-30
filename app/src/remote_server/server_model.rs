@@ -43,10 +43,10 @@ use super::proto::{
     TextEdit, UpdateGitHubPrInfo, UpdateGitHubRepoInfo, UpdateGitStatus, UploadHandoffSnapshot,
     WriteFile, WriteFileResponse, WriteFileSuccess, client_message, delete_file_response,
     discard_files_response, get_diff_state_response, get_fragment_metadata_from_hash_response,
-    git_commit_chain_response, git_create_pr_response,
-    git_get_committed_branch_files_response, git_push_response, host_scoped_request, notification,
-    resolve_conflict_response, run_command_response, save_buffer_response,
-    server_message, session_scoped_request, write_file_response,
+    git_commit_chain_response, git_create_pr_response, git_get_committed_branch_files_response,
+    git_push_response, host_scoped_request, notification, resolve_conflict_response,
+    run_command_response, save_buffer_response, server_message, session_scoped_request,
+    write_file_response,
 };
 use super::server_buffer_tracker::{PendingBufferRequestKind, ServerBufferTracker};
 use super::{diff_state_proto, ripgrep_search};
@@ -610,7 +610,6 @@ impl ServerModel {
         model
     }
 
-
     // LOCAL FORK: the remote agent context snapshot broadcast helpers were
     // removed with the agent.
 
@@ -952,11 +951,9 @@ impl ServerModel {
         self.send_server_message(
             Some(conn_id),
             None,
-            server_message::Message::CodebaseIndexStatusesSnapshot(
-                CodebaseIndexStatusesSnapshot {
-                    statuses: Vec::new(),
-                },
-            ),
+            server_message::Message::CodebaseIndexStatusesSnapshot(CodebaseIndexStatusesSnapshot {
+                statuses: Vec::new(),
+            }),
         );
     }
 
@@ -2207,7 +2204,6 @@ impl ServerModel {
             }
         }
     }
-
 
     /// Handles `GetBranches` — request/response.
     ///

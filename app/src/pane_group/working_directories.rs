@@ -25,9 +25,7 @@ use crate::code::buffer_location::LocalOrRemotePath;
 #[cfg(feature = "local_fs")]
 use crate::code::file_tree::FileTreeView;
 use crate::code_review::code_review_view::CodeReviewView;
-use crate::code_review::comments::{
-    AttachedReviewComment, ReviewCommentBatch,
-};
+use crate::code_review::comments::{AttachedReviewComment, ReviewCommentBatch};
 use crate::code_review::diff_state::{DiffMode, DiffStateModel};
 use crate::workspace::view::global_search::view::GlobalSearchView;
 

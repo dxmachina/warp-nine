@@ -693,7 +693,6 @@ impl BillingAndUsagePageV2View {
         None
     }
 
-
     fn render_addon_credits_panel(
         &self,
         workspace: &Workspace,

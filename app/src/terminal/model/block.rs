@@ -167,11 +167,9 @@ pub struct BlocklistEnvVarMetadata {
 pub enum AgentViewVisibility {
     /// Block was created in terminal mode. It should always be visible in terminal view,
     /// and may also be attached to conversations as context.
-    Terminal {
-    },
+    Terminal {},
     /// Block was created inside an agent view conversation.
-    Agent {
-    },
+    Agent {},
 }
 
 impl AgentViewVisibility {
@@ -180,12 +178,7 @@ impl AgentViewVisibility {
         Self::Terminal {}
     }
 
-
-
-
-
     // LOCAL FORK: fn promote_pending_to_attached removed with the agent.
-
 }
 
 pub struct Block {
@@ -941,7 +934,6 @@ impl Block {
         &self.interaction_mode
     }
 
-
     /// Resets this block's visibility to terminal mode.
     /// Use this when a block is being returned to terminal context (e.g., exiting agent view).
     pub fn clear_conversation_id(&mut self) {
@@ -953,9 +945,6 @@ impl Block {
     pub fn set_agent_view_visibility(&mut self, visibility: AgentViewVisibility) {
         self.agent_view_visibility = visibility;
     }
-
-
-
 
     // LOCAL FORK: fn promote_pending_to_attached removed with the agent.
 

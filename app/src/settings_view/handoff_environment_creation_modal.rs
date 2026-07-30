@@ -104,8 +104,7 @@ impl HandoffEnvironmentCreationModal {
                 // owner resolution and its UpdateManager online-create path. Both are
                 // gone, so the request can only fail.
                 ctx.emit(HandoffEnvironmentCreationModalEvent::CreationFailed {
-                    error_message: "Cloud environments are not available in this build"
-                        .to_string(),
+                    error_message: "Cloud environments are not available in this build".to_string(),
                 });
             }
             UpdateEnvironmentFormEvent::Cancelled => {

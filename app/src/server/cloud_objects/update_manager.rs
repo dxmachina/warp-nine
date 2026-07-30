@@ -123,18 +123,10 @@ pub struct ObjectOperationResult {
 
 #[derive(Debug)]
 pub enum UpdateManagerEvent {
-    ObjectOperationComplete {
-        result: ObjectOperationResult,
-    },
-    CloudPreferencesUpdated {
-        updated: Vec<Preference>,
-    },
-    MCPGalleryUpdated {
-        templates: Vec<MCPGalleryTemplate>,
-    },
-    AmbientTaskUpdated {
-        timestamp: DateTime<Utc>,
-    },
+    ObjectOperationComplete { result: ObjectOperationResult },
+    CloudPreferencesUpdated { updated: Vec<Preference> },
+    MCPGalleryUpdated { templates: Vec<MCPGalleryTemplate> },
+    AmbientTaskUpdated { timestamp: DateTime<Utc> },
 }
 
 /// An enum for choosing the behavior of the fetch_single_cloud_object function.
@@ -1004,7 +996,6 @@ impl UpdateManager {
         self.refresh_updated_objects(ctx);
     }
 
-
     /// Fetches environment "last used" timestamps from the server and merges them
     /// into the in-memory environment objects.
     fn fetch_and_merge_environment_timestamps(&mut self, ctx: &mut ModelContext<UpdateManager>) {
@@ -1764,8 +1755,6 @@ impl UpdateManager {
         }
     }
 
-
-
     pub fn update_workflow(
         &mut self,
         workflow: Workflow,
@@ -1810,7 +1799,6 @@ impl UpdateManager {
             ctx,
         );
     }
-
 
     pub fn update_notebook_data(
         &mut self,
@@ -2402,11 +2390,6 @@ impl UpdateManager {
         );
     }
 
-
-
-
-
-
     /// Helper for implementing *pessimistic* permission changes.
     ///
     /// The overall flow for a pessimistic permission change is:
@@ -2813,14 +2796,6 @@ impl UpdateManager {
             ctx,
         );
     }
-
-
-
-
-
-
-
-
 
     pub fn delete_ai_execution_profile(
         &mut self,

@@ -6,7 +6,6 @@ use warp_core::features::FeatureFlag;
 use warpui::units::Pixels;
 use warpui::{AppContext, SingletonEntity};
 
-
 #[derive(
     Clone,
     Copy,

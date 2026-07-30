@@ -449,9 +449,7 @@ impl RemoteCodebaseIndexModel {
         }
 
         let remote_paths = self.active_git_repo_paths_needing_auto_index();
-        if remote_paths.is_empty()
-            || !should_auto_index_codebase(ctx)
-        {
+        if remote_paths.is_empty() || !should_auto_index_codebase(ctx) {
             return;
         }
 

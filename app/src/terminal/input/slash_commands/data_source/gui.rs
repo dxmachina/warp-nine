@@ -83,7 +83,6 @@ impl GuiSlashCommandDataSource {
         me
     }
 
-
     pub(super) fn is_cloud_mode_v2(&self) -> bool {
         self.is_cloud_mode_v2
     }
@@ -200,8 +199,6 @@ impl GuiSlashCommandDataSource {
         // composer can be a cloud pane.
         self.is_cloud_mode_v2
     }
-
-
 }
 
 impl SyncDataSource for GuiSlashCommandDataSource {

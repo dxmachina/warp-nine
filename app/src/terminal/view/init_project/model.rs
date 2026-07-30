@@ -8,12 +8,12 @@ use repo_metadata::repositories::DetectedRepositories;
 use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::{Entity, ModelContext, SingletonEntity as _};
 
+use crate::persisted_workspace::PersistedWorkspace;
 use crate::terminal::view::init_project::lsp_server_selector::LSPServerInfo;
 use crate::terminal::view::init_project::{
     CodebaseIndexingResult, CreateEnvironmentResult, FILES_TO_CHECK, InitActionResult,
     LINKABLE_FILES, LanguageServersResult, ProjectScopedRulesResult,
 };
-use crate::persisted_workspace::PersistedWorkspace;
 
 const INIT_STEP_COUNT: usize = enum_iterator::cardinality::<InitStepKind>();
 

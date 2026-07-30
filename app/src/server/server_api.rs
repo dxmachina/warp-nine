@@ -472,13 +472,11 @@ impl ServerApi {
         )
     }
 
-
     /// Returns ambient agent headers to attach to requests.
     async fn ambient_agent_headers(&self) -> Result<Vec<(String, String)>> {
         self.ambient_headers(AmbientHeaderPolicy::inherit_all())
             .await
     }
-
 
     pub fn send_graphql_request<'a, QF, O: warp_graphql::client::Operation<QF> + Send + 'a>(
         &'a self,
@@ -575,7 +573,6 @@ impl ServerApi {
 
         Ok(self.wrap_eventsource_with_iap_detection(request.eventsource()))
     }
-
 
     /// Sends a POST request to a public API endpoint and returns the raw response on success.
     async fn post_public_api_response<B>(
@@ -1138,7 +1135,6 @@ impl ServerApiProvider {
     pub fn get_team_client(&self) -> Arc<dyn TeamClient> {
         self.server_api.clone()
     }
-
 
     pub fn get_cloud_objects_client(&self) -> Arc<dyn ObjectClient> {
         self.server_api.clone()

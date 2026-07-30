@@ -68,4 +68,3 @@ pub async fn create_pr(
 }
 
 // LOCAL FORK: fn generate_commit_message removed with the agent.
-

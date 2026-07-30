@@ -17,9 +17,9 @@ use crate::editor::{AutosuggestionLocation, AutosuggestionType};
 use crate::features::FeatureFlag;
 // `BackingView` is the trait that gives `TerminalView::set_focus_handle`; without it
 // in scope the call sites below fail to resolve even though the impl is unchanged.
-use crate::pane_group::{BackingView, TerminalPaneId};
 use crate::pane_group::focus_state::PaneGroupFocusState;
 use crate::pane_group::pane::PaneStack;
+use crate::pane_group::{BackingView, TerminalPaneId};
 use crate::settings::import::model::ImportedConfigModel;
 use crate::settings::{AppEditorSettings, WarpPromptSeparator};
 use crate::terminal::alt_screen::should_intercept_mouse;

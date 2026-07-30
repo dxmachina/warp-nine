@@ -20,7 +20,6 @@ use warpui::{
 
 use super::command_dialog::EnvVarCommandDialog;
 use super::menus::Menus;
-use crate::terminal::model::secret_detection::find_secrets_in_text_with_levels;
 use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::{CloudObjectEventEntrypoint, Owner};
@@ -44,6 +43,7 @@ use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
 use crate::search::external_secrets::view::ExternalSecretsMenu;
 use crate::server::cloud_objects::update_manager::{FetchSingleObjectOption, UpdateManager};
 use crate::server::ids::{ServerId, SyncId};
+use crate::terminal::model::secret_detection::find_secrets_in_text_with_levels;
 use crate::terminal::model::secrets::SecretLevel;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
 use crate::ui_components::breadcrumb::{BreadcrumbState, render_breadcrumbs};

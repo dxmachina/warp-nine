@@ -6,9 +6,7 @@ use warp_core::ui::appearance::Appearance;
 use warp_core::ui::theme::Fill;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::ChildView;
-use warpui::{
-    AppContext, Element, Entity, EntityId, ModelHandle, View, ViewContext, ViewHandle,
-};
+use warpui::{AppContext, Element, Entity, EntityId, ModelHandle, View, ViewContext, ViewHandle};
 
 use crate::features::FeatureFlag;
 use crate::search::data_source::{Query, QueryFilter};

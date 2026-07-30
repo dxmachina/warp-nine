@@ -621,8 +621,7 @@ pub enum DisplayChipKind {
         popup_open: bool,
         popup: ViewHandle<crate::context_chips::node_version_popup::NodeVersionPopupView>,
     },
-    AgentPlanAndTodoList {
-    },
+    AgentPlanAndTodoList {},
     GitBranch {
         menu_open: bool,
         menu: ViewHandle<DisplayChipMenu>,
@@ -1129,7 +1128,6 @@ impl DisplayChip {
             terminal_view_id: config.terminal_view_id,
         }
     }
-
 
     fn close_node_version_popup(&mut self, ctx: &mut ViewContext<'_, DisplayChip>) {
         if let DisplayChipKind::NodeVersion { popup_open, .. } = &mut self.display_chip_kind {
@@ -2041,16 +2039,13 @@ pub enum PromptChipShellCommand {
 pub enum PromptDisplayChipEvent {
     OpenFile(String),
     OpenTextFileInCodeEditor(String),
-    ToggleMenu {
-        open: bool,
-    },
+    ToggleMenu { open: bool },
     OpenCodeReview,
     OpenConversationHistory,
     OpenCommandPaletteFiles,
     TryExecuteCommand(PromptChipShellCommand),
     RunAgentQuery(String),
-    OpenAIDocument {
-    },
+    OpenAIDocument {},
 }
 
 impl TypedActionView for DisplayChip {

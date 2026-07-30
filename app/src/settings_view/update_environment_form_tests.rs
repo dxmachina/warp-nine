@@ -193,7 +193,6 @@ fn init_update_environment_form_test_models(app: &mut App) {
     app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(UpdateManager::mock);
     app.add_singleton_model(|_| KeybindingChangedNotifier::new());
-
 }
 
 #[derive(Debug)]

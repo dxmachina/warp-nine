@@ -1035,7 +1035,6 @@ fn normalize_summary_text(text: &str) -> Option<String> {
     (!normalized.is_empty()).then_some(normalized)
 }
 
-
 fn coalesce_summary_branch_entries(
     entries: Vec<VerticalTabsSummaryBranchEntry>,
 ) -> Vec<VerticalTabsSummaryBranchEntry> {
@@ -4045,7 +4044,6 @@ fn preferred_agent_tab_titles(
     (conversation_title, cli_agent_title)
 }
 
-
 fn terminal_pull_request_badge_label(pull_request_url: &str) -> String {
     github_pr_display_text_from_url(pull_request_url)
         .map(|label| label.strip_prefix("PR ").unwrap_or(&label).to_string())
@@ -4144,7 +4142,6 @@ fn resolved_terminal_working_directory(
     // LOCAL FORK: cloud environment names came from the agent's ambient task data.
     working_directory
 }
-
 
 fn render_terminal_row_content(
     props: &PaneProps<'_>,

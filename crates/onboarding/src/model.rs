@@ -658,7 +658,11 @@ impl OnboardingStateModel {
         ctx.emit(OnboardingStateEvent::UpgradeRequested);
     }
 
-    pub(crate) fn on_user_selected_model(&mut self, model_id: String, ctx: &mut ModelContext<Self>) {
+    pub(crate) fn on_user_selected_model(
+        &mut self,
+        model_id: String,
+        ctx: &mut ModelContext<Self>,
+    ) {
         if self.agent_settings.selected_model_id == model_id {
             return;
         }

@@ -1114,7 +1114,6 @@ impl BlockList {
         }
     }
 
-
     /// Marks the rich content item with the given view ID as needing its height
     /// to be remeasured on the next layout.
     pub fn mark_rich_content_dirty(&mut self, view_id: EntityId) {
@@ -1317,10 +1316,7 @@ impl BlockList {
         }
     }
 
-    pub fn finish_oz_environment_startup_commands_at_block(
-        &mut self,
-        block_id: &BlockId,
-    ) {
+    pub fn finish_oz_environment_startup_commands_at_block(&mut self, block_id: &BlockId) {
         self.is_executing_oz_environment_startup_commands = false;
         if let Some(block_index) = self.block_index_for_id(block_id) {
             for block in self.blocks.iter_mut().skip(block_index.0) {
@@ -1406,7 +1402,6 @@ impl BlockList {
         Some(block)
     }
 
-
     /// Removes command blocks at stable pre-removal indices.
     fn remove_command_blocks_at_indices(&mut self, indices_to_remove: Vec<BlockIndex>) {
         if indices_to_remove.is_empty() {
@@ -1425,7 +1420,6 @@ impl BlockList {
         // Force a re-draw since the blocklist has changed.
         self.event_proxy.send_wakeup_event();
     }
-
 
     /// Gets the active background block, if one exists.
     pub(super) fn background_block_mut(&mut self) -> Option<&mut Block> {
@@ -1491,7 +1485,6 @@ impl BlockList {
         &self.transcript_scope
     }
 
-
     /// Returns whether the active conversation executes in a cloud context.
     pub fn is_cloud_conversation_context(&self) -> bool {
         self.active_conversation_context
@@ -1508,7 +1501,6 @@ impl BlockList {
         self.update_blocks_and_sumtree(None, None, |_| {}, |_| {});
     }
 
-
     /// Clears the active conversation association without changing transcript scope.
     pub fn clear_active_conversation_context(&mut self) {
         self.active_conversation_context = None;
@@ -1521,7 +1513,6 @@ impl BlockList {
             self.active_block_mut().clear_conversation_id();
         }
     }
-
 
     /// Clears the active conversation association and returns to terminal scope.
     pub fn exit_conversation_context(&mut self) {
@@ -1562,10 +1553,7 @@ impl BlockList {
 
     pub fn refresh_block_heights_for_passive_code_diff(&mut self) {}
 
-
-
     // LOCAL FORK: fn remove_pending_context_assocation_for_blocks removed with the agent.
-
 
     /// Update the height of an active block in the block heights SumTree. In general,
     /// blocks are immutable once finished. Only the active block and the most
@@ -1719,7 +1707,6 @@ impl BlockList {
         self.block_id_to_block_index.get(id).copied()
     }
 
-
     /// Scans the block at `block_index` for secrets.
     pub fn scan_block_for_secrets(&mut self, block_index: BlockIndex) {
         if let Some(block) = self.blocks.get_mut(block_index.0) {
@@ -1730,7 +1717,6 @@ impl BlockList {
     pub fn block_heights(&self) -> &SumTree<BlockHeightItem> {
         &self.block_heights
     }
-
 
     /// Finds the first block out of the given indices that matches the filter.
     /// This function respects the blocklist ordering, regardless of whether it renders as inverted.
@@ -2037,7 +2023,6 @@ impl BlockList {
             |_| {},
         );
     }
-
 
     pub fn toggle_visibility_of_block_for_env_var(&mut self, block_id: &str) {
         let block_id = block_id.to_owned();
@@ -3224,7 +3209,6 @@ impl BlockList {
         }
         active_block.clear_marked_text();
     }
-
 
     /// LOCAL FORK: AI blocks and `last_non_hidden_ai_block_handle` went with the
     /// agent, so no block in this build is an AI block. Kept as a stub because

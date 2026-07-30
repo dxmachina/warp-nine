@@ -42,7 +42,6 @@ enum HistoryItemType {
 }
 
 impl InlineHistoryItem {
-
     pub fn command(
         command: String,
         linked_workflow_data: Option<LinkedWorkflowData>,

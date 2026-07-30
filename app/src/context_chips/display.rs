@@ -58,7 +58,6 @@ pub struct PromptDisplay {
 
     /// Whether this terminal is viewing a shared session.
     is_shared_session_viewer: bool,
-
 }
 
 const PROMPT_CHIP_DISPLAY_ID: &str = "PromptChipDisplay";
@@ -71,16 +70,13 @@ pub enum PromptDisplayAction {
 pub enum PromptDisplayEvent {
     OpenFile(String),
     OpenTextFileInCodeEditor(String),
-    ToggleMenu {
-        open: bool,
-    },
+    ToggleMenu { open: bool },
     OpenCodeReview,
     OpenConversationHistory,
     OpenCommandPaletteFiles,
     RunAgentQuery(String),
     TryExecuteCommand(PromptChipShellCommand),
-    OpenAIDocument {
-    },
+    OpenAIDocument {},
 }
 
 impl PromptDisplay {

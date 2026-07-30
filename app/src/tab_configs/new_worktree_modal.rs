@@ -28,9 +28,9 @@ use warp_core::ui::theme::color::internal_colors;
 use crate::appearance::Appearance;
 use crate::editor::{EditorView, Event as EditorEvent, SingleLineEditorOptions};
 use crate::modal::ModalAction;
+use crate::persisted_workspace::PersistedWorkspace;
 use crate::tab_configs::branch_picker::BranchPicker;
 use crate::tab_configs::repo_picker::{RepoPicker, RepoPickerEvent};
-use crate::persisted_workspace::PersistedWorkspace;
 
 /// Gap between sections in the modal body (repo picker, branch picker, checkbox).
 const SECTION_GAP: f32 = 16.;

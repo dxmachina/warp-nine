@@ -129,13 +129,9 @@ pub(crate) enum IconWithStatusVariant {
     /// A Warp agent conversation: monochrome Warp glyph and circle. Local conversations
     /// use a foreground/background pair that flips for light and dark themes; ambient
     /// (cloud) conversations retain the purple brand background and cloud status badge.
-    OzAgent {
-        is_ambient: bool,
-    },
+    OzAgent { is_ambient: bool },
     /// A CLI agent icon on the agent's brand color background.
-    CLIAgent {
-        is_ambient: bool,
-    },
+    CLIAgent { is_ambient: bool },
     /// A pre-rendered avatar with an optional status overlay (cloud lobe when
     /// ambient). Caller must size `avatar` to `circle_size(total_size)` so the
     /// overlay's overhang matches the other variants.

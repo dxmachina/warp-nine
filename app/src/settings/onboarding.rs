@@ -185,11 +185,8 @@ fn apply_ui_customization_settings(
     }
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct OnboardingAutonomyPermissions {
-}
-
+struct OnboardingAutonomyPermissions {}
 
 #[cfg(test)]
 #[path = "onboarding_tests.rs"]

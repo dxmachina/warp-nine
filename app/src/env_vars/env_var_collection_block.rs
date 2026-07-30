@@ -25,14 +25,14 @@ use crate::terminal::block_list_element::BlockListMenuSource;
 use crate::terminal::block_list_viewport::InputMode;
 use crate::terminal::view::TerminalAction;
 use crate::ui_components::blended_colors;
-use crate::view_components::action_button::{
-    ButtonSize, KeystrokeSource, NakedTheme, PrimaryTheme,
-};
 use crate::ui_components::inline_action::inline_action_header::{
     ExpandedConfig, HeaderConfig, INLINE_ACTION_HORIZONTAL_PADDING, InteractionMode,
 };
 use crate::ui_components::inline_action::inline_action_icons;
 use crate::ui_components::inline_action::status_icons::{yellow_running_icon, yellow_stop_icon};
+use crate::view_components::action_button::{
+    ButtonSize, KeystrokeSource, NakedTheme, PrimaryTheme,
+};
 use crate::view_components::compactible_action_button::{
     CompactibleActionButton, RenderCompactibleActionButton, SMALL_SIZE_SWITCH_THRESHOLD,
 };

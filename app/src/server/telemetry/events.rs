@@ -47,8 +47,6 @@ use crate::terminal::model::terminal_model::BlockSelectionCardinality;
 use crate::terminal::settings::AltScreenPaddingMode;
 use crate::terminal::shared_session::SharedSessionActionSource;
 use crate::terminal::shell::ShellType;
-use crate::terminal::view::inline_banner::{
-};
 use crate::terminal::view::{
     BlockEntity, BlockSelectionDetails, NotificationsDiscoveryBannerAction,
     NotificationsErrorBannerAction, NotificationsTrigger, PromptPart,
@@ -1280,10 +1278,8 @@ pub enum TelemetryEvent {
     },
     OpenNewSessionFromFilePath,
     OpenTeamFromURI,
-    ShowedSuggestedAgentModeWorkflowChip {
-    },
-    ShowedSuggestedAgentModeWorkflowModal {
-    },
+    ShowedSuggestedAgentModeWorkflowChip {},
+    ShowedSuggestedAgentModeWorkflowModal {},
     SelectNavigationPaletteItem,
     SelectCommandPaletteOption(String),
     PaletteSearchOpened {
@@ -1710,7 +1706,6 @@ pub enum TelemetryEvent {
         /// The server-generated output ID for the output in this block.
         ///
         /// This is only populated if the some part of the response was successfully received.
-
         was_autodetected_ai_query: bool,
 
         /// Time from sending request to receiving the first token in the output.
@@ -1736,8 +1731,7 @@ pub enum TelemetryEvent {
     },
 
     /// User clicked the continue conversation button from a block footer.
-    AgentModeContinueConversationButtonClicked {
-    },
+    AgentModeContinueConversationButtonClicked {},
 
     /// User opened the rewind confirmation dialog.
     AgentModeRewindDialogOpened {
@@ -1850,11 +1844,9 @@ pub enum TelemetryEvent {
     },
 
     /// Keeps track of number of times the user uses a zero state prompt suggestion & the type of suggestion used.
-    ZeroStatePromptSuggestionUsed {
-    },
+    ZeroStatePromptSuggestionUsed {},
 
-    UnitTestSuggestionShown {
-    },
+    UnitTestSuggestionShown {},
 
     UnitTestSuggestionAccepted {
         query: Option<String>,
@@ -1868,8 +1860,7 @@ pub enum TelemetryEvent {
 
     /// Emitted when a user makes their first edit to any file in a code diff suggestion from Agent
     /// Mode.
-    AgentModeCodeSuggestionEditedByUser {
-    },
+    AgentModeCodeSuggestionEditedByUser {},
 
     /// Emitted when a user switches between files while viewing a code diff suggestion from Agent
     /// Mode.
@@ -1877,8 +1868,7 @@ pub enum TelemetryEvent {
         source: AgentModeCodeFileNavigationSource,
     },
 
-    AgentModeCodeDiffHunksNavigated {
-    },
+    AgentModeCodeDiffHunksNavigated {},
 
     /// Emitted when the user toggles the "Intelligent autosuggestions" setting in the AI settings page.
     ToggleIntelligentAutosuggestionsSetting {
@@ -2068,8 +2058,7 @@ pub enum TelemetryEvent {
     RepoOutlineConstructionFailed {
         error: String,
     },
-    AutoexecutedAgentModeRequestedCommand {
-    },
+    AutoexecutedAgentModeRequestedCommand {},
     KnowledgePaneOpened {
         entrypoint: KnowledgePaneEntrypoint,
     },
@@ -2086,15 +2075,12 @@ pub enum TelemetryEvent {
     },
     #[cfg(feature = "local_fs")]
     PreviewPanePromoted,
-    AISuggestedRuleAdded {
-    },
-    AISuggestedRuleEdited {
-    },
+    AISuggestedRuleAdded {},
+    AISuggestedRuleEdited {},
     AISuggestedRuleContentChanged {
         is_saved: bool,
     },
-    AISuggestedAgentModeWorkflowAdded {
-    },
+    AISuggestedAgentModeWorkflowAdded {},
     AttachedImagesToAgentModeQuery {
         num_images: usize,
         /// Whether or not Universal Developer Input mode is enabled
@@ -2123,8 +2109,7 @@ pub enum TelemetryEvent {
         selection_source: WorkflowSelectionSource,
     },
     /// A file from the result of an AI Agent Action exceeded the context limit.
-    FileExceededContextLimit {
-    },
+    FileExceededContextLimit {},
     AgentModeError {
         error: String,
         /// Some errors are retried internally without showing to the user.
@@ -2151,8 +2136,7 @@ pub enum TelemetryEvent {
         error: String,
     },
     FileGlobToolSucceeded,
-    FileGlobToolFailed {
-    },
+    FileGlobToolFailed {},
     MCPServerCollectionPaneOpened {
         entrypoint: MCPServerCollectionPaneEntrypoint,
     },
@@ -2218,8 +2202,7 @@ pub enum TelemetryEvent {
     TabCloseButtonPositionUpdated {
         position: TabCloseButtonPosition,
     },
-    ExpandedCodeSuggestions {
-    },
+    ExpandedCodeSuggestions {},
     AIExecutionProfileCreated,
     AIExecutionProfileDeleted,
     AIExecutionProfileSettingUpdated {

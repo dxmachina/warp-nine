@@ -55,9 +55,8 @@ impl CloudModeV2HistoryMenuView {
         buffer_model: ModelHandle<InputBufferModel>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
-        let data_source = ctx.add_model(|_| {
-            InlineHistoryMenuDataSource::new(terminal_view_id, active_session)
-        });
+        let data_source =
+            ctx.add_model(|_| InlineHistoryMenuDataSource::new(terminal_view_id, active_session));
 
         let mixer = ctx.add_model(|ctx| {
             let mut mixer = SearchMixer::<AcceptHistoryItem>::new();

@@ -32,8 +32,7 @@ pub struct PaneUuid(pub Vec<u8>);
 
 /// Wrapper for persisting agent management filters to restore.
 #[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PersistedAgentManagementFilters {
-}
+pub struct PersistedAgentManagementFilters {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct WindowSnapshot {

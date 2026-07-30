@@ -463,7 +463,6 @@ impl TerminalManager<TerminalView> {
                         source.source_type.clone(),
                         ctx,
                     );
-
                 });
                 Self::log_shared_session_lifecycle(
                     &terminal_view,
@@ -501,10 +500,7 @@ impl TerminalManager<TerminalView> {
                 // LOCAL FORK: historical agent conversations were replayed to viewers
                 // here; there are no conversations to replay.
             }
-            NetworkEvent::FailedToCreateSharedSession {
-                reason,
-                cause,
-            } => {
+            NetworkEvent::FailedToCreateSharedSession { reason, cause } => {
                 log::warn!("Failed to create shared session: reason={reason:?}, cause={cause:?}");
 
                 model
@@ -622,8 +618,9 @@ impl TerminalManager<TerminalView> {
                 }
             }
             NetworkEvent::ParticipantListUpdated(participant_list) => {
-                let was_viewer_driven_sizing_eligible = terminal_view
-                    .update(ctx, |view, ctx| view.is_viewer_driven_sizing_eligible(true, ctx));
+                let was_viewer_driven_sizing_eligible = terminal_view.update(ctx, |view, ctx| {
+                    view.is_viewer_driven_sizing_eligible(true, ctx)
+                });
 
                 if let Some(presence_manager) =
                     terminal_view.as_ref(ctx).shared_session_presence_manager()
@@ -643,8 +640,12 @@ impl TerminalManager<TerminalView> {
                     // since it was a default. Prefer to keep the viewer-set size for transcript
                     // persistence.
                     if !is_ambient_agent {
-                        let sharer_uid =
-                            participant_list.sharer.info.profile_data.firebase_uid.as_str();
+                        let sharer_uid = participant_list
+                            .sharer
+                            .info
+                            .profile_data
+                            .firebase_uid
+                            .as_str();
                         let still_eligible =
                             PresenceManager::single_distinct_present_viewer_uid_from_viewers(
                                 participant_list.viewers.iter(),
@@ -833,9 +834,7 @@ impl TerminalManager<TerminalView> {
                 });
             }
             NetworkEvent::AgentPromptRequested {
-                id,
-                participant_id,
-                ..
+                id, participant_id, ..
             } => {
                 // LOCAL FORK: viewers could ask the sharer's agent to run a prompt.
                 // There is no agent to run it, so the request is always rejected.
@@ -927,14 +926,13 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
-            NetworkEvent::ViewerTerminalSizeReported {
-                window_size,
-            } => {
+            NetworkEvent::ViewerTerminalSizeReported { window_size } => {
                 if !*SharedSessionSettings::as_ref(ctx).viewer_driven_sizing_enabled {
                     return;
                 }
-                let eligible = terminal_view
-                    .update(ctx, |view, ctx| view.is_viewer_driven_sizing_eligible(true, ctx));
+                let eligible = terminal_view.update(ctx, |view, ctx| {
+                    view.is_viewer_driven_sizing_eligible(true, ctx)
+                });
                 if eligible {
                     terminal_view.update(ctx, |view, ctx| {
                         view.resize_from_viewer_report(*window_size, ctx);
@@ -961,8 +959,9 @@ impl TerminalManager<TerminalView> {
                     .active_block()
                     .is_active_and_long_running()
                 {
-                    if let Some(interaction) =
-                        context_update.long_running_command_agent_interaction.clone()
+                    if let Some(interaction) = context_update
+                        .long_running_command_agent_interaction
+                        .clone()
                     {
                         terminal_view.update(ctx, |view, ctx| {
                             view.apply_long_running_command_agent_interaction(interaction, ctx);
@@ -970,7 +969,7 @@ impl TerminalManager<TerminalView> {
                     } else if let Some(interaction_state) =
                         context_update.long_running_command_agent_interaction_state
                     {
-                        // TODO (roland): this is kept around for backward compatibility. Remove after 6 weeks (around Jul 23, 2026) 
+                        // TODO (roland): this is kept around for backward compatibility. Remove after 6 weeks (around Jul 23, 2026)
                         // once clients have updated to use context_update.long_running_command_agent_interaction above
                         terminal_view.update(ctx, |view, ctx| {
                             view.apply_long_running_command_agent_interaction_state(

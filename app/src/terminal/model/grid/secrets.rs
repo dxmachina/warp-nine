@@ -5,9 +5,9 @@ use std::sync::Arc;
 use itertools::Itertools as _;
 
 use super::GridHandler;
-use crate::terminal::model::secret_detection::find_secrets_in_text_with_levels_using_regex;
 use crate::terminal::model::grid::{Dimensions as _, RespectDisplayedOutput, grapheme_cursor};
 use crate::terminal::model::index::{Direction, Point};
+use crate::terminal::model::secret_detection::find_secrets_in_text_with_levels_using_regex;
 use crate::terminal::model::secrets::{
     IsObfuscated, ObfuscateSecrets, SECRETS_REGEX, Secret, SecretAndHandle, SecretHandle,
     SecretLevel, SecretsRegex,

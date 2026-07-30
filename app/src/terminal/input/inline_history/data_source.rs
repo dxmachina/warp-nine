@@ -66,10 +66,7 @@ pub struct InlineHistoryMenuDataSource {
 }
 
 impl InlineHistoryMenuDataSource {
-    pub fn new(
-        terminal_view_id: EntityId,
-        active_session: ModelHandle<ActiveSession>,
-    ) -> Self {
+    pub fn new(terminal_view_id: EntityId, active_session: ModelHandle<ActiveSession>) -> Self {
         Self {
             terminal_view_id,
             active_session,

@@ -14,8 +14,8 @@ use warpui::elements::new_scrollable::{
 };
 use warpui::elements::{
     Align, Border, ChildAnchor, ChildView, ClippedScrollStateHandle, ConstrainedBox, Container,
-    CornerRadius, CrossAxisAlignment, Element, Empty, Expanded, Flex, Hoverable,
-    MainAxisSize, MouseStateHandle, NewScrollable, OffsetPositioning, ParentAnchor, ParentElement,
+    CornerRadius, CrossAxisAlignment, Element, Empty, Expanded, Flex, Hoverable, MainAxisSize,
+    MouseStateHandle, NewScrollable, OffsetPositioning, ParentAnchor, ParentElement,
     ParentOffsetBounds, Radius, SavePosition, ScrollTarget, ScrollToPositionMode, Shrinkable,
     SizeConstraintCondition, SizeConstraintSwitch, Stack, Text,
 };
@@ -370,7 +370,6 @@ pub fn render_separator(appearance: &Appearance) -> Box<dyn Element> {
         .with_margin_bottom(HEADER_PADDING)
         .finish()
 }
-
 
 #[derive(Default)]
 pub struct AdditionalInfo<T> {

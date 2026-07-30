@@ -39,8 +39,8 @@ use crate::search::result_renderer::QueryResultRenderer;
 use crate::search::search_bar::{
     SearchBar, SearchBarEvent, SearchBarState, SearchResultOrdering, SelectionUpdate,
 };
-use crate::server::ids::SyncId;
 use crate::send_telemetry_from_ctx;
+use crate::server::ids::SyncId;
 use crate::server::telemetry::{LaunchConfigUiLocation, TelemetryEvent};
 use crate::session_management::SessionSource;
 use crate::settings::CtrlTabBehavior;
@@ -927,7 +927,9 @@ impl View {
                 // LOCAL FORK: starting a new conversation used to be blocked while the
                 // agent was monitoring a command. The AI context model went with the agent.
                 let terminal_view_id =
-                    active_terminal_in_window(window_id, ctx, |terminal_view, _| terminal_view.id());
+                    active_terminal_in_window(window_id, ctx, |terminal_view, _| {
+                        terminal_view.id()
+                    });
 
                 if let Some(terminal_view_id) = terminal_view_id {
                     ctx.dispatch_typed_action(&WorkspaceAction::StartNewConversation {

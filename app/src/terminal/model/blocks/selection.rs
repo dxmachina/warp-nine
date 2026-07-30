@@ -1516,7 +1516,6 @@ impl BlockList {
     }
 }
 
-
 // LOCAL FORK: fn read_selected_text_from_pending_user_query_block removed with the agent.
 
 #[cfg(test)]

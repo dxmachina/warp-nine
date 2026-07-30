@@ -2,13 +2,13 @@ use warpui::prelude::ChildView;
 use warpui::{Element, EntityId, View, ViewContext, ViewHandle};
 
 use super::{InitStepBlock, InitStepKind};
-use crate::terminal::telemetry_banner::TelemetryBanner;
 use crate::env_vars::env_var_collection_block::EnvVarCollectionBlock;
 use crate::terminal::TerminalView;
 use crate::terminal::block_list_viewport::ScrollPositionUpdate;
 use crate::terminal::model::blocks::{RemovableBlocklistItem, RichContentItem};
 use crate::terminal::model::rich_content::RichContentType;
 use crate::terminal::model::terminal_model::BlockIndex;
+use crate::terminal::telemetry_banner::TelemetryBanner;
 use crate::terminal::view::init_environment::InitEnvironmentBlock;
 use crate::terminal::view::ssh_remote_server_choice_view::SshRemoteServerChoiceView;
 use crate::terminal::view::ssh_remote_server_failed_banner::SshRemoteServerFailedBanner;
@@ -36,13 +36,11 @@ pub enum RichContentInsertionPosition {
 
 /// Metadata for an AI block rich content.
 #[derive(Clone, Debug)]
-pub struct AIBlockMetadata {
-}
+pub struct AIBlockMetadata {}
 
 /// Metadata for an agent view entry rich content.
 #[derive(Clone, Debug)]
-pub struct AgentViewEntryMetadata {
-}
+pub struct AgentViewEntryMetadata {}
 
 /// Wrapper type to hold rich content views and allow generating typed `ChildView` instances
 /// on-demand. The `ChildView`s are then passed to the `BlockListElement` to be used when
@@ -54,7 +52,6 @@ pub struct RichContent {
     /// Optional rich content view-specific metadata to be passed to the `BlocklistElement` for
     /// rendering.
     metadata: Option<RichContentMetadata>,
-
 }
 
 impl RichContent {
@@ -78,9 +75,6 @@ impl RichContent {
         self.metadata = Some(metadata);
         self
     }
-
-
-
 
     /// Build a new `ChildView` element for this rich content
     fn element(&self) -> Box<dyn Element> {
@@ -180,8 +174,7 @@ impl RichContent {
 #[derive(Clone, Debug)]
 pub enum RichContentMetadata {
     AIBlock(AIBlockMetadata),
-    AIOnboardingBlock {
-    },
+    AIOnboardingBlock {},
     UsageFooter,
     InitStep {
         step_kind: InitStepKind,
@@ -209,14 +202,12 @@ pub enum RichContentMetadata {
         telemetry_banner_handle: ViewHandle<TelemetryBanner>,
     },
     AgentViewEntry(AgentViewEntryMetadata),
-    AmbientAgentBlock {
-    },
+    AmbientAgentBlock {},
     InlineAgentViewHeader,
     AgentViewZeroState,
     TerminalViewZeroState,
     PluginInstructionsBlock,
-    PendingUserQuery {
-    },
+    PendingUserQuery {},
     HarnessSessionHeader,
 }
 

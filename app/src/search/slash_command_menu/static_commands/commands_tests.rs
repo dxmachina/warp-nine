@@ -111,10 +111,7 @@ fn add_api_key_command_is_tui_only_and_requires_a_provider() {
         .expect("expected /add-api-key to require a provider");
     assert!(!argument.is_optional);
     assert!(!argument.should_execute_on_selection);
-    assert_eq!(
-        argument.hint_text,
-        Some(API_KEY_PROVIDER_VALUE_NAME)
-    );
+    assert_eq!(argument.hint_text, Some(API_KEY_PROVIDER_VALUE_NAME));
     assert!(
         argument
             .hint_text
@@ -142,10 +139,7 @@ fn clear_api_key_command_is_tui_only_and_requires_a_provider() {
         .expect("expected /clear-provider-api-key to require a provider");
     assert!(!argument.is_optional);
     assert!(!argument.should_execute_on_selection);
-    assert_eq!(
-        argument.hint_text,
-        Some(API_KEY_PROVIDER_VALUE_NAME)
-    );
+    assert_eq!(argument.hint_text, Some(API_KEY_PROVIDER_VALUE_NAME));
     assert!(
         argument
             .hint_text

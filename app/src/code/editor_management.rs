@@ -231,17 +231,14 @@ impl CodeSource {
             self,
             Self::FileTree {
                 location: LocalOrRemotePath::Remote(_),
+            } | Self::CommandPalette {
+                location: LocalOrRemotePath::Remote(_),
+            } | Self::ProjectRules {
+                location: LocalOrRemotePath::Remote(_),
+            } | Self::Skill {
+                location: LocalOrRemotePath::Remote(_),
+                ..
             }
-                | Self::CommandPalette {
-                    location: LocalOrRemotePath::Remote(_),
-                }
-                | Self::ProjectRules {
-                    location: LocalOrRemotePath::Remote(_),
-                }
-                | Self::Skill {
-                    location: LocalOrRemotePath::Remote(_),
-                    ..
-                }
         )
     }
 }

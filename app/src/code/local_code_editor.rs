@@ -1520,7 +1520,6 @@ impl LocalCodeEditorView {
     /// 5. Starting the LSP server via PersistedWorkspace
     #[cfg(feature = "local_fs")]
     fn enable_lsp_for_path(path: &Path, ctx: &mut ViewContext<Self>) {
-
         // Get the language ID from the file path
         let Some(language_id) = LanguageId::from_path(path) else {
             log::warn!("Enable lsp for path should only work for supported file paths");
@@ -1564,7 +1563,6 @@ impl LocalCodeEditorView {
     /// and emits events that are handled by handle_persisted_workspace_event.
     #[cfg(feature = "local_fs")]
     fn install_and_enable_lsp_for_path(path: &Path, ctx: &mut ViewContext<Self>) {
-
         let Some(language_id) = LanguageId::from_path(path) else {
             log::warn!("Install and enable lsp for path should only work for supported file paths");
             return;

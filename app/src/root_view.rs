@@ -78,8 +78,6 @@ use crate::server::telemetry::{LaunchConfigUiLocation, TelemetryEvent};
 use crate::settings::cloud_preferences_syncer::{
     CloudPreferencesSyncer, CloudPreferencesSyncerEvent,
 };
-use crate::settings::{
-};
 use crate::settings_view::{OpenTeamsSettingsModalArgs, SettingsSection, flags};
 use crate::terminal::available_shells::AvailableShell;
 use crate::terminal::general_settings::GeneralSettings;
@@ -901,7 +899,6 @@ fn open_shared_session_as_viewer(session_id: &SessionId, ctx: &mut AppContext) {
     );
 }
 
-
 /// Opens a new window and starts the guided `/create-environment` setup flow.
 fn create_environment(arg: &CreateEnvironmentArg, ctx: &mut AppContext) {
     let repos = arg.repos.clone();
@@ -1030,7 +1027,6 @@ fn open_settings_in_new_window(args: &OpenSettingsArgs, ctx: &mut AppContext) {
         }
     });
 }
-
 
 /// Opens a new window and shows the Codex modal.
 fn open_codex_in_new_window(_: &(), ctx: &mut AppContext) {
@@ -1505,8 +1501,7 @@ pub enum NewWorkspaceSource {
     SharedSessionAsViewer {
         session_id: SessionId,
     },
-    FromCloudConversationId {
-    },
+    FromCloudConversationId {},
     NotebookFromFilePath {
         file_path: Option<PathBuf>,
     },
@@ -2007,7 +2002,6 @@ impl RootView {
         true
     }
 
-
     /// Debug method to enter the onboarding state.
     fn debug_enter_onboarding_state(&mut self, _: &(), ctx: &mut ViewContext<Self>) -> bool {
         if !ChannelState::enable_debug_features() {
@@ -2296,7 +2290,6 @@ impl RootView {
         }
     }
 
-
     fn minimize_window(&mut self, _: &(), ctx: &mut ViewContext<Self>) -> bool {
         ctx.minimize_window();
         true
@@ -2528,7 +2521,6 @@ impl RootView {
         }
     }
 
-
     /// Adds a tab and starts the guided `/create-environment` setup flow.
     fn create_environment_in_existing_window(
         &mut self,
@@ -2727,7 +2719,6 @@ impl RootView {
         }
         true
     }
-
 
     /// Opens the Codex modal in an existing window.
     pub fn open_codex_in_existing_window(&mut self, _: &(), ctx: &mut ViewContext<Self>) -> bool {
@@ -3068,7 +3059,6 @@ impl RootView {
     ) -> bool {
         use voice_input::{VoiceInput, VoiceInputState, VoiceInputToggledFrom};
         use warpui::event::KeyState;
-
 
         // Check that the released key matches the configured voice input toggle key.
         let ai_settings = AISettings::as_ref(ctx);

@@ -52,6 +52,7 @@ use crate::cloud_object::{
 };
 use crate::drive::folders::CloudFolder;
 use crate::notebooks::CloudNotebook;
+use crate::persisted_workspace::EnablementState;
 use crate::server::experiments::ServerExperiment;
 use crate::server::ids::SyncId;
 use crate::suggestions::ignored_suggestions_model::SuggestionType;
@@ -61,7 +62,6 @@ use crate::terminal::model::session::SessionId;
 use crate::workflows::CloudWorkflow;
 use crate::workspaces::user_profiles::UserProfileWithUID;
 use crate::workspaces::workspace::{Workspace as WorkspaceMetadata, WorkspaceUid};
-use crate::persisted_workspace::EnablementState;
 
 #[derive(Clone)]
 pub enum PersistenceScope {
@@ -410,8 +410,7 @@ pub enum ModelEvent {
     },
     /// Close the SQLite writer thread when the app is about to quit.
     Terminate,
-    UpsertAIQuery {
-    },
+    UpsertAIQuery {},
     /// Delete the AI query and related data for a given conversation.
     DeleteAIConversation {
         conversation_id: String,
@@ -459,8 +458,7 @@ pub enum ModelEvent {
         suggestion: String,
         suggestion_type: SuggestionType,
     },
-    UpsertMCPServerInstallation {
-    },
+    UpsertMCPServerInstallation {},
     DeleteMCPServerInstallations {
         installation_uuids: Vec<Uuid>,
     },

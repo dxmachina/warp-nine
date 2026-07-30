@@ -1,10 +1,7 @@
-
 use warp_editor::render::model::LineCount;
 use warpui::{Entity, ModelContext};
 
-use super::{
-    AttachedReviewComment, AttachedReviewCommentTarget, CommentId,
-};
+use super::{AttachedReviewComment, AttachedReviewCommentTarget, CommentId};
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code::editor::EditorReviewComment;
 use crate::code_review::diff_state::DiffMode;
@@ -26,9 +23,7 @@ impl Entity for ReviewCommentBatch {
 
 impl ReviewCommentBatch {
     pub fn from_comments(comments: Vec<AttachedReviewComment>) -> Self {
-        Self {
-            comments,
-        }
+        Self { comments }
     }
 
     pub(crate) fn get_review_comment_by_id(&self, id: CommentId) -> Option<&AttachedReviewComment> {

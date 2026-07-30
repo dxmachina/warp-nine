@@ -1065,7 +1065,6 @@ enum Divisor {
 }
 
 impl BillingAndUsagePageView {
-
     fn render_usage_based_pricing_section(
         &self,
         enabled: bool,

@@ -9,8 +9,7 @@ use crate::terminal::input::rewind::search_item::RewindSearchItem;
 
 /// Action emitted when a rewind point is selected.
 #[derive(Clone, Debug)]
-pub struct SelectRewindPoint {
-}
+pub struct SelectRewindPoint {}
 
 /// Information about file changes for a rewind point.
 #[derive(Debug, Clone, Default)]
@@ -19,8 +18,7 @@ pub struct FileChangesInfo {
     pub lines_removed: usize,
 }
 
-pub struct RewindDataSource {
-}
+pub struct RewindDataSource {}
 
 impl RewindDataSource {
     pub fn new() -> Self {

@@ -90,7 +90,6 @@ impl ClosedItem {
         }
     }
 
-
     fn clean_up_pane_group(pane_group: &ViewHandle<PaneGroup>, ctx: &mut AppContext) {
         let window_id = pane_group.window_id(ctx);
 

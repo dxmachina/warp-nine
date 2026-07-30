@@ -637,10 +637,7 @@ fn snapshot_asymmetric_tree() {
         direction: crate::app_state::SplitDirection::Horizontal,
         children: vec![
             (crate::app_state::PaneFlex(0.7), deep_left),
-            (
-                crate::app_state::PaneFlex(0.3),
-                make_cloud_leaf(false),
-            ),
+            (crate::app_state::PaneFlex(0.3), make_cloud_leaf(false)),
         ],
     });
 

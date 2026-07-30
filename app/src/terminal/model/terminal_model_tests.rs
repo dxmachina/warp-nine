@@ -11,7 +11,6 @@ use warpui::r#async::executor::Background;
 use warpui::text::{SelectionType, str_to_byte_vec};
 
 use super::*;
-use crate::ai::agent::conversation::AIConversationId;
 use crate::terminal::color;
 use crate::terminal::event_listener::ChannelEventListener;
 use crate::terminal::model::ObfuscateSecrets;
@@ -81,23 +80,9 @@ fn take_typeahead_for_input_advances_incremental_typeahead() {
     );
 }
 
-#[test]
-fn take_typeahead_for_input_ignores_agent_requested_commands() {
-    let mut model = TerminalModel::mock(None, None);
-    model.simulate_long_running_block("sleep 5", "");
-    let action_id: crate::ai::agent::AIAgentActionId = "action".to_owned().into();
-    model
-        .block_list_mut()
-        .active_block_mut()
-        .set_agent_interaction_mode(AgentInteractionMetadata::new_hidden(
-            action_id,
-            AIConversationId::new(),
-        ));
-    model.finish_block();
-    report_shell_typeahead(&mut model, "echo hi");
-
-    assert_eq!(model.take_typeahead_for_input(), None);
-}
+// LOCAL FORK: `take_typeahead_for_input_ignores_agent_requested_commands` covered
+// shell typeahead being suppressed for hidden agent-issued commands. Blocks can no
+// longer be marked as agent interactions, so there is nothing left to suppress.
 
 #[test]
 fn take_typeahead_for_input_is_none_when_typeahead_is_empty() {
@@ -177,8 +162,6 @@ fn generic_shared_session_viewer_model_starts_view_pending() {
 
 #[test]
 fn is_cloud_agent_conversation_only_true_for_genuine_ambient_sessions() {
-    use std::str::FromStr;
-
     let make_model = || {
         TerminalModel::new_for_shared_session_viewer(
             block_size(),
@@ -207,14 +190,8 @@ fn is_cloud_agent_conversation_only_true_for_genuine_ambient_sessions() {
     model.set_shared_session_source(SharedSessionSource::ambient_agent(Some(task_id.to_owned())));
     assert!(model.is_cloud_agent_conversation());
 
-    // Viewing an ambient conversation transcript is a cloud agent conversation.
-    let mut model = make_model();
-    model.set_conversation_transcript_viewer_status(Some(
-        ConversationTranscriptViewerStatus::ViewingAmbientConversation(
-            AmbientAgentTaskId::from_str(task_id).expect("valid task id"),
-        ),
-    ));
-    assert!(model.is_cloud_agent_conversation());
+    // LOCAL FORK: the `ViewingAmbientConversation` transcript-viewer status went
+    // with the agent, so the transcript-viewer leg of this check is gone.
 }
 
 fn iterm_file_osc(name: &str, inline: bool, payload: &[u8]) -> String {

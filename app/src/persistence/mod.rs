@@ -23,7 +23,7 @@ use std::sync::{Arc, OnceLock};
 use std::thread::JoinHandle;
 
 use ai::project_context::model::ProjectRulePath;
-use ai::workspace::WorkspaceMetadata as CodeWorkspaceMetadata;
+use crate::workspace_metadata::WorkspaceMetadata as CodeWorkspaceMetadata;
 use chrono::{DateTime, Local, Utc};
 use instant::Instant;
 use lsp::supported_servers::LSPServerType;

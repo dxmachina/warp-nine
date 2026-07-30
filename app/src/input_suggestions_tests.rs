@@ -11,7 +11,6 @@ use warpui::App;
 use warpui::platform::WindowStyle;
 
 use super::{HistoryInputSuggestion, InputSuggestions, TabCompletionsPreselectOption};
-use crate::ai::blocklist::AIQueryHistory;
 use crate::input_suggestions::{HistoryOrder, filter_tab_suggestions};
 use crate::terminal::HistoryEntry;
 use crate::terminal::model::session::SessionId;
@@ -373,32 +372,6 @@ fn test_history_order() {
     };
     assert_eq!(
         no_session_cmd.history_order(Some(current_session_id), &live_sessions,),
-        HistoryOrder::DifferentSession
-    );
-
-    // AI queries from current session
-    let ai_query_current = HistoryInputSuggestion::AIQuery {
-        entry: AIQueryHistory::new_for_test(
-            "ai query current session",
-            now,
-            HistoryOrder::CurrentSession,
-        ),
-    };
-    assert_eq!(
-        ai_query_current.history_order(Some(current_session_id), &live_sessions,),
-        HistoryOrder::CurrentSession
-    );
-
-    // AI queries from different session
-    let ai_query_different = HistoryInputSuggestion::AIQuery {
-        entry: AIQueryHistory::new_for_test(
-            "ai query different session",
-            now,
-            HistoryOrder::DifferentSession,
-        ),
-    };
-    assert_eq!(
-        ai_query_different.history_order(Some(current_session_id), &live_sessions,),
         HistoryOrder::DifferentSession
     );
 }

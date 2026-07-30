@@ -9,7 +9,7 @@ use ai::index::full_source_code_embedding::manager::{
     CodebaseIndexStatus, CodebaseIndexingError,
 };
 use ai::project_context::model::{ProjectContextModel, ProjectContextModelEvent};
-use ai::workspace::WorkspaceMetadata;
+use crate::workspace_metadata::WorkspaceMetadata;
 use lsp::supported_servers::LSPServerType;
 use lsp::{LspManagerModel, LspManagerModelEvent, LspServerModel, LspState};
 use pathfinder_color::ColorU;

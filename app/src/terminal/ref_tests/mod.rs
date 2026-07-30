@@ -122,7 +122,6 @@ fn ref_test(dir: &Path) {
         warp_prompt_height_lines: 0.1,
     };
     let mut terminal = TerminalModel::new(
-        None, /* restored_blocks */
         sizes,
         color::List::from(&Colors::default()),
         channel_event_proxy,

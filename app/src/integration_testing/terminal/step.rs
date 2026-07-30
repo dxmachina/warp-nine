@@ -1,5 +1,3 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use warpui::integration::{AssertionOutcome, TestStep};
@@ -216,68 +214,16 @@ pub fn assert_execute_command_successfully(
     )
 }
 
-/// Creates an event function that saves whether AI mode is active, switches to terminal
-/// input mode if needed, and returns a `TypedCharacters` event for the given command.
-fn switch_to_terminal_mode_and_type_command(
-    tab_idx: usize,
-    pane_idx: usize,
-    was_ai_mode: Arc<AtomicBool>,
-    command: String,
-) -> impl Fn(&mut warpui::App, warpui::WindowId) -> Event + 'static {
-    move |app, window_id| {
-        let tv = terminal_view(app, window_id, tab_idx, pane_idx);
-        let is_ai = tv.read(app, |view, ctx| {
-            view.input()
-                .read(ctx, |input, ctx| input.input_type(ctx).is_ai())
-        });
-        was_ai_mode.store(is_ai, Ordering::SeqCst);
-        if is_ai {
-            tv.update(app, |view, ctx| {
-                view.input().update(ctx, |input, ctx| {
-                    input.set_input_mode_terminal(false, ctx);
-                });
-            });
-        }
-        Event::TypedCharacters {
-            chars: command.clone(),
-        }
-    }
-}
-
-/// Restores AI input mode if it was previously active (as recorded in `was_ai_mode`).
-///
-/// This is an action (not an assertion) so it always runs before assertions,
-/// ensuring the input mode is restored even if a subsequent assertion fails.
-fn restore_ai_mode_if_needed(
-    tab_idx: usize,
-    pane_idx: usize,
-    was_ai_mode: Arc<AtomicBool>,
-) -> impl Fn(&mut warpui::App, warpui::WindowId) + 'static {
-    move |app, window_id| {
-        if was_ai_mode.load(Ordering::SeqCst) {
-            let tv = terminal_view(app, window_id, tab_idx, pane_idx);
-            tv.update(app, |view, ctx| {
-                view.input().update(ctx, |input, ctx| {
-                    input.set_input_mode_agent(false, ctx);
-                });
-            });
-        }
-    }
-}
-
 /// Shared implementation for executing a shell command in the terminal.
 ///
-/// If the input is currently in AI mode, this automatically switches to terminal input
-/// mode before typing the command, and restores AI mode after the command completes.
-/// This allows callers to run shell commands without manually toggling input mode.
+/// LOCAL FORK: the input no longer has an AI mode, so this no longer has to switch the
+/// input out of AI mode before typing and restore it afterwards.
 fn execute_command_step(
     tab_idx: usize,
     pane_idx: usize,
     command: String,
     validate_output_fn: impl FnMut(&mut warpui::App, warpui::WindowId) -> AssertionOutcome + 'static,
 ) -> TestStep {
-    let was_ai_mode = Arc::new(AtomicBool::new(false));
-    let was_ai_mode_for_restore = was_ai_mode.clone();
     let command_for_event = command.clone();
 
     new_step_with_default_assertions_for_pane(
@@ -285,18 +231,11 @@ fn execute_command_step(
         tab_idx,
         pane_idx,
     )
-    .with_event_fn(switch_to_terminal_mode_and_type_command(
-        tab_idx,
-        pane_idx,
-        was_ai_mode,
-        command_for_event,
-    ))
+    .with_event_fn(move |_app, _window_id| Event::TypedCharacters {
+        chars: command_for_event.clone(),
+    })
     .with_keystrokes(&["enter"])
     .set_timeout(Duration::from_secs(10))
-    .with_action({
-        let restore = restore_ai_mode_if_needed(tab_idx, pane_idx, was_ai_mode_for_restore);
-        move |app, window_id, _| restore(app, window_id)
-    })
     .add_named_assertion(
         format!("assert '{command}' ran"),
         assert_command_executed(tab_idx, pane_idx, command),

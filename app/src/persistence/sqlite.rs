@@ -1491,7 +1491,7 @@ fn decode_path(bytes: Vec<u8>) -> PathBuf {
 
 fn save_codebase_index_metadata(
     conn: &mut SqliteConnection,
-    index_metadata: ai::workspace::WorkspaceMetadata,
+    index_metadata: crate::workspace_metadata::WorkspaceMetadata,
 ) -> Result<()> {
     use schema::workspace_metadata::dsl::*;
 
@@ -1509,12 +1509,12 @@ fn save_codebase_index_metadata(
 
 fn get_all_codebase_index_metadata(
     conn: &mut SqliteConnection,
-) -> Result<Vec<ai::workspace::WorkspaceMetadata>, diesel::result::Error> {
+) -> Result<Vec<crate::workspace_metadata::WorkspaceMetadata>, diesel::result::Error> {
     use schema::workspace_metadata::dsl::*;
 
     Ok(workspace_metadata
         .load_iter::<WorkspaceMetadataModel, DefaultLoadingMode>(conn)?
-        .filter_map(|item| item.ok().map(ai::workspace::WorkspaceMetadata::from))
+        .filter_map(|item| item.ok().map(crate::workspace_metadata::WorkspaceMetadata::from))
         .collect_vec())
 }
 

@@ -28,8 +28,6 @@ fn line_comment(file_path: &str, line_number: usize, content: &str) -> AttachedR
             },
         },
         last_update_time: Local::now(),
-        base: None,
-        head: None,
         outdated: false,
         origin: CommentOrigin::Native,
     }
@@ -134,8 +132,6 @@ fn editor_comments_for_file_includes_only_line_comments() {
             content: "general".to_string(),
             target: AttachedReviewCommentTarget::General,
             last_update_time: Local::now(),
-            base: None,
-            head: None,
             outdated: false,
             origin: CommentOrigin::Native,
         };

@@ -12,7 +12,6 @@ use warpui::{App, Element as _, ModelHandle, SingletonEntity, ViewHandle};
 
 use super::*;
 use crate::NotebookKeybindings;
-use crate::ai::request_usage_model::AIRequestUsageModel;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::code::buffer_location::LocalOrRemotePath;
@@ -173,13 +172,10 @@ fn initialize_test_app(app: &mut App) {
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(NotebookKeybindings::new);
 
-    // CodeReviewView reads AI usage/availability when comments are populated
-    // (e.g. to compute the comment tray's "Send to Agent" button state), so
-    // register the same AI singletons the other code_review tests use.
+    // LOCAL FORK: the AI usage/availability singletons this used to register
+    // (`AIRequestUsageModel`) went with the agent, along with the comment tray's
+    // "Send to Agent" button that read them.
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
-    app.add_singleton_model(|ctx| {
-        AIRequestUsageModel::new_for_test(ServerApiProvider::as_ref(ctx).get_ai_client(), ctx)
-    });
 }
 
 fn create_find_model_with_query(

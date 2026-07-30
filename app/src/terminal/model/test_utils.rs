@@ -17,7 +17,7 @@ use super::ansi::{
     CommandFinishedValue, CompletionMetadata, Handler, PrecmdValue, PreexecValue, Processor,
     PromptMetadata,
 };
-use super::block::{Block, BlockId, BlockSize};
+use super::block::{Block, BlockId, BlockSize, SerializedBlock};
 use super::blocks::BlockList;
 use super::bootstrap::BootstrapStage;
 use super::image_map::StoredImageMetadata;
@@ -28,7 +28,6 @@ use super::kitty::{
 };
 use super::terminal_model::BlockIndex;
 use super::{ObfuscateSecrets, TerminalModel};
-use crate::ai::blocklist::SerializedBlockListItem;
 use crate::terminal::color::{self, Colors};
 use crate::terminal::event_listener::ChannelEventListener;
 use crate::terminal::{BlockPadding, SizeInfo};
@@ -121,55 +120,21 @@ fn block_padding() -> BlockPadding {
 /// For tests that want to observe the events produced through interactions
 /// with the block list, a custom [`ChannelEventListener`] can be registered.
 ///
-/// This example restores a block, and asserts that an event was sent over
-/// the channel event proxy:
-///
-/// ```no_run
-/// # use warp::terminal::event::{BlockType, Event};
-/// # use warp::terminal::event_listener::ChannelEventListener;
-/// # use warp::terminal::model::block::SerializedBlock;
-/// # use warp::terminal::model::test_utils::TestBlockListBuilder;
-///
-/// let (events_tx, events_rx) = async_channel::unbounded();
-/// let channel_event_proxy = ChannelEventListener::builder_for_test()
-///     .with_terminal_events_tx(events_tx)
-///     .build();
-///
-/// // `.into()` produces the `SerializedBlockListItem` that `with_restored_blocks`
-/// // expects; its type lives in a private module so it can't be named directly.
-/// let block = SerializedBlock::new_for_test("test".into(), "test".into()).into();
-///
-/// let block_list = TestBlockListBuilder::new()
-///     .with_channel_event_proxy(channel_event_proxy)
-///     .with_restored_blocks(&[block])
-///     .build();
-///
-/// let Ok(Event::BlockCompleted(data)) = events_rx.try_recv() else {
-///     panic!("Expected a BlockCompleted event to have been generated!");
-/// };
-///
-/// assert!(matches!(data.block_type, BlockType::Restored));
-/// ```
-pub struct TestBlockListBuilder<'a> {
-    restored_blocks: Option<&'a [SerializedBlockListItem]>,
+/// LOCAL FORK: `with_restored_blocks` is gone. Session block restore went with
+/// the agent, and `BlockList::new` no longer takes restored blocks.
+pub struct TestBlockListBuilder {
     honor_ps1: bool,
     block_sizes: BlockSize,
     channel_event_proxy: ChannelEventListener,
 }
 
-impl<'a> TestBlockListBuilder<'a> {
+impl TestBlockListBuilder {
     pub fn new() -> Self {
         Self {
-            restored_blocks: None,
             honor_ps1: false,
             block_sizes: block_size(),
             channel_event_proxy: ChannelEventListener::new_for_test(),
         }
-    }
-
-    pub fn with_restored_blocks(mut self, restored_blocks: &'a [SerializedBlockListItem]) -> Self {
-        self.restored_blocks = Some(restored_blocks);
-        self
     }
 
     pub fn with_honor_ps1(mut self, honor_ps1: bool) -> Self {
@@ -188,29 +153,22 @@ impl<'a> TestBlockListBuilder<'a> {
     }
 
     pub fn build(self) -> BlockList {
-        let mut block_list = BlockList::new(
-            self.restored_blocks,
+        BlockList::new(
             self.block_sizes,
             self.channel_event_proxy,
             Arc::new(Background::default()),
             false, /* show_warp_bootstrap_input */
-            false, /* show_warp_bootstrap_input */
+            false, /* show_in_band_command_blocks */
             false, /* show_memory_stats */
             self.honor_ps1,
             false, /* is_inverted */
             ObfuscateSecrets::No,
             false, /* is_telemetry_enabled */
-        );
-        // This is usually done by the terminal manager after constructing the blocklist,
-        // but we have tests assuming the separator exists.
-        if self.restored_blocks.is_some() {
-            block_list.append_session_restoration_separator_to_block_list(false);
-        }
-        block_list
+        )
     }
 }
 
-impl Default for TestBlockListBuilder<'_> {
+impl Default for TestBlockListBuilder {
     fn default() -> Self {
         Self::new()
     }
@@ -285,7 +243,6 @@ impl TestBlockBuilder {
             self.honor_ps1,
             ObfuscateSecrets::No,
             false, /* is_telemetry_enabled */
-            None,
         )
     }
 }
@@ -315,22 +272,26 @@ pub fn create_test_block_with_grids(
 
 impl TerminalModel {
     /// Creates a simple, default [`TerminalModel`] with an optional
-    /// set of restored blocks and an optional [`ChannelEventListener`]
-    /// to subscribe to terminal events.
+    /// [`ChannelEventListener`] to subscribe to terminal events.
     ///
     /// See [`TerminalModel::new_for_test`] for a more configurable
     /// test constructor.
+    ///
+    /// LOCAL FORK: `restored_blocks` used to be
+    /// `Option<&[SerializedBlockListItem]>`. Session block restore went with the
+    /// agent and that wrapper type no longer exists, so the parameter is kept
+    /// (call sites still build `SerializedBlock`s) but no longer restored.
     pub fn mock(
-        restored_blocks: Option<&[SerializedBlockListItem]>,
+        restored_blocks: Option<&[SerializedBlock]>,
         event_proxy: Option<ChannelEventListener>,
     ) -> TerminalModel {
+        let _ = restored_blocks;
         TerminalModel::new_for_test(
             block_size(),
             color::List::from(&Colors::default()),
             event_proxy.unwrap_or_else(ChannelEventListener::new_for_test),
             Arc::new(Background::default()),
             false,
-            restored_blocks,
             false,
             false, /* is_inverted */
             None,

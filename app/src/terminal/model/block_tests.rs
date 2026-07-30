@@ -1667,24 +1667,20 @@ fn test_restored_block_was_local() {
     assert_eq!(block.restored_block_was_local(), None);
 }
 
+/// Pins the on-disk format: rows written by an older build carried conversation
+/// ids inside the `Agent` variant. Those ids went with the agent, but the
+/// variant is deliberately kept so legacy rows still deserialize and keep
+/// hiding their block from the terminal transcript.
 #[test]
 fn test_deserialize_legacy_agent_view_visibility_agent_variant() {
-    let origin_conversation_id = AIConversationId::new();
-    let json = format!("{{\"Agent\":{{\"conversation_id\":\"{origin_conversation_id}\"}}}}");
+    let json = r#"{"Agent":{"conversation_id":"9e0f1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b"}}"#;
 
-    let visibility: SerializedAgentViewVisibility = serde_json::from_str(&json).unwrap();
-    match visibility {
-        SerializedAgentViewVisibility::Agent {
-            origin_conversation_id: parsed_origin_conversation_id,
-            pending_other_conversation_ids,
-            other_conversation_ids,
-        } => {
-            assert_eq!(parsed_origin_conversation_id, origin_conversation_id);
-            assert!(pending_other_conversation_ids.is_empty());
-            assert!(other_conversation_ids.is_empty());
-        }
-        _ => panic!("Expected agent visibility"),
-    }
+    let visibility: SerializedAgentViewVisibility = serde_json::from_str(json).unwrap();
+    assert_eq!(visibility, SerializedAgentViewVisibility::Agent {});
+    assert_eq!(
+        AgentViewVisibility::from(visibility),
+        AgentViewVisibility::Agent {}
+    );
 }
 
 #[test]

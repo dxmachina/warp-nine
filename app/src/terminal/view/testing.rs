@@ -9,10 +9,8 @@ cfg_if::cfg_if! {
         use parking_lot::FairMutex;
         use warpui::{ViewContext};
 
-        use crate::{
-            ai::blocklist::SerializedBlockListItem, pane_group::TerminalViewResources,
-            resource_center::TipsCompleted,
-        };
+        use crate::pane_group::TerminalViewResources;
+        use crate::tips::TipsCompleted;
         use crate::terminal::model::session::Sessions;
         use crate::terminal::model_events::ModelEventDispatcher;
         use crate::terminal::view::WARP_PROMPT_HEIGHT_LINES;
@@ -27,9 +25,13 @@ use super::TerminalView;
 
 impl TerminalView {
     #[cfg(test)]
+    /// LOCAL FORK: `restored_blocks` used to carry `SerializedBlockListItem`s, which
+    /// went with the agent along with session block restore. The parameter is kept
+    /// (as an always-`None` unit slice) so the ~dozen `None`-passing call sites across
+    /// the test tree stay unchanged.
     pub fn new_for_test(
         tips_model: ModelHandle<TipsCompleted>,
-        restored_blocks: Option<&[SerializedBlockListItem]>,
+        restored_blocks: Option<&[()]>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         Self::new_for_test_with_cloud_mode(tips_model, restored_blocks, false, ctx)
@@ -38,7 +40,7 @@ impl TerminalView {
     #[cfg(test)]
     pub fn new_for_test_with_cloud_mode(
         tips_model: ModelHandle<TipsCompleted>,
-        restored_blocks: Option<&[SerializedBlockListItem]>,
+        restored_blocks: Option<&[()]>,
         is_cloud_mode: bool,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
@@ -50,6 +52,7 @@ impl TerminalView {
         use crate::terminal::event_listener::ChannelEventListener;
         use crate::terminal::model::block::BlockSize;
         use crate::themes::default_themes::dark_theme;
+        let _ = restored_blocks;
         let size_info = SizeInfo::new(
             vec2f(7., 10.5),
             1.0.into_pixels(),
@@ -93,7 +96,6 @@ impl TerminalView {
             event_proxy,
             ctx.background_executor().clone(),
             false,
-            restored_blocks,
             false, /* honor_ps1 */
             false, /* is_inverted */
             None,  /* startup_directory */
@@ -115,8 +117,6 @@ impl TerminalView {
             colors,
             None,
             prompt_type,
-            None,
-            None, // conversation_restoration - not used for test
             None, // inactive_pty_reads_rx - not used for test
             is_cloud_mode,
             ctx,

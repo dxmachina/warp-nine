@@ -5,7 +5,6 @@ use warpui::{AddSingletonModel, App, SingletonEntity, TypedActionView, ViewHandl
 
 use super::{DriveIndex, DriveIndexAction, SharedObjectLimitBannerKind};
 use crate::ASSETS;
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
 use crate::cloud_object::model::actions::ObjectActions;
@@ -52,7 +51,6 @@ fn initialize_app(app: &mut App) {
     app.add_singleton_model(|_| UserProfiles::new(Vec::new()));
     app.add_singleton_model(SessionPermissionsManager::new);
     app.add_singleton_model(|_| KeybindingChangedNotifier::mock());
-    app.add_singleton_model(|_| BlocklistAIHistoryModel::new_for_test());
     #[cfg(feature = "voice_input")]
     app.add_singleton_model(voice_input::VoiceInput::new);
 }

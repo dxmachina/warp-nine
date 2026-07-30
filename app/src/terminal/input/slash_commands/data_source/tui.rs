@@ -1,4 +1,3 @@
-use crate::settings::{AISettings, AISettingsChangedEvent};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -12,16 +11,21 @@ use super::core::subscribe_to_shared_dependencies;
 use super::{
     InlineItem, SlashCommandDataSource, SlashCommandDataSourceState, UpdatedActiveCommands,
 };
-#[cfg(feature = "voice_input")]
 use crate::search::SyncDataSource;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::DataSourceRunErrorWrapper;
 use crate::search::slash_command_menu::static_commands::Availability;
 use crate::search::slash_command_menu::static_commands::commands::{COMMAND_REGISTRY, VOICE};
-#[cfg(feature = "voice_input")]
 use crate::terminal::TerminalModel;
 use crate::terminal::input::slash_commands::AcceptSlashCommandOrSavedPrompt;
 use crate::terminal::model::session::active_session::ActiveSession;
+// LOCAL FORK: these four voice_input gates were dangling. The excision deleted
+// `use crate::ai::{AIRequestUsageModel, ...}` but left its `#[cfg]` behind, so the
+// attribute slid onto the next import and gated `SyncDataSource` and
+// `TerminalModel`, both of which are used unconditionally. That broke every
+// build without `voice_input`; the bundle hid it because `gui = ["voice_input"]`.
+#[cfg(feature = "voice_input")]
+use crate::settings::{AISettings, AISettingsChangedEvent};
 #[cfg(feature = "voice_input")]
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 

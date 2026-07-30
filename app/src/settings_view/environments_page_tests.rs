@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
-use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
+use cloud_object_models::GithubRepo;
 use instant::Instant;
 use warp_core::ui::appearance::Appearance;
 use warpui::elements::Empty;
@@ -9,15 +8,10 @@ use warpui::platform::WindowStyle;
 use warpui::{App, AppContext, Element, Entity, TypedActionView, View, WindowId};
 
 use super::*;
-use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
-use crate::ai::cloud_environments::{
-    AmbientAgentEnvironment, CloudAmbientAgentEnvironmentModel, GithubRepo,
-};
 use crate::auth::AuthStateProvider;
 use crate::network::NetworkStatus;
-use crate::root_view::CreateEnvironmentArg;
 use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::ids::{ClientId, ServerId, SyncId};
+use crate::server::ids::{ClientId, SyncId};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::sync_queue::SyncQueue;
 use crate::settings::PrivacySettings;
@@ -108,13 +102,8 @@ fn init_env_page_view_test_models(app: &mut App) {
     app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(UpdateManager::mock);
     app.add_singleton_model(|_| KeybindingChangedNotifier::new());
-    app.add_singleton_model(|_| GitHubAuthNotifier::new());
-
-    // The agent-assisted modal reads locally indexed repos via CodebaseIndexManager.
-    // We register a test instance to avoid singleton lookup panics in unit tests.
-    app.add_singleton_model(|ctx| {
-        CodebaseIndexManager::new_for_test(ServerApiProvider::as_ref(ctx).get(), ctx)
-    });
+    // LOCAL FORK: the GitHub auth notifier and the `CodebaseIndexManager` that fed
+    // the agent-assisted environment modal both went with the agent.
 }
 
 type EmptyMouseStates = (
@@ -621,225 +610,10 @@ fn test_render_list_page_with_no_environments_shows_empty_state() {
             let view_handle = ctx.add_typed_action_view(window_id, EnvironmentsPageView::new);
             let appearance = Appearance::as_ref(ctx);
 
-            // CloudModel mock should have no environments by default
-            let environments = CloudAmbientAgentEnvironment::get_all(ctx);
-            assert_eq!(
-                environments.len(),
-                0,
-                "Test should start with no environments"
-            );
-
             let view = view_handle.as_ref(ctx);
             let element = EnvironmentsPageWidget::render_list_page(view, appearance, ctx);
             // Element is created successfully - just verify it doesn't panic
             drop(element);
-        });
-    })
-}
-
-#[test]
-fn test_render_list_page_with_environments_shows_list() {
-    // Test that when there are environments, the list is rendered (not empty state)
-    App::test((), |mut app| async move {
-        init_env_page_view_test_models(&mut app);
-        let window_id = create_test_window(&mut app);
-
-        app.update(|ctx| {
-            // Create test environment in CloudModel
-            let environment = AmbientAgentEnvironment::new(
-                "Test Environment".to_string(),
-                Some("Test description".to_string()),
-                vec![GithubRepo::new("owner".to_string(), "repo".to_string())],
-                "ubuntu:latest".to_string(),
-                vec!["npm install".to_string()],
-            );
-
-            let sync_id = SyncId::ClientId(ClientId::new());
-            let object = CloudAmbientAgentEnvironment::new(
-                sync_id,
-                CloudAmbientAgentEnvironmentModel::new(environment),
-                crate::cloud_object::CloudObjectMetadata::mock(),
-                crate::cloud_object::CloudObjectPermissions::mock_personal(),
-            );
-
-            CloudModel::handle(ctx).update(ctx, |model, ctx| {
-                model.create_object(sync_id, object, ctx);
-            });
-            let environments = CloudAmbientAgentEnvironment::get_all(ctx);
-            assert_eq!(
-                environments.len(),
-                1,
-                "Should have one environment after insert"
-            );
-
-            let view_handle = ctx.add_typed_action_view(window_id, EnvironmentsPageView::new);
-            let appearance = Appearance::as_ref(ctx);
-            let view = view_handle.as_ref(ctx);
-
-            let element = EnvironmentsPageWidget::render_list_page(view, appearance, ctx);
-            // Element is created successfully - just verify it doesn't panic
-            drop(element);
-        });
-    })
-}
-
-#[test]
-fn test_render_list_page_with_personal_and_team_environments_shows_section_headers() {
-    App::test((), |mut app| async move {
-        init_env_page_view_test_models(&mut app);
-        let window_id = create_test_window(&mut app);
-
-        app.update(|ctx| {
-            // Ensure UserWorkspaces has a current team name so the "Team" section renders with the
-            // shared header copy ("Shared by Warp and <team>").
-            UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
-                user_workspaces.setup_test_workspace(ctx);
-                user_workspaces.update_current_workspace(
-                    |workspace| {
-                        if let Some(team) = workspace.teams.first_mut() {
-                            team.name = "Katarina's team".to_string();
-                        }
-                    },
-                    ctx,
-                );
-                let team_uid = user_workspaces.inherited_or_default_team_uid(None);
-                user_workspaces.register_window(window_id, team_uid, ctx);
-            });
-
-            let personal_env = AmbientAgentEnvironment::new(
-                "Personal Env".to_string(),
-                None,
-                vec![],
-                "ubuntu:latest".to_string(),
-                vec![],
-            );
-
-            let team_env = AmbientAgentEnvironment::new(
-                "Team Env".to_string(),
-                None,
-                vec![],
-                "ubuntu:latest".to_string(),
-                vec![],
-            );
-
-            let personal_id = SyncId::ClientId(ClientId::new());
-            let personal_object = CloudAmbientAgentEnvironment::new(
-                personal_id,
-                CloudAmbientAgentEnvironmentModel::new(personal_env),
-                crate::cloud_object::CloudObjectMetadata::mock(),
-                crate::cloud_object::CloudObjectPermissions::mock_personal(),
-            );
-
-            let team_id = SyncId::ClientId(ClientId::new());
-            let mut team_permissions = crate::cloud_object::CloudObjectPermissions::mock_personal();
-            team_permissions.owner = Owner::Team {
-                team_uid: ServerId::from(789),
-            };
-            let team_object = CloudAmbientAgentEnvironment::new(
-                team_id,
-                CloudAmbientAgentEnvironmentModel::new(team_env),
-                crate::cloud_object::CloudObjectMetadata::mock(),
-                team_permissions,
-            );
-
-            CloudModel::handle(ctx).update(ctx, |model, ctx| {
-                model.create_object(personal_id, personal_object, ctx);
-                model.create_object(team_id, team_object, ctx);
-            });
-
-            let view_handle = ctx.add_typed_action_view(window_id, EnvironmentsPageView::new);
-            let appearance = Appearance::as_ref(ctx);
-            let view = view_handle.as_ref(ctx);
-
-            let element = EnvironmentsPageWidget::render_list_page(view, appearance, ctx);
-            let text_content = element.debug_text_content().unwrap_or_default();
-
-            assert!(
-                text_content.contains("PERSONAL"),
-                "Expected 'Personal' section header in rendered content: {text_content}"
-            );
-            assert!(
-                text_content.contains("SHARED BY WARP AND KATARINA'S TEAM"),
-                "Expected shared section header in rendered content: {text_content}"
-            );
-        });
-    })
-}
-
-#[test]
-fn test_render_list_page_with_only_personal_environments_shows_personal_header() {
-    App::test((), |mut app| async move {
-        init_env_page_view_test_models(&mut app);
-        let window_id = create_test_window(&mut app);
-
-        app.update(|ctx| {
-            let personal_env = AmbientAgentEnvironment::new(
-                "Personal Env".to_string(),
-                None,
-                vec![],
-                "ubuntu:latest".to_string(),
-                vec![],
-            );
-
-            let personal_id = SyncId::ClientId(ClientId::new());
-            let personal_object = CloudAmbientAgentEnvironment::new(
-                personal_id,
-                CloudAmbientAgentEnvironmentModel::new(personal_env),
-                crate::cloud_object::CloudObjectMetadata::mock(),
-                crate::cloud_object::CloudObjectPermissions::mock_personal(),
-            );
-
-            CloudModel::handle(ctx).update(ctx, |model, ctx| {
-                model.create_object(personal_id, personal_object, ctx);
-            });
-
-            let view_handle = ctx.add_typed_action_view(window_id, EnvironmentsPageView::new);
-            let appearance = Appearance::as_ref(ctx);
-            let view = view_handle.as_ref(ctx);
-
-            let element = EnvironmentsPageWidget::render_list_page(view, appearance, ctx);
-            let text_content = element.debug_text_content().unwrap_or_default();
-
-            assert!(
-                text_content.contains("PERSONAL"),
-                "Expected 'Personal' header in rendered content: {text_content}"
-            );
-        });
-    })
-}
-
-#[test]
-fn test_set_github_auth_redirect_target_updates_form() {
-    App::test((), |mut app| async move {
-        init_env_page_view_test_models(&mut app);
-        let window_id = create_test_window(&mut app);
-
-        let mut view_handle = None;
-        app.update(|ctx| {
-            view_handle = Some(ctx.add_typed_action_view(window_id, EnvironmentsPageView::new));
-        });
-        let view_handle = view_handle.expect("EnvironmentsPageView handle should be created");
-
-        app.update(|ctx| {
-            let view = view_handle.as_ref(ctx);
-            let target = view.environment_form.read(ctx, |form, _ctx| {
-                form.github_auth_redirect_target_for_test()
-            });
-            assert_eq!(target, GithubAuthRedirectTarget::SettingsEnvironments);
-        });
-
-        app.update(|ctx| {
-            view_handle.update(ctx, |view, ctx| {
-                view.set_github_auth_redirect_target(GithubAuthRedirectTarget::FocusCloudMode, ctx);
-            });
-        });
-
-        app.update(|ctx| {
-            let view = view_handle.as_ref(ctx);
-            let target = view.environment_form.read(ctx, |form, _ctx| {
-                form.github_auth_redirect_target_for_test()
-            });
-            assert_eq!(target, GithubAuthRedirectTarget::FocusCloudMode);
         });
     })
 }
@@ -1022,144 +796,6 @@ fn test_environment_setup_mode_selector_renders_options() {
 }
 
 #[test]
-fn test_agent_assisted_modal_open_and_cancel_renders_and_hides() {
-    // Verifies the Environments page wires up the modal visibility and cancel event correctly.
-    App::test((), |mut app| async move {
-        init_env_page_view_test_models(&mut app);
-        let window_id = create_test_window(&mut app);
-
-        let mut view_handle = None;
-        app.update(|ctx| {
-            view_handle = Some(ctx.add_typed_action_view(window_id, EnvironmentsPageView::new));
-        });
-        let view_handle = view_handle.expect("EnvironmentsPageView handle should be created");
-
-        // Open the modal.
-        app.update(|ctx| {
-            view_handle.update(ctx, |view, ctx| {
-                view.handle_action(&EnvironmentsPageAction::OpenAgentAssistedCreateModal, ctx);
-            });
-        });
-
-        // Verify the modal is visible.
-        // We assert against `is_visible()` rather than `debug_text_content()` of the full dialog,
-        // because dialog/icon rendering can be asset-provider-dependent in unit tests.
-        app.update(|ctx| {
-            let view = view_handle.as_ref(ctx);
-            let modal = view.agent_assisted_environment_modal.clone();
-            let is_visible = modal.read(ctx, |modal, _ctx| modal.is_visible());
-            assert!(is_visible, "Expected modal to be visible after open action");
-        });
-
-        // Cancel via modal event.
-        app.update(|ctx| {
-            view_handle.update(ctx, |view, ctx| {
-                view.agent_assisted_environment_modal
-                    .update(ctx, |_modal, ctx| {
-                        ctx.emit(AgentAssistedEnvironmentModalEvent::Cancelled);
-                    });
-            });
-        });
-
-        // Verify modal is hidden.
-        app.update(|ctx| {
-            let view = view_handle.as_ref(ctx);
-            let modal = view.agent_assisted_environment_modal.clone();
-            let is_visible = modal.read(ctx, |modal, _ctx| modal.is_visible());
-            assert!(
-                !is_visible,
-                "Expected modal to be hidden after cancel event"
-            );
-        });
-    })
-}
-
-#[test]
-fn test_agent_assisted_modal_confirm_dispatches_root_view_action_and_hides_modal() {
-    // We treat the RootView action dispatch as the contract that a terminal tab + setup flow will start.
-    // (The deeper terminal-tab assertions are better suited to integration tests.)
-    App::test((), |mut app| async move {
-        init_env_page_view_test_models(&mut app);
-
-        // Capture the CreateEnvironmentArg passed through the RootView action boundary.
-        let dispatched_repo_paths: Arc<Mutex<Vec<Vec<String>>>> = Arc::new(Mutex::new(Vec::new()));
-        let dispatched_repo_paths_clone = dispatched_repo_paths.clone();
-
-        app.update(|ctx| {
-            ctx.add_global_action(
-                "root_view:create_environment_in_existing_window_and_run",
-                move |arg: &CreateEnvironmentArg, _ctx| {
-                    dispatched_repo_paths_clone
-                        .lock()
-                        .expect("mutex should not be poisoned")
-                        .push(arg.repos.clone());
-                },
-            );
-        });
-
-        let window_id = create_test_window(&mut app);
-
-        let mut view_handle = None;
-        app.update(|ctx| {
-            view_handle = Some(ctx.add_typed_action_view(window_id, EnvironmentsPageView::new));
-        });
-        let view_handle = view_handle.expect("EnvironmentsPageView handle should be created");
-
-        // Open the modal.
-        app.update(|ctx| {
-            view_handle.update(ctx, |view, ctx| {
-                view.handle_action(&EnvironmentsPageAction::OpenAgentAssistedCreateModal, ctx);
-            });
-        });
-
-        // Confirm via modal event.
-        let repo_paths = vec!["/tmp/repo-a".to_string(), "/tmp/repo-b".to_string()];
-        app.update(|ctx| {
-            view_handle.update(ctx, |view, ctx| {
-                view.agent_assisted_environment_modal
-                    .update(ctx, |_modal, ctx| {
-                        ctx.emit(AgentAssistedEnvironmentModalEvent::Confirmed {
-                            repo_paths: repo_paths.clone(),
-                        });
-                    });
-            });
-        });
-
-        // Verify global action was dispatched with repos.
-        let dispatched = dispatched_repo_paths
-            .lock()
-            .expect("mutex should not be poisoned")
-            .clone();
-        assert_eq!(
-            dispatched,
-            vec![repo_paths],
-            "Expected root view action to be dispatched with repo paths"
-        );
-
-        // Verify modal is hidden after confirm.
-        app.update(|ctx| {
-            let view = view_handle.as_ref(ctx);
-            let modal = view.agent_assisted_environment_modal.clone();
-            let is_visible = modal.read(ctx, |modal, _ctx| modal.is_visible());
-            assert!(
-                !is_visible,
-                "Expected modal to be hidden after confirm event"
-            );
-        });
-    })
-}
-
-// ============================================================================
-// Note: Form-related tests (repos field, docker image field, form state, etc.)
-// have been moved to update_environment_form_tests.rs since the form component
-// was extracted into UpdateEnvironmentForm.
-// ============================================================================
-
-// ============================================================================
-// Environments Page Enum Tests
-// ============================================================================
-
-#[test]
 fn test_environments_page_default_is_list() {
     let page = EnvironmentsPage::default();
     assert!(matches!(page, EnvironmentsPage::List));
@@ -1267,66 +903,6 @@ fn test_environment_matches_search_query_is_case_insensitive() {
     assert!(environment.matches_search_query("warp-internal"));
 }
 
-#[test]
-fn test_toolbar_renders_search_editor_view() {
-    use pathfinder_geometry::vector::vec2f;
-
-    App::test((), |mut app| async move {
-        init_env_page_view_test_models(&mut app);
-
-        // Seed at least one environment so the list page renders the toolbar.
-        app.update(|ctx| {
-            let environment = AmbientAgentEnvironment::new(
-                "Test Environment".to_string(),
-                Some("Test description".to_string()),
-                vec![],
-                "ubuntu:latest".to_string(),
-                vec![],
-            );
-
-            let sync_id = SyncId::ClientId(ClientId::new());
-            let object = CloudAmbientAgentEnvironment::new(
-                sync_id,
-                CloudAmbientAgentEnvironmentModel::new(environment),
-                crate::cloud_object::CloudObjectMetadata::mock(),
-                crate::cloud_object::CloudObjectPermissions::mock_personal(),
-            );
-
-            CloudModel::handle(ctx).update(ctx, |model, ctx| {
-                model.create_object(sync_id, object, ctx);
-            });
-        });
-
-        // Make EnvironmentsPageView the root view so it gets laid out by the Presenter.
-        let (window_id, env_page_handle) =
-            app.add_window(WindowStyle::NotStealFocus, EnvironmentsPageView::new);
-
-        app.update(|ctx| {
-            // Render a frame so layout runs and parent relationships are computed.
-            // We use a large window size to avoid edge cases where layout is skipped.
-            let presenter = ctx.presenter(window_id).expect("presenter should exist");
-            presenter
-                .borrow_mut()
-                .build_scene(vec2f(1000., 700.), 1., None, ctx);
-
-            let env_page = env_page_handle.as_ref(ctx);
-            let env_page_id = env_page_handle.id();
-            let search_editor_id = env_page.search_editor.id();
-
-            let chain = ctx.view_ancestors(window_id, search_editor_id);
-            assert!(
-                chain.len() >= 2,
-                "Expected search editor to be laid out as a child view; got ancestors={chain:?}"
-            );
-            assert_eq!(
-                chain.first().copied(),
-                Some(env_page_id),
-                "Expected search editor root to be EnvironmentsPageView"
-            );
-            assert_eq!(chain.last().copied(), Some(search_editor_id));
-        });
-    })
-}
 // ============================================================================
 // Environment Last Used Timestamp Tests
 // ============================================================================

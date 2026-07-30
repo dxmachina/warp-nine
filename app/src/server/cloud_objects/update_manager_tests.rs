@@ -14,9 +14,6 @@ use warpui::{App, ModelHandle, SingletonEntity};
 
 use super::{GetCloudObjectResponse, InitialLoadResponse, UpdateManager};
 use crate::ASSETS;
-use crate::ai::cloud_environments::{
-    AmbientAgentEnvironment, CloudAmbientAgentEnvironment, CloudAmbientAgentEnvironmentModel,
-};
 use crate::auth::UserUid;
 use crate::auth::user::TEST_USER_UID;
 use crate::cloud_object::model::actions::{
@@ -5783,104 +5780,6 @@ fn test_move_object_personal_to_team_failure() {
 
         // There's no database update to roll back.
         assert!(db_events(&update_manager_struct).is_empty());
-    });
-}
-
-/// Test successfully moving a Cloud Environment (generic string object) from a user's personal
-/// space to a team drive.
-#[test]
-fn test_move_cloud_environment_personal_to_team_success() {
-    App::test(ASSETS, |mut app| async move {
-        initialize_app(&mut app);
-        let mut server_api = mock_server_api();
-
-        let server_id: ServerId = 123.into();
-        let environment_id: GenericStringObjectId = server_id.into();
-        let sync_id = SyncId::ServerId(environment_id.into());
-        let folder_id: FolderId = 456.into();
-        let team = Space::Team {
-            team_uid: ServerId::from(789),
-        };
-
-        let environment = AmbientAgentEnvironment::new(
-            "Test Env".to_string(),
-            Some("Test description".to_string()),
-            vec![],
-            "ubuntu:latest".to_string(),
-            vec![],
-        );
-
-        let mut metadata = crate::cloud_object::CloudObjectMetadata::mock();
-        metadata.folder_id = Some(folder_id.into());
-
-        let object = CloudAmbientAgentEnvironment::new(
-            sync_id,
-            CloudAmbientAgentEnvironmentModel::new(environment),
-            metadata,
-            crate::cloud_object::CloudObjectPermissions::mock_personal(),
-        );
-
-        CloudModel::handle(&app).update(&mut app, |cloud_model, _| {
-            cloud_model.add_object(sync_id, object);
-            add_folder(folder_id, Owner::mock_current_user(), cloud_model);
-        });
-
-        server_api
-            .expect_transfer_generic_string_object_owner()
-            .times(1)
-            .return_once(move |_, _| Ok(true));
-
-        assert_folder_for_object(&app, &sync_id.uid(), Some(folder_id.into()));
-        assert_space_for_object(&app, &sync_id.uid(), Space::Personal);
-
-        let update_manager_struct = create_update_manager_struct(&mut app, Arc::new(server_api));
-
-        let type_and_id = CloudObjectTypeAndId::GenericStringObject {
-            object_type: GenericStringObjectFormat::Json(JsonObjectType::CloudEnvironment),
-            id: sync_id,
-        };
-
-        update_manager_struct
-            .update_manager
-            .update(&mut app, |update_manager, ctx| {
-                update_manager.move_object_to_location(
-                    type_and_id,
-                    CloudObjectLocation::Space(team),
-                    ctx,
-                );
-            });
-
-        assert_pending_online_only_change_for_object(&mut app, &sync_id.uid(), true);
-        assert_space_for_object(&app, &sync_id.uid(), team);
-        assert_root_level_for_object(&mut app, &sync_id.uid(), true);
-
-        assert_eq!(
-            cloud_events(&update_manager_struct),
-            vec![CloudModelEvent::ObjectMoved {
-                type_and_id,
-                source: UpdateSource::Local,
-                from_folder: Some(folder_id.into()),
-                to_folder: None,
-            }]
-        );
-
-        // Wait for the move to complete.
-        update_manager_struct
-            .update_manager
-            .update(&mut app, |update_manager, ctx| {
-                ctx.await_spawned_future(update_manager.spawned_futures[0])
-            })
-            .await;
-
-        assert_pending_online_only_change_for_object(&mut app, &sync_id.uid(), false);
-        assert_space_for_object(&app, &sync_id.uid(), team);
-
-        let events = db_events(&update_manager_struct);
-        assert_eq!(events.len(), 1);
-        let ModelEvent::UpsertGenericStringObject { object } = &events[0] else {
-            panic!("Expected upsert of cloud environment, got {:?}", &events[0])
-        };
-        assert_eq!(object.id(), sync_id);
     });
 }
 

@@ -451,7 +451,7 @@ impl ServerApi {
         let auth_state = Arc::new(AuthState::new_for_test());
         let client = Arc::new(http_client::Client::new_for_test());
 
-        Self::new_with_parts(client, auth_state, tx, None, None, TelemetryApi::new())
+        Self::new_with_parts(client, auth_state, tx, None, TelemetryApi::new())
     }
 
     #[cfg(all(test, feature = "skip_login"))]
@@ -467,7 +467,6 @@ impl ServerApi {
             Arc::new(http_client::Client::new_for_test()),
             auth_state,
             event_sender,
-            None,
             None,
             TelemetryApi::new(),
         )

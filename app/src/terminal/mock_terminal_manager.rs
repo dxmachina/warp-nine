@@ -157,10 +157,15 @@ mod testing {
     }
 
     impl MockTerminalManager {
+        /// LOCAL FORK: `restored_blocks` carried `SerializedBlockListItem`s, which went
+        /// with the agent along with session block restore. The parameter is kept (as an
+        /// always-`None` unit slice) so the ~100 `None`-passing call sites in
+        /// `terminal/view_tests.rs` stay unchanged.
         pub fn create_new_terminal_view_window_for_test(
             app: &mut App,
-            restored_blocks: Option<&[SerializedBlockListItem]>,
+            restored_blocks: Option<&[()]>,
         ) -> ViewHandle<TerminalView> {
+            let _ = restored_blocks;
             let server_api = app.read(|ctx| ServerApiProvider::as_ref(ctx).get());
             let tips_model = app.add_model(|_| Default::default());
 
@@ -177,8 +182,6 @@ mod testing {
                         shell_type: ShellType::Zsh,
                     },
                     resources,
-                    restored_blocks.map(|blocks| blocks.to_vec()).as_ref(),
-                    None,
                     Vector2F::new(7., 10.5),
                     ctx.window_id(),
                     ctx,

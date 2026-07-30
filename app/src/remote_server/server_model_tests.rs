@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use warp_util::standardized_path::StandardizedPath;
@@ -6,9 +6,8 @@ use warpui::App;
 
 use super::super::diff_state_tracker::RemoteDiffStateManager;
 use super::super::proto::{
-    Authenticate, BundledSkillMetadata, HomeSkillMetadata, Initialize, RemoteAgentContextSnapshot,
-    RemoteContextFileProto, RemoteSkillProto, ServerMessage, WriteFileResponse, WriteFileSuccess,
-    remote_skill_proto, server_message, write_file_response,
+    Authenticate, Initialize, ServerMessage, WriteFileResponse, WriteFileSuccess, server_message,
+    write_file_response,
 };
 use super::super::protocol::RequestId;
 use super::super::server_buffer_tracker::ServerBufferTracker;
@@ -24,14 +23,6 @@ fn test_model(app: &mut App) -> ServerModel {
         grace_timer_cancel: None,
         in_progress: HashMap::new(),
         host_id: "test-host-id".to_string(),
-        bundled_skills: Vec::new(),
-        remote_agent_context_snapshot: RemoteAgentContextSnapshot {
-            revision: 1,
-            home_dir: "/home/user".to_string(),
-            skills: Vec::new(),
-            global_rules: Vec::new(),
-        },
-        remote_agent_context_snapshot_sent: HashSet::new(),
         executors: HashMap::new(),
         pending_file_ops: PendingFileOps::new(),
         auth_state: Arc::new(AuthState::new_logged_out_for_test()),
@@ -52,80 +43,6 @@ fn test_key(repo: &str, mode: DiffMode) -> DiffModelKey {
         repo_path: StandardizedPath::try_new(repo).unwrap(),
         mode,
     }
-}
-
-fn test_bundled_skill_proto(id: &str) -> RemoteSkillProto {
-    RemoteSkillProto {
-        path: format!(
-            "/home/user/.warp/remote-server/bundled_resources/bundled/skills/{id}/SKILL.md"
-        ),
-        content: format!("# {id}"),
-        source: Some(remote_skill_proto::Source::Bundled(BundledSkillMetadata {
-            id: id.to_string(),
-            requires_mcp: None,
-        })),
-    }
-}
-
-#[test]
-fn remote_agent_context_snapshot_broadcasts_replacements_and_initializes_once() {
-    App::test((), |mut app| async move {
-        let mut model = test_model(&mut app);
-        let conn = uuid::Uuid::new_v4();
-        let (tx, rx) = async_channel::unbounded();
-        model.connection_senders.insert(conn, tx);
-
-        model.send_remote_agent_context_snapshot_to_connection(conn);
-        assert!(matches!(
-            rx.try_recv().map(|msg| msg.message),
-            Ok(Some(server_message::Message::RemoteAgentContextSnapshot(_)))
-        ));
-        model.send_remote_agent_context_snapshot_to_connection(conn);
-        assert!(rx.try_recv().is_err());
-
-        model.remote_agent_context_snapshot = RemoteAgentContextSnapshot {
-            revision: 2,
-            home_dir: "/home/user".to_string(),
-            skills: vec![
-                test_bundled_skill_proto("test-skill"),
-                RemoteSkillProto {
-                    path: "/home/user/.agents/skills/test/SKILL.md".to_string(),
-                    content: "skill content".to_string(),
-                    source: Some(remote_skill_proto::Source::Home(HomeSkillMetadata {})),
-                },
-            ],
-            global_rules: vec![RemoteContextFileProto {
-                path: "/home/user/.agents/AGENTS.md".to_string(),
-                content: "rule content".to_string(),
-            }],
-        };
-        model.broadcast_remote_agent_context_snapshot();
-
-        match rx
-            .try_recv()
-            .expect("remote Agent Mode context replacement")
-            .message
-        {
-            Some(server_message::Message::RemoteAgentContextSnapshot(snapshot)) => {
-                assert_eq!(snapshot.revision, 2);
-                assert_eq!(snapshot.skills.len(), 2);
-                assert_eq!(snapshot.skills[1].content, "skill content");
-                assert_eq!(snapshot.global_rules[0].content, "rule content");
-            }
-            other => panic!("expected RemoteAgentContextSnapshot, got {other:?}"),
-        }
-
-        let late_conn = uuid::Uuid::new_v4();
-        let (late_tx, late_rx) = async_channel::unbounded();
-        model.connection_senders.insert(late_conn, late_tx);
-        model.send_remote_agent_context_snapshot_to_connection(late_conn);
-        assert!(matches!(
-            late_rx.try_recv().map(|msg| msg.message),
-            Ok(Some(server_message::Message::RemoteAgentContextSnapshot(_)))
-        ));
-        model.send_remote_agent_context_snapshot_to_connection(late_conn);
-        assert!(late_rx.try_recv().is_err());
-    });
 }
 
 #[test]

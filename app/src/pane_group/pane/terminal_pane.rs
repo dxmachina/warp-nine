@@ -829,7 +829,3 @@ fn handle_terminal_view_event(
 
 // LOCAL FORK: fn dispatch_start_agent_conversation, fn launch_local_no_harness_child,
 // fn launch_remote_child and fn handle_ai_history_event all went with the agent.
-
-#[cfg(all(test, not(target_family = "wasm")))]
-#[path = "terminal_pane_tests.rs"]
-mod tests;

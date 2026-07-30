@@ -7,13 +7,13 @@ use warpui::{
     WindowId,
 };
 
+use cloud_object_models::{BaseImage, GithubRepo};
+
+use super::github_auth_url::{self, AuthSource, GithubAuthRedirectTarget};
 use super::{
     EnvironmentFormCopy, EnvironmentFormInitArgs, EnvironmentFormValues, SuggestImageState,
     UpdateEnvironmentForm, UpdateEnvironmentFormAction,
 };
-use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
-use crate::ai::ambient_agents::github_auth_url::{self, AuthSource, GithubAuthRedirectTarget};
-use crate::ai::cloud_environments::{BaseImage, GithubRepo};
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::network::NetworkStatus;
@@ -194,7 +194,6 @@ fn init_update_environment_form_test_models(app: &mut App) {
     app.add_singleton_model(UpdateManager::mock);
     app.add_singleton_model(|_| KeybindingChangedNotifier::new());
 
-    app.add_singleton_model(|_| GitHubAuthNotifier::new());
 }
 
 #[derive(Debug)]

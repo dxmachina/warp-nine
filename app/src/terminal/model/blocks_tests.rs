@@ -5,11 +5,9 @@ use warpui::elements::DEFAULT_UI_LINE_HEIGHT_RATIO;
 use warpui::units::IntoLines;
 
 use super::*;
-use crate::ai::agent::AIAgentActionId;
 use crate::settings::TerminalSpacing;
 use crate::terminal::event::Event;
 use crate::terminal::model::ansi::Handler;
-use crate::terminal::model::block::AgentInteractionMetadata;
 use crate::terminal::model::test_utils;
 use crate::terminal::model::test_utils::TestBlockListBuilder;
 use crate::terminal::view::{InlineBannerItem, InlineBannerType};
@@ -665,179 +663,6 @@ pub fn visible_bootstrap_block_event_fires_when_script_execution_becomes_visible
     assert_eq!(visible_events, 0);
 }
 
-// Add a few restored blocks and ensure they show up appropriately.
-#[test]
-pub fn test_restore_completed_blocks() {
-    let (events_tx, events_rx) = async_channel::unbounded();
-    let channel_event_proxy = ChannelEventListener::builder_for_test()
-        .with_terminal_events_tx(events_tx)
-        .build();
-
-    let serialized_block: SerializedBlockListItem =
-        SerializedBlock::new_for_test("i am".into(), "restored".into()).into();
-    let restored_blocks = [serialized_block.clone(), serialized_block];
-    let block_list = TestBlockListBuilder::new()
-        .with_channel_event_proxy(channel_event_proxy)
-        .with_restored_blocks(&restored_blocks)
-        .build();
-
-    // We expect to have the two restored blocks, followed by the WarpInput
-    // block.
-    assert_eq!(block_list.blocks.len(), 3);
-    let restored_block_height = 5.5;
-    assert_lines_approx_eq!(
-        block_list.blocks[0].height(&crate::terminal::model::block::TranscriptScope::Terminal),
-        restored_block_height
-    );
-    assert_lines_approx_eq!(
-        block_list.blocks[1].height(&crate::terminal::model::block::TranscriptScope::Terminal),
-        restored_block_height
-    );
-    assert_lines_approx_eq!(
-        block_list.block_heights.summary().height,
-        2.0 * restored_block_height + RESTORED_BLOCK_SEPARATOR_HEIGHT
-    );
-
-    let mut block_completed_events = Vec::new();
-    while let Ok(event) = events_rx.try_recv() {
-        if let Event::AfterBlockCompleted(block_completed_type) = event {
-            block_completed_events.push(block_completed_type)
-        }
-    }
-    assert_eq!(block_completed_events.len(), 2);
-    assert!(matches!(
-        block_completed_events[0].block_type,
-        BlockType::Restored
-    ));
-    assert!(matches!(
-        block_completed_events[1].block_type,
-        BlockType::Restored
-    ));
-}
-
-#[test]
-pub fn test_restore_blocks_with_local_status() {
-    let (events_tx, events_rx) = async_channel::unbounded();
-    let channel_event_proxy = ChannelEventListener::builder_for_test()
-        .with_terminal_events_tx(events_tx)
-        .build();
-
-    // Create a block that was local (is_local = Some(true))
-    let mut local_block = SerializedBlock::new_for_test("local".into(), "block".into());
-    local_block.is_local = Some(true);
-
-    // Create a block that was remote (is_local = Some(false))
-    let mut remote_block = SerializedBlock::new_for_test("remote".into(), "block".into());
-    remote_block.is_local = Some(false);
-
-    // Create a block with unspecified locality (is_local = None)
-    let unspecified_block = SerializedBlock::new_for_test("unspecified".into(), "block".into());
-
-    // Create block list with these blocks
-    let restored_blocks = [
-        local_block.clone().into(),
-        remote_block.clone().into(),
-        unspecified_block.clone().into(),
-    ];
-
-    let block_list = TestBlockListBuilder::new()
-        .with_channel_event_proxy(channel_event_proxy)
-        .with_restored_blocks(&restored_blocks)
-        .build();
-
-    // We should have 3 restored blocks plus the WarpInput block
-    assert_eq!(block_list.blocks.len(), 4);
-
-    // Check that the local status was preserved
-    assert_eq!(block_list.blocks[0].restored_block_was_local(), Some(true));
-    assert_eq!(block_list.blocks[1].restored_block_was_local(), Some(false));
-    assert_eq!(block_list.blocks[2].restored_block_was_local(), None);
-
-    // Ensure the event stream is populated correctly
-    let mut block_completed_events = Vec::new();
-    while let Ok(event) = events_rx.try_recv() {
-        if let Event::AfterBlockCompleted(block_completed_type) = event {
-            block_completed_events.push(block_completed_type);
-        }
-    }
-
-    // We should have 3 events for the 3 restored blocks
-    assert_eq!(block_completed_events.len(), 3);
-    assert!(matches!(
-        block_completed_events[0].block_type,
-        BlockType::Restored
-    ));
-}
-
-#[test]
-pub fn test_restore_block_that_wasnt_started() {
-    let (events_tx, events_rx) = async_channel::unbounded();
-    let channel_event_proxy = ChannelEventListener::builder_for_test()
-        .with_terminal_events_tx(events_tx)
-        .build();
-
-    let block = SerializedBlock::new_active_block_for_test();
-    let block_list = TestBlockListBuilder::new()
-        .with_channel_event_proxy(channel_event_proxy)
-        .with_restored_blocks(&[block.into()])
-        .build();
-
-    // Non-started blocks are skipped during the restoration process, so we
-    // expect to only have one block - the WarpInput block.
-    assert_eq!(block_list.blocks.len(), 1);
-    assert_eq!(
-        block_list.blocks[0].bootstrap_stage(),
-        BootstrapStage::WarpInput
-    );
-    assert_eq!(
-        block_list.blocks[0].height(&crate::terminal::model::block::TranscriptScope::Terminal),
-        Lines::zero()
-    );
-
-    let mut block_completed_events = Vec::new();
-    while let Ok(event) = events_rx.try_recv() {
-        if let Event::AfterBlockCompleted(block_completed_type) = event {
-            block_completed_events.push(block_completed_type)
-        }
-    }
-    assert_eq!(block_completed_events.len(), 0);
-}
-
-#[test]
-pub fn test_restore_block_that_wasnt_completed() {
-    let (events_tx, events_rx) = async_channel::unbounded();
-    let channel_event_proxy = ChannelEventListener::builder_for_test()
-        .with_terminal_events_tx(events_tx)
-        .build();
-
-    let mut block = SerializedBlock::new_for_test("test".into(), "test".into());
-    block.completed_ts = None;
-    let block_list = TestBlockListBuilder::new()
-        .with_channel_event_proxy(channel_event_proxy)
-        .with_restored_blocks(&[block.into()])
-        .build();
-
-    // Non-completed blocks are skipped during the restoration process, so we
-    // expect to only have one block - the WarpInput block.
-    assert_eq!(block_list.blocks.len(), 1);
-    assert_eq!(
-        block_list.blocks[0].bootstrap_stage(),
-        BootstrapStage::WarpInput
-    );
-    assert_lines_approx_eq!(
-        block_list.blocks[0].height(&crate::terminal::model::block::TranscriptScope::Terminal),
-        0.0
-    );
-
-    let mut block_completed_events = Vec::new();
-    while let Ok(event) = events_rx.try_recv() {
-        if let Event::AfterBlockCompleted(block_completed_type) = event {
-            block_completed_events.push(block_completed_type)
-        }
-    }
-    assert_eq!(block_completed_events.len(), 0);
-}
-
 // Bootstrap with no restored blocks and no script execution.
 // There will be a special hidden InitShell block and everything else should be empty.
 #[test]
@@ -895,64 +720,6 @@ pub fn test_basic_bootstrapping() {
         block_completed_events[1].block_type,
         BlockType::BootstrapHidden
     ));
-}
-
-#[test]
-pub fn test_session_restoration_separator() {
-    let serialized_block: SerializedBlockListItem =
-        SerializedBlock::new_for_test("i am".as_bytes().to_vec(), "restored".as_bytes().to_vec())
-            .into();
-    let restored_blocks = [serialized_block.clone(), serialized_block];
-    let mut block_list = TestBlockListBuilder::new()
-        .with_restored_blocks(&restored_blocks)
-        .build();
-
-    block_list.set_next_gap_height_in_lines((11. + RESTORED_BLOCK_SEPARATOR_HEIGHT).into_lines());
-    assert_eq!(block_list.blocks.len(), 3);
-    assert_lines_approx_eq!(
-        block_list.blocks[0].height(&crate::terminal::model::block::TranscriptScope::Terminal),
-        5.5
-    );
-    assert_lines_approx_eq!(
-        block_list.blocks[1].height(&crate::terminal::model::block::TranscriptScope::Terminal),
-        5.5
-    );
-    assert_lines_approx_eq!(
-        block_list.blocks[2].height(&crate::terminal::model::block::TranscriptScope::Terminal),
-        0.0
-    );
-
-    // We have two blocks at height 5.5 and a separator with height 1.5.
-    assert_lines_approx_eq!(
-        block_list.block_heights.summary().height,
-        11.0 + RESTORED_BLOCK_SEPARATOR_HEIGHT
-    );
-
-    // Clear the visible screen and ensure total height increases by 10.
-    block_list.clear_visible_screen();
-    assert_eq!(block_list.blocks.len(), 3);
-    assert_lines_approx_eq!(
-        block_list.block_heights.summary().height,
-        11.0 + RESTORED_BLOCK_SEPARATOR_HEIGHT
-            + block_list
-                .next_gap_height()
-                .expect("height should be set")
-                .as_f64()
-    );
-
-    // With the active block still hidden during initialize, the gap is inserted before the active
-    // block in clear_visible_screen.
-    // Total items: 2 restored blocks + 1 separator + 1 gap + 1 active block = 5.
-    assert_eq!(block_list.block_heights.summary().total_count, 5);
-    // Gap is at index 3 (before the active block at index 4).
-    assert_eq!(block_list.active_gap.as_ref().unwrap().index, 3);
-    assert_approx_eq!(
-        Lines,
-        block_list.active_gap.as_ref().unwrap().current_height,
-        block_list
-            .next_gap_height()
-            .expect("gap height should be set")
-    );
 }
 
 #[test]
@@ -1591,7 +1358,7 @@ fn test_remove_rich_content_block() {
     insert_block(&mut block_list, "cmd", "output");
 
     let view_id_a = EntityId::new();
-    block_list.append_rich_content(RichContentItem::new_for_test(None, view_id_a, None), false);
+    block_list.append_rich_content(RichContentItem::new_for_test(None, view_id_a), false);
 
     let second_block_index = insert_block(&mut block_list, "cmd", "output");
 
@@ -1602,7 +1369,7 @@ fn test_remove_rich_content_block() {
     );
 
     let view_id_b = EntityId::new();
-    block_list.append_rich_content(RichContentItem::new_for_test(None, view_id_b, None), false);
+    block_list.append_rich_content(RichContentItem::new_for_test(None, view_id_b), false);
 
     /*
     The blocklist is now:
@@ -1667,224 +1434,6 @@ fn test_remove_rich_content_block() {
 }
 
 #[test]
-fn test_conversation_scoped_rich_content_hidden_outside_fullscreen_agent_view() {
-    FeatureFlag::AgentView.set_enabled(true);
-    let mut block_list =
-        new_bootstrapped_block_list(None, None, ChannelEventListener::new_for_test());
-    let conversation_id = AIConversationId::new();
-    let view_id = EntityId::new();
-
-    block_list.append_rich_content(
-        RichContentItem::new_for_test(None, view_id, Some(conversation_id)),
-        false,
-    );
-
-    block_list.set_transcript_scope(TranscriptScope::Conversation(conversation_id));
-
-    let item_visible_in_fullscreen =
-        block_list
-            .block_heights()
-            .items()
-            .iter()
-            .find_map(|item| match item {
-                BlockHeightItem::RichContent(rich_content) if rich_content.view_id == view_id => {
-                    Some(*rich_content)
-                }
-                _ => None,
-            });
-    assert!(item_visible_in_fullscreen.is_some());
-    assert!(item_visible_in_fullscreen.is_some_and(|item| !item.should_hide));
-    assert!(
-        item_visible_in_fullscreen
-            .is_some_and(|item| item.last_laid_out_height > BlockHeight::zero())
-    );
-
-    block_list.set_transcript_scope(TranscriptScope::Terminal);
-
-    let item_hidden_in_terminal_mode =
-        block_list
-            .block_heights()
-            .items()
-            .iter()
-            .find_map(|item| match item {
-                BlockHeightItem::RichContent(rich_content) if rich_content.view_id == view_id => {
-                    Some(*rich_content)
-                }
-                _ => None,
-            });
-    assert!(item_hidden_in_terminal_mode.is_some());
-    assert!(item_hidden_in_terminal_mode.is_some_and(|item| item.should_hide));
-
-    block_list.set_transcript_scope(TranscriptScope::Terminal);
-
-    let item_hidden_in_inline =
-        block_list
-            .block_heights()
-            .items()
-            .iter()
-            .find_map(|item| match item {
-                BlockHeightItem::RichContent(rich_content) if rich_content.view_id == view_id => {
-                    Some(*rich_content)
-                }
-                _ => None,
-            });
-    assert!(item_hidden_in_inline.is_some());
-    assert!(item_hidden_in_inline.is_some_and(|item| item.should_hide));
-}
-
-#[test]
-fn test_clear_user_executed_command_blocks_for_conversation() {
-    let mut block_list =
-        new_bootstrapped_block_list(None, None, ChannelEventListener::new_for_test());
-
-    let terminal_block_index = insert_block(&mut block_list, "terminal", "output");
-
-    let conversation_id = AIConversationId::new();
-
-    let user_block_index = insert_block(&mut block_list, "user", "output");
-    {
-        let block = &mut block_list.blocks_mut()[user_block_index.0];
-        // User-executed command blocks created inside agent view typically remain in User
-        // interaction mode.
-        block.set_conversation_id(conversation_id);
-    }
-
-    let requested_command_block_index = insert_block(&mut block_list, "requested", "output");
-    {
-        let block = &mut block_list.blocks_mut()[requested_command_block_index.0];
-        block.set_conversation_id(conversation_id);
-        let action_id: AIAgentActionId = "action".to_owned().into();
-        block.set_agent_interaction_mode(AgentInteractionMetadata::new_hidden(
-            action_id,
-            conversation_id,
-        ));
-    }
-
-    let view_id = EntityId::new();
-    block_list.append_rich_content(
-        RichContentItem::new_for_test(None, view_id, Some(conversation_id)),
-        false,
-    );
-
-    block_list.set_transcript_scope(TranscriptScope::Conversation(conversation_id));
-
-    let terminal_block_id = block_list
-        .block_at(terminal_block_index)
-        .unwrap()
-        .id()
-        .clone();
-    let user_block_id = block_list.block_at(user_block_index).unwrap().id().clone();
-    let requested_command_block_id = block_list
-        .block_at(requested_command_block_index)
-        .unwrap()
-        .id()
-        .clone();
-
-    block_list.clear_user_executed_command_blocks_for_conversation(conversation_id);
-
-    assert!(block_list.block_index_for_id(&terminal_block_id).is_some());
-    assert!(
-        block_list
-            .block_index_for_id(&requested_command_block_id)
-            .is_some()
-    );
-    assert!(block_list.block_index_for_id(&user_block_id).is_none());
-    assert!(
-        block_list
-            .removable_blocklist_item_positions
-            .contains_key(&RemovableBlocklistItem::RichContent(view_id))
-    );
-}
-
-#[test]
-fn test_agent_origin_block_can_be_attached_to_other_conversation() {
-    let _agent_view_flag = FeatureFlag::AgentView.override_enabled(true);
-    let mut block_list =
-        new_bootstrapped_block_list(None, None, ChannelEventListener::new_for_test());
-
-    let expected_origin_conversation_id = AIConversationId::new();
-    let other_conversation_id = AIConversationId::new();
-
-    block_list.enter_conversation_context(expected_origin_conversation_id, false, false);
-    let user_block_index = insert_block(&mut block_list, "user", "output");
-    let user_block_id = block_list.block_at(user_block_index).unwrap().id().clone();
-
-    let associated = block_list
-        .associate_blocks_with_conversation([&user_block_id].into_iter(), other_conversation_id);
-    assert_eq!(associated.len(), 1);
-    assert_eq!(associated[0].0, user_block_id);
-    match &associated[0].1 {
-        AgentViewVisibility::Agent {
-            origin_conversation_id: observed_origin_conversation_id,
-            pending_other_conversation_ids,
-            other_conversation_ids,
-        } => {
-            assert_eq!(
-                observed_origin_conversation_id,
-                &expected_origin_conversation_id
-            );
-            assert!(pending_other_conversation_ids.contains(&other_conversation_id));
-            assert!(!other_conversation_ids.contains(&other_conversation_id));
-        }
-        _ => panic!("Expected agent visibility for agent-origin block"),
-    }
-
-    block_list.enter_conversation_context(other_conversation_id, false, false);
-    let user_block_index = block_list.block_index_for_id(&user_block_id).unwrap();
-    let user_block = block_list.block_at(user_block_index).unwrap();
-    assert!(!user_block.is_empty(block_list.transcript_scope()));
-
-    let promoted = block_list.promote_blocks_to_attached_from_conversation(other_conversation_id);
-    assert_eq!(promoted.len(), 1);
-    assert_eq!(promoted[0].0, user_block_id);
-    match &promoted[0].1 {
-        AgentViewVisibility::Agent {
-            pending_other_conversation_ids,
-            other_conversation_ids,
-            ..
-        } => {
-            assert!(!pending_other_conversation_ids.contains(&other_conversation_id));
-            assert!(other_conversation_ids.contains(&other_conversation_id));
-        }
-        _ => panic!("Expected agent visibility for agent-origin block"),
-    }
-
-    let removed = block_list.remove_pending_context_assocation_for_blocks(
-        [&user_block_id].into_iter(),
-        other_conversation_id,
-    );
-    assert!(removed.is_empty());
-
-    block_list.exit_conversation_context();
-    let user_block_index = block_list.block_index_for_id(&user_block_id).unwrap();
-    let user_block = block_list.block_at(user_block_index).unwrap();
-    assert!(user_block.is_empty(block_list.transcript_scope()));
-}
-#[test]
-fn unfiltered_transcript_scope_shows_restored_conversation_command_blocks() {
-    let _agent_view_flag = FeatureFlag::AgentView.override_enabled(true);
-    let mut block_list =
-        new_bootstrapped_block_list(None, None, ChannelEventListener::new_for_test());
-    let conversation_id = AIConversationId::new();
-    let mut serialized_block =
-        SerializedBlock::new_for_test(b"echo restored".to_vec(), b"restored\r\n".to_vec());
-    serialized_block.agent_view_visibility =
-        Some(AgentViewVisibility::new_from_conversation(conversation_id).into());
-    let block_id = serialized_block.id.clone();
-    block_list.set_transcript_scope(TranscriptScope::Unfiltered);
-
-    block_list.insert_restored_block(&serialized_block);
-    let restored_block = block_list
-        .block_with_id(&block_id)
-        .expect("restored command block should exist");
-    assert!(matches!(
-        restored_block.agent_view_visibility(),
-        AgentViewVisibility::Agent { .. }
-    ));
-    assert!(restored_block.is_visible(block_list.transcript_scope()));
-}
-
-#[test]
 fn test_finish_startup_commands_at_block_attaches_and_unhides_command_blocks_since_target_block() {
     let _agent_view_flag = FeatureFlag::AgentView.override_enabled(true);
     let mut block_list =
@@ -1905,12 +1454,11 @@ fn test_finish_startup_commands_at_block_attaches_and_unhides_command_blocks_sin
         .unwrap()
         .id()
         .clone();
-    let conversation_id = AIConversationId::new();
 
-    block_list.enter_conversation_context(conversation_id, false, true);
-
-    block_list
-        .finish_oz_environment_startup_commands_at_block(&harness_block_id, Some(conversation_id));
+    // LOCAL FORK: the conversation the finished startup commands used to be
+    // attached to went with the agent, so this now only pins the hide/unhide
+    // half of the behavior.
+    block_list.finish_oz_environment_startup_commands_at_block(&harness_block_id);
 
     assert!(!block_list.is_executing_oz_environment_startup_commands());
 
@@ -1921,22 +1469,10 @@ fn test_finish_startup_commands_at_block_attaches_and_unhides_command_blocks_sin
         assert!(!block.is_hidden());
         assert!(!block.is_oz_environment_startup_command());
         assert!(!block.should_hide_block(block_list.transcript_scope()));
-        match block.agent_view_visibility() {
-            AgentViewVisibility::Terminal {
-                pending_conversation_ids,
-                conversation_ids,
-            } => {
-                assert!(pending_conversation_ids.is_empty());
-                assert!(conversation_ids.contains(&conversation_id));
-            }
-            AgentViewVisibility::Agent {
-                origin_conversation_id,
-                pending_other_conversation_ids,
-                other_conversation_ids,
-            } => panic!(
-                "expected terminal visibility, got agent visibility: {origin_conversation_id:?}, {pending_other_conversation_ids:?}, {other_conversation_ids:?}"
-            ),
-        }
+        assert!(matches!(
+            block.agent_view_visibility(),
+            AgentViewVisibility::Terminal { .. }
+        ));
     }
 
     let setup_block = block_list

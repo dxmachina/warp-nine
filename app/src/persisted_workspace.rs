@@ -1,13 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 
-use ai::index::full_source_code_embedding::manager::{
-    CodebaseIndexManager, CodebaseIndexManagerEvent,
-};
-use ai::project_context::model::{ProjectContextModel, ProjectContextModelEvent};
-use ai::workspace::{WorkspaceMetadata, WorkspaceMetadataEvent};
 use anyhow::Context;
 use chrono::Utc;
 use itertools::Itertools;
@@ -24,7 +18,6 @@ use repo_metadata::repositories::{DetectedRepositories, DetectedRepositoriesEven
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "local_fs")]
 use warp_core::channel::ChannelState;
-use warp_core::features::FeatureFlag;
 use warp_errors::report_if_error;
 #[cfg(feature = "local_fs")]
 use warp_util::{local_or_remote_path::LocalOrRemotePath, standardized_path::StandardizedPath};
@@ -45,6 +38,7 @@ use crate::settings::CodeSettings;
 use crate::terminal::TerminalView;
 #[cfg(feature = "local_fs")]
 use crate::terminal::local_shell::LocalShellState;
+use crate::workspace_metadata::WorkspaceMetadata;
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 #[cfg(feature = "local_fs")]
 use crate::{view_components::DismissibleToast, workspace::ToastStack};
@@ -233,60 +227,29 @@ impl PersistedWorkspace {
             })
             .collect();
 
-        if FeatureFlag::FullSourceCodeEmbedding.is_enabled() {
-            ctx.subscribe_to_model(&CodebaseIndexManager::handle(ctx), |me, _, event, ctx| {
-                match event {
-                    CodebaseIndexManagerEvent::IndexMetadataUpdated { root_path, event } => {
-                        me.handle_index_metadata_event(root_path, *event);
-                    }
-                    CodebaseIndexManagerEvent::RemoveExpiredIndexMetadata { expired_metadata } => {
-                        // TODO: Disable expired metadata removal once we have other consumers of the workspace metadata.
-                        me.clean_up_expired_metadata(expired_metadata.clone(), ctx);
-                    }
-                    _ => {}
+        // LOCAL FORK: upstream gated three subscriptions here on
+        // `FeatureFlag::FullSourceCodeEmbedding`. Two of them are gone with the
+        // agent: a `CodebaseIndexManager` subscription that mirrored index
+        // metadata into the workspace map, and a `ProjectContextModel`
+        // subscription that persisted discovered/deleted project rules (its
+        // `KnownRulesChanged` event was only ever emitted by the rules reader,
+        // which lived in `crates/ai`). Upstream also subscribed to
+        // `BlocklistAIHistoryEvent` here to kick off an incremental codebase
+        // sync whenever the agent started a new conversation; there are no
+        // conversations in this fork.
+        //
+        // The workspace-settings subscription below survives and is no longer
+        // gated on the embedding flag: it belongs to the workspace model, not to
+        // the indexer, and its handler is a no-op either way.
+        ctx.subscribe_to_model(
+            &UserWorkspaces::handle(ctx),
+            |me, _, user_workspaces_event, ctx| {
+                if let UserWorkspacesEvent::CodebaseContextEnablementChanged = user_workspaces_event
+                {
+                    me.on_settings_changed(ctx);
                 }
-            });
-
-            // LOCAL FORK: upstream also subscribed to BlocklistAIHistoryEvent here
-            // to kick off an incremental codebase sync whenever the agent started a
-            // new conversation. There are no conversations in this fork, so the
-            // subscription and the sync it drove are both gone.
-
-            // Subscribe to changes in workspace settings.
-            ctx.subscribe_to_model(
-                &UserWorkspaces::handle(ctx),
-                |me, _, user_workspaces_event, ctx| {
-                    if let UserWorkspacesEvent::CodebaseContextEnablementChanged =
-                        user_workspaces_event
-                    {
-                        me.on_settings_changed(ctx);
-                    }
-                },
-            );
-
-            // Subscribe to ProjectContextModel events to persist rule changes
-            ctx.subscribe_to_model(&ProjectContextModel::handle(ctx), |me, _, event, _ctx| {
-                if let ProjectContextModelEvent::KnownRulesChanged(delta) = event {
-                    let mut events = vec![];
-
-                    if !delta.discovered_rules.is_empty() {
-                        events.push(ModelEvent::UpsertProjectRules {
-                            project_rule_paths: delta.discovered_rules.clone(),
-                        });
-                    }
-
-                    if !delta.deleted_rules.is_empty() {
-                        events.push(ModelEvent::DeleteProjectRules {
-                            path: delta.deleted_rules.clone(),
-                        });
-                    }
-
-                    if !events.is_empty() {
-                        me.save_to_db(events);
-                    }
-                }
-            });
-        }
+            },
+        );
 
         // LOCAL FORK: upstream subscribed to DetectedRepositories here to run
         // `index_repo` on every git repo it found, which drove codebase embedding
@@ -667,47 +630,12 @@ impl PersistedWorkspace {
         }
     }
 
-    fn handle_index_metadata_event(&mut self, root_path: &PathBuf, event: WorkspaceMetadataEvent) {
-        match event {
-            WorkspaceMetadataEvent::Queried => {
-                if let Some(workspace) = self.workspaces.get_mut(root_path) {
-                    workspace.metadata.queried_ts = Some(Utc::now());
-                }
-                self.persist_metadata_for_index(root_path);
-            }
-            WorkspaceMetadataEvent::Modified => {
-                if let Some(workspace) = self.workspaces.get_mut(root_path) {
-                    workspace.metadata.modified_ts = Some(Utc::now());
-                }
-                self.persist_metadata_for_index(root_path);
-            }
-            WorkspaceMetadataEvent::Created => {
-                let new_metadata = WorkspaceMetadata {
-                    path: root_path.clone(),
-                    navigated_ts: None,
-                    // Count creation as a modification event.
-                    modified_ts: Some(Utc::now()),
-                    queried_ts: None,
-                };
-
-                if let Some(existing) = self.workspaces.get_mut(root_path) {
-                    // Preserve existing language server settings when re-creating
-                    // workspace metadata (e.g. after an expired index is cleaned up
-                    // and the user navigates back to the same directory).
-                    existing.metadata = new_metadata;
-                } else {
-                    self.workspaces.insert(
-                        root_path.clone(),
-                        Workspace {
-                            metadata: new_metadata,
-                            language_servers: HashMap::new(),
-                        },
-                    );
-                }
-                self.persist_metadata_for_index(root_path);
-            }
-        }
-    }
+    // LOCAL FORK: `handle_index_metadata_event` lived here. It translated
+    // `WorkspaceMetadataEvent::{Created, Modified, Queried}` from the codebase
+    // indexer into workspace-map updates plus a SQLite upsert. The indexer was
+    // its only caller, so it went with the agent. Workspace rows are still
+    // created and refreshed by `user_added_workspace`, `navigated_to_path` and
+    // `set_lsp_server_for_path`.
 
     pub fn workspace_for_path(&self, root_path: &Path) -> Option<WorkspaceMetadata> {
         self.workspaces
@@ -725,101 +653,23 @@ impl PersistedWorkspace {
         }
     }
 
-    /// Triggers an incremental sync for the codebase context when a new conversation starts.
-    /// This ensures that the codebase index is up-to-date before the conversation begins.
-    fn trigger_incremental_sync_for_conversation(
-        &mut self,
-        terminal_view_id: warpui::EntityId,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        if !UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx) {
-            return;
-        }
-
-        // Get the current working directory for the terminal view that started the conversation
-        // Collect window IDs first to avoid borrowing conflicts
-        let window_ids: Vec<_> = ctx.window_ids().collect();
-
-        for window_id in window_ids {
-            let terminal_views = ctx.views_of_type::<TerminalView>(window_id);
-
-            for terminal_view in terminal_views.into_iter().flatten() {
-                let terminal_view_ref = terminal_view.as_ref(ctx);
-                if terminal_view_ref.view_id() == terminal_view_id {
-                    if terminal_view_ref.active_session_is_local(ctx) != Some(true) {
-                        log::info!(
-                            "Skipping local codebase incremental sync for non-local agent conversation"
-                        );
-                        return;
-                    }
-
-                    let pwd = terminal_view_ref.pwd();
-                    if let Some(pwd) = pwd {
-                        let directory_path = PathBuf::from(pwd);
-
-                        // Trigger an incremental sync through the CodebaseIndexManager
-                        CodebaseIndexManager::handle(ctx).update(ctx, |codebase_manager, ctx| {
-                            if let Err(e) = codebase_manager
-                                .trigger_incremental_sync_for_path(&directory_path, ctx)
-                            {
-                                log::warn!("Failed to trigger incremental sync {e}");
-                            }
-                        });
-                    }
-                    return; // Found the terminal view, exit both loops
-                }
-            }
-        }
-    }
-
-    fn clean_up_expired_metadata(
-        &self,
-        indices_to_remove: Arc<Vec<PathBuf>>,
-        _ctx: &mut ModelContext<Self>,
-    ) {
-        log::info!("Cleaning up index metadata from SQLite");
-
-        let indices_to_remove = indices_to_remove.as_ref();
-        self.save_to_db(indices_to_remove.iter().filter_map(|path| {
-            let Some(ws) = self.workspaces.get(path) else {
-                return Some(ModelEvent::DeleteCodebaseIndexMetadata {
-                    repo_path: path.to_path_buf(),
-                });
-            };
-
-            // Skip non-persisted workspaces — they have no DB row to delete.
-            if !ws.is_persisted() {
-                return None;
-            }
-
-            // Don't delete workspace metadata rows for workspaces that have
-            // persisted LSP server settings (Yes/No).
-            //
-            // Deleting workspace_metadata rows would orphan corresponding
-            // workspace_language_server rows (FK'd without ON DELETE CASCADE).
-            // On next app load, the inner_join used to load workspace language
-            // servers will silently drop orphaned rows, making enabled
-            // language servers appear disabled.
-            let has_persisted_servers = ws
-                .language_servers
-                .values()
-                .any(|s| *s != EnablementState::Suggested);
-            if has_persisted_servers {
-                return None;
-            }
-
-            Some(ModelEvent::DeleteCodebaseIndexMetadata {
-                repo_path: path.to_path_buf(),
-            })
-        }));
-    }
-
-    #[cfg(feature = "local_fs")]
-    fn clean_up_deleted_indices(&self, ctx: &mut ModelContext<Self>) {
-        CodebaseIndexManager::handle(ctx).update(ctx, |codebase_manager, ctx| {
-            codebase_manager.clean_up_deleted_indices(ctx);
-        });
-    }
+    // LOCAL FORK: three codebase-index methods lived here, all of them driven
+    // only by the agent and all of them reaching into `crates/ai`:
+    //
+    // - `trigger_incremental_sync_for_conversation` re-synced the embedding
+    //   index for a terminal's pwd when the agent opened a conversation. Its
+    //   only caller was the `BlocklistAIHistoryEvent` subscription in `new`.
+    // - `clean_up_expired_metadata` deleted `workspace_metadata` rows for
+    //   indices the manager had expired, via
+    //   `ModelEvent::DeleteCodebaseIndexMetadata`. Nothing expires indices in
+    //   this fork, so no workspace row is ever deleted; the enum variant is
+    //   left in place so older databases keep replaying.
+    // - `clean_up_deleted_indices` forwarded to the manager's own cleanup.
+    //
+    // The upsert half (`ModelEvent::UpsertCodebaseIndexMetadata`) is *not*
+    // agent-specific despite the name: it is the only write path for the
+    // `workspace_metadata` table, which still backs the workspace list, so it
+    // stays.
 
     fn save_to_db(&self, events: impl IntoIterator<Item = ModelEvent>) {
         let model_event_sender = self.model_event_sender.clone();

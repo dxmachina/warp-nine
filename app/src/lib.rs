@@ -98,6 +98,7 @@ mod warp_managed_paths_watcher;
 mod wasm_nux_dialog;
 mod window_settings;
 mod word_block_editor;
+mod workspace_metadata;
 mod workspaces;
 
 // PLEASE DO NOT ADD MORE PUBLIC MODULES!
@@ -1967,14 +1968,13 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(DefaultTerminal::new);
 
     ctx.add_singleton_model(|ctx| {
-        let should_restore_indices = launch_mode.supports_indexing()
-            && (matches!(launch_mode, LaunchMode::RemoteServerDaemon { .. })
-                || UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx));
-        let indices_to_restore = if should_restore_indices {
-            persisted_workspaces.clone()
-        } else {
-            vec![]
-        };
+        // LOCAL FORK: nothing to restore. The embedding store was
+        // `impl StoreClient for ServerApi` in `server/server_api/ai.rs` and went
+        // with the agent, so the manager runs against a no-op client and no index
+        // is ever written or read. Restoring persisted index metadata would only
+        // hand it rows it cannot use, so this is empty rather than a conversion
+        // between two structurally identical `WorkspaceMetadata` types.
+        let indices_to_restore = vec![];
 
         // LOCAL FORK: the per-tier limits came from the removed request usage
         // model. Fall back to the free-tier values the server used to hand out.

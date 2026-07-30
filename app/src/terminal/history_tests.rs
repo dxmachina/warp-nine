@@ -11,15 +11,9 @@ use warp_core::command::ExitCode;
 use warpui::{App, ModelHandle};
 
 use super::{HistoryEntry, HistoryEvent, PersistedCommand, ShellHost};
-use crate::ai::agent::conversation::AIConversationId;
 use crate::terminal::History;
-use crate::terminal::model::block::{
-    AgentInteractionMetadata, SerializedAIMetadata, SerializedBlock,
-};
-use crate::terminal::model::bootstrap::BootstrapStage;
 use crate::terminal::model::session::command_executor::testing::TestCommandExecutor;
 use crate::terminal::model::session::{BootstrapSessionType, Session, SessionId, SessionInfo};
-use crate::terminal::model::test_utils::TestBlockBuilder;
 use crate::terminal::shell::ShellType;
 use crate::test_util::{Stub, VirtualFS};
 
@@ -99,76 +93,6 @@ impl HistoryEntry {
             is_for_restored_block: false,
         }
     }
-}
-
-#[test]
-fn history_entry_for_restored_block_preserves_agent_execution() {
-    let mut block = TestBlockBuilder::new()
-        .with_bootstrap_stage(BootstrapStage::RestoreBlocks)
-        .build();
-    block.set_agent_interaction_mode_for_requested_command(
-        String::from("action-id").into(),
-        None,
-        AIConversationId::new(),
-    );
-
-    let entry = HistoryEntry::for_restored_block("ls".to_string(), &block);
-
-    assert!(entry.is_agent_executed);
-}
-
-#[test]
-fn history_entry_for_restored_block_does_not_treat_all_agent_interactions_as_agent_execution() {
-    let mut block = TestBlockBuilder::new()
-        .with_bootstrap_stage(BootstrapStage::RestoreBlocks)
-        .build();
-    block.set_agent_interaction_mode(AgentInteractionMetadata::new(
-        None,
-        AIConversationId::new(),
-        None,
-        None,
-        false,
-        false,
-    ));
-
-    let entry = HistoryEntry::for_restored_block("ls".to_string(), &block);
-
-    assert!(!entry.is_agent_executed);
-}
-
-#[test]
-fn history_entry_for_completed_block_preserves_agent_execution() {
-    let ai_metadata = serde_json::to_string(&SerializedAIMetadata::from(
-        AgentInteractionMetadata::new_hidden(
-            String::from("action-id").into(),
-            AIConversationId::new(),
-        ),
-    ))
-    .unwrap();
-    let block = SerializedBlock {
-        ai_metadata: Some(ai_metadata),
-        ..SerializedBlock::new_for_test("ls".as_bytes().to_vec(), vec![])
-    };
-
-    let entry = HistoryEntry::for_completed_block("ls".to_string(), &block);
-
-    assert!(entry.is_agent_executed);
-}
-
-#[test]
-fn history_entry_for_completed_block_does_not_treat_all_agent_interactions_as_agent_execution() {
-    let ai_metadata = serde_json::to_string(&SerializedAIMetadata::from(
-        AgentInteractionMetadata::new(None, AIConversationId::new(), None, None, false, false),
-    ))
-    .unwrap();
-    let block = SerializedBlock {
-        ai_metadata: Some(ai_metadata),
-        ..SerializedBlock::new_for_test("ls".as_bytes().to_vec(), vec![])
-    };
-
-    let entry = HistoryEntry::for_completed_block("ls".to_string(), &block);
-
-    assert!(!entry.is_agent_executed);
 }
 
 /// Initializes history for testing

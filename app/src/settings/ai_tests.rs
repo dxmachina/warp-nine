@@ -1,35 +1,10 @@
 use chrono::Utc;
-use warp_graphql::scalars::time::ServerTimestamp;
 use warpui::{App, SingletonEntity};
 
 use super::*;
-use crate::ai::request_usage_model::{RequestLimitInfo, RequestLimitRefreshDuration};
 use crate::auth::AuthStateProvider;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::workspaces::user_workspaces::UserWorkspaces;
-
-fn create_test_request_limit_info(
-    limit: usize,
-    used: usize,
-    next_refresh: DateTime<Utc>,
-    is_unlimited: bool,
-    refresh_duration: RequestLimitRefreshDuration,
-) -> RequestLimitInfo {
-    RequestLimitInfo {
-        limit,
-        num_requests_used_since_refresh: used,
-        next_refresh_time: ServerTimestamp::new(next_refresh),
-        is_unlimited,
-        request_limit_refresh_duration: refresh_duration,
-        is_unlimited_voice: false,
-        voice_request_limit: 0,
-        voice_requests_used_since_last_refresh: 0,
-        is_unlimited_codebase_indices: false,
-        max_codebase_indices: 0,
-        max_files_per_repo: 5000,
-        embedding_generation_batch_size: 100,
-    }
-}
 
 fn add_ai_enablement_dependencies_for_test(app: &mut App) {
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
@@ -409,42 +384,6 @@ fn test_toolbar_command_map_roundtrip() {
 }
 
 #[test]
-fn test_toolbar_command_map_matched_agent() {
-    App::test((), |mut app| async move {
-        initialize_settings_for_tests(&mut app);
-
-        let mut map = IndexMap::new();
-        map.insert("^claude".to_string(), "Claude".to_string());
-        map.insert("^gemini".to_string(), "Gemini".to_string());
-        map.insert("^custom-tool".to_string(), String::new());
-
-        AISettings::handle(&app).update(&mut app, |settings, ctx| {
-            report_if_error!(
-                settings
-                    .cli_agent_footer_enabled_commands
-                    .set_value(ToolbarCommandMap::new(map), ctx)
-            );
-        });
-
-        app.read(|ctx| {
-            let agent = CompiledCommandsForCodingAgentToolbar::matched_agent(ctx, "claude chat");
-            assert_eq!(agent, Some(CLIAgent::Claude));
-
-            let agent = CompiledCommandsForCodingAgentToolbar::matched_agent(ctx, "gemini ask");
-            assert_eq!(agent, Some(CLIAgent::Gemini));
-
-            let agent =
-                CompiledCommandsForCodingAgentToolbar::matched_agent(ctx, "custom-tool --flag");
-            assert_eq!(agent, Some(CLIAgent::Unknown));
-
-            let agent =
-                CompiledCommandsForCodingAgentToolbar::matched_agent(ctx, "unmatched-command");
-            assert_eq!(agent, None);
-        });
-    });
-}
-
-#[test]
 fn orchestration_is_enabled_when_ai_is_enabled() {
     App::test((), |mut app| async move {
         initialize_settings_for_tests(&mut app);
@@ -609,157 +548,6 @@ fn test_should_display_quota_reset_banner_with_only_one_cycle() {
         AISettings::handle(&app).read(&app, |settings, _ctx| {
             // Banner should not be displayed when there's only one cycle, even if quota is exceeded
             assert!(!settings.should_display_quota_reset_banner());
-        });
-    });
-}
-
-#[test]
-fn test_update_quota_info_create_new_cycle_when_none_exists() {
-    App::test((), |mut app| async move {
-        initialize_settings_for_tests(&mut app);
-
-        let now = Utc::now();
-        let next_refresh = now + chrono::Duration::days(30);
-
-        // Create a request limit info with quota not exceeded
-        let request_limit_info = create_test_request_limit_info(
-            100, // limit
-            50,  // used
-            next_refresh,
-            false, // not unlimited
-            RequestLimitRefreshDuration::Monthly,
-        );
-
-        AISettings::handle(&app).update(&mut app, |settings, ctx| {
-            // Ensure we start with empty history
-            settings
-                .ai_request_quota_info
-                .set_value(
-                    AIRequestQuotaInfo {
-                        cycle_history: vec![],
-                    },
-                    ctx,
-                )
-                .unwrap();
-
-            // Update quota info
-            settings.update_quota_info(&request_limit_info, ctx);
-        });
-
-        AISettings::handle(&app).read(&app, |settings, _ctx| {
-            // Verify a new cycle was created
-            let cycle_history = &settings.ai_request_quota_info.cycle_history;
-            assert_eq!(cycle_history.len(), 1);
-
-            let cycle = &cycle_history[0];
-            assert_eq!(cycle.end_date, next_refresh);
-            assert!(!cycle.was_quota_exceeded);
-            assert!(!cycle.banner_state.dismissed);
-        });
-    });
-}
-
-#[test]
-fn test_update_quota_info_update_existing_cycle() {
-    App::test((), |mut app| async move {
-        initialize_settings_for_tests(&mut app);
-
-        let now = Utc::now();
-        let cycle_end_date = now + chrono::Duration::days(30);
-
-        // Set up an existing cycle
-        let existing_cycle = CycleInfo {
-            end_date: cycle_end_date,
-            was_quota_exceeded: false,
-            banner_state: BannerState::default(),
-        };
-
-        AISettings::handle(&app).update(&mut app, |settings, ctx| {
-            settings
-                .ai_request_quota_info
-                .set_value(
-                    AIRequestQuotaInfo {
-                        cycle_history: vec![existing_cycle],
-                    },
-                    ctx,
-                )
-                .unwrap();
-        });
-
-        // Create a request limit info with updated usage
-        let request_limit_info = create_test_request_limit_info(
-            100, // limit
-            75,  // used (increased)
-            cycle_end_date,
-            false, // not unlimited
-            RequestLimitRefreshDuration::Monthly,
-        );
-
-        AISettings::handle(&app).update(&mut app, |settings, ctx| {
-            // Update quota info
-            settings.update_quota_info(&request_limit_info, ctx);
-        });
-
-        AISettings::handle(&app).read(&app, |settings, _ctx| {
-            // Verify the cycle was updated
-            let cycle_history = &settings.ai_request_quota_info.cycle_history;
-            assert_eq!(cycle_history.len(), 1);
-
-            let cycle = &cycle_history[0];
-            assert_eq!(cycle.end_date, cycle_end_date);
-            assert!(!cycle.was_quota_exceeded);
-        });
-    });
-}
-
-#[test]
-fn test_update_quota_info_quota_exceeded() {
-    App::test((), |mut app| async move {
-        initialize_settings_for_tests(&mut app);
-
-        let now = Utc::now();
-        let next_refresh = now + chrono::Duration::days(30);
-
-        // Create a request limit info with quota exceeded
-        let request_limit_info = create_test_request_limit_info(
-            100, // limit
-            100, // used (equal to limit, should be marked as exceeded)
-            next_refresh,
-            false, // not unlimited
-            RequestLimitRefreshDuration::Monthly,
-        );
-
-        AISettings::handle(&app).update(&mut app, |settings, ctx| {
-            // Update quota info
-            settings.update_quota_info(&request_limit_info, ctx);
-        });
-
-        AISettings::handle(&app).read(&app, |settings, _ctx| {
-            // Verify quota exceeded is set correctly
-            let cycle_history = &settings.ai_request_quota_info.cycle_history;
-            let cycle = &cycle_history[0];
-            assert!(cycle.was_quota_exceeded);
-        });
-
-        // Test with unlimited requests (should never be exceeded)
-        let unlimited_request_limit_info = create_test_request_limit_info(
-            100, // limit
-            200, // used (exceeds limit)
-            next_refresh,
-            true, // unlimited
-            RequestLimitRefreshDuration::Monthly,
-        );
-
-        AISettings::handle(&app).update(&mut app, |settings, ctx| {
-            // Update quota info
-            settings.update_quota_info(&unlimited_request_limit_info, ctx);
-        });
-
-        AISettings::handle(&app).read(&app, |settings, _ctx| {
-            // Verify quota exceeded is not set for unlimited plan
-            let cycle_history = &settings.ai_request_quota_info.cycle_history;
-            let cycle = &cycle_history[0];
-            assert!(!cycle.was_quota_exceeded);
         });
     });
 }

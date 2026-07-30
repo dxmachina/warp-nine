@@ -430,6 +430,27 @@ strip = "symbols"
 # Force the rust compiler to create a dSYM. Starting in 1.53 the default on MacOS is "unpacked".
 split-debuginfo = "packed"
 
+# LOCAL FORK: upstream ships release with none of the following set, which
+# leaves several large, cheap size wins on the table. Measured on the stock
+# arm64 slice (395MB), the shipped binary is 120MB of `__text` and 159MB of
+# `__const`, plus ~38MB of unwinding metadata (`__eh_frame` 14.3MB,
+# `__gcc_except_tab` 7.4MB, `GCC_except_table0` 16.8MB).
+#
+# Cross-crate inlining and dead-code elimination. Upstream leaves LTO off, so
+# nothing is eliminated across the ~1500 crates in the graph — which matters a
+# lot here, because this fork has cut whole subsystems and their now-unreachable
+# code can only be dropped at link time.
+lto = "fat"
+# One codegen unit per crate lets the backend deduplicate aggressively. Costs
+# build parallelism, which is an acceptable trade for a personal build.
+codegen-units = 1
+# No unwinding: this removes the exception tables counted above. The three
+# `catch_unwind` call sites become aborts. Two are irrelevant here (the ONNX
+# classifier is not built in this fork, and the warpui integration driver is
+# test-only); the third guards against Sentry panicking across SQLite's FFI
+# boundary, and this fork has no Sentry, so its body only logs.
+panic = "abort"
+
 [profile.dev]
 # Use line-tables-only to speed up dev builds. Change to `debug = true` if you
 # need full debuginfo for step-through debugging (gdb/lldb).
@@ -477,7 +498,12 @@ miniz_oxide.opt-level = 3
 # binaries with better runtime performance with little build-time overhead.
 [profile.release-lto]
 inherits = "release"
-lto = "thin"
+# LOCAL FORK: was `thin`. This is the profile `script/macos/bundle` actually
+# uses for the app, so the `lto = "fat"` set in `[profile.release]` was being
+# overridden right back to thin here. Fat LTO matters more in this fork than
+# upstream: whole subsystems have been cut, and their now-unreachable code can
+# only be dropped at link time.
+lto = "fat"
 
 # A shorthand profile for `release-lto`.
 # Windows enforces that any path is a maximum of 255 characters and

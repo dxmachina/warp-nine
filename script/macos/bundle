@@ -477,8 +477,17 @@ elif [[ "$ARTIFACT" == tui ]]; then
     WARP_TUI_FEATURES="$WARP_TUI_FEATURES,crash_reporting"
   fi
 elif [[ "$ARTIFACT" == app ]]; then
-  # All channels ship the v3 classifier and v2 heuristic.
-  FEATURES="$FEATURES,gui,nld_classifier_v3,nld_heuristic_v2"
+  # LOCAL FORK: upstream appends `nld_classifier_v3,nld_heuristic_v2` here, which
+  # is what makes `input_classifier` embed `bert_tiny_v3.onnx`. That single model
+  # plus its tokenizer is a measured 17.45MB of the shipped binary (found as one
+  # anonymous `__const` blob whose leading strings are `input_classifier::onnx`
+  # and `bert_tiny_tokenizer.json`).
+  #
+  # The classifier exists to guess whether what you typed is a shell command or
+  # natural language meant for the agent. With no agent there is nothing to route
+  # to, so the model is pure weight. Note `script/run` never passed these
+  # features, which is why dev builds were always ~17MB lighter than bundles.
+  FEATURES="$FEATURES,gui"
 fi
 
 # If we're building a universal bundle for the app artifact, make sure the additional target is available.

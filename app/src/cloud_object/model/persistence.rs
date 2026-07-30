@@ -10,7 +10,6 @@ use warp_graphql::scalars::time::ServerTimestamp;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
 use super::generic_string_model::GenericStringObjectId;
-use crate::ai::execution_profiles::CloudAIExecutionProfile;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::{
     CloudModelType, CloudObject, CloudObjectLocation, CloudObjectPermissions, GenericCloudObject,

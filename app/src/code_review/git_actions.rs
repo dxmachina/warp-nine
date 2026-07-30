@@ -15,9 +15,7 @@
 
 use std::path::Path;
 
-use crate::ai::generate_code_review_content::api::{GenerateCodeReviewContentRequest, OutputType};
 use crate::code_review::diff_state::CommitChainMode;
-use crate::server::server_api::ai::AIClient;
 use crate::util::git::{self, Commit, PrInfo, get_branch_commit_messages, get_diff_for_pr};
 
 /// Runs the commit chain — always commits, then optionally pushes, then

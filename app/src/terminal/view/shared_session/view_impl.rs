@@ -31,9 +31,6 @@ use super::sharer::Sharer;
 use super::sharer::inactivity_modal::InactivityModalEvent;
 use super::viewer::Viewer;
 use super::{ConversationEndedTombstoneEvent, ConversationEndedTombstoneView};
-use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::auth::UserUid;
 use crate::context_chips::ContextChipKind;
 use crate::drive::sharing::ShareableObject;
@@ -946,7 +943,6 @@ impl TerminalView {
 
     fn start_cloud_followup_from_tombstone(
         &mut self,
-        task_id: crate::ai::ambient_agents::AmbientAgentTaskId,
         ctx: &mut ViewContext<Self>,
     ) {
         if !FeatureFlag::HandoffCloudCloud.is_enabled() {

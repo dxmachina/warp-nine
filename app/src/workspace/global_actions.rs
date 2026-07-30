@@ -7,8 +7,6 @@ use warp_graphql::mutations::create_anonymous_user::AnonymousUserType;
 use warpui::windowing::WindowManager;
 use warpui::{AppContext, SingletonEntity, TypedActionView};
 
-use crate::ai::agent::AIAgentExchangeId;
-use crate::ai::agent::conversation::AIConversationId;
 use crate::app_state::get_app_state;
 use crate::network::NetworkStatus;
 use crate::persistence::ModelEvent;

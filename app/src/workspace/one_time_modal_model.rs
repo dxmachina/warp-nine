@@ -12,8 +12,6 @@ use super::view::feature_intro_modal::{FEATURE_INTROS, FeatureIntroId};
 use super::view::free_ai_removal_modal::{
     FreeAiRemovalModalTelemetryEvent, FreeAiRemovalModalVariant,
 };
-use crate::ai::blocklist::agent_view::toolbar_item::AgentToolbarItemKind;
-use crate::ai::{AIRequestUsageModel, AIRequestUsageModelEvent};
 use crate::auth::auth_manager::AuthManagerEvent;
 use crate::auth::{AuthManager, AuthStateProvider};
 use crate::channel::{Channel, ChannelState};

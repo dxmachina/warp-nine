@@ -23,9 +23,6 @@ use warpui::{
     ViewContext, ViewHandle, WeakViewHandle,
 };
 
-use super::agent_assisted_environment_modal::{
-    AgentAssistedEnvironmentModal, AgentAssistedEnvironmentModalEvent,
-};
 use super::delete_environment_confirmation_dialog::{
     DeleteEnvironmentConfirmationDialog, DeleteEnvironmentConfirmationDialogEvent,
 };
@@ -38,8 +35,6 @@ use super::update_environment_form::{
     UpdateEnvironmentFormEvent,
 };
 use super::{SettingsSection, editor_text_colors};
-use crate::ai::ambient_agents::github_auth_url::GithubAuthRedirectTarget;
-use crate::ai::cloud_environments::{self, CloudAmbientAgentEnvironment};
 use crate::appearance::Appearance;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::{

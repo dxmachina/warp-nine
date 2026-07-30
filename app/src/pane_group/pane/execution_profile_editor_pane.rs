@@ -5,10 +5,6 @@ use super::{
     DetachType, PaneConfiguration, PaneContent, PaneGroup, PaneId, ShareableLink,
     ShareableLinkError,
 };
-use crate::ai::execution_profiles::ExecutionProfileId;
-use crate::ai::execution_profiles::editor::{
-    ExecutionProfileEditorManager, ExecutionProfileEditorView, ExecutionProfileEditorViewEvent,
-};
 use crate::app_state::LeafContents;
 
 pub struct ExecutionProfileEditorPane {

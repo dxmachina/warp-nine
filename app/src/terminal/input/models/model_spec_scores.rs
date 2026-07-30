@@ -11,7 +11,6 @@ use warpui::text_layout::ClipConfig;
 use warpui::ui_components::components::UiComponent;
 use warpui::{AppContext, Element, SingletonEntity as _};
 
-use crate::ai::llms::LLMSpec;
 use crate::appearance::Appearance;
 use crate::terminal::input::inline_menu::styles as inline_styles;
 

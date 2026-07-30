@@ -11,7 +11,6 @@ use warpui::prelude::{Align, CrossAxisAlignment, Flex, MainAxisAlignment, MainAx
 use warpui::text_layout::ClipConfig;
 use warpui::{AppContext, Element, SingletonEntity};
 
-use crate::ai::document::ai_document_model::{AIDocument, AIDocumentVersion};
 use crate::appearance::Appearance;
 use crate::search::{ItemHighlightState, SearchItem};
 use crate::terminal::input::inline_menu::styles as inline_styles;

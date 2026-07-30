@@ -16,7 +16,6 @@ use warpui::{
     WeakViewHandle,
 };
 
-use crate::ai::AIRequestUsageModel;
 use crate::auth::{AuthManager, AuthStateProvider};
 use crate::menu::{self, Menu, MenuItem, MenuItemFields};
 use crate::settings_view::admin_actions::AdminActions;

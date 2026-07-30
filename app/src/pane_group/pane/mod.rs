@@ -43,10 +43,6 @@ use warpui::{
 
 pub use self::view::{PaneHeaderAction, PaneHeaderCustomAction, PaneView, PaneViewEvent};
 use super::{ActivationReason, LeafContents, PaneGroup, PaneGroupAction};
-use crate::ai::ai_document_view::AIDocumentView;
-use crate::ai::blocklist::inline_action::code_diff_view::CodeDiffView;
-use crate::ai::execution_profiles::editor::ExecutionProfileEditorView;
-use crate::ai::facts::AIFactView;
 #[cfg(feature = "local_fs")]
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code::view::CodeView;

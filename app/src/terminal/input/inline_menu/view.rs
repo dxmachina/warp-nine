@@ -32,7 +32,6 @@ use warpui::{
     ViewContext, ViewHandle, WeakViewHandle,
 };
 
-use crate::ai::blocklist::agent_view::{AgentViewController, AgentViewControllerEvent};
 use crate::search::item::IconLocation;
 use crate::search::mixer::{SearchMixer, SearchMixerEvent};
 use crate::search::result_renderer::{

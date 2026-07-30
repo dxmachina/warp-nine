@@ -68,11 +68,6 @@ use super::{
     BlockCompleted, FinishedCommandMetadata, ModelEvent, PersistedData, PersistedDataScope,
     PersistenceScope, StartedCommandMetadata, WriterHandles, schema,
 };
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
-use crate::ai::mcp::templatable_installation::VariableValue;
-use crate::ai::mcp::{TemplatableMCPServer, TemplatableMCPServerInstallation};
-use crate::ai::persisted_workspace::EnablementState;
 use crate::app_state::{
     AIFactPaneSnapshot, AmbientAgentPaneSnapshot, AppState, BranchSnapshot, CodePaneSnapShot,
     CodePaneTabSnapshot, CodeReviewPaneSnapshot, EnvVarCollectionPaneSnapshot, LeafContents,
@@ -114,6 +109,7 @@ use crate::workspaces::team::Team as TeamMetadata;
 use crate::workspaces::user_profiles::{UserProfileWithUID, user_profile_from_persistence};
 use crate::workspaces::workspace::{Workspace as WorkspaceMetadata, WorkspaceUid};
 use crate::{safe_info, send_telemetry_from_app_ctx};
+use crate::persisted_workspace::EnablementState;
 
 diesel::define_sql_function! {
     fn json_extract(target: diesel::sql_types::Text, path: diesel::sql_types::Text) -> diesel::sql_types::Text;

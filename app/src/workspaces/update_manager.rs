@@ -15,7 +15,6 @@ use super::user_workspaces::{
     CreateTeamResponse, UserWorkspaces, WorkspacesMetadataResponse, WorkspacesMetadataWithPricing,
 };
 use super::workspace::WorkspaceUid;
-use crate::ai::llms::LLMPreferences;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::CloudObjectEventEntrypoint;
 use crate::network::{NetworkStatus, NetworkStatusEvent, NetworkStatusKind};

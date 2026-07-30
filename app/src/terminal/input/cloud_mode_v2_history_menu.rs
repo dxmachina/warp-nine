@@ -11,7 +11,6 @@ use warpui::{
     ViewHandle,
 };
 
-use crate::ai::blocklist::agent_view::AgentViewController;
 use crate::search::data_source::{Query, QueryFilter};
 use crate::search::mixer::SearchMixer;
 use crate::terminal::input::InputSuggestionsMode;

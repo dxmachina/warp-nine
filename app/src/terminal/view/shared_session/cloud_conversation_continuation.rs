@@ -1,21 +1,10 @@
 use warp_cli::agent::Harness;
 use warpui::{AppContext, EntityId, ModelHandle, SingletonEntity};
 
-use crate::ai::agent::api::ServerConversationToken;
-use crate::ai::agent::conversation::{
-    AIAgentHarness, AIConversationId, ServerAIConversationMetadata,
-};
-use crate::ai::agent_conversations_model::AgentConversationsModel;
-use crate::ai::ambient_agents::{
-    AmbientAgentTask, AmbientAgentTaskId, AmbientConversationStatus,
-    conversation_output_status_from_conversation,
-};
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::{Owner, ServerGuestSubject};
 use crate::drive::sharing::SharingAccessLevel;
 use crate::terminal::TerminalModel;
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

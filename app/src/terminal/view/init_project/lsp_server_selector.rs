@@ -13,10 +13,6 @@ use warpui::ui_components::text::Span;
 use warpui::{AppContext, Element, SingletonEntity, TypedActionView, ViewContext, ViewHandle};
 
 use super::{InitProjectBlockAction, InitStepBlock};
-use crate::ai::agent::icons::yellow_stop_icon;
-use crate::ai::blocklist::block::toggleable_items::{ToggleableItemBuilder, ToggleableItemsView};
-use crate::ai::blocklist::inline_action::inline_action_header::INLINE_ACTION_HORIZONTAL_PADDING;
-use crate::ai::blocklist::inline_action::inline_action_icons::icon_size;
 use crate::appearance::Appearance;
 use crate::ui_components::blended_colors;
 
@@ -60,7 +56,6 @@ pub fn create_lsp_server_selector(
     ctx.subscribe_to_view(
         &view_handle,
         move |parent_me, lsp_view_handle, event, parent_ctx| {
-            use crate::ai::blocklist::block::toggleable_items::ToggleableItemsEvent;
 
             match event {
                 ToggleableItemsEvent::SelectionChanged => {

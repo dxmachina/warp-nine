@@ -2,7 +2,6 @@ use itertools::Itertools;
 use warpui::{AppContext, SingletonEntity};
 
 use super::AIQuerySearchResultItem;
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::search::ai_queries::fuzzy_match::FuzzyMatchAIQueryResults;
 use crate::search::command_search::searcher::CommandSearchItemAction;
 use crate::search::data_source::{Query, QueryResult};

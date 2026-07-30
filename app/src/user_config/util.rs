@@ -9,9 +9,6 @@ use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::ai::custom_model_routers::{
-    CustomModelRouter, ModelConfigError, parse_model_config_yaml,
-};
 use crate::launch_configs::launch_config::LaunchConfig;
 use crate::tab_configs::{TabConfig, TabConfigError};
 use crate::themes::theme::{ThemeKind, WarpTheme, WarpThemeConfig};

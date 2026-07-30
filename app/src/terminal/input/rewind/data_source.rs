@@ -7,9 +7,6 @@ use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use warpui::{AppContext, Entity, SingletonEntity};
 
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::agent::{AIAgentActionResultType, AIAgentExchangeId, AIAgentInput};
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::search::SyncDataSource;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::DataSourceRunErrorWrapper;

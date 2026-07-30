@@ -33,7 +33,6 @@ use super::{
     ContentEditability, LinkSharingSubjectType, ShareableObject, SharingAccessLevel, Subject,
     SubjectExt, TeamKind, UserKind, style,
 };
-use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::CloudViewModel;
@@ -1217,7 +1216,6 @@ impl SharingDialog {
     fn remove_targeted_guest_for_conversation(
         &mut self,
         guest_idx: usize,
-        conversation_id: crate::ai::agent::conversation::AIConversationId,
         ctx: &mut ViewContext<Self>,
     ) {
         let Some(guest) = self.guest_states.get(guest_idx) else {
@@ -1259,7 +1257,6 @@ impl SharingDialog {
         &mut self,
         guest_idx: usize,
         access_level: SharingAccessLevel,
-        conversation_id: crate::ai::agent::conversation::AIConversationId,
         ctx: &mut ViewContext<Self>,
     ) {
         let guest_email = match self.guest_states.get(guest_idx) {
@@ -1301,7 +1298,6 @@ impl SharingDialog {
         &mut self,
         guest_emails: Vec<String>,
         access_level: SharingAccessLevel,
-        conversation_id: crate::ai::agent::conversation::AIConversationId,
         ctx: &mut ViewContext<Self>,
     ) {
         // Get the conversation's server_id from metadata

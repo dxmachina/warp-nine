@@ -5,7 +5,6 @@ use super::{
     DetachType, PaneConfiguration, PaneContent, PaneGroup, PaneId, ShareableLink,
     ShareableLinkError,
 };
-use crate::ai::facts::{AIFactManager, AIFactView, AIFactViewEvent};
 use crate::app_state::{AIFactPaneSnapshot, LeafContents};
 
 pub struct AIFactPane {

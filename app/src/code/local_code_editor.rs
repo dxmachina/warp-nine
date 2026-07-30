@@ -59,7 +59,6 @@ use warpui::{
     ViewHandle, WindowId,
 };
 
-use crate::ai::persisted_workspace::{PersistedWorkspace, PersistedWorkspaceEvent};
 use crate::code::buffer_location::LocalOrRemotePath as BufferFileLocation;
 use crate::code::editor::EditorReviewComment;
 use crate::code::editor::model::HoverableLink;
@@ -179,6 +178,7 @@ struct LoadedFileMetadata {
 use warp_errors::report_error;
 
 pub use super::diff_viewer::DisplayMode;
+use crate::persisted_workspace::{LspTask, PersistedWorkspace, PersistedWorkspaceEvent};
 
 type TerminalTargetFn = dyn Fn(WindowId, &AppContext) -> Option<ViewHandle<TerminalView>>;
 
@@ -951,7 +951,6 @@ impl LocalCodeEditorView {
             // If the LSP is not registered, try to start it via PersistedWorkspace.
             #[cfg(feature = "local_fs")]
             {
-                use crate::ai::persisted_workspace::LspTask;
                 PersistedWorkspace::handle(ctx).update(ctx, |workspace, ctx| {
                     workspace.execute_lsp_task(LspTask::Spawn { file_path: path }, ctx);
                 });
@@ -1521,7 +1520,6 @@ impl LocalCodeEditorView {
     /// 5. Starting the LSP server via PersistedWorkspace
     #[cfg(feature = "local_fs")]
     fn enable_lsp_for_path(path: &Path, ctx: &mut ViewContext<Self>) {
-        use crate::ai::persisted_workspace::LspTask;
 
         // Get the language ID from the file path
         let Some(language_id) = LanguageId::from_path(path) else {
@@ -1566,7 +1564,6 @@ impl LocalCodeEditorView {
     /// and emits events that are handled by handle_persisted_workspace_event.
     #[cfg(feature = "local_fs")]
     fn install_and_enable_lsp_for_path(path: &Path, ctx: &mut ViewContext<Self>) {
-        use crate::ai::persisted_workspace::LspTask;
 
         let Some(language_id) = LanguageId::from_path(path) else {
             log::warn!("Install and enable lsp for path should only work for supported file paths");

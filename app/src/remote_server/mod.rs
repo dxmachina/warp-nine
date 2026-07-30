@@ -9,7 +9,6 @@ use warp_server_client::auth::AuthEvent;
 use warpui::SingletonEntity as _;
 
 #[cfg(not(target_family = "wasm"))]
-use crate::ai::{AIRequestUsageModel, AIRequestUsageModelEvent};
 #[cfg(not(target_family = "wasm"))]
 use crate::server::server_api::ServerApiProvider;
 

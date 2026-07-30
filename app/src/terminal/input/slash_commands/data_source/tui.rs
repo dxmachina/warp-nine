@@ -11,9 +11,7 @@ use super::core::subscribe_to_shared_dependencies;
 use super::{
     InlineItem, SlashCommandDataSource, SlashCommandDataSourceState, UpdatedActiveCommands,
 };
-use crate::ai::blocklist::block::cli_controller::CLISubagentController;
 #[cfg(feature = "voice_input")]
-use crate::ai::{AIRequestUsageModel, AIRequestUsageModelEvent};
 use crate::search::SyncDataSource;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::DataSourceRunErrorWrapper;

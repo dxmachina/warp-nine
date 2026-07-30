@@ -13,12 +13,8 @@ use warpui::{
     AppContext, Element, Entity, SingletonEntity, TypedActionView, View, ViewContext, ViewHandle,
 };
 
-use crate::ai::blocklist::code_block::{
-    CodeBlockOptions, CodeSnippetButtonHandles, render_code_block_plain,
-};
 use crate::appearance::Appearance;
 use crate::terminal::CLIAgent;
-use crate::terminal::cli_agent_sessions::plugin_manager::PluginInstructions;
 use crate::ui_components::icons::Icon;
 use crate::view_components::DismissibleToast;
 use crate::view_components::action_button::{ActionButton, ButtonSize, NakedTheme};

@@ -8,12 +8,12 @@ use std::sync::{Arc, Mutex};
 
 use warpui::{AppContext, Entity, SingletonEntity};
 
-use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::{AsyncDataSource, BoxFuture, DataSourceRunErrorWrapper};
 use crate::terminal::input::repos::AcceptRepo;
 #[cfg(feature = "local_fs")]
 use crate::util::git::RepoGitSummary;
+use crate::persisted_workspace::PersistedWorkspace;
 
 /// Cache of per-repo git summaries (branch + diff stats) keyed by repo path.
 ///

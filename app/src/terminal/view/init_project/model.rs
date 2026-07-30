@@ -9,7 +9,6 @@ use repo_metadata::repositories::DetectedRepositories;
 use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::{Entity, ModelContext, SingletonEntity as _};
 
-use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::settings::CodeSettings;
 use crate::terminal::view::init_project::lsp_server_selector::LSPServerInfo;
 use crate::terminal::view::init_project::{
@@ -17,6 +16,7 @@ use crate::terminal::view::init_project::{
     LINKABLE_FILES, LanguageServersResult, ProjectScopedRulesResult,
 };
 use crate::workspaces::user_workspaces::UserWorkspaces;
+use crate::persisted_workspace::PersistedWorkspace;
 
 const INIT_STEP_COUNT: usize = enum_iterator::cardinality::<InitStepKind>();
 

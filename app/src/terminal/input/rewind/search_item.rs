@@ -14,7 +14,6 @@ use warpui::scene::{CornerRadius, Radius};
 use warpui::text_layout::ClipConfig;
 use warpui::{AppContext, Element, SingletonEntity};
 
-use crate::ai::agent::AIAgentExchangeId;
 use crate::appearance::Appearance;
 use crate::code::editor::{add_color, remove_color};
 use crate::search::{ItemHighlightState, SearchItem};

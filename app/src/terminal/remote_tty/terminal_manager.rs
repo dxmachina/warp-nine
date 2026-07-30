@@ -7,7 +7,6 @@ use parking_lot::FairMutex;
 use pathfinder_geometry::vector::Vector2F;
 use warpui::{AppContext, ModelHandle, ViewHandle, WindowId};
 
-use crate::ai::blocklist::InputConfig;
 use crate::context_chips::prompt_type::PromptType;
 use crate::pane_group::TerminalViewResources;
 use crate::persistence::ModelEvent;

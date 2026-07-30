@@ -21,8 +21,6 @@ use warpui::{
 };
 
 use crate::TelemetryEvent;
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::agent_conversations_model::AgentConversationsModel;
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
 use crate::code::buffer_location::LocalOrRemotePath;
@@ -57,9 +55,6 @@ use crate::util::openable_file_type::{
     EditorLayout, is_markdown_file, resolve_file_target_with_editor_choice,
 };
 use crate::workspace::WorkspaceAction;
-use crate::workspace::view::conversation_list::view::{
-    ConversationListView, Event as ConversationListViewEvent,
-};
 use crate::workspace::view::global_search::view::{
     Event as GlobalSearchViewEvent, GlobalSearchEntryFocus, GlobalSearchView,
 };

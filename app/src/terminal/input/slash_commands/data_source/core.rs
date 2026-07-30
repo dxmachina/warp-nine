@@ -14,18 +14,11 @@ use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::fonts::FamilyId;
 use warpui::{AppContext, Entity, EntityId, ModelContext, ModelHandle, SingletonEntity};
 
-use crate::ai::agent_conversations_model::{AgentConversationsModel, AgentConversationsModelEvent};
-use crate::ai::blocklist::block::cli_controller::{CLISubagentController, CLISubagentEvent};
-use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
-use crate::ai::skills::{SkillDescriptor, SkillManager};
 use crate::search::slash_command_menu::fuzzy_match::SlashCommandFuzzyMatchResult;
 use crate::search::slash_command_menu::static_commands::{Availability, commands};
 use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::settings::{
     AISettings, AISettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
-};
-use crate::terminal::cli_agent_sessions::{
-    CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
 };
 use crate::terminal::input::slash_command_model::{
     DetectedCommand, DetectedSkillCommand, ParsedSlashCommandInput,

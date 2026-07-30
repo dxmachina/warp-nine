@@ -26,16 +26,6 @@ use super::network::{
     session_ended_reason_string, viewer_removed_reason_string, write_to_pty_failure_reason_string,
 };
 use super::orchestration_viewer_model::OrchestrationViewerModel;
-use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
-use crate::ai::agent::conversation::ConversationStatus;
-use crate::ai::ambient_agents::AmbientAgentTaskId;
-use crate::ai::blocklist::agent_view::{AgentViewController, AgentViewControllerEvent};
-use crate::ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer;
-use crate::ai::blocklist::{
-    BlocklistAIContextEvent, BlocklistAIContextModel, BlocklistAIHistoryEvent,
-    BlocklistAIHistoryModel,
-};
-use crate::ai::llms::{LLMPreferences, LLMPreferencesEvent};
 use crate::context_chips::prompt_snapshot::PromptSnapshot;
 use crate::context_chips::prompt_type::PromptType;
 use crate::features::FeatureFlag;
@@ -43,9 +33,6 @@ use crate::network::{NetworkStatus, NetworkStatusEvent, NetworkStatusKind};
 use crate::pane_group::TerminalViewResources;
 use crate::pane_group::pane::DetachType;
 use crate::settings::{InputModeSettings, WarpPromptSeparator};
-use crate::terminal::cli_agent_sessions::{
-    CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
-};
 use crate::terminal::event_listener::ChannelEventListener;
 use crate::terminal::input::CommandExecutionSource;
 use crate::terminal::model::ObfuscateSecrets;
@@ -62,7 +49,6 @@ use crate::terminal::shared_session::shared_handlers::{
 };
 use crate::terminal::terminal_manager::{BlockSpacing, compute_block_size, terminal_colors_list};
 use crate::terminal::view::ExecuteCommandEvent;
-use crate::terminal::view::ambient_agent::is_cloud_agent_pre_first_exchange;
 use crate::terminal::{
     Event as TerminalViewEvent, PTY_READS_BROADCAST_CHANNEL_SIZE, TerminalModel, TerminalView,
 };

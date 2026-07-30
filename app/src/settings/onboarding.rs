@@ -5,8 +5,6 @@ use warp_core::features::FeatureFlag;
 use warp_errors::report_if_error;
 use warpui::{AppContext, SingletonEntity as _};
 
-use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
-use crate::ai::execution_profiles::{ActionPermission, WriteToPtyPermission};
 use crate::drive::settings::WarpDriveSettings;
 use crate::settings::ai::DefaultSessionMode;
 use crate::settings::{AISettings, CodeSettings};

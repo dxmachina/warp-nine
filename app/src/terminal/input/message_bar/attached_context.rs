@@ -3,8 +3,6 @@
 use warp_core::features::FeatureFlag;
 use warpui::keymap::Keystroke;
 
-use crate::ai::blocklist::agent_view::{AgentMessageBarMouseStates, AgentViewController};
-use crate::ai::blocklist::{BlocklistAIContextModel, BlocklistAIInputModel};
 use crate::terminal::input::InputAction;
 use crate::terminal::input::buffer_model::InputBufferModel;
 use crate::terminal::input::message_bar::{

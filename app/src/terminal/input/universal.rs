@@ -11,7 +11,6 @@ use super::common::{
     add_voltron_overlay, add_workflow_info_overlay, maybe_add_buy_credits_banner,
     wrap_input_with_terminal_padding_and_focus_handler,
 };
-use crate::ai::blocklist::InputType;
 use crate::appearance::Appearance;
 use crate::context_chips::spacing;
 use crate::features::FeatureFlag;

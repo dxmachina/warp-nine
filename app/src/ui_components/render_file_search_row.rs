@@ -25,7 +25,6 @@ use warpui::{AppContext, Element, SingletonEntity};
 
 use crate::appearance::Appearance;
 use crate::search::ItemHighlightState;
-use crate::search::ai_context_menu::safe_truncate;
 
 pub const MAX_COMBINED_LENGTH: usize = 55;
 

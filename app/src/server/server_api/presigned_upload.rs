@@ -10,7 +10,6 @@ use crc::{CRC_32_ISCSI, Crc};
 pub use warp_server_client::HttpStatusError;
 
 #[cfg(feature = "local_fs")]
-use super::ai::FileArtifactUploadTargetInfo;
 use super::harness_support::{UploadFieldValue, UploadTarget};
 
 #[cfg(not(target_family = "wasm"))]

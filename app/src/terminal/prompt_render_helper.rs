@@ -20,7 +20,6 @@ use super::session_settings::SessionSettings;
 use super::settings::TerminalSettings;
 use super::shell::ShellType;
 use super::{SizeInfo, TerminalModel, prompt};
-use crate::ai::blocklist::BlocklistAIInputModel;
 use crate::appearance::Appearance;
 use crate::context_chips::display::PromptDisplay;
 use crate::context_chips::spacing;

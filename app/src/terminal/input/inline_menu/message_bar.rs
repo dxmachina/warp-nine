@@ -4,7 +4,6 @@ use warpui::prelude::Container;
 use warpui::scene::Border;
 use warpui::{AppContext, Entity, ModelHandle, SingletonEntity, View, ViewContext};
 
-use crate::ai::blocklist::agent_view::{AgentViewController, AgentViewControllerEvent};
 use crate::terminal::input::inline_menu::model::InlineMenuModel;
 use crate::terminal::input::inline_menu::{
     InlineMenuAction, InlineMenuMessageProvider, InlineMenuPositioner,

@@ -16,7 +16,6 @@ use std::sync::Arc;
 use anyhow::{Result, bail};
 use warp_util::standardized_path::StandardizedPath;
 
-use crate::server::server_api::ai::{AIClient, InitialSnapshotToken};
 
 /// Always fails: agent handoff is not supported in this build.
 pub(crate) async fn gather_and_upload_handoff_snapshot(

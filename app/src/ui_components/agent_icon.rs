@@ -11,12 +11,7 @@
 use warp_cli::agent::Harness;
 use warpui::{AppContext, SingletonEntity};
 
-use crate::ai::agent::conversation::ConversationStatus;
-use crate::ai::agent_conversations_model::{
-    AgentConversationEntry, AgentConversationsModel, AgentRunDisplayStatus,
-};
 use crate::terminal::CLIAgent;
-use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::view::TerminalView;
 use crate::ui_components::icon_with_status::IconWithStatusVariant;
 

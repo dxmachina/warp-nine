@@ -8,8 +8,6 @@ use warpui::color::ColorU;
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{AppContext, SingletonEntity, WeakViewHandle};
 
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::server::ids::ServerId;
 use crate::server::server_api::object::GuestIdentifier;

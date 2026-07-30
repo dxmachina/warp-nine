@@ -7,7 +7,6 @@ use warpui::prelude::{ConstrainedBox, Container, CrossAxisAlignment, Empty, Flex
 use warpui::{AppContext, Element, SingletonEntity};
 
 use super::{AcceptSlashCommandOrSavedPrompt, InlineItem};
-use crate::ai::blocklist::agent_view::shortcuts::render_keystroke_with_color_overrides;
 use crate::search::item::SearchItemDetail;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
 use crate::search::{ItemHighlightState, SearchItem};

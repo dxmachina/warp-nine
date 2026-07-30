@@ -8,9 +8,6 @@ use warpui::elements::{MouseStateHandle, PartialClickableElement};
 use warpui::platform::Cursor;
 use warpui::text::char_slice;
 
-use crate::ai::agent::{AIAgentActionType, AIAgentOutput, AIAgentTextSection, ReadFilesRequest};
-use crate::ai::blocklist::block::TextLocation;
-use crate::ai::blocklist::block::view_impl::output::LinkActionConstructors;
 use crate::terminal::ShellLaunchData;
 use crate::terminal::links::should_directly_open_link;
 use crate::terminal::model::grid::grid_handler::{is_file_link_separator, is_url_link_separator};

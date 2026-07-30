@@ -3,12 +3,6 @@ use warp_terminal::model::Point;
 use warp_terminal::model::grid::Dimensions;
 
 use super::{Block, SerializedAIMetadata};
-use crate::ai::agent::AIAgentActionId;
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::agent::task::TaskId;
-use crate::ai::blocklist::block::cli_controller::{
-    LongRunningCommandControlState, UserTakeOverReason,
-};
 use crate::terminal::event::Event;
 use crate::terminal::model::RespectObfuscatedSecrets;
 use crate::terminal::model::grid::RespectDisplayedOutput;

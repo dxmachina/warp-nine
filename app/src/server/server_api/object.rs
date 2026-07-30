@@ -122,12 +122,6 @@ use warp_graphql::queries::get_updated_cloud_objects::{
 use warp_graphql::subscriptions::get_warp_drive_updates::GetWarpDriveUpdates;
 use warp_graphql::subscriptions::start_graphql_streaming_operation;
 
-use crate::ai::ambient_agents::scheduled::ScheduledAmbientAgent;
-use crate::ai::cloud_environments::AmbientAgentEnvironment;
-use crate::ai::document::ai_document_model::AIDocumentId;
-use crate::ai::execution_profiles::AIExecutionProfile;
-use crate::ai::facts::AIFact;
-use crate::ai::mcp::{MCPServer, TemplatableMCPServer};
 use crate::channel::ChannelState;
 use crate::cloud_object::model::generic_string_model::{
     GenericStringModel, GenericStringObjectId, Serializer, StringModel,

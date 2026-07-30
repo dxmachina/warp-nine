@@ -32,13 +32,6 @@ use warp_util::{local_or_remote_path::LocalOrRemotePath, standardized_path::Stan
 use warpui::windowing::WindowManager;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
-use crate::ai::AIRequestUsageModel;
-use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
-#[cfg(feature = "local_fs")]
-use crate::ai::codebase_auto_indexing::{
-    CodebaseAutoIndexingSurface, auto_index_candidate_roots, should_auto_index_codebase,
-};
-use crate::ai::metadata_project_rules::read_project_rule_contents;
 #[cfg(feature = "local_fs")]
 use crate::code::language_server_shutdown_manager::LanguageServerShutdownManager;
 #[cfg(feature = "local_fs")]
@@ -254,22 +247,10 @@ impl PersistedWorkspace {
                 }
             });
 
-            // Subscribe to AI conversation events to trigger incremental sync
-            ctx.subscribe_to_model(
-                &BlocklistAIHistoryModel::handle(ctx),
-                |me, _, event, ctx| {
-                    if let BlocklistAIHistoryEvent::StartedNewConversation {
-                        terminal_surface_id,
-                        ..
-                    } = event
-                    {
-                        #[cfg(feature = "local_fs")]
-                        me.clean_up_deleted_indices(ctx);
-
-                        me.trigger_incremental_sync_for_conversation(*terminal_surface_id, ctx);
-                    }
-                },
-            );
+            // LOCAL FORK: upstream also subscribed to BlocklistAIHistoryEvent here
+            // to kick off an incremental codebase sync whenever the agent started a
+            // new conversation. There are no conversations in this fork, so the
+            // subscription and the sync it drove are both gone.
 
             // Subscribe to changes in workspace settings.
             ctx.subscribe_to_model(
@@ -307,26 +288,9 @@ impl PersistedWorkspace {
             });
         }
 
-        // Registered regardless of whether codebase indexing is enabled:
-        // `index_repo` also drives project-rules (and, transitively, project
-        // skills) discovery, which must work in modes that keep codebase
-        // indexing off (e.g. the TUI front-end). The embedding half of
-        // `index_repo` stays behind its own gates, and
-        // `CodebaseIndexManager::index_directory` no-ops when indexing is
-        // disabled.
-        #[cfg(feature = "local_fs")]
-        if !cfg!(any(
-            test,
-            feature = "fast_dev",
-            feature = "integration_tests"
-        )) {
-            ctx.subscribe_to_model(&DetectedRepositories::handle(ctx), |me, _, event, ctx| {
-                let DetectedRepositoriesEvent::DetectedGitRepo { repository, .. } = event;
-                let repo_path = repository.as_ref(ctx).root_dir().to_local_path_lossy();
-
-                me.index_repo(repo_path, ctx);
-            });
-        }
+        // LOCAL FORK: upstream subscribed to DetectedRepositories here to run
+        // `index_repo` on every git repo it found, which drove codebase embedding
+        // and project-rules discovery. Both lived in `crates/ai`, so both are gone.
 
         // Collect workspace paths before metadata is moved into Self.
         #[cfg(feature = "local_fs")]
@@ -626,74 +590,15 @@ impl PersistedWorkspace {
             .sum()
     }
 
-    fn on_settings_changed(&mut self, ctx: &mut ModelContext<Self>) {
-        Self::maybe_enable_codebase_indexing(ctx);
-    }
+    fn on_settings_changed(&mut self, _ctx: &mut ModelContext<Self>) {}
 
-    pub fn on_user_changed(&self, ctx: &mut ModelContext<Self>) {
-        Self::maybe_enable_codebase_indexing(ctx);
-    }
+    pub fn on_user_changed(&self, _ctx: &mut ModelContext<Self>) {}
 
-    /// Enables or disables codebase indexing according to the setting.
-    fn maybe_enable_codebase_indexing(ctx: &mut ModelContext<Self>) {
-        CodebaseIndexManager::handle(ctx).update(ctx, |manager, ctx| {
-            if !manager.is_indexing_enabled() {
-                return;
-            }
-            let codebase_context_enabled =
-                UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx);
-            if codebase_context_enabled {
-                Self::enable_codebase_indexing(manager, ctx);
-            } else {
-                manager.reset_codebase_indexing(ctx);
-            }
-        });
-    }
-
-    fn enable_codebase_indexing(
-        manager: &mut CodebaseIndexManager,
-        ctx: &mut ModelContext<CodebaseIndexManager>,
-    ) {
-        let request_model = AIRequestUsageModel::handle(ctx);
-        let codebase_limits = request_model.as_ref(ctx).codebase_context_limits();
-        manager.update_max_limits(
-            codebase_limits.max_indices_allowed,
-            codebase_limits.max_files_per_repo,
-            codebase_limits.embedding_generation_batch_size,
-            ctx,
-        );
-
-        #[cfg(feature = "local_fs")]
-        if should_auto_index_codebase(CodebaseAutoIndexingSurface::Local, ctx) {
-            let roots = all_working_directories(ctx).into_iter().filter_map(|dir| {
-                DetectedRepositories::as_ref(ctx)
-                    .get_root_for_path(&LocalOrRemotePath::Local(dir))
-                    .and_then(|root| root.to_local_path().map(Path::to_path_buf))
-            });
-            for root in auto_index_candidate_roots(roots, |_| true) {
-                manager.index_directory(root, ctx);
-            }
-        }
-    }
-
-    #[cfg_attr(not(feature = "local_fs"), allow(dead_code))]
-    fn index_repo(&self, directory_path: PathBuf, ctx: &mut ModelContext<Self>) {
-        ProjectContextModel::handle(ctx).update(ctx, |model, ctx| {
-            let _ = model.index_and_store_rules(
-                directory_path.clone(),
-                read_project_rule_contents,
-                ctx,
-            );
-        });
-        if FeatureFlag::FullSourceCodeEmbedding.is_enabled()
-            && UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx)
-            && *CodeSettings::as_ref(ctx).auto_indexing_enabled
-        {
-            CodebaseIndexManager::handle(ctx).update(ctx, |manager, ctx| {
-                manager.index_directory(directory_path, ctx);
-            });
-        }
-    }
+    // LOCAL FORK: `maybe_enable_codebase_indexing`, `enable_codebase_indexing` and
+    // `index_repo` lived here. They drove source-code embedding and project-rules
+    // discovery through `CodebaseIndexManager` and `ProjectContextModel`, both of
+    // which are in `crates/ai`. The two hooks above stay as no-ops because
+    // callers outside this module still fire them on settings and user changes.
 
     /// Explicitly registers a directory as a workspace, as if the user had navigated there.
     ///

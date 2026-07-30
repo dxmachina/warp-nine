@@ -26,9 +26,6 @@ use super::credentials::{Credentials, FirebaseToken, LoginToken};
 use super::user::User;
 use super::user_properties::UserProperties;
 use super::{AuthStateProvider, UserUid};
-use crate::ai::AIRequestUsageModel;
-use crate::ai::llms::LLMPreferences;
-use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::autoupdate::AutoupdateState;
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::update_manager::UpdateManager;
@@ -48,6 +45,7 @@ use crate::terminal::shared_session::manager::Manager as SharedSessionManager;
 use crate::uri::browser_url_handler::{parse_current_url, update_browser_url};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::{
+use crate::persisted_workspace::PersistedWorkspace;
     GlobalResourceHandlesProvider, TelemetryEvent, persistence, send_telemetry_from_ctx,
     send_telemetry_sync_from_ctx,
 };

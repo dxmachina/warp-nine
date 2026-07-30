@@ -1,6 +1,5 @@
 use warpui::{Entity, ModelContext, ViewHandle};
 
-use crate::ai::blocklist::inline_action::code_diff_view::{CodeDiffView, CodeDiffViewEvent};
 
 /// Intermediate model between CodeDiffPane and CodeDiffView.
 /// This model is needed because if the PaneGroup subscribes directly to the CodeDiffView,

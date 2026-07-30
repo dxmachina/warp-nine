@@ -11,9 +11,6 @@ use fuzzy_match::FuzzyMatchResult;
 use ordered_float::OrderedFloat;
 use warpui::{AppContext, Entity, EntityId, ModelHandle, SingletonEntity};
 
-use crate::ai::agent::conversation::{AIConversationId, ConversationStatus};
-use crate::ai::blocklist::BlocklistAIHistoryModel;
-use crate::ai::blocklist::agent_view::AgentViewController;
 use crate::input_suggestions::{HistoryInputSuggestion, HistoryOrder};
 use crate::search::SyncDataSource;
 use crate::search::data_source::{Query, QueryFilter, QueryResult};

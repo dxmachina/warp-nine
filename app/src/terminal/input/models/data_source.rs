@@ -26,13 +26,6 @@ use super::model_spec_scores::{
     MODEL_SPECS_DESCRIPTION, MODEL_SPECS_TITLE, ModelSpecScoresLayout, REASONING_LEVEL_DESCRIPTION,
     REASONING_LEVEL_TITLE, render_model_spec_header, render_model_spec_scores,
 };
-use crate::ai::custom_model_routers::is_custom_router_id;
-use crate::ai::execution_profiles::model_menu_items::is_auto;
-use crate::ai::llms::{
-    ByoKeySource, DisableReason, LLMId, LLMInfo, LLMPreferences, LLMProvider, LLMSpec,
-    byo_key_source_for_model, should_show_bedrock_icon_for_model,
-    should_show_gemini_enterprise_agent_platform_icon_for_model, should_show_key_icon_for_model,
-};
 use crate::auth::AuthStateProvider;
 use crate::features::FeatureFlag;
 use crate::search::data_source::{Query, QueryFilter, QueryResult};
@@ -44,7 +37,6 @@ use crate::terminal::input::inline_menu::{
     default_navigation_message_items, styles as inline_styles,
 };
 use crate::terminal::input::message_bar::{Message, MessageItem};
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::workspace::WorkspaceAction;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 

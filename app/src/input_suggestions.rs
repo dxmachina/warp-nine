@@ -30,7 +30,6 @@ use warpui::{
     AppContext, Entity, SingletonEntity, TypedActionView, View, ViewContext, WeakViewHandle,
 };
 
-use crate::ai::blocklist::{AIQueryHistory, AIQueryHistoryOutputStatus, render_ai_agent_mode_icon};
 use crate::appearance::Appearance;
 use crate::terminal::HistoryEntry;
 use crate::terminal::history::LinkedWorkflowData;

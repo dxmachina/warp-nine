@@ -23,7 +23,6 @@ use warpui::{
     ViewHandle, WeakViewHandle,
 };
 
-use crate::ai::agent::AgentReviewCommentBatch;
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code_review::code_review_header::HEADER_BUTTON_PADDING;
@@ -43,7 +42,6 @@ use crate::pane_group::{
 };
 use crate::settings::{AISettings, AISettingsChangedEvent};
 use crate::terminal::CLIAgent;
-use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::input::MenuPositioning;
 use crate::terminal::resizable_data::{ModalType, ResizableData};
 use crate::terminal::view::TerminalView;

@@ -32,13 +32,6 @@ use warpui::{
     TypedActionView, View, ViewContext, ViewHandle,
 };
 
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::blocklist::agent_view::shortcuts::render_keystroke_with_color_overrides;
-use crate::ai::blocklist::block::cli_controller::{CLISubagentController, CLISubagentEvent};
-use crate::ai::blocklist::{
-    BlocklistAIHistoryEvent, BlocklistAIHistoryModel, QueuedQueryEvent, QueuedQueryId,
-    QueuedQueryModel, QueuedQueryOrigin,
-};
 use crate::appearance::Appearance;
 use crate::editor::{
     EditorOptions, EditorView, Event as EditorEvent, PropagateAndNoOpEscapeKey,
@@ -46,7 +39,6 @@ use crate::editor::{
 };
 use crate::send_telemetry_from_ctx;
 use crate::server::telemetry::TelemetryEvent;
-use crate::terminal::cli_agent_sessions::{CLIAgentSessionsModel, CLIAgentSessionsModelEvent};
 use crate::terminal::input::suggestions_mode_model::InputSuggestionsModeModel;
 use crate::ui_components::icons::Icon as TerminalIcon;
 use crate::util::truncation::truncate_from_end;

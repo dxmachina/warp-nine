@@ -9,7 +9,6 @@ use warpui::fonts::{Properties, Weight};
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::{AppContext, Element, SingletonEntity};
 
-use crate::ai::blocklist::AIQueryHistoryOutputStatus;
 use crate::appearance::Appearance;
 use crate::search::ai_queries::fuzzy_match::FuzzyMatchAIQueryResults;
 use crate::search::command_search::searcher::CommandSearchItemAction;

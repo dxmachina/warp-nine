@@ -2,7 +2,6 @@ use ai::skills::SkillReference;
 use warpui::elements::ChildView;
 use warpui::{Element, Entity, EntityId, ModelHandle, View, ViewContext, ViewHandle};
 
-use crate::ai::blocklist::agent_view::AgentViewController;
 use crate::search::data_source::Query;
 use crate::search::mixer::{SearchMixer, SearchMixerEvent};
 use crate::terminal::input::buffer_model::{InputBufferModel, InputBufferUpdateEvent};
@@ -14,7 +13,6 @@ use crate::terminal::input::suggestions_mode_model::{
     InputSuggestionsModeEvent, InputSuggestionsModeModel,
 };
 use crate::terminal::model::session::active_session::ActiveSession;
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 
 #[derive(Debug, Clone)]
 pub enum InlineSkillSelectorEvent {

@@ -22,33 +22,16 @@ use super::{
 // Imports below are only consumed by the non-wasm `launch_local_*_child`
 // dispatch helpers; gating them keeps the wasm build warning-clean.
 use crate::AIExecutionProfilesModel;
-use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
-use crate::ai::agent::conversation::{AIConversationId, ConversationStatus};
-use crate::ai::agent::{RenderableAIError, StartAgentExecutionMode};
-use crate::ai::ambient_agents::AmbientAgentTaskId;
-use crate::ai::ambient_agents::task::normalize_orchestrator_agent_name;
 #[cfg(feature = "local_fs")]
-use crate::ai::blocklist::BlocklistAIHistoryEvent;
-use crate::ai::blocklist::agent_view::{AgentViewControllerEvent, AgentViewEntryOrigin};
-use crate::ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer;
-use crate::ai::blocklist::{BlocklistAIHistoryModel, StartAgentRequest};
 #[cfg(not(target_family = "wasm"))]
-use crate::ai::blocklist::{apply_child_agent_model_override, prepare_local_oz_child_launch};
-use crate::ai::conversation_utils;
-use crate::ai::llms::LLMPreferences;
-use crate::ai::orchestration::{RemoteChildLaunchConfig, prepare_remote_child_launch};
 use crate::app_state::{AmbientAgentPaneSnapshot, LeafContents, TerminalPaneSnapshot};
 use crate::code::buffer_location::LocalOrRemotePath;
 #[cfg(feature = "local_fs")]
 use crate::pane_group::CodeSource;
 use crate::pane_group::Event::OpenConversationHistory;
-use crate::pane_group::child_agent::{
-    ErrorChildAgentConversationRequest, create_error_child_agent_conversation,
-};
 use crate::pane_group::{self, Direction, PaneGroup};
 use crate::persistence::{BlockCompleted, ModelEvent};
 use crate::session_management::SessionNavigationData;
-use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::general_settings::GeneralSettings;
 #[cfg(not(target_family = "wasm"))]
 use crate::terminal::shared_session::SharedSessionSource;
@@ -61,13 +44,7 @@ use crate::view_components::ToastFlavor;
 use crate::workspace::sync_inputs::SyncedInputState;
 use crate::workspace::{PaneViewLocator, WorkspaceRegistry};
 #[cfg(not(target_family = "wasm"))]
-use crate::{
-    pane_group::child_agent::{
-        HiddenChildAgentConversation, HiddenChildAgentConversationRequest,
-        HiddenChildAgentTaskContext, create_hidden_child_agent_conversation,
-    },
-    terminal::shared_session::IsSharedSessionCreator,
-};
+use crate::terminal::shared_session::IsSharedSessionCreator;
 
 pub type TerminalPaneView = PaneView<TerminalView>;
 
@@ -1829,7 +1806,6 @@ fn handle_ai_history_event(
     is_shared_ambient_agent_session: bool,
     ctx: &mut ViewContext<PaneGroup>,
 ) {
-    use crate::ai::blocklist::maybe_build_ai_query_upsert_event;
 
     if event
         .terminal_surface_id()

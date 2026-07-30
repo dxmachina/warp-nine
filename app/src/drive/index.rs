@@ -51,8 +51,6 @@ use super::settings::WarpDriveSettings;
 use super::sharing::dialog::{SharingDialog, SharingDialogEvent};
 use super::sharing::{ContentEditability, ShareableObject};
 use super::{CloudObjectTypeAndId, DriveObjectType, DriveSortOrder};
-use crate::ai::document::ai_document_model::AIDocumentId;
-use crate::ai::facts::{AIFact, AIMemory};
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::{AuthManager, LoginGatedFeature};

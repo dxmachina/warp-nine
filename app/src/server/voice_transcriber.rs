@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use warpui::{Entity, SingletonEntity};
 
 use super::server_api::{ServerApi, TranscribeError};
-use crate::ai::voice::transcribe::{Provider, TranscribeRequest};
 use crate::voice::transcriber::Transcriber;
 
 pub struct ServerVoiceTranscriber {

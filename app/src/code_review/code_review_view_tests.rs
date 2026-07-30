@@ -15,7 +15,7 @@ use warpui::{App, ViewHandle};
 
 use super::*;
 use crate::NotebookKeybindings;
-use crate::ai::persisted_workspace::PersistedWorkspace;
+use crate::persisted_workspace::PersistedWorkspace;
 use crate::ai::request_usage_model::AIRequestUsageModel;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;

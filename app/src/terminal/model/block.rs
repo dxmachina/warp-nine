@@ -39,8 +39,6 @@ use super::kitty::{KittyAction, KittyResponse};
 use super::secrets::RespectObfuscatedSecrets;
 use super::selection::ScrollDelta;
 use super::session::{Sessions, command_executor};
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::agent::redaction::redact_secrets;
 use crate::context_chips::prompt_snapshot::PromptSnapshot;
 use crate::server::block::DisplaySetting;
 use crate::server::ids::SyncId;

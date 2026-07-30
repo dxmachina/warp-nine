@@ -27,7 +27,6 @@ use crate::terminal::input::inline_menu::{
 use crate::terminal::input::message_bar::{Message, MessageItem};
 use crate::terminal::input::skills::{SelectableSkill, query_selectable_skills};
 use crate::terminal::model::session::active_session::{ActiveSession, ActiveSessionEvent};
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 
 #[derive(Clone, Debug)]
 pub struct AcceptSkill {

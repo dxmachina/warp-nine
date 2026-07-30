@@ -15,7 +15,6 @@ use warpui::{AppContext, Element, EventContext, PaintContext, SingletonEntity as
 
 use super::SubshellSource;
 use super::settings::WarpifySettings;
-use crate::ai::blocklist::inline_action::inline_action_icons;
 use crate::ui_components::blended_colors;
 
 /// The flag font size varies with the monospace font width, but if it gets too big it will start

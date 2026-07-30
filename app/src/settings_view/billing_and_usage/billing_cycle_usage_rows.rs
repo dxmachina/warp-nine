@@ -15,7 +15,6 @@ use warpui::platform::Cursor;
 use warpui::ui_components::components::UiComponent;
 use warpui::{AppContext, Element, EventContext, SingletonEntity};
 
-use crate::ai::AIRequestUsageModel;
 use crate::auth::AuthStateProvider;
 use crate::settings_view::billing_and_usage::billing_cycle_usage_common::{
     BarSegment, BillingUsageMouseStates, ROW_BORDER_RADIUS, ROW_BORDER_WIDTH, TOOLTIP_GAP,

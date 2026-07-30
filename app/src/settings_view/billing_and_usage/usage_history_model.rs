@@ -6,7 +6,6 @@ use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::auth::AuthStateProvider;
 use crate::server::server_api::ServerApiProvider;
-use crate::server::server_api::ai::AIClient;
 
 const PAGE_SIZE: i32 = 20;
 

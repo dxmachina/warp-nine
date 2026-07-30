@@ -8,7 +8,6 @@ use warpui::prelude::CrossAxisAlignment;
 use warpui::text_layout::ClipConfig;
 use warpui::{AppContext, Element, SingletonEntity as _};
 
-use crate::ai::execution_profiles::ExecutionProfileId;
 use crate::appearance::Appearance;
 use crate::search::{ItemHighlightState, SearchItem};
 use crate::terminal::input::inline_menu::styles as inline_styles;

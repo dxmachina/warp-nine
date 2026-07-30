@@ -5,7 +5,6 @@ use super::{
     DetachType, PaneConfiguration, PaneContent, PaneEvent, PaneId, PaneView, ShareableLink,
     ShareableLinkError,
 };
-use crate::ai::blocklist::inline_action::code_diff_view::{CodeDiffView, CodeDiffViewEvent};
 use crate::app_state::{CodePaneSnapShot, CodePaneTabSnapshot, LeafContents};
 use crate::code::editor_management::{CodeManager, CodeSource};
 use crate::pane_group::PaneGroup;

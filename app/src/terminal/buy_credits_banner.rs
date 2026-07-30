@@ -24,9 +24,6 @@ use warpui::{
     WeakViewHandle,
 };
 
-use crate::ai::request_usage_model::{
-    AIRequestUsageModel, AIRequestUsageModelEvent, BuyCreditsBannerDisplayState,
-};
 use crate::auth::AuthStateProvider;
 use crate::features::FeatureFlag;
 use crate::menu::MenuItemFields;

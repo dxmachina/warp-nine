@@ -22,7 +22,6 @@ use super::{
     TuiAutoupdateSettings, TuiThemeSettings, TuiZeroStateSettings, VimBannerSettings,
     WarpDrivePrivacySettings,
 };
-use crate::ai::cloud_agent_settings::CloudAgentSettings;
 use crate::appearance;
 use crate::banner::BannerState;
 use crate::drive::settings::WarpDriveSettings;

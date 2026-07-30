@@ -16,7 +16,6 @@ use warpui::elements::SecretRange;
 use super::grid::grid_handler::GridHandler;
 use super::grid::{Dimensions as _, RespectDisplayedOutput};
 use super::terminal_model::RangeInModel;
-use crate::ai::blocklist::TextLocation;
 use crate::safe_warn;
 use crate::terminal::model::find::RegexDFAs;
 use crate::terminal::model::index::Point;

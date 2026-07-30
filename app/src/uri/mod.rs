@@ -21,9 +21,6 @@ use warpui::platform::TerminationMode;
 use warpui::{AppContext, EntityId, SingletonEntity as _, TypedActionView, ViewHandle, WindowId};
 
 use self::docker::open_docker_container;
-use crate::ai::active_agent_views_model::{ActiveAgentViewsModel, ConversationOrTaskId};
-use crate::ai::agent::api::ServerConversationToken;
-use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
 use crate::cloud_object::ObjectType;
 use crate::drive::{OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings};
 use crate::features::FeatureFlag;

@@ -84,12 +84,6 @@ const MAX_BRANCH_COUNT_CAP: usize = 500;
 /// Unique identifier for a connected proxy session in daemon mode.
 pub type ConnectionId = uuid::Uuid;
 use super::protocol::RequestId;
-use crate::ai::agent::FileLocations;
-use crate::ai::blocklist::handoff::snapshot::upload_result_to_proto;
-use crate::ai::blocklist::{ReadFileContextResult, read_local_file_context};
-use crate::ai::skills::{
-    BundledSkill, SkillManager, SkillManagerEvent, bundled_skill_snapshot_protos,
-};
 use crate::auth::auth_state::{AuthState, AuthStateProvider};
 use crate::code_review::git_actions;
 use crate::features::FeatureFlag;
@@ -3834,7 +3828,6 @@ fn fragment_metadata_to_proto(
 
 /// Converts a [`ReadFileContextResult`] into its protobuf equivalent.
 fn file_context_result_to_proto(result: ReadFileContextResult) -> ReadFileContextResponse {
-    use crate::ai::agent::AnyFileContent;
 
     let file_contexts = result
         .file_contexts

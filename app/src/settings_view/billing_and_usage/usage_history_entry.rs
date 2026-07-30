@@ -9,10 +9,6 @@ use warpui::elements::{
 use warpui::platform::Cursor;
 use warpui::{AppContext, Element, View};
 
-use crate::ai::blocklist::format_credits;
-use crate::ai::blocklist::usage::conversation_usage_view::{
-    ConversationUsageInfo, ConversationUsageView, DisplayMode,
-};
 use crate::settings_view::billing_and_usage_page::BillingAndUsagePageAction;
 use crate::ui_components::blended_colors;
 use crate::ui_components::icons::Icon;

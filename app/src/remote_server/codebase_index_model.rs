@@ -12,11 +12,6 @@ use super::manager::{
     RemoteCodebaseIndexStatusWithPath, RemoteCodebaseIndexUpdateOperation, RemoteServerManager,
     RemoteServerManagerEvent,
 };
-use crate::ai::blocklist::SessionContext;
-use crate::ai::codebase_auto_indexing::{
-    CodebaseAutoIndexingSurface, auto_index_candidate_roots, should_auto_index_codebase,
-    should_use_codebase_indexing,
-};
 use crate::server::telemetry::{
     RemoteCodebaseAutoIndexTrigger, RemoteCodebaseIndexStatusTelemetrySource,
 };

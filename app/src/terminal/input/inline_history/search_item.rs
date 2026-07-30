@@ -11,8 +11,6 @@ use warpui::scene::{CornerRadius, Radius};
 use warpui::text_layout::ClipConfig;
 use warpui::{AppContext, Element, SingletonEntity};
 
-use crate::ai::agent::conversation::{AIConversationId, ConversationStatus};
-use crate::ai::conversation_status_ui::{STATUS_ELEMENT_PADDING, render_status_element};
 use crate::appearance::Appearance;
 use crate::search::{ItemHighlightState, SearchItem};
 use crate::terminal::history::LinkedWorkflowData;

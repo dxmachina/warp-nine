@@ -12,7 +12,6 @@ use features_page::{FeaturesPageView, FeaturesSettingsPageEvent};
 use itertools::Itertools as _;
 use keybindings::KeybindingsView;
 use main_page::{MainPageAction, MainSettingsPageEvent, MainSettingsPageView};
-use mcp_servers_page::MCPServersSettingsPageView;
 // LOCAL FORK: `SettingsUmbrella` is unused now that the Agents / Code / Cloud
 // platform umbrellas are gone from the sidebar. The type is kept in `nav.rs`
 // rather than deleted so the diff against upstream stays small.
@@ -50,8 +49,6 @@ use warpui::{
 };
 
 use self::telemetry::SettingsTelemetryEvent;
-use crate::ai::custom_model_routers::CustomModelRouter;
-use crate::ai::execution_profiles::ExecutionProfileId;
 use crate::appearance::Appearance;
 use crate::editor::{
     EditorView, Event as EditorEvent, PropagateAndNoOpNavigationKeys, SingleLineEditorOptions,
@@ -64,7 +61,6 @@ use crate::pane_group::{BackingView, Direction, PaneConfiguration, PaneEvent, Sp
 use crate::server::server_api::ServerApiProvider;
 use crate::server::telemetry::MCPServerCollectionPaneEntrypoint;
 use crate::settings::{AISettings, BlockVisibilitySettings, SettingsFileError};
-use crate::settings_view::mcp_servers_page::{MCPServersSettingsPage, MCPServersSettingsPageEvent};
 use crate::terminal::SizeInfo;
 use crate::terminal::model::blockgrid::BlockGrid;
 use crate::ui_components::icons;

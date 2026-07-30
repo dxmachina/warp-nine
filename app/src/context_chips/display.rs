@@ -14,12 +14,6 @@ use warpui::{
 use super::display_chip::{DisplayChip, DisplayChipConfig, PromptDisplayChipEvent};
 use super::prompt_type::PromptType;
 use super::{ChipResult, ContextChipKind, git_line_changes_from_chips};
-use crate::ai::blocklist::agent_view::AgentViewController;
-use crate::ai::blocklist::{
-    BlocklistAIContextModel, BlocklistAIHistoryEvent, BlocklistAIHistoryModel,
-    BlocklistAIInputEvent, BlocklistAIInputModel,
-};
-use crate::ai::document::ai_document_model::{AIDocumentId, AIDocumentVersion};
 use crate::completer::SessionContext;
 use crate::context_chips::display_chip::{DisplayChipAction, PromptChipShellCommand};
 use crate::settings::InputSettings;

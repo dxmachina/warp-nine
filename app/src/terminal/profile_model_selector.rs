@@ -30,26 +30,6 @@ use warp_core::ui::color::{Opacity, coloru_with_opacity};
 use warp_core::ui::theme::Fill;
 use warp_core::ui::theme::color::internal_colors;
 
-use crate::ai::blocklist::prompt::PromptIconButtonTheme;
-use crate::ai::blocklist::{
-    BlocklistAIController, BlocklistAIControllerEvent, BlocklistAIInputEvent, BlocklistAIInputModel,
-};
-use crate::ai::cloud_agent_settings::CloudAgentSettings;
-use crate::ai::custom_model_routers::is_custom_router_id;
-use crate::ai::execution_profiles::ExecutionProfileId;
-use crate::ai::execution_profiles::model_menu_items::{
-    available_model_menu_items, has_reasoning_variants, is_auto,
-};
-use crate::ai::execution_profiles::profiles::{
-    AIExecutionProfilesModel, AIExecutionProfilesModelEvent,
-};
-use crate::ai::harness_availability::{
-    HarnessAvailabilityEvent, HarnessAvailabilityModel, HarnessModelInfo,
-};
-use crate::ai::llms::{
-    ByoKeySource, LLMId, LLMInfo, LLMPreferences, LLMPreferencesEvent, LLMSpec,
-    byo_key_source_for_model, dedupe_model_display_names, should_show_key_icon_for_model,
-};
 use crate::appearance::Appearance;
 use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::context_chips::display_chip::{udi_font_size, udi_icon_size};
@@ -58,7 +38,6 @@ use crate::menu::{Event as MenuEvent, Menu, MenuItem, MenuItemFields};
 use crate::settings_view::SettingsSection;
 use crate::terminal::TerminalModel;
 use crate::terminal::input::{MenuPositioning, MenuPositioningProvider};
-use crate::terminal::view::ambient_agent::{AmbientAgentViewModel, AmbientAgentViewModelEvent};
 use crate::ui_components::icons::Icon;
 use crate::view_components::action_button::{
     ActionButton, ActionButtonTheme, ButtonSize, SecondaryTheme,

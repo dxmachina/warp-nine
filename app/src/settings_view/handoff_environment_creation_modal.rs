@@ -10,8 +10,6 @@ use warpui::{
     ViewHandle,
 };
 
-use crate::ai::ambient_agents::github_auth_url::{AuthSource, GithubAuthRedirectTarget};
-use crate::ai::cloud_environments;
 use crate::appearance::Appearance;
 use crate::modal::MODAL_BACKDROP_OPACITY;
 use crate::server::cloud_objects::update_manager::UpdateManager;

@@ -7,7 +7,6 @@ use ai::document::AIDocumentId;
 pub use view::{InlinePlanMenuEvent, InlinePlanMenuView};
 use warpui::keymap::Keystroke;
 
-use crate::ai::document::ai_document_model::AIDocumentVersion;
 use crate::terminal::input::inline_menu::{
     InlineMenuAction, InlineMenuMessageArgs, InlineMenuRowAction, InlineMenuType,
     default_navigation_message_items,

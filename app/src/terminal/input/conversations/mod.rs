@@ -10,7 +10,6 @@ use warp_core::ui::appearance::Appearance;
 use warpui::SingletonEntity;
 use warpui::keymap::Keystroke;
 
-use crate::ai::agent_conversations_model::AgentConversationEntryId;
 use crate::terminal::input::inline_menu::{
     InlineMenuAction, InlineMenuMessageArgs, InlineMenuRowAction, InlineMenuType,
     default_navigation_message_items,

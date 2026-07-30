@@ -19,9 +19,7 @@ use super::diff_viewer::{DiffViewer, DisplayMode};
 use super::editor::NavBarBehavior;
 use super::editor::scroll::{ScrollPosition, ScrollTrigger};
 use super::editor::view::{CodeEditorEvent, CodeEditorView};
-use crate::ai::blocklist::diff_storage::SaveFuture;
 #[cfg(not(target_family = "wasm"))]
-use crate::ai::blocklist::diff_types::DiffSessionType;
 use crate::editor::InteractionState;
 
 pub enum InlineDiffViewEvent {

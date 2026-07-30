@@ -93,19 +93,12 @@ use self::model::{LocalSelections, Selection, UpdateBufferOption};
 use super::Point;
 use super::soft_wrap::{ClampDirection, DisplayPointAndClampDirection};
 use crate::BlocklistAIHistoryModel;
-use crate::ai::agent::ImageContext;
-use crate::ai::blocklist::{BlocklistAIContextModel, InputType, PendingAttachment, PendingFile};
-use crate::ai::predict::next_command_model::{NextCommandModel, NextCommandSuggestionState};
 use crate::appearance::Appearance;
 use crate::channel::{Channel, ChannelState};
 use crate::editor::RangeExt;
 use crate::editor::accept_autosuggestion_keybinding_view::AcceptAutosuggestionKeybinding;
 use crate::editor::autosuggestion_ignore_view::{AutosuggestionIgnore, AutosuggestionIgnoreEvent};
 use crate::features::FeatureFlag;
-use crate::search::ai_context_menu::mixer::AIContextMenuSearchableAction;
-use crate::search::ai_context_menu::view::{
-    AIContextMenu, AIContextMenuCategory, AIContextMenuEvent,
-};
 use crate::server::telemetry::TelemetryEvent;
 #[cfg(feature = "voice_input")]
 use crate::settings::AISettingsChangedEvent;

@@ -6,7 +6,6 @@ use warpui::units::{IntoPixels, Pixels};
 use warpui::{AppContext, Entity, ModelContext, ModelHandle, SingletonEntity, WindowId};
 
 use super::styles::{HEADER_BORDER, HEADER_ROW_HEIGHT};
-use crate::ai::blocklist::agent_view::AgentViewController;
 use crate::appearance::Appearance;
 use crate::settings::{InputModeSettings, InputSettings};
 use crate::terminal::block_list_viewport::InputMode;

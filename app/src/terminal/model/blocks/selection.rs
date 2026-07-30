@@ -14,8 +14,6 @@ use warpui::{AppContext, EntityId, ViewAsRef as _};
 use super::{
     BlockHeight, BlockHeightItem, BlockHeightSummary, BlockList, BlockListPoint, RichContentItem,
 };
-use crate::ai::blocklist::AIBlock;
-use crate::ai::blocklist::block::PendingUserQueryBlock;
 use crate::env_vars::env_var_collection_block::EnvVarCollectionBlock;
 use crate::terminal::GridType;
 use crate::terminal::event::Event as TerminalEvent;

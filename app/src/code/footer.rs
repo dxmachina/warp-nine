@@ -31,16 +31,13 @@ use warpui::{
 };
 
 #[cfg(feature = "local_fs")]
-use crate::ai::persisted_workspace::PersistedWorkspaceEvent;
-use crate::ai::persisted_workspace::{
-    LSPEnablementResultForFile, LspRepoStatus, PersistedWorkspace,
-};
 use crate::code::lsp_telemetry::{LspControlActionType, LspEnablementSource, LspTelemetryEvent};
 use crate::settings::AISettings;
 use crate::ui_components::blended_colors;
 #[cfg(feature = "local_fs")]
 use crate::user_config::is_tab_config_toml;
 use crate::view_components::action_button::{
+use crate::persisted_workspace::{LSPEnablementResultForFile, LspRepoStatus, PersistedWorkspace, PersistedWorkspaceEvent};
     ActionButton, ButtonSize, NakedTheme, PaneHeaderTheme,
 };
 

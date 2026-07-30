@@ -5,9 +5,6 @@ use warp_core::features::FeatureFlag;
 use warp_search_core::inline_menu::InputDrivenInlineMenuLifecycle;
 use warpui::{AppContext, Entity, ModelContext, ModelHandle, SingletonEntity};
 
-use crate::ai::blocklist::{
-    BlocklistAIInputEvent, BlocklistAIInputModel, InputTypeAutoDetectionSource,
-};
 use crate::search::slash_command_menu::StaticCommand;
 use crate::settings::InputSettings;
 use crate::terminal::input::buffer_model::{InputBufferModel, InputBufferUpdateEvent};

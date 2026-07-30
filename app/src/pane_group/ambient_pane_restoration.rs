@@ -3,12 +3,6 @@ use uuid::Uuid;
 use warp_errors::report_error;
 use warpui::{SingletonEntity, ViewContext, ViewHandle};
 
-use crate::ai::agent::api::ServerConversationToken;
-use crate::ai::agent_conversations_model::{
-    AgentConversationEntryId, AgentConversationNavigationSubject, AgentConversationsModel,
-};
-use crate::ai::ambient_agents::AmbientAgentTaskId;
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::pane_group::{PaneGroup, PaneId, TerminalPane, TerminalViewResources};
 use crate::terminal::TerminalView;
 use crate::workspace::WorkspaceAction;

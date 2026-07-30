@@ -11,7 +11,6 @@ use itertools::Itertools;
 
 use super::model::Block;
 use super::{model, schema};
-use crate::ai::blocklist::{PersistedAIInput, PersistedAIInputType, SerializedBlockListItem};
 use crate::app_state::PaneUuid;
 use crate::persistence::schema::ai_queries;
 use crate::terminal::model::block::{SerializedAgentViewVisibility, SerializedBlock};

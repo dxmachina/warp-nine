@@ -42,7 +42,6 @@ use super::tab_menu::Tabs;
 use super::transfer_ownership_confirmation_modal::{
     TransferOwnershipConfirmationEvent, TransferOwnershipConfirmationModal,
 };
-use crate::ai::AIRequestUsageModel;
 use crate::appearance::Appearance;
 use crate::auth::auth_manager::{AuthManager, LoginGatedFeature};
 use crate::auth::auth_state::AuthState;

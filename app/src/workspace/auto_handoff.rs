@@ -11,11 +11,6 @@ use super::{
     WorkspaceRegistry,
 };
 use crate::BlocklistAIHistoryModel;
-use crate::ai::active_agent_views_model::{ActiveAgentViewsModel, ConversationOrTaskId};
-use crate::ai::agent::conversation::{AIConversation, AIConversationId};
-use crate::ai::ambient_agents::telemetry::CloudAgentTelemetryEvent;
-use crate::ai::blocklist::orchestration_topology::has_local_orchestrated_children;
-use crate::ai::llms::LLMPreferences;
 use crate::settings::AISettings;
 use crate::system::{SystemStats, SystemStatsEvent};
 use crate::terminal::view::TerminalView;

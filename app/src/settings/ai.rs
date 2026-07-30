@@ -27,8 +27,6 @@ use warpui::platform::OperatingSystem;
 use warpui::platform::keyboard::KeyCode;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity, UpdateModel};
 
-use crate::ai::execution_profiles::ExecutionProfilesConfig;
-use crate::ai::request_usage_model::RequestLimitInfo;
 use crate::auth::AuthStateProvider;
 use crate::settings::PrivacySettings;
 use crate::terminal::CLIAgent;

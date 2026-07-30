@@ -5,8 +5,6 @@ use super::{
     DetachType, PaneConfiguration, PaneContent, PaneGroup, PaneId, ShareableLink,
     ShareableLinkError,
 };
-use crate::ai::custom_model_router_editor::{CustomRouterEditorEvent, CustomRouterEditorView};
-use crate::ai::custom_model_routers::CustomModelRouter;
 use crate::app_state::LeafContents;
 use crate::pane_group::focus_state::PaneFocusHandle;
 

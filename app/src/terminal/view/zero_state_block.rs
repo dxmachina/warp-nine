@@ -16,10 +16,6 @@ use warpui::{
 };
 
 use crate::WorkspaceAction;
-use crate::ai::blocklist::agent_view::{
-    AgentViewController, AgentViewControllerEvent, AgentViewEntryOrigin,
-    ENTER_AGENT_VIEW_NEW_CONVERSATION_KEYSTROKE, ENTER_CLOUD_AGENT_VIEW_NEW_CONVERSATION_KEYSTROKE,
-};
 use crate::appearance::Appearance;
 use crate::settings::{AISettings, AISettingsChangedEvent, InputModeSettings};
 use crate::terminal::event::BlockType;

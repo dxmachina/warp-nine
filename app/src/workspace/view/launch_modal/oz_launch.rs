@@ -5,7 +5,6 @@ use warpui::assets::asset_cache::AssetSource;
 use warpui::{AppContext, SingletonEntity};
 
 use super::{CTAButton, CheckboxConfig, LaunchModalEvent, Slide};
-use crate::ai::ambient_agents::telemetry::{CloudAgentTelemetryEvent, CloudModeEntryPoint};
 use crate::terminal::view::OnboardingIntention;
 use crate::ui_components::icons::Icon;
 use crate::workspace::action::WorkspaceAction;

@@ -8,7 +8,6 @@ use warpui::elements::{
 use warpui::{AppContext, SingletonEntity};
 
 use super::{Input, SubshellRenderState, should_render_prompt_using_editor_decorator_elements};
-use crate::ai::blocklist::InputType;
 use crate::appearance::Appearance;
 use crate::context_chips::spacing;
 use crate::features::FeatureFlag;

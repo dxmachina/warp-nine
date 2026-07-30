@@ -30,19 +30,9 @@ use warpui::{
 };
 
 use crate::BlocklistAIHistoryModel;
-use crate::ai::AIRequestUsageModel;
-use crate::ai::blocklist::block::cli_controller::CLISubagentController;
-use crate::ai::blocklist::prompt::PromptIconButtonTheme;
-use crate::ai::blocklist::prompt::prompt_alert::{PromptAlertEvent, PromptAlertView};
-use crate::ai::blocklist::{
-    BlocklistAIHistoryEvent, BlocklistAIInputModel, InputConfig, InputType,
-};
-use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
-use crate::ai::llms::LLMPreferences;
 use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::network::NetworkStatus;
 #[cfg(not(target_family = "wasm"))]
-use crate::search::ai_context_menu::view::AIContextMenu;
 #[cfg(not(target_family = "wasm"))]
 use crate::settings::InputSettings;
 use crate::settings::{AISettings, AISettingsChangedEvent};
@@ -59,7 +49,6 @@ use crate::terminal::profile_model_selector::{
 };
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::ui_components::icons::Icon;
 use crate::view_components::action_button::{
     ActionButton, ActionButtonTheme, ButtonSize, NakedTheme, TooltipAlignment,

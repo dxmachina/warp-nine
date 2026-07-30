@@ -35,7 +35,6 @@ use warpui::{
 
 use super::grid_renderer::CellGlyphCache;
 use super::model::grid::RespectDisplayedOutput;
-use crate::ai::generate_block_title::api::GenerateBlockTitleRequest;
 use crate::appearance::Appearance;
 use crate::editor::{
     EditOrigin, EditorView, Event as EditorEvent, SingleLineEditorOptions, TextOptions,

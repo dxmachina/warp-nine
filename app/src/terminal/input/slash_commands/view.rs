@@ -2,7 +2,6 @@ use ai::skills::SkillReference;
 use warpui::elements::ChildView;
 use warpui::{AppContext, Element, Entity, ModelHandle, View, ViewContext, ViewHandle};
 
-use crate::ai::blocklist::agent_view::AgentViewController;
 use crate::search::slash_command_menu::SlashCommandId;
 use crate::server::ids::SyncId;
 use crate::terminal::input::buffer_model::InputBufferModel;

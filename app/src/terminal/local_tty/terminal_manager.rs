@@ -25,8 +25,6 @@ use super::shell::{ShellStarter, ShellStarterSource};
 #[cfg(unix)]
 use super::terminal_attributes::TerminalAttributesPoller;
 use super::{mio_channel, recorder};
-use crate::ai::aws_credentials::AwsCredentialRefresher as _;
-use crate::ai::blocklist::SerializedBlockListItem;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_state::AuthState;
 use crate::banner::BannerState;

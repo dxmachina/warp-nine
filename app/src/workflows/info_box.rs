@@ -30,7 +30,6 @@ use super::command_parser::{
 use super::workflow::Argument;
 use super::workflow_view::env_var_selector::{EnvVarSelector, EnvVarSelectorEvent};
 use super::{AIWorkflowOrigin, CloudWorkflow};
-use crate::ai::blocklist::ai_brand_color;
 use crate::appearance::Appearance;
 use crate::cloud_object::CloudObjectMetadataExt;
 use crate::cloud_object::model::actions::{ObjectActionType, ObjectActions};

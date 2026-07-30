@@ -16,7 +16,6 @@ use warpui::ui_components::radio_buttons::{
 use warpui::{AppContext, Element, Entity, SingletonEntity, TypedActionView, View, ViewContext};
 
 use super::style::{self, BUTTON_GAP, MODAL_MARGIN};
-use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::appearance::Appearance;
 use crate::terminal::TerminalModel;
 use crate::terminal::shared_session::ai_agent::encode_agent_response_event;

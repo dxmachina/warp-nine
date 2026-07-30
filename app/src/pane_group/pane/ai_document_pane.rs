@@ -5,8 +5,6 @@ use super::{
     DetachType, PaneConfiguration, PaneContent, PaneGroup, PaneId, ShareableLink,
     ShareableLinkError,
 };
-use crate::ai::ai_document_view::{AIDocumentEvent, AIDocumentView};
-use crate::ai::document::ai_document_model::AIDocumentModel;
 use crate::app_state::{AIDocumentPaneSnapshot, LeafContents};
 
 pub struct AIDocumentPane {

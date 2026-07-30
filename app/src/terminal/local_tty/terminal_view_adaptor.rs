@@ -26,6 +26,14 @@ use warpui::{AppContext, ModelHandle, SingletonEntity, ViewHandle, WindowId};
 
 use super::terminal_manager::{TerminalManager, TerminalSurfaceInit, TerminalSurfaceResult};
 use crate::NetworkStatus;
+use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
+use crate::ai::agent::conversation::AIConversation;
+use crate::ai::blocklist::agent_view::{AgentViewController, AgentViewControllerEvent};
+use crate::ai::blocklist::{
+    BlocklistAIContextEvent, BlocklistAIContextModel, BlocklistAIControllerEvent,
+    BlocklistAIHistoryEvent, BlocklistAIHistoryModel, InputConfig, SerializedBlockListItem,
+};
+use crate::ai::llms::{LLMPreferences, LLMPreferencesEvent};
 use crate::context_chips::current_prompt::CurrentPrompt;
 use crate::context_chips::prompt_snapshot::PromptSnapshot;
 use crate::context_chips::prompt_type::PromptType;
@@ -35,13 +43,18 @@ use crate::network::{NetworkStatusEvent, NetworkStatusKind};
 use crate::pane_group::TerminalViewResources;
 use crate::persistence::ModelEvent;
 use crate::server::telemetry::{TelemetryAgentViewEntryOrigin, TelemetryEvent};
+use crate::terminal::cli_agent_sessions::{
+    CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
+};
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 use crate::terminal::shared_session::manager::Manager;
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::terminal::shared_session::presence_manager::PresenceManager;
+use crate::terminal::shared_session::replay_agent_conversations::reconstruct_response_events_from_conversations;
 use crate::terminal::shared_session::settings::SharedSessionSettings;
 use crate::terminal::shared_session::shared_handlers::{
+    RemoteUpdateGuard, apply_auto_approve_agent_actions_update, apply_cli_agent_state_update,
     apply_input_mode_update, apply_selected_agent_model_update, apply_selected_conversation_update,
     build_selected_conversation_update,
 };
@@ -53,6 +66,7 @@ use crate::terminal::shared_session::{
     SharedSessionActionSource, SharedSessionScrollbackType, SharedSessionSource,
     SharedSessionStatus, max_session_size,
 };
+use crate::terminal::view::{ConversationRestorationInNewPaneType, Event as TerminalViewEvent};
 use crate::terminal::writeable_pty::terminal_manager_util::wire_up_remote_server_controller_with_view;
 use crate::terminal::{TerminalManager as TerminalManagerTrait, TerminalModel, TerminalView};
 use crate::view_components::ToastFlavor;
@@ -73,6 +87,8 @@ pub(crate) struct TerminalViewSurfaceConfig {
     pub(crate) resources: TerminalViewResources,
     pub(crate) model_event_sender: Option<SyncSender<ModelEvent>>,
     pub(crate) window_id: WindowId,
+    pub(crate) initial_input_config: Option<InputConfig>,
+    pub(crate) conversation_restoration: Option<ConversationRestorationInNewPaneType>,
     pub(crate) has_conversation_restoration: bool,
     pub(crate) is_historical: bool,
     pub(crate) should_use_live_appearance: bool,
@@ -81,11 +97,27 @@ pub(crate) struct TerminalViewSurfaceConfig {
 
 /// Resolves the block list used by the GUI `TerminalView` surface.
 pub(crate) fn terminal_view_restored_blocks(
+    restored_blocks: Option<&Vec<SerializedBlockListItem>>,
+    conversation_restoration: &Option<ConversationRestorationInNewPaneType>,
 ) -> Option<Vec<SerializedBlockListItem>> {
     restored_blocks
         .filter(|blocks| !blocks.is_empty())
         .cloned()
         .or_else(|| match conversation_restoration {
+            Some(ConversationRestorationInNewPaneType::Historical { conversation, .. })
+            | Some(ConversationRestorationInNewPaneType::Forked { conversation, .. }) => {
+                Some(conversation.to_serialized_blocklist_items())
+            }
+            Some(ConversationRestorationInNewPaneType::Startup { conversations, .. }) => {
+                let mut items: Vec<_> = conversations
+                    .iter()
+                    .flat_map(|c| c.to_serialized_blocklist_items())
+                    .collect();
+                // Because there are multiple conversations that may have interleaved timestamps, we need to sort by start_ts
+                items.sort_by_key(|item| item.start_ts());
+                if items.is_empty() { None } else { Some(items) }
+            }
+            _ => None,
         })
 }
 
@@ -368,6 +400,7 @@ fn wire_up_terminal_view_session_sharing(
                         );
                     }
                 }
+                AgentViewControllerEvent::ExitedAgentView {
                     origin,
                     final_exchange_count,
                     ..
@@ -439,6 +472,7 @@ fn wire_up_terminal_view_session_sharing(
         &BlocklistAIHistoryModel::handle(ctx),
         move |_, event, ctx| {
             match event {
+                BlocklistAIHistoryEvent::UpdatedStreamingExchange {
                     terminal_surface_id,
                     conversation_id,
                     ..
@@ -480,6 +514,7 @@ fn wire_up_terminal_view_session_sharing(
                         ctx,
                     );
                 }
+                BlocklistAIHistoryEvent::UpdatedAutoexecuteOverride {
                     terminal_surface_id,
                 } => {
                     if *terminal_surface_id != view_id_for_stream_init {
@@ -518,6 +553,7 @@ fn wire_up_terminal_view_session_sharing(
                 // on the old value (the protocol has no
                 // `UpdateSourceType` upstream message) until they
                 // reconnect.
+                BlocklistAIHistoryEvent::ConversationServerTokenAssigned {
                     terminal_surface_id,
                     conversation_id,
                 } => {
@@ -578,7 +614,66 @@ fn wire_up_terminal_view_session_sharing(
 }
 
 impl TerminalManager<TerminalView> {
+    /// Streams all historical agent conversations from this terminal to viewers.
+    /// This is called when starting a shared  session mid-conversation so that viewers
+    /// can see all conversation history and properly continue conversations.
+    fn stream_historical_agent_conversations(
+        terminal_view: &ViewHandle<TerminalView>,
+        model: &Arc<FairMutex<TerminalModel>>,
+        ctx: &mut AppContext,
+    ) {
+        // Get all conversations for this terminal view
+        // Any conversation could be continued during session sharing
+        let conversations: Vec<AIConversation> = BlocklistAIHistoryModel::as_ref(ctx)
+            .all_live_conversations_for_terminal_surface(terminal_view.id())
+            .filter(|conv| conv.exchange_count() > 0)
+            .cloned()
+            .collect();
 
+        if conversations.is_empty() {
+            return;
+        }
+
+        // Get the sharer's participant id to use for historical conversations
+        let sharer_id = terminal_view
+            .as_ref(ctx)
+            .shared_session_presence_manager()
+            .map(|manager| manager.as_ref(ctx).sharer_id());
+
+        model
+            .lock()
+            .send_agent_conversation_replay_started_for_shared_session();
+
+        // Reconstruct and send all conversations' messages as ResponseEvent objects
+        // Exchanges are sorted chronologically to handle interleaved conversations
+        // Historical events use the original conversation token, so no need to pass forked_from.
+        let events = reconstruct_response_events_from_conversations(&conversations);
+        for event in events {
+            model
+                .lock()
+                .send_agent_response_for_shared_session(&event, sharer_id.clone(), None);
+        }
+        model
+            .lock()
+            .send_agent_conversation_replay_ended_for_shared_session();
+    }
+
+    /// Send selected_conversation update to viewers based on current selection.
+    fn send_selected_conversation_update_for_sharer(
+        session_sharer: &Rc<RefCell<Option<ModelHandle<Network>>>>,
+        agent_view_controller: &ModelHandle<AgentViewController>,
+        ai_context_model: &ModelHandle<BlocklistAIContextModel>,
+        ctx: &mut AppContext,
+    ) {
+        if let Some(network) = session_sharer.borrow().as_ref()
+            && let Some(update) =
+                build_selected_conversation_update(agent_view_controller, ai_context_model, ctx)
+        {
+            network.update(ctx, |network, _| {
+                network.send_universal_developer_input_context_update(update)
+            });
+        }
+    }
 
     #[allow(clippy::too_many_arguments)]
     fn start_sharing_session(
@@ -1586,6 +1681,7 @@ impl TerminalManager<TerminalView> {
         // Clone before the subscribe_to_view closure moves the original.
         let sharer_remote_update_guard_for_cli = sharer_remote_update_guard.clone();
         ctx.subscribe_to_view(terminal_view, move |view, event, ctx| match event {
+            TerminalViewEvent::StartSharingCurrentSession {
                 scrollback_type,
                 source,
             } if FeatureFlag::CreatingSharedSessions.is_enabled() => {
@@ -1628,6 +1724,7 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
+            TerminalViewEvent::UpdateRole {
                 participant_id,
                 role,
             } => {
@@ -1679,6 +1776,7 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
+            TerminalViewEvent::RespondToRoleRequest {
                 participant_id,
                 role_request_id,
                 response,
@@ -1693,6 +1791,7 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
+            TerminalViewEvent::InputEditorUpdated {
                 block_id,
                 operations,
             } => {
@@ -1730,6 +1829,7 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
+            TerminalViewEvent::LongRunningCommandAgentInteractionStateChanged {
                 state,
                 block_id,
             } => {
@@ -1774,11 +1874,13 @@ impl TerminalManager<TerminalView> {
                 CLIAgentSessionsModelEvent::Started { agent, .. } => {
                     UniversalDeveloperInputContextUpdate {
                         cli_agent_session: Some(CLIAgentSessionState::Active {
+                            cli_agent: agent.to_serialized_name(),
                             is_rich_input_open: false,
                         }),
                         ..Default::default()
                     }
                 }
+                CLIAgentSessionsModelEvent::InputSessionChanged {
                     agent,
                     new_input_state,
                     ..

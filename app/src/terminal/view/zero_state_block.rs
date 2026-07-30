@@ -1,4 +1,3 @@
-use crate::settings::{AISettings, AISettingsChangedEvent, InputModeSettings};
 use settings::Setting;
 use warp_core::ui::Icon;
 use warp_errors::report_if_error;
@@ -17,7 +16,12 @@ use warpui::{
 };
 
 use crate::WorkspaceAction;
+use crate::ai::blocklist::agent_view::{
+    AgentViewController, AgentViewControllerEvent, AgentViewEntryOrigin,
+    ENTER_AGENT_VIEW_NEW_CONVERSATION_KEYSTROKE, ENTER_CLOUD_AGENT_VIEW_NEW_CONVERSATION_KEYSTROKE,
+};
 use crate::appearance::Appearance;
+use crate::settings::{AISettings, AISettingsChangedEvent, InputModeSettings};
 use crate::terminal::event::BlockType;
 use crate::terminal::input::message_bar::common::render_standard_message;
 use crate::terminal::input::message_bar::{Message, MessageItem};
@@ -54,6 +58,7 @@ pub struct TerminalViewZeroStateBlock {
 
 impl TerminalViewZeroStateBlock {
     pub fn new(
+        agent_view_controller: &ModelHandle<AgentViewController>,
         model_events_dispatcher: &ModelHandle<ModelEventDispatcher>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
@@ -74,6 +79,7 @@ impl TerminalViewZeroStateBlock {
 
         let model_events_clone = model_events_dispatcher.clone();
         ctx.subscribe_to_model(agent_view_controller, move |me, controller, event, ctx| {
+            if let AgentViewControllerEvent::ExitedAgentView {
                 original_exchange_count,
                 final_exchange_count,
                 ..
@@ -182,6 +188,9 @@ impl View for TerminalViewZeroStateBlock {
                     ],
                     |ctx| {
                         ctx.dispatch_typed_action(TerminalAction::StartNewAgentConversation {
+                            origin: AgentViewEntryOrigin::Input {
+                                was_prompt_autodetected: false,
+                            },
                         });
                     },
                     self.state_handles.start_new_conversation.clone(),

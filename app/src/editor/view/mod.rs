@@ -6,11 +6,6 @@ mod snapshot;
 #[cfg(feature = "voice_input")]
 mod voice;
 
-use crate::settings::AISettingsChangedEvent;
-use crate::settings::{
-    AISettings, AppEditorSettings, AppEditorSettingsChangedEvent, CursorBlink, CursorDisplayType,
-    InputSettings, SelectionSettings,
-};
 use core::f32;
 use std::borrow::Cow;
 use std::cmp::{self, Ordering};
@@ -97,15 +92,26 @@ pub use {
 use self::model::{LocalSelections, Selection, UpdateBufferOption};
 use super::Point;
 use super::soft_wrap::{ClampDirection, DisplayPointAndClampDirection};
+use crate::BlocklistAIHistoryModel;
+use crate::ai::agent::ImageContext;
+use crate::ai::blocklist::{BlocklistAIContextModel, InputType, PendingAttachment, PendingFile};
+use crate::ai::predict::next_command_model::{NextCommandModel, NextCommandSuggestionState};
 use crate::appearance::Appearance;
 use crate::channel::{Channel, ChannelState};
 use crate::editor::RangeExt;
 use crate::editor::accept_autosuggestion_keybinding_view::AcceptAutosuggestionKeybinding;
 use crate::editor::autosuggestion_ignore_view::{AutosuggestionIgnore, AutosuggestionIgnoreEvent};
 use crate::features::FeatureFlag;
+use crate::search::ai_context_menu::mixer::AIContextMenuSearchableAction;
+use crate::search::ai_context_menu::view::{
+    AIContextMenu, AIContextMenuCategory, AIContextMenuEvent,
+};
 use crate::server::telemetry::TelemetryEvent;
 #[cfg(feature = "voice_input")]
+use crate::settings::AISettingsChangedEvent;
 use crate::settings::{
+    AISettings, AppEditorSettings, AppEditorSettingsChangedEvent, CursorBlink, CursorDisplayType,
+    InputSettings, SelectionSettings,
 };
 use crate::settings_view::flags;
 use crate::suggestions::ignored_suggestions_model::{IgnoredSuggestionsModel, SuggestionType};
@@ -1753,6 +1759,7 @@ impl ImageContextOptions {
 }
 
 pub struct AIContextMenuState {
+    ai_context_menu: ViewHandle<AIContextMenu>,
 
     /// The mouse handle for the at context menu icon.
     at_context_menu_button_mouse_handle: MouseStateHandle,
@@ -1793,6 +1800,7 @@ pub struct EditorView {
     cursor_display_override: Option<CursorDisplayType>,
     window_id: WindowId,
     autosuggestion_state: Option<Arc<AutosuggestionState>>,
+    next_command_model: Option<ModelHandle<NextCommandModel>>,
 
     /// The height of the editor at the last render.
     /// This is needed because autosuggestions soft wrap and can increase the height of the editor.
@@ -1886,6 +1894,7 @@ pub struct EditorView {
     #[cfg(feature = "voice_input")]
     voice_new_feature_popup: ViewHandle<FeaturePopup>,
 
+    context_model: Option<ModelHandle<BlocklistAIContextModel>>,
 
     /// Options for attaching image context.
     /// Made public to allow terminal input to access image attachment state and limits.
@@ -2965,8 +2974,10 @@ impl EditorView {
 
     pub fn with_next_command_model(
         self,
+        next_command_model: ModelHandle<NextCommandModel>,
     ) -> Self {
         Self {
+            next_command_model: Some(next_command_model),
             ..self
         }
     }
@@ -3076,9 +3087,12 @@ impl EditorView {
                     let is_udi_enabled =
                         InputSettings::as_ref(ctx).is_universal_developer_input_enabled(ctx);
                     let current_input_mode = if me.is_ai_input {
+                        InputType::AI
                     } else {
+                        InputType::Shell
                     };
                     match event {
+                        AIContextMenuEvent::Close {
                             item_count,
                             query_length,
                         } => {
@@ -3097,6 +3111,7 @@ impl EditorView {
                             ctx.focus_self();
                             ctx.notify();
                         }
+                        AIContextMenuEvent::ResultAccepted {
                             action,
                             item_count,
                             query_length,
@@ -3497,6 +3512,7 @@ impl EditorView {
     /// If there's an empty buffer, populates the input with an intelligent autosuggestion for the input_type.
     pub fn maybe_populate_intelligent_autosuggestion(
         &mut self,
+        input_type: InputType,
         ctx: &mut ViewContext<Self>,
     ) {
         // If our existing autosuggestion is not meant for the current input type, clear it.
@@ -5227,6 +5243,141 @@ impl EditorView {
         );
     }
 
+    /// Processes and attaches images to the AI context model.
+    ///
+    /// This function handles the final step of image attachment after validation,
+    /// updating the context model and UI state accordingly.
+    pub fn process_and_attach_images_as_ai_context(
+        &mut self,
+        num_images_user_attached: usize,
+        pending_images: Vec<AttachedImage>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if !self.image_context_options.is_enabled() {
+            if self.image_context_options.is_unsupported_model() {
+                let window_id = ctx.window_id();
+                ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
+                    toast_stack.add_ephemeral_toast(
+                        DismissibleToast::error(
+                            "The selected model does not support images as context".to_owned(),
+                        ),
+                        window_id,
+                        ctx,
+                    );
+                });
+            }
+            return;
+        }
+
+        let is_udi_enabled = InputSettings::as_ref(ctx).is_universal_developer_input_enabled(ctx);
+
+        send_telemetry_from_ctx!(
+            TelemetryEvent::AttachedImagesToAgentModeQuery {
+                num_images: pending_images.len(),
+                is_udi_enabled,
+            },
+            ctx
+        );
+
+        self.process_attached_images_future_handle = Some(ctx.spawn(
+            async move {
+                let mut processed_pending_images = vec![];
+                let mut num_oversized_images: usize = 0;
+                let mut num_unprocessed_images: usize = 0;
+
+                for image in pending_images {
+                    let is_figma = is_figma_png(&image.data);
+
+                    let resized_image_bytes = match resize_image(&image.data) {
+                        Ok(resized_image_bytes) => resized_image_bytes,
+                        Err(err) => {
+                            num_unprocessed_images += 1;
+                            log::warn!("Error resizing attached image {err:?}");
+                            continue;
+                        }
+                    };
+
+                    if resized_image_bytes.len() > MAX_IMAGE_SIZE_BYTES {
+                        num_oversized_images += 1;
+                        continue;
+                    }
+
+                    let base64_str = general_purpose::STANDARD.encode(&resized_image_bytes);
+
+                    processed_pending_images.push(ImageContext {
+                        data: base64_str,
+                        mime_type: image.mime_type,
+                        file_name: image.file_name,
+                        is_figma,
+                    });
+                }
+
+                (
+                    num_oversized_images,
+                    num_unprocessed_images,
+                    processed_pending_images,
+                )
+            },
+            move |this, (num_oversized_images, num_unprocessed_images, pending_images), ctx| {
+                // Future was aborted
+                if this.process_attached_images_future_handle.is_none() {
+                    return;
+                }
+
+                let window_id = ctx.window_id();
+
+                if num_oversized_images > 0 {
+                    let message = if num_oversized_images == 1 && num_images_user_attached == 1 {
+                        "Image cannot be attached - file is too large.".into()
+                    } else if num_oversized_images == 1 {
+                        "1 image wasn't attached — file is too large.".into()
+                    } else {
+                        format!(
+                            "{num_oversized_images} images weren't attached — files are too large."
+                        )
+                    };
+
+                    ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
+                        toast_stack.add_persistent_toast(
+                            DismissibleToast::error(message),
+                            window_id,
+                            ctx,
+                        );
+                    });
+                }
+
+                if num_unprocessed_images > 0 {
+                    let message = if num_unprocessed_images == 1 && num_images_user_attached == 1 {
+                        "Image cannot be attached - error processing.".into()
+                    } else if num_unprocessed_images == 1 {
+                        "1 image wasn't attached - error processing.".into()
+                    } else {
+                        format!(
+                            "{num_unprocessed_images} images weren't attached - error processing."
+                        )
+                    };
+
+                    ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
+                        toast_stack.add_persistent_toast(
+                            DismissibleToast::error(message),
+                            window_id,
+                            ctx,
+                        );
+                    });
+                }
+
+                if let Some(context_model) = &this.context_model {
+                    context_model.update(ctx, |context_model, ctx| {
+                        context_model.append_pending_images(pending_images, ctx);
+                    });
+                }
+
+                ctx.emit(Event::ProcessingAttachedImages(false));
+            },
+        ));
+
+        ctx.emit(Event::ProcessingAttachedImages(true));
+    }
 
     /// Stores non-image files selected via the file picker into the pending files context.
     fn process_non_image_files(&mut self, file_paths: Vec<String>, ctx: &mut ViewContext<Self>) {
@@ -7976,6 +8127,11 @@ impl EditorView {
         }
     }
 
+    pub fn ai_context_menu(&self) -> Option<&ViewHandle<AIContextMenu>> {
+        self.ai_context_menu_state
+            .as_ref()
+            .map(|state| &state.ai_context_menu)
+    }
 
     fn render_at_context_menu_button(
         &self,
@@ -8289,6 +8445,8 @@ pub enum Event {
         operations: Rc<Vec<CrdtOperation>>,
     },
     SetAIContextMenuOpen(bool),
+    AcceptAIContextMenuItem(AIContextMenuSearchableAction),
+    SelectAIContextMenuCategory(AIContextMenuCategory),
     ProcessingAttachedImages(bool),
     VoiceStateUpdated {
         is_listening: bool,

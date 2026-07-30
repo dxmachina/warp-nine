@@ -35,6 +35,7 @@ mod bootstrap;
 mod buy_credits_banner;
 pub mod color;
 mod command_corrections_denylist;
+pub mod conversation_restoration;
 pub mod dynamic_enum_suggestions;
 pub mod enable_auto_reload_modal;
 pub mod event;
@@ -60,6 +61,7 @@ pub mod mock_terminal_manager;
 pub mod model;
 pub mod model_events;
 pub mod platform;
+pub mod profile_model_selector;
 pub mod prompt;
 pub mod prompt_render_helper;
 pub mod recorder;
@@ -90,6 +92,9 @@ pub use writeable_pty::{PtyIntent, PtyIntentEvent, TerminalSurface};
 #[cfg(windows)]
 pub mod wsl;
 
+pub mod cli_agent;
+pub use cli_agent::CLIAgent;
+pub(crate) mod cli_agent_sessions;
 
 pub use block_list_settings::*;
 pub use mock_terminal_manager::MockTerminalManager;

@@ -5,7 +5,6 @@ mod search_item;
 pub(super) mod view;
 
 #[cfg(feature = "local_fs")]
-use crate::settings::AISettings;
 use std::path::PathBuf;
 
 use ai::skills::SkillReference;
@@ -26,10 +25,23 @@ use warpui::clipboard::ClipboardContent;
 use warpui::{AppContext, SingletonEntity, ViewContext};
 
 use crate::TelemetryEvent;
+use crate::ai::agent::conversation::AIConversationId;
 #[cfg(not(target_family = "wasm"))]
+use crate::ai::agent_conversations_model::AgentConversationsModel;
 #[cfg(not(target_family = "wasm"))]
+use crate::ai::agent_management::telemetry::AgentManagementTelemetryEvent;
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
+use crate::ai::ambient_agents::telemetry::HandoffEntryPoint;
+use crate::ai::blocklist::agent_view::{
+    AgentViewEntryOrigin, DismissalStrategy, ENTER_OR_EXIT_CONFIRMATION_WINDOW, EphemeralMessage,
+};
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
+use crate::ai::blocklist::handoff::PendingCloudLaunch;
+use crate::ai::blocklist::{
+    BlocklistAIHistoryModel, InputTypeAutoDetectionSource, PendingAttachment, QueuedQuery,
+    QueuedQueryId, QueuedQueryModel, QueuedQueryOrigin, SlashCommandRequest,
+};
+use crate::ai::conversation_rename::rename_conversation;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::code_review::telemetry_event::CodeReviewPaneEntrypoint;
 #[cfg(not(target_family = "wasm"))]
@@ -39,6 +51,7 @@ use crate::search::slash_command_menu::static_commands::{Availability, SlashComm
 use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::server::ids::SyncId;
 use crate::server::telemetry::{AgentModeAutoDetectionSettingOrigin, SlashCommandAcceptedDetails};
+use crate::settings::AISettings;
 use crate::tab::SelectedTabColor;
 use crate::terminal::input::decorations::InputBackgroundJobOptions;
 use crate::terminal::input::inline_menu::{InlineMenuAction, InlineMenuType};
@@ -448,6 +461,8 @@ impl Input {
         argument: Option<&String>,
         trigger: SlashCommandTrigger,
         is_queued_prompt: bool,
+        queued_conversation_id: Option<AIConversationId>,
+        queued_query_id: Option<QueuedQueryId>,
         ctx: &mut ViewContext<Self>,
     ) -> bool {
         fn show_error_toast(message: String, ctx: &mut ViewContext<Input>) {
@@ -528,6 +543,7 @@ impl Input {
                 ctx.emit(Event::EnterAgentView {
                     initial_prompt: prompt,
                     conversation_id: None,
+                    origin: AgentViewEntryOrigin::SlashCommand { trigger },
                 });
             }
             SlashCommandKind::CloudAgent => {
@@ -1005,6 +1021,7 @@ impl Input {
                         WorkspaceAction::OpenLocalToCloudHandoffPane {
                             launch: Some(launch),
                             environment_id: None,
+                            entry_point: HandoffEntryPoint::SlashCommand,
                         },
                     );
                 } else if self.source_conversation_has_content(ctx) {
@@ -1016,6 +1033,7 @@ impl Input {
                         WorkspaceAction::OpenLocalToCloudHandoffPane {
                             launch: None,
                             environment_id: None,
+                            entry_point: HandoffEntryPoint::SlashCommand,
                         },
                     );
                 } else {
@@ -1089,6 +1107,7 @@ impl Input {
                     ForkedConversationDestination::for_fork_trigger(trigger.is_cmd_or_ctrl_enter());
 
                 send_telemetry_from_ctx!(
+                    AgentManagementTelemetryEvent::SlashCommandContinueLocally,
                     ctx
                 );
 
@@ -1211,6 +1230,7 @@ impl Input {
                             conversation_id,
                             QueuedQuery::new_with_attachments(
                                 prompt,
+                                QueuedQueryOrigin::QueueSlashCommand,
                                 attachments,
                             ),
                             ctx,
@@ -1276,6 +1296,7 @@ impl Input {
             self.agent_view_controller.update(ctx, |controller, ctx| {
                 let _ = controller.try_enter_agent_view(
                     None,
+                    AgentViewEntryOrigin::SlashCommand {
                         trigger: SlashCommandTrigger::input(),
                     },
                     ctx,
@@ -1466,6 +1487,8 @@ impl Input {
     /// Sends a queued `/compact-and` summary and stores its follow-up on the original conversation.
     pub(super) fn execute_queued_compact_and(
         &mut self,
+        conversation_id: AIConversationId,
+        queued_query_id: QueuedQueryId,
         initial_prompt: Option<String>,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -1474,6 +1497,7 @@ impl Input {
             .to_vec();
         self.ai_controller.update(ctx, move |controller, ctx| {
             controller.send_queued_slash_command_request(
+                SlashCommandRequest::Summarize { prompt: None },
                 queued_query_id,
                 Some(conversation_id),
                 ctx,
@@ -1488,6 +1512,7 @@ impl Input {
                 conversation_id,
                 QueuedQuery::new_with_attachments(
                     initial_prompt,
+                    QueuedQueryOrigin::CompactAndSlashCommand,
                     followup_attachments,
                 ),
                 ctx,
@@ -1513,6 +1538,37 @@ pub fn slash_command_is_submitted_as_prompt(command: &StaticCommand) -> bool {
     )
 }
 
+/// Returns true when the conversation with `conversation_id` is associated with an Oz
+/// `AmbientAgentTask`. Callers deciding between `/fork` and `/continue-locally` should also
+/// check the same `CLOUD_AGENT` context that gates `/continue-locally`.
+#[cfg(not(target_family = "wasm"))]
+pub(crate) fn conversation_is_cloud_oz_for_slash_command(
+    conversation_id: AIConversationId,
+    ctx: &AppContext,
+) -> bool {
+    let history = BlocklistAIHistoryModel::as_ref(ctx);
+    let Some(conversation) = history.conversation(&conversation_id) else {
+        return false;
+    };
+    let Some(task_id) = conversation.task_id() else {
+        return false;
+    };
+
+    let Some(task) = AgentConversationsModel::as_ref(ctx).get_task_data(&task_id) else {
+        // Permissive: not yet fetched. Matches the data-source default so the command isn't
+        // wrongly blocked while the task fetch is in flight.
+        return true;
+    };
+
+    match task
+        .agent_config_snapshot
+        .as_ref()
+        .and_then(|s| s.harness.as_ref())
+    {
+        Some(config) => config.harness_type == Harness::Oz,
+        None => true,
+    }
+}
 
 /// Tooltip and slash command name for the fork button, returned as a unit so
 /// callers rendering the button and callers inserting the command always agree.
@@ -1527,6 +1583,7 @@ pub(crate) struct ForkButtonAction {
 /// is unavailable in the current cloud-agent context, and `/fork` otherwise.
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn fork_button_action(
+    conversation_id: Option<AIConversationId>,
     is_cloud_agent_context: bool,
     ctx: &AppContext,
 ) -> ForkButtonAction {

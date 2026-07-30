@@ -1,6 +1,3 @@
-use crate::settings::{
-    AISettings, AISettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
-};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -17,10 +14,18 @@ use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::fonts::FamilyId;
 use warpui::{AppContext, Entity, EntityId, ModelContext, ModelHandle, SingletonEntity};
 
+use crate::ai::agent_conversations_model::{AgentConversationsModel, AgentConversationsModelEvent};
+use crate::ai::blocklist::block::cli_controller::{CLISubagentController, CLISubagentEvent};
+use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
+use crate::ai::skills::{SkillDescriptor, SkillManager};
 use crate::search::slash_command_menu::fuzzy_match::SlashCommandFuzzyMatchResult;
 use crate::search::slash_command_menu::static_commands::{Availability, commands};
 use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::settings::{
+    AISettings, AISettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
+};
+use crate::terminal::cli_agent_sessions::{
+    CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
 };
 use crate::terminal::input::slash_command_model::{
     DetectedCommand, DetectedSkillCommand, ParsedSlashCommandInput,
@@ -66,6 +71,7 @@ pub struct CommonCommandGates {
 /// availability. The callback remains concrete, so this helper does not require a surface trait.
 pub(super) fn subscribe_to_shared_dependencies<T>(
     active_session: &ModelHandle<ActiveSession>,
+    cli_subagent_controller: &ModelHandle<CLISubagentController>,
     terminal_view_id: EntityId,
     recompute_active_commands: fn(&mut T, &mut ModelContext<T>),
     ctx: &mut ModelContext<T>,
@@ -115,6 +121,8 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
     ctx.subscribe_to_model(
         &CLIAgentSessionsModel::handle(ctx),
         move |me, _, event, ctx| {
+            if let CLIAgentSessionsModelEvent::InputSessionChanged {
+                terminal_view_id: event_terminal_view_id,
                 ..
             } = event
                 && *event_terminal_view_id == terminal_view_id
@@ -144,6 +152,7 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
         move |me, _, event, ctx| {
             if matches!(
                 event,
+                AgentConversationsModelEvent::TasksUpdated
                     | AgentConversationsModelEvent::NewTasksReceived
             ) {
                 recompute_active_commands(me, ctx);
@@ -159,6 +168,7 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
 /// the wrapping surface types.
 pub struct SlashCommandDataSourceState {
     active_session: ModelHandle<ActiveSession>,
+    cli_subagent_controller: ModelHandle<CLISubagentController>,
     terminal_view_id: EntityId,
     active_commands_by_id: HashMap<SlashCommandId, StaticCommand>,
     active_repo_root: Option<PathBuf>,
@@ -166,12 +176,14 @@ pub struct SlashCommandDataSourceState {
 impl SlashCommandDataSourceState {
     pub(super) fn new(
         active_session: ModelHandle<ActiveSession>,
+        cli_subagent_controller: ModelHandle<CLISubagentController>,
         terminal_view_id: EntityId,
     ) -> Self {
         Self {
             active_session,
             cli_subagent_controller,
             terminal_view_id,
+            active_commands_by_id: HashMap::new(),
             active_repo_root: None,
         }
     }
@@ -422,8 +434,31 @@ pub trait SlashCommandDataSource {
         }
     }
 
+    /// Whether there is an active conversation, given whether the agent view is active.
+    /// There is always an active conversation in the agent view.
+    fn has_active_conversation(&self, is_agent_view_active: bool, ctx: &AppContext) -> bool {
+        is_agent_view_active
+            || crate::ai::blocklist::BlocklistAIHistoryModel::as_ref(ctx)
+                .active_conversation(self.terminal_view_id())
+                .is_some()
+    }
 
+    /// Returns `true` if the CLI agent rich input is currently open for this terminal.
+    fn is_cli_agent_input_open(&self, ctx: &AppContext) -> bool {
+        CLIAgentSessionsModel::as_ref(ctx).is_input_open(self.terminal_view_id())
+    }
 
+    /// Returns the supported skill providers for the active CLI agent, or `None` if
+    /// CLI agent input is not open (meaning no filtering should be applied).
+    fn active_cli_agent_providers(
+        &self,
+        ctx: &AppContext,
+    ) -> Option<&'static [ai::skills::SkillProvider]> {
+        CLIAgentSessionsModel::as_ref(ctx)
+            .session(self.terminal_view_id())
+            .filter(|s| matches!(s.input_state, CLIAgentInputState::Open { .. }))
+            .map(|s| s.agent.supported_skill_providers())
+    }
 
     /// Fuzzy-match the active commands against `query_text`. Returns scored [`InlineItem`]s with
     /// compact layout left unset; the caller applies any surface-specific presentation.

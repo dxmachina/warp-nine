@@ -1,5 +1,6 @@
 #![allow(clippy::doc_lazy_continuation)]
 
+mod ai;
 mod alloc;
 mod antivirus;
 #[cfg(target_os = "macos")]
@@ -115,6 +116,7 @@ mod workspaces;
 // in the warp::integration_testing::assertions module (or a sub-module).  These
 // functions will allow us to keep types internal to this crate and expose a
 // simpler API for integration tests to consume.
+pub mod ai_assistant;
 pub mod appearance;
 pub mod channel;
 pub mod editor;
@@ -125,7 +127,6 @@ pub mod integration_testing;
 pub mod keyboard;
 pub mod launch_configs;
 pub mod pane_group;
-pub mod persisted_workspace;
 // LOCAL FORK: `resource_center` (the "Warp Essentials" panel) deleted.
 pub mod root_view;
 pub mod search;
@@ -134,7 +135,6 @@ pub mod settings_view;
 pub mod tab_configs;
 pub mod terminal;
 pub mod themes;
-use crate::settings::{AISettings, AccessibilitySettings, ScrollSettings, SelectionSettings};
 use ::ai::index::DEFAULT_SYNC_REQUESTS_PER_MIN;
 #[cfg(feature = "local_fs")]
 use ::ai::index::full_source_code_embedding::SnapshotStorage;
@@ -143,6 +143,16 @@ use ::ai::index::full_source_code_embedding::manager::{
     CodebaseIndexManager, CodebaseIndexManagerConfig,
 };
 use ::ai::project_context::model::ProjectContextModel;
+pub use ai::agent::todos::AIAgentTodoList;
+pub use ai::agent::{AIAgentActionResultType, FileEdit, TodoOperation};
+use ai::agent_conversations_model::AgentConversationsModel;
+use ai::agent_management::AgentNotificationsModel;
+use ai::ambient_agents::scheduled::ScheduledAgentManager;
+use ai::blocklist::{BlocklistAIHistoryModel, BlocklistAIPermissions};
+use ai::execution_profiles::editor::ExecutionProfileEditorManager;
+use ai::execution_profiles::profiles::AIExecutionProfilesModel;
+use ai::metadata_project_rules::read_project_rule_contents;
+use ai::persisted_workspace::PersistedWorkspace;
 use auth::auth_manager::AuthManager;
 use auth::auth_state::{AuthState, AuthStateProvider};
 use code::editor_management::CodeManager;
@@ -171,8 +181,12 @@ use warp_cli::{CliCommand, GlobalOptions};
 #[cfg(feature = "local_fs")]
 use watcher::HomeDirectoryWatcher;
 
+use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
 #[cfg(not(target_family = "wasm"))]
+use crate::ai::aws_credentials::AwsCredentialRefresher as _;
 #[cfg(not(target_family = "wasm"))]
+use crate::ai::geap_credentials::GeapCredentialRefresher as _;
+use crate::ai::mcp::{FileBasedMCPManager, FileMCPWatcher};
 use crate::uri::web_intent_parser::maybe_rewrite_web_url_to_intent;
 use crate::view_components::DismissibleToast;
 pub mod workflows;
@@ -231,8 +245,23 @@ use workflows::manager::WorkflowManager;
 use workspace::sync_inputs::SyncedInputState;
 
 use self::features::FeatureFlag;
+use crate::ai::AIRequestUsageModel;
+use crate::ai::agent::conversation::AIConversationId;
 #[cfg(not(target_family = "wasm"))]
+use crate::ai::ambient_agents::AmbientAgentTaskId;
+use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
+use crate::ai::blocklist::RecordingController;
+use crate::ai::connected_self_hosted_workers::ConnectedSelfHostedWorkersModel;
+use crate::ai::document::ai_document_model::AIDocumentModel;
+use crate::ai::facts::manager::AIFactManager;
+use crate::ai::harness_availability::HarnessAvailabilityModel;
+use crate::ai::llms::LLMPreferences;
+use crate::ai::mcp::{MCPGalleryManager, TemplatableMCPServerManager};
+use crate::ai::outline::RepoOutlines;
+use crate::ai::restored_conversations::RestoredAgentConversations;
+use crate::ai::skills::SkillManager;
 #[cfg(not(target_family = "wasm"))]
+use crate::ai::tui_api_keys::TuiApiKeyRefresher;
 use crate::antivirus::AntivirusInfo;
 use crate::app_state::AppState;
 use crate::autoupdate::{AutoupdateState, RelaunchModel};
@@ -276,10 +305,12 @@ use crate::server::telemetry::{AppStartupInfo, CloseTarget, PaletteSource, Telem
 use crate::session_management::{RunningSessionSummary, SessionNavigationData};
 use crate::settings::cloud_preferences_syncer::initialize_cloud_preferences_syncer;
 use crate::settings::manager::SettingsManager;
+use crate::settings::{AISettings, AccessibilitySettings, ScrollSettings, SelectionSettings};
 use crate::settings_view::DisplayCount;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
 use crate::system::SystemStats;
+use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::keys::TerminalKeybindings;
 use crate::terminal::resizable_data::ResizableData;
 use crate::terminal::view::inline_banner::ByoLlmAuthBannerSessionState;
@@ -300,12 +331,34 @@ use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_profiles::UserProfiles;
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
-use crate::persisted_workspace::PersistedWorkspace;
 
 /// Our embedded application assets.
 pub static ASSETS: warp_assets::Assets = warp_assets::Assets;
 const TUI_SECURE_STORAGE_SERVICE_SUFFIX: &str = ".tui";
 
+fn determine_agent_source(
+    launch_mode: &LaunchMode,
+) -> Option<crate::ai::ambient_agents::AgentSource> {
+    match launch_mode {
+        LaunchMode::CommandLine { .. } => {
+            if std::env::var("GITHUB_ACTIONS").ok().as_deref() == Some("true") {
+                Some(crate::ai::ambient_agents::AgentSource::GitHubAction)
+            } else {
+                Some(crate::ai::ambient_agents::AgentSource::Cli)
+            }
+        }
+        LaunchMode::App { .. } | LaunchMode::Test { .. } => {
+            Some(crate::ai::ambient_agents::AgentSource::CloudMode)
+        }
+        // RemoteServerProxy and RemoteServerDaemon are headless server
+        // processes that don't use the agent subsystem.
+        // TODO: the TUI front-end has no agent harness wired up yet; give it an
+        // appropriate `AgentSource` once that lands.
+        LaunchMode::RemoteServerProxy
+        | LaunchMode::RemoteServerDaemon { .. }
+        | LaunchMode::Tui { .. } => None,
+    }
+}
 
 #[cfg(feature = "local_fs")]
 fn daemon_codebase_index_snapshot_storage(launch_mode: &LaunchMode) -> Option<SnapshotStorage> {
@@ -1891,6 +1944,7 @@ pub(crate) fn initialize_app(
     timer.mark_interval_end("INITIALIZE_TELEMETRY_COLLECTION");
 
     // Register initial keybindings prior to creating menus
+    ai::init(ctx);
     app_services::init(ctx);
     // // TODO: Temporarily disabling keybindings for WASM builds. Will be implemented in future WASM support.
     #[cfg(not(target_family = "wasm"))]
@@ -1923,6 +1977,7 @@ pub(crate) fn initialize_app(
     ai::blocklist::block::status_bar::init(ctx);
     drive::index::init(ctx);
     drive::sharing::dialog::init(ctx);
+    ai_assistant::panel::init(ctx);
     settings_view::update_environment_form::init(ctx);
     env_vars::env_var_collection_block::init(ctx);
     context_chips::display_menu::init(ctx);
@@ -1953,6 +2008,7 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(|_| GlobalCodeReviewModel);
     ctx.add_singleton_model(workspace::OneTimeModalModel::new);
     ctx.add_singleton_model(
+        workspace::bonus_grant_notification_model::BonusGrantNotificationModel::new,
     );
     #[cfg(feature = "local_fs")]
     ctx.add_singleton_model(FileModel::new);
@@ -2069,8 +2125,10 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(BlocklistAIPermissions::new);
     ctx.add_singleton_model(ai::blocklist::orchestration_events::OrchestrationEventService::new);
     ctx.add_singleton_model(
+        ai::blocklist::local_agent_task_sync_model::LocalAgentTaskSyncModel::new,
     );
     ctx.add_singleton_model(
+        ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer::new,
     );
 
     if launch_mode.supports_indexing() {

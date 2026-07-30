@@ -1,31 +1,20 @@
 mod action;
+mod agent_view;
+pub mod ambient_agent;
 mod block_banner;
 pub mod block_onboarding;
+pub(crate) mod blocklist_filter;
 mod bookmarks;
 mod context_menu;
 pub mod init;
 pub mod inline_banner;
+pub mod load_ai_conversation;
+pub(crate) mod queued_prompts_panel;
 #[cfg(test)]
 #[path = "view/queued_prompts_tests.rs"]
 mod queued_prompts_tests;
-use crate::terminal::view::inline_banner::{
-    AgentModeSetupSpeedbumpBannerAction, AgentModeSetupSpeedbumpBannerState,
-    AliasExpansionBannerState, NotificationsDiscoveryBannerState, NotificationsErrorBannerState,
-};
-use crate::{
-    safe_warn, send_telemetry_from_ctx, send_telemetry_sync_from_ctx,
-};
-use crate::settings::ai::FocusedTerminalInfo;
-use crate::settings::{
-    AISettings, AISettingsChangedEvent, AliasExpansionSettings, AppEditorSettings,
-    BlockVisibilitySettings, BlockVisibilitySettingsChangedEvent, CodeSettings, DebugSettings,
-    DebugSettingsChangedEvent, EmacsBindingsSettings, FontSettings, FontSettingsChangedEvent,
-    InputModeSettings, InputModeSettingsChangedEvent, InputSettings, PaneSettings,
-    PaneSettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
-    PrivacySettingsSnapshot, SelectionSettings, VimBannerSettings,
-};
 use ai::agent::action::InsertReviewComment;
-use crate::persisted_workspace::{LspTask, PersistedWorkspace};
+pub use load_ai_conversation::ConversationRestorationInNewPaneType;
 // TODO(advait): if we align on prompt suggestions banner in Input, move code out of inline_banner mod.
 pub(crate) mod init_environment;
 mod init_project;
@@ -39,6 +28,7 @@ use repo_metadata::CanonicalizedPath;
 use warp_util::remote_path::RemotePath;
 use warp_util::standardized_path::StandardizedPath;
 
+use crate::ai::block_context::BlockContext;
 use crate::global_resource_handles::GlobalResourceHandlesProvider;
 mod link_detection;
 mod open_in_warp;
@@ -46,6 +36,7 @@ mod pane_impl;
 mod passive_suggestions;
 mod pending_user_query;
 #[cfg(not(target_family = "wasm"))]
+pub(crate) mod plugin_instructions_block;
 pub mod rich_content;
 mod shared_session;
 mod shell_terminated_banner;
@@ -58,6 +49,7 @@ mod tab_metadata;
 mod testing;
 mod tooltips;
 pub(crate) mod docker_sandbox;
+pub mod use_agent_footer;
 mod zero_state_block;
 
 use std::any::Any;
@@ -128,9 +120,14 @@ use session_sharing_protocol::sharer::{
     RoleUpdateReason, SessionEndedReason, SessionRetentionReason,
 };
 use settings::{Setting, ToggleableSetting};
+use shared_session::cloud_conversation_continuation::CloudConversationContinuationUiState;
+pub(crate) use shared_session::cloud_conversation_continuation::{
+    AIQueryRouting, resolve_ai_query_routing,
+};
 use shared_session::{SharedSessionAdapter, Viewer};
 use ssh_file_upload::{FileUpload, FileUploadEvent};
 use sum_tree::SeekBias;
+use use_agent_footer::UseAgentToolbar;
 use uuid::Uuid;
 use vec1::vec1;
 use warp_core::r#async::debounce;
@@ -202,11 +199,89 @@ use super::ssh::util::{InteractiveSshCommand, SshWarpifyCommand, parse_interacti
 use super::warpify::WarpificationSource;
 use super::warpify::success_block::{WarpifySuccessBlock, WarpifySuccessBlockEvent};
 use super::warpify::trigger_state::{SshBlockState, WarpifyState};
+use super::{CLIAgent, GridType, cli_agent};
 #[cfg(any(test, feature = "integration_tests"))]
 use crate::ai::agent::UserQueryMode;
+use crate::ai::agent::api::ServerConversationToken;
+use crate::ai::agent::conversation::{AIConversation, AIConversationId, ConversationStatus};
+use crate::ai::agent::redaction::redact_secrets;
+use crate::ai::agent::todos::popup::{AgentTodosPopupEvent, AgentTodosPopupView};
+use crate::ai::agent::{
+    AIAgentActionId, AIAgentActionType, AIAgentCitation, AIAgentContext, AIAgentExchangeId,
+    AIAgentInput, AIAgentOutputStatus, AIAgentPtyWriteMode, AIAgentTextSection,
+    AgentReviewCommentBatch, CancellationReason, FileLocations, FinishedAIAgentOutput,
+    PassiveCodeDiffEntry, PassiveSuggestionResultType, PassiveSuggestionTrigger, RenderableAIError,
+    ServerOutputId, ShellCommandCompletedTrigger,
+};
 #[cfg(feature = "local_fs")]
+use crate::ai::agent::{CurrentHead, DiffBase};
+use crate::ai::agent_conversations_model::{AgentConversationsModel, AgentConversationsModelEvent};
+use crate::ai::ambient_agents::{
+    AmbientAgentTaskId, AmbientConversationStatus, conversation_output_status_from_conversation,
+};
+use crate::ai::blocklist::agent_view::agent_input_footer::toolbar_item::AgentToolbarItemKind;
+use crate::ai::blocklist::agent_view::{
+    AgentViewController, AgentViewControllerEvent, AgentViewConversationSelection,
+    AgentViewDisplayMode, AgentViewEntryBlockParams, AgentViewEntryOrigin,
+    AgentViewHeaderDisabledTheme, AgentViewHeaderTheme, AgentViewZeroStateBlock,
+    AgentViewZeroStateEvent, ENTER_OR_EXIT_CONFIRMATION_WINDOW, EphemeralMessageModel,
+    ExitConfirmationTrigger, GuiInputModePolicy, InlineAgentViewHeader, OrchestrationPillBar,
+    fork_from_last_known_good_state_exchange_id, get_agent_view_entry_block_position_id,
+    is_in_cloud_context,
+};
+use crate::ai::blocklist::block::cli::{CLISubagentView, CLISubagentViewEvent};
+use crate::ai::blocklist::block::cli_controller::{
+    CLISubagentController, CLISubagentEvent, UserTakeOverReason,
+};
+use crate::ai::blocklist::block::status_bar::BlocklistAIStatusBarEvent;
+use crate::ai::blocklist::block::{AIBlockAction, FinishReason};
+use crate::ai::blocklist::codebase_index_speedbump_banner::{
+    CodebaseIndexSpeedbumpBannerAction, CodebaseIndexSpeedbumpBannerState, VisibilityState,
+};
+use crate::ai::blocklist::diff_storage::DiffStorageHelper;
+use crate::ai::blocklist::diff_types::FileDiff;
+use crate::ai::blocklist::inline_action::code_diff_view::CodeDiffView;
+use crate::ai::blocklist::model::{
+    AIBlockModel, AIBlockModelHelper, AIBlockModelImpl, AIBlockOutputStatus,
+};
+use crate::ai::blocklist::orchestration_topology::OrchestrationNavigationDirection;
+use crate::ai::blocklist::suggested_agent_mode_workflow_modal::SuggestedAgentModeWorkflowAndId;
+use crate::ai::blocklist::suggested_rule_modal::SuggestedRuleAndId;
+use crate::ai::blocklist::summarization_cancel_dialog::SummarizationCancelDialog;
 use crate::terminal::telemetry_banner::{TelemetryBanner, should_collect_ai_ugc_telemetry};
+use crate::ai::blocklist::usage::conversation_usage_view::{
+    ConversationUsageInfo, ConversationUsageView, TimingInfo,
+};
+use crate::ai::blocklist::{
+    AIBlock, AIBlockEvent, ATTACH_AS_AGENT_MODE_CONTEXT_TEXT, AutofireAction,
+    BlocklistAIActionEvent, BlocklistAIActionModel, BlocklistAIContextEvent,
+    BlocklistAIContextModel, BlocklistAIController, BlocklistAIControllerEvent,
+    BlocklistAIHistoryEvent, BlocklistAIHistoryModel, BlocklistAIInputEvent, BlocklistAIInputModel,
+    ClientIdentifiers, ConversationSelection, ConversationStatusUpdate, InputConfig, InputType,
+    InputTypeAutoDetectionSource, PRE_REWIND_PREFIX,
+    PendingAttachment, PendingQueryState, QueuedQuery, QueuedQueryId,
+    QueuedQueryModel, QueuedQueryOrigin, RequestFileEditsFormatKind, ShellCommandExecutor,
+    ShellCommandExecutorEvent, SlashCommandRequest, StartAgentExecutor, StartAgentExecutorEvent,
+    StartAgentRequest, ai_brand_color, block_context_from_terminal_model,
+    get_ai_block_overflow_menu_element_position_id, get_attached_blocks_chip_element_position_id,
+    is_lrc_auto_queue_active,
+};
+use crate::ai::conversation_details_panel::ConversationDetailsPanelEvent;
+use crate::ai::conversation_utils;
+use crate::ai::document::ai_document_model::{AIDocumentId, AIDocumentModel, AIDocumentVersion};
+use crate::ai::execution_profiles::ExecutionProfileId;
+use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
+use crate::ai::get_relevant_files::controller::GetRelevantFilesController;
+use crate::ai::llms::{LLMId, LLMModelHost, LLMPreferences};
+use crate::ai::loading::shimmering_warp_loading_text;
 #[cfg(feature = "local_fs")]
+use crate::ai::persisted_workspace::PersistedWorkspace;
+use crate::ai::predict::prompt_suggestions::{
+    has_pending_code_or_unit_test_prompt_suggestion,
+    is_accept_prompt_suggestion_bound_to_cmd_enter,
+    is_accept_prompt_suggestion_bound_to_ctrl_enter,
+};
+use crate::ai_assistant::{ASK_AI_ASSISTANT_TEXT, AskAIType};
 use crate::antivirus::AntivirusInfo;
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::auth::auth_manager::AuthManager;
@@ -277,12 +352,20 @@ use crate::server::telemetry::{
     TelemetryEvent, ToggleBlockFilterSource, WorkflowTelemetryMetadata,
 };
 use crate::session_management::{CommandContext, SessionNavigationPromptElements};
+use crate::settings::ai::FocusedTerminalInfo;
 #[cfg(feature = "local_fs")]
 use crate::settings::import::model::ImportedConfigModel;
 use crate::settings::import::view::{SettingsImportEvent, SettingsImportView};
 use crate::settings::{
+    AISettings, AISettingsChangedEvent, AliasExpansionSettings, AppEditorSettings,
+    BlockVisibilitySettings, BlockVisibilitySettingsChangedEvent, CodeSettings, DebugSettings,
+    DebugSettingsChangedEvent, EmacsBindingsSettings, FontSettings, FontSettingsChangedEvent,
+    InputModeSettings, InputModeSettingsChangedEvent, InputSettings, PaneSettings,
+    PaneSettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
+    PrivacySettingsSnapshot, SelectionSettings, VimBannerSettings,
 };
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
+use crate::settings_view::mcp_servers_page::MCPServersSettingsPage;
 use crate::settings_view::{SettingsSection, flags};
 use crate::shell_indicator::ShellIndicatorType;
 use crate::terminal::alias::{AliasedCommand, check_for_alias_async};
@@ -303,7 +386,18 @@ use crate::terminal::block_list_viewport::{
     ScrollState, ViewportState,
 };
 use crate::terminal::bootstrap::init_subshell_command;
+use crate::terminal::cli_agent_sessions::event::{
+    CLI_AGENT_NOTIFICATION_SENTINEL, CLIAgentEvent, CLIAgentEventPayload, CLIAgentEventSource,
+    CLIAgentEventType, parse_event,
+};
+use crate::terminal::cli_agent_sessions::listener::{CLIAgentSessionListener, is_agent_supported};
 #[cfg(not(target_family = "wasm"))]
+use crate::terminal::cli_agent_sessions::plugin_manager::{PluginModalKind, plugin_manager_for};
+use crate::terminal::cli_agent_sessions::{
+    CLIAgentInputEntrypoint, CLIAgentInputState, CLIAgentRichInputCloseReason, CLIAgentSession,
+    CLIAgentSessionContext, CLIAgentSessionStatus, CLIAgentSessionsModel,
+    CLIAgentSessionsModelEvent,
+};
 use crate::terminal::color::List;
 use crate::terminal::command_corrections_denylist::COMMAND_CORRECTIONS_PREFERRED_DENYLIST;
 use crate::terminal::event::{
@@ -375,6 +469,9 @@ use crate::terminal::view::init_environment::mode_selector::{
 };
 use crate::terminal::view::init_environment::{InitEnvironmentBlock, InitEnvironmentBlockEvent};
 use crate::terminal::view::inline_banner::{
+    AgentModeSetupSpeedbumpBannerAction, AgentModeSetupSpeedbumpBannerState,
+    AliasExpansionBannerState, NotificationsDiscoveryBannerState, NotificationsErrorBannerState,
+    PromptSuggestionBannerState, VimModeBannerState, render_agent_mode_setup_banner,
 };
 use crate::terminal::view::passive_suggestions::PromptSuggestionResolution;
 pub use crate::terminal::view::rich_content::{
@@ -444,6 +541,8 @@ use crate::workspace::{
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 use crate::workspaces::workspace::CustomerType;
 use crate::{
+    AIAgentActionResultType, AIRequestUsageModel, ActiveSession as WindowActiveSession, safe_error,
+    safe_warn, send_telemetry_from_ctx, send_telemetry_sync_from_ctx,
 };
 
 lazy_static! {
@@ -869,6 +968,7 @@ pub struct PromptSuggestion {
     pub prompt: String,
 
     /// If this is some, we eagerly pre-fetch the Agent Mode response for this query.
+    pub coding_query_context: Option<Vec<FileLocations>>,
 
     /// If this is a static prompt suggestion, we store the name of the suggestion type here.
     pub static_prompt_suggestion_name: Option<String>,
@@ -982,6 +1082,7 @@ struct InlineBannersState {
 
     vim_banner_state: Option<VimModeBannerState>,
 
+    codebase_index_speedbump_banner: Option<CodebaseIndexSpeedbumpBannerState>,
 
     agent_setup_speedbump_banner: Option<AgentModeSetupSpeedbumpBannerState>,
 
@@ -1271,24 +1372,34 @@ pub enum ContextMenuAction {
     AskAI(AskAISource),
     OpenWorkflowModal,
     CopyAIDebuggingLink {
+        conversation_token: ServerConversationToken,
+        request_id: Option<ServerOutputId>,
     },
     CopyExternalDebuggingId {
+        request_id: Option<ServerOutputId>,
+        conversation_id: ServerConversationToken,
     },
     CopyConversationId {
+        conversation_id: ServerConversationToken,
     },
     CopyServerRequestId {
+        request_id: ServerConversationToken,
     },
     // Copy the share link for a conversation in the blocklist.
     CopyConversationShareLink {
+        conversation_id: AIConversationId,
     },
     // Copy the text of a conversation in the blocklist.
     CopyConversationText {
+        conversation_id: AIConversationId,
     },
     // Fork a conversation in the blocklist into a new pane.
     ForkAIConversation {
+        conversation_id: AIConversationId,
     },
     /// Opens the sharing dialog for a conversation from the AI block context menu
     OpenConversationShareDialog {
+        conversation_id: AIConversationId,
     },
     OpenShareSessionModal,
     StopSharing,
@@ -1318,10 +1429,14 @@ pub enum ContextMenuAction {
     /// Forks at the query boundary (includes all exchanges up to the next user query).
     ForkAIConversationFromBlock {
         ai_block_view_id: EntityId,
+        exchange_id: AIAgentExchangeId,
+        conversation_id: AIConversationId,
     },
     /// Fork the AI conversation from the exact exchange that was clicked on.
     ForkAIConversationFromExactExchange {
         ai_block_view_id: EntityId,
+        exchange_id: AIAgentExchangeId,
+        conversation_id: AIConversationId,
     },
     /// Save the AI block prompt as an agent mode workflow (saved prompt)
     SavePromptAsAgentModeWorkflow {
@@ -1498,6 +1613,7 @@ impl IndicatorPositionArg {
 
 #[derive(Clone)]
 pub struct ExecuteAIRequestedCommandEvent {
+    pub requested_command_id: AIAgentActionId,
     pub command: String,
     pub shell_type: ShellType,
 }
@@ -1555,6 +1671,7 @@ pub enum Event {
     },
     Pane(PaneEvent),
     OpenSettings(SettingsSection),
+    AskAIAssistant(AskAIType),
     /// Event propagates terminal inputs up to the workspace,
     /// to be processed on the way back down through the view hierarchy.
     SyncInput(SyncEvent),
@@ -1570,14 +1687,18 @@ pub enum Event {
     OpenWorkflowModalWithTemporary(Box<Workflow>),
     OpenWarpDriveObjectInPane(ObjectUid),
     OpenSuggestedAgentModeWorkflowModal {
+        workflow_and_id: SuggestedAgentModeWorkflowAndId,
     },
     OpenSuggestedRuleDialog {
+        rule_and_id: SuggestedRuleAndId,
     },
     OpenAIFactCollection {
         /// If set, open the fact collection to the specific rule.
         sync_id: Option<SyncId>,
     },
     ToggleAIDocumentPane {
+        document_id: AIDocumentId,
+        document_version: AIDocumentVersion,
     },
     /// Closes all visible AI document panes without opening a new one.
     HideAIDocumentPanes,
@@ -1585,6 +1706,8 @@ pub enum Event {
     /// When `is_auto_open` is true, subject to conditions to check if auto opening is acceptable.
     /// When `is_auto_open` is false (user-triggered), always opens unconditionally.
     OpenAIDocumentPane {
+        document_id: AIDocumentId,
+        document_version: AIDocumentVersion,
         is_auto_open: bool,
     },
     OpenPromptEditor,
@@ -1608,6 +1731,7 @@ pub enum Event {
     },
     WriteAgentInputToPty {
         bytes: Cow<'static, [u8]>,
+        mode: AIAgentPtyWriteMode,
     },
     Resize {
         size_update: SizeUpdate,
@@ -1632,6 +1756,7 @@ pub enum Event {
         source: CodeSource,
     },
     OpenCodeDiff {
+        view: ViewHandle<CodeDiffView>,
     },
     OpenCodeReviewPane(CodeReviewPanelArg),
     ToggleCodeReviewPane(CodeReviewPanelArg),
@@ -1807,6 +1932,7 @@ pub enum Event {
     OpenThemeChooser,
     OpenConversationHistory,
     OpenMCPSettingsPage {
+        page: Option<MCPServersSettingsPage>,
     },
     OpenAddRulePane,
     OpenRulesPane,
@@ -1842,11 +1968,13 @@ pub enum Event {
     },
     SlowBootstrap,
     OpenAgentProfileEditor {
+        profile_id: ExecutionProfileId,
     },
     OpenAutoReloadModal {
         purchased_credits: i32,
     },
     #[cfg(not(target_family = "wasm"))]
+    OpenPluginInstructionsPane(CLIAgent, PluginModalKind),
     ShowToast {
         message: String,
         flavor: ToastFlavor,
@@ -1872,13 +2000,16 @@ pub enum Event {
     /// [`BlocklistAIHistoryModel::record_new_conversation_request_complete`]
     /// so the executor can disambiguate per-request pendings when multiple
     /// StartAgent requests are in flight in parallel.
+    StartAgentConversation(StartAgentRequest),
     /// Emitted when the user clicks a child agent row in the status card to reveal
     /// its hidden pane.
     RevealChildAgent {
+        conversation_id: AIConversationId,
     },
     /// Emitted when the user clicks a pill in the orchestration pill bar.
     /// The pane group swaps visibility instead of cloning the conversation.
     SwapPaneToConversation {
+        conversation_id: AIConversationId,
     },
     /// Emitted by `OrchestrationViewerModel` when a child of a shared-session
     /// orchestration first reports a `session_id`. The pane group materializes
@@ -1887,21 +2018,26 @@ pub enum Event {
     /// joining the child's session. Subsequent pill clicks navigate to the
     /// hidden pane via the existing `SwapPaneToConversation` mechanism.
     EnsureSharedSessionViewerChildPane {
+        conversation_id: AIConversationId,
         session_id: session_sharing_protocol::common::SessionId,
     },
     /// Emitted when "Open in new tab" is picked from a child pill's 3-dot menu.
     /// Bubbles up to the workspace to create the new tab.
     OpenChildAgentInNewTab {
+        conversation_id: AIConversationId,
     },
     /// Emitted when "Open in new pane" is picked from a child pill's 3-dot menu.
     /// Reuses the existing dedicated child pane to preserve in-flight state.
     OpenChildAgentInNewPane {
+        conversation_id: AIConversationId,
     },
     /// Emitted when "Stop agent" is picked from a child pill's 3-dot menu.
     StopAgentConversation {
+        conversation_id: AIConversationId,
     },
     /// Emitted when "Kill agent" is picked from a child pill's 3-dot menu.
     KillAgentConversation {
+        conversation_id: AIConversationId,
     },
     /// Emitted when this pane's [`ambient_agent::AmbientAgentViewModel`] is lazily
     /// created — e.g. a raw `shared_session` link-join viewer that only discovers the
@@ -2057,8 +2193,10 @@ pub struct BlocklistAIRenderContext {
 
     /// The ID of the selected Agent Mode conversation, if any.
     ///
+    selected_conversation_id: Option<AIConversationId>,
 
     /// The IDs of exchanges in the selected conversation.
+    exchange_ids: Option<HashSet<AIAgentExchangeId>>,
 
     /// `true` if we should highlight pending and active context in this conversation.
     pub should_highlight_context: bool,
@@ -2076,6 +2214,12 @@ impl BlocklistAIRenderContext {
         self.selected_conversation_id.is_some()
     }
 
+    /// Returns `true` if the exchange with the given ID is in the active conversation.
+    pub fn is_exchange_in_active_conversation(&self, id: &AIAgentExchangeId) -> bool {
+        self.exchange_ids
+            .as_ref()
+            .is_some_and(|active_exchange_ids| active_exchange_ids.contains(id))
+    }
 
     pub fn context_inclusion_state_for_block(
         &self,
@@ -2142,6 +2286,7 @@ impl BlocklistAIRenderContext {
 /// Groups together some structs to represent the state of the Terminal View for the
 /// current frame. Passed to `AltScreenElement` and `BlockListElement`.
 pub struct TerminalViewRenderContext {
+    pub size_info: SizeInfo,
     pub scroll_position: ScrollPosition,
     pub highlighted_url: Option<GridHighlightedLink>,
     pub link_tool_tip: Option<GridHighlightedLink>,
@@ -2239,6 +2384,7 @@ pub struct TerminalViewStateChange {
 struct CtrlCActiveBlockState {
     is_long_running: bool,
     is_agent_in_control_of_command: bool,
+    conversation_id_to_stop: Option<AIConversationId>,
 }
 
 impl Default for TerminalViewStateChange {
@@ -2389,6 +2535,7 @@ pub struct TerminalView {
     /// agent view's blocks have mounted. Set when entering the agent view from the
     /// terminal (where the target block doesn't exist yet on the current frame) and
     /// consumed in `after_terminal_view_layout`, after layout has mounted it.
+    pending_agent_scroll_target: Option<AIAgentExchangeId>,
 
     find_link_tx: Sender<FindLinkArg>,
 
@@ -2528,6 +2675,8 @@ pub struct TerminalView {
     pending_user_query_view_id: Option<EntityId>,
     pending_user_query_kind: Option<PendingUserQueryKind>,
     queued_prompt_callback: Option<ConversationFinishedCallback>,
+    last_observed_conversation_status: HashMap<AIConversationId, ConversationStatus>,
+    last_observed_active_subagent: HashMap<AIConversationId, bool>,
 
     /// Cached view ids for usage footers keyed by the AI block view id that owns them.
     usage_footer_view_ids: HashMap<EntityId, EntityId>,
@@ -2549,6 +2698,11 @@ pub struct TerminalView {
     show_snackbar: bool,
     hover_near_snackbar_area: bool,
 
+    ai_controller: ModelHandle<BlocklistAIController>,
+    ai_action_model: ModelHandle<BlocklistAIActionModel>,
+    ai_input_model: ModelHandle<BlocklistAIInputModel>,
+    ai_context_model: ModelHandle<BlocklistAIContextModel>,
+    get_relevant_files_controller: ModelHandle<GetRelevantFilesController>,
 
     pending_env_var_collection: Option<CloudEnvVarCollection>,
 
@@ -2637,6 +2791,7 @@ pub struct TerminalView {
 
     is_todo_popup_visible: bool,
 
+    agent_todos_popup: ViewHandle<AgentTodosPopupView>,
 
     /// Per-repo git status model for the current repository, if any.
     git_repo_status: Option<ModelHandle<GitRepoStatusModel>>,
@@ -2666,15 +2821,22 @@ pub struct TerminalView {
     // we want to keep the title as the conversation title, so we should ignore the model event setting the title after bootstrapping finishes
     ignore_next_set_title_event: bool,
 
+    cli_subagent_views: HashMap<BlockId, ViewHandle<CLISubagentView>>,
+    cli_subagent_controller: ModelHandle<CLISubagentController>,
+    use_agent_footer: ViewHandle<UseAgentToolbar>,
 
+    agent_view_controller: ModelHandle<AgentViewController>,
     agent_view_back_button: ViewHandle<ActionButton>,
     /// Pill bar shown above the agent view header listing the orchestrator and
     /// child agents. Always constructed; render-time guards control whether it draws anything.
+    orchestration_pill_bar: ViewHandle<OrchestrationPillBar>,
     /// `true` when this view hosts a child agent split off into its own
     /// pane/tab. Drives breadcrumb-vs-pill-bar rendering in the pane header.
     is_orchestration_split_off: bool,
     is_using_conversation_for_pane_header_title: bool,
 
+    ambient_agent_view_model: Option<ModelHandle<ambient_agent::AmbientAgentViewModel>>,
+    pending_cloud_followup_task_id: Option<AmbientAgentTaskId>,
 
     /// Conversation details panel (side panel showing conversation/task metadata).
     /// Available for cloud Oz runs and for any active local AI conversation.
@@ -2698,6 +2860,7 @@ pub struct TerminalView {
     ambient_agent_cancel_mouse_state: warpui::elements::MouseStateHandle,
 
     /// First-time cloud agent setup view (full-screen overlay for creating initial environment).
+    first_time_cloud_agent_setup_view: ViewHandle<ambient_agent::FirstTimeCloudAgentSetupView>,
 
     /// Environment setup mode selector modal for /create-environment command.
     environment_setup_mode_selector: ViewHandle<EnvironmentSetupModeSelector>,
@@ -2730,6 +2893,7 @@ pub struct TerminalView {
     /// (tab close, update relaunch, etc.) are not attributed to agent commands.
     manual_pty_shutdown_requested: bool,
 
+    ephemeral_message_model: ModelHandle<EphemeralMessageModel>,
 
     /// Per-session PTY recorder for writing PTY bytes to a file.
     pty_recorder: ModelHandle<PtyRecorder>,
@@ -2938,6 +3102,8 @@ impl TerminalView {
         colors: List,
         model_event_sender: Option<SyncSender<persistence::ModelEvent>>,
         current_prompt: ModelHandle<PromptType>,
+        initial_input_config: Option<InputConfig>,
+        conversation_restoration: Option<ConversationRestorationInNewPaneType>,
         inactive_pty_reads_rx: Option<async_broadcast::InactiveReceiver<Arc<Vec<u8>>>>,
         is_ambient_agent: bool,
         ctx: &mut ViewContext<Self>,
@@ -2962,6 +3128,7 @@ impl TerminalView {
 
         ctx.subscribe_to_model(&agent_view_controller, |me, _, event, ctx| {
             match event {
+                AgentViewControllerEvent::EnteredAgentView {
                     display_mode,
                     conversation_id,
                     is_new,
@@ -3002,6 +3169,7 @@ impl TerminalView {
                                 && !has_pending_blocks
                                 && !matches!(
                                     origin,
+                                    AgentViewEntryOrigin::CreateEnvironment
                                         | AgentViewEntryOrigin::SlashInit
                                         | AgentViewEntryOrigin::ThirdPartyCloudAgent
                                 );
@@ -3040,10 +3208,12 @@ impl TerminalView {
                                                 );
                                             });
                                         }
+                                        AgentViewZeroStateEvent::OpenConversation {
                                             conversation_id,
                                         } => {
                                             me.enter_agent_view_for_conversation(
                                                 None,
+                                                AgentViewEntryOrigin::ConversationListView,
                                                 *conversation_id,
                                                 ctx,
                                             );
@@ -3074,6 +3244,7 @@ impl TerminalView {
                         }
                     }
                 }
+                AgentViewControllerEvent::ExitedAgentView {
                     conversation_id,
                     origin,
                     original_exchange_count,
@@ -3180,6 +3351,12 @@ impl TerminalView {
                     // Delete the conversation if it's unmodified, new, has no init steps,
                     // and isn't a child agent in an orchestration tree.
                     if !was_modified && was_new && !has_init_steps && !is_child_agent {
+                        conversation_utils::remove_conversation(
+                            *conversation_id,
+                            me.view_id,
+                            false, // Empty new conversations were never synced to the cloud.
+                            ctx,
+                        );
                     }
 
                     // This handles the case where the user has taken over control but the command is still in progress.
@@ -3205,6 +3382,13 @@ impl TerminalView {
                         || matches!(origin, AgentViewEntryOrigin::AgentRequestedNewConversation);
                     if should_insert {
                         me.insert_agent_view_entry_block(
+                            AgentViewEntryBlockParams {
+                                conversation_id: *conversation_id,
+                                is_new: was_new,
+                                is_restored: false, /* is_restored */
+                                origin: origin.clone(),
+                                agent_view_controller: me.agent_view_controller.clone(),
+                            },
                             RichContentInsertionPosition::Append {
                                 insert_below_long_running_block: true,
                             },
@@ -3449,6 +3633,7 @@ impl TerminalView {
             |me, _, event, ctx| {
                 let is_task_update = matches!(
                     event,
+                    AgentConversationsModelEvent::TasksUpdated
                         | AgentConversationsModelEvent::NewTasksReceived
                 );
                 if is_task_update {
@@ -3456,6 +3641,7 @@ impl TerminalView {
                 }
                 let should_refresh_details_panel = matches!(
                     event,
+                    AgentConversationsModelEvent::TasksUpdated
                         | AgentConversationsModelEvent::NewTasksReceived
                         | AgentConversationsModelEvent::ConversationUpdated { .. }
                         | AgentConversationsModelEvent::ConversationArtifactsUpdated { .. }
@@ -3578,6 +3764,7 @@ impl TerminalView {
                 ),
                 (AIContextInclusionState::Active, Default::default()),
             ]),
+            selected_conversation_id: None,
             exchange_ids: None,
             should_highlight_context: false,
             is_ai_input_enabled: ai_input_model.as_ref(ctx).is_ai_input_enabled(),
@@ -3595,6 +3782,7 @@ impl TerminalView {
         ctx.subscribe_to_model(&ai_input_model, Self::handle_ai_input_model_event);
         ctx.subscribe_to_model(&ai_action_model, Self::handle_ai_action_model_event);
         ctx.subscribe_to_model(&CLIAgentSessionsModel::handle(ctx), |me, _, event, ctx| {
+            if let CLIAgentSessionsModelEvent::Ended {
                 terminal_view_id, ..
             } = event
                 && *terminal_view_id == me.view_id
@@ -4037,6 +4225,7 @@ impl TerminalView {
             inline_menu_positioner,
             view_handle: ctx.handle(),
             size_info: size_info.into(),
+            snackbar_header_state: Default::default(),
             colors,
             scroll_position: ScrollState::new(ScrollPosition::FollowsBottomOfMostRecentBlock),
             scroll_position_before_entering_agent_view: None,
@@ -4609,6 +4798,45 @@ impl TerminalView {
         callback(self, ctx);
     }
 
+    /// If the active conversation is a child agent, navigate to the parent
+    /// and return `true`; otherwise return `false` so the caller can run
+    /// the normal exit-agent-view flow. Cross-tab and swap-target cases
+    /// are handled by the workspace's focus path; falls back to emitting
+    /// a swap event when the parent has no canonical owner. Runs before
+    /// any can-exit gating so long-running children can still navigate back.
+    fn try_navigate_to_parent_conversation(&mut self, ctx: &mut ViewContext<Self>) -> bool {
+        if !FeatureFlag::AgentView.is_enabled() {
+            return false;
+        }
+        let active_conv_id = self
+            .agent_view_controller
+            .as_ref(ctx)
+            .agent_view_state()
+            .active_conversation_id();
+        let Some(active_conv_id) = active_conv_id else {
+            return false;
+        };
+        let history = BlocklistAIHistoryModel::as_ref(ctx);
+        let parent_id = history
+            .conversation(&active_conv_id)
+            .and_then(|c| c.parent_conversation_id());
+        let Some(parent_id) = parent_id else {
+            return false;
+        };
+        let parent_terminal_view_id = history.terminal_surface_id_for_conversation(&parent_id);
+
+        if let Some(parent_terminal_view_id) = parent_terminal_view_id {
+            // Defer so it runs after in-flight event handling completes.
+            ctx.dispatch_typed_action_deferred(WorkspaceAction::FocusTerminalViewInWorkspace {
+                terminal_view_id: parent_terminal_view_id,
+            });
+        } else {
+            ctx.emit(Event::SwapPaneToConversation {
+                conversation_id: parent_id,
+            });
+        }
+        true
+    }
 
     /// Exits the active agent, either:
     /// * Exiting agent view for the selected conversation
@@ -4636,8 +4864,52 @@ impl TerminalView {
         }
     }
 
+    /// Schedule a callback to run after the next
+    /// [`BlocklistAIControllerEvent::FinishedReceivingOutput`] received, regardless of whether the
+    /// conversation completed successfully, was cancelled, or encountered an error.
+    /// The callback receives the `FinishReason` to allow different handling based on how the
+    /// conversation ended.
+    pub fn on_next_conversation_finished<F>(&mut self, callback: F)
+    where
+        F: FnOnce(&mut Self, FinishReason, &mut ViewContext<Self>) + 'static,
+    {
+        self.conversation_completed_callbacks
+            .push(Box::new(callback));
+    }
 
+    /// Handles `conversation_id`'s turn finishing with `finish_reason`: fires
+    /// the pane-level finished callbacks and drains the conversation's queued
+    /// prompts.
+    fn handle_finished_conversation(
+        &mut self,
+        conversation_id: AIConversationId,
+        finish_reason: FinishReason,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        self.fire_conversation_finished_callbacks(finish_reason, ctx);
+        self.drain_queued_prompts(conversation_id, finish_reason, ctx);
+    }
 
+    /// Fires the pane-level one-shot callbacks registered via
+    /// [`Self::on_next_conversation_finished`], plus the queued-prompt
+    /// callback if one is armed.
+    fn fire_conversation_finished_callbacks(
+        &mut self,
+        finish_reason: FinishReason,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let queued_prompt = self.queued_prompt_callback.take();
+        let callbacks = self
+            .conversation_completed_callbacks
+            .drain(..)
+            .collect_vec();
+        for callback in callbacks {
+            callback(self, finish_reason, ctx);
+        }
+        if let Some(callback) = queued_prompt {
+            callback(self, finish_reason, ctx);
+        }
+    }
 
     /// Advances the queued-prompts queue after a dispatched queued command's block completes.
     /// Runs after input cleanup so queued-command draft preservation can observe the in-flight
@@ -4964,6 +5236,123 @@ impl TerminalView {
         }
     }
 
+    fn handle_ai_controller_event(
+        &mut self,
+        _: ModelHandle<BlocklistAIController>,
+        event: &BlocklistAIControllerEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if let BlocklistAIControllerEvent::SentRequest { model_id, .. } = event {
+            self.maybe_insert_aws_bedrock_login_banner(model_id, ctx);
+        }
+        if let BlocklistAIControllerEvent::ExecuteLocalHarnessCommand { command } = event {
+            self.execute_command_or_set_pending(command, ctx);
+        }
+        if let BlocklistAIControllerEvent::FinishedReceivingOutput {
+            conversation_id, ..
+        } = event
+        {
+            // If the conversation still has a subagent in flight (e.g. a CLI
+            // subagent managing a long-running command), the response stream
+            // that just ended belongs to the subagent or to the main agent
+            // handing off to it — not the end of the overall turn. Defer
+            // conversation-finished side effects (e.g. firing a queued `/queue`
+            // prompt) until the entire turn is actually done.
+            let has_active_subagent = BlocklistAIHistoryModel::as_ref(ctx)
+                .conversation(conversation_id)
+                .is_some_and(|c| c.has_active_subagent());
+
+            let mut pane_finish_reason: Option<FinishReason> = None;
+            if let Some(active_ai_block) = self.active_ai_block(ctx) {
+                // A new exchange is already active, so callbacks for the
+                // just-finished exchange will be skipped. Clear any pending
+                // user query now to prevent its callback from firing when
+                // the new exchange eventually completes.
+                //
+                // However, if the active block belongs to the same conversation
+                // that has the queued prompt (e.g. a blocked tool-call approval),
+                // keep the pending query — the conversation hasn't truly moved on.
+                let active_block_conversation_id = active_ai_block.as_ref(ctx).conversation_id();
+                let pending_query_conversation_id = self.pending_user_query_conversation_id();
+                let is_same_conversation = pending_query_conversation_id
+                    .is_some_and(|id| id == active_block_conversation_id);
+                if self.pending_user_query_view_id.is_some() && !is_same_conversation {
+                    self.remove_pending_user_query_block(ctx);
+                }
+            } else if !has_active_subagent && let Some(last_ai_block) = self.last_ai_block() {
+                pane_finish_reason = last_ai_block.as_ref(ctx).finish_reason();
+            }
+
+            // Pane-scoped: the one-shot conversation-finished callbacks fire
+            // when the pane's most recent block is done.
+            if let Some(reason) = pane_finish_reason {
+                self.fire_conversation_finished_callbacks(reason, ctx);
+            }
+
+            // Conversation-scoped: drain this conversation's queued prompts
+            // keyed off its own most recent block. The pane-global lookup
+            // above can observe a sibling conversation's block instead
+            // (orchestration panes host the lead and local child conversations
+            // in one view), so it can't drive the drain decision or supply the
+            // finish reason.
+            if !has_active_subagent
+                && let Some(reason) = self.finish_reason_for_conversation(*conversation_id, ctx)
+            {
+                self.drain_queued_prompts(*conversation_id, reason, ctx);
+            }
+
+            // If the most recent action in the current interaction turn created or updated a plan
+            // document, show an "Execute this plan" prompt suggestion.
+            let mut should_show_execute_plan_suggestion = false;
+            for view in self.rich_content_views.iter().rev() {
+                if let Some(ai_metadata) = view.ai_block_metadata() {
+                    let block = ai_metadata.ai_block_handle.as_ref(ctx);
+
+                    if let Some(output) = block.output_status(ctx).output_to_render()
+                        && let Some(most_recent_action) = output.get().actions().last()
+                    {
+                        should_show_execute_plan_suggestion = matches!(
+                            &most_recent_action.action,
+                            AIAgentActionType::CreateDocuments(_)
+                                | AIAgentActionType::EditDocuments(_)
+                        );
+                        break;
+                    }
+
+                    if block.has_user_input(ctx) {
+                        // We reached the start of the current interaction turn.
+                        break;
+                    }
+                }
+            }
+
+            if should_show_execute_plan_suggestion
+                && !FeatureFlag::PromptSuggestionsViaMAA.is_enabled()
+                && let Some(block) = self.last_ai_block()
+            {
+                let block_id = BlockId::from(block.id().to_string());
+                let suggestion = AgentModePromptSuggestion::Success(PromptSuggestion {
+                    id: Uuid::new_v4().to_string(),
+                    label: Some("Execute this plan".to_string()),
+                    prompt: "Execute this plan".to_string(),
+                    coding_query_context: None,
+                    static_prompt_suggestion_name: Some("EXECUTE_CREATED_PLAN".to_string()),
+                    should_start_new_conversation: false,
+                });
+
+                self.on_legacy_prompt_suggestion_generated(
+                    suggestion,
+                    block_id,
+                    "".to_string(),
+                    0,
+                    ctx,
+                );
+            }
+
+            self.update_input_prompt_suggestions_banner_state(ctx);
+            ctx.notify();
+        }
+    }
 
     /// Append a prompt to the queued-query singleton for regular Agent Mode queueing surfaces
     /// such as the queue-next toggle and `/queue`. Returns `None` if no conversation is selected
@@ -4971,6 +5360,7 @@ impl TerminalView {
     pub fn enqueue_prompt(
         &mut self,
         prompt: String,
+        origin: QueuedQueryOrigin,
         ctx: &mut ViewContext<Self>,
     ) -> Option<QueuedQueryId> {
         // Guard against queueing when no conversation is active to avoid stranding prompts.
@@ -4987,6 +5377,7 @@ impl TerminalView {
     pub fn enqueue_initial_cloud_mode_prompt(
         &mut self,
         prompt: String,
+        ctx: &mut ViewContext<Self>,
     ) -> Option<QueuedQueryId> {
         self.enqueue_prompt(prompt, QueuedQueryOrigin::InitialCloudMode, ctx)
     }
@@ -4999,6 +5390,8 @@ impl TerminalView {
     pub fn enqueue_followup_prompt(
         &mut self,
         prompt: String,
+        origin: QueuedQueryOrigin,
+        conversation_id: AIConversationId,
         ctx: &mut ViewContext<Self>,
     ) {
         if FeatureFlag::QueuedPromptsV2.is_enabled() {
@@ -5020,7 +5413,194 @@ impl TerminalView {
         }
     }
 
+    /// Drains one prompt from the queued-query singleton for `conversation_id` when that
+    /// conversation finishes.
+    fn drain_queued_prompts(
+        &mut self,
+        conversation_id: AIConversationId,
+        finish_reason: FinishReason,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match finish_reason {
+            FinishReason::Complete => {
+                let input_is_empty = self.input.as_ref(ctx).buffer_text(ctx).is_empty();
+                let first_row_is_in_edit_mode =
+                    QueuedQueryModel::as_ref(ctx).first_row_is_in_edit_mode(conversation_id);
+                if first_row_is_in_edit_mode && !input_is_empty {
+                    return;
+                }
 
+                // Peek the head row's action without removing it so the send path can read its
+                // attachments by id; the row is removed afterward via `remove_fired_row`.
+                let action = QueuedQueryModel::as_ref(ctx).peek_autofire(conversation_id);
+                match action {
+                    Some(AutofireAction::Submit { query_id, text }) => {
+                        self.input.update(ctx, |input, ctx| {
+                            input.submit_queued_prompt_for_active_pane(
+                                text,
+                                conversation_id,
+                                query_id,
+                                ctx,
+                            );
+                        });
+                        QueuedQueryModel::handle(ctx).update(ctx, |model, ctx| {
+                            model.remove_fired_row(conversation_id, query_id, ctx);
+                        });
+                    }
+                    Some(AutofireAction::ExecuteCommand { query_id, command }) => {
+                        let started = self.input.update(ctx, |input, ctx| {
+                            input.execute_queued_command(&command, conversation_id, ctx)
+                        });
+                        // If the command couldn't start (e.g. precmd not yet received) no
+                        // completion will arrive. Keep the row queued when the user has a draft;
+                        // otherwise restore it into the empty input and remove the row.
+                        if started {
+                            QueuedQueryModel::handle(ctx).update(ctx, |model, ctx| {
+                                model.remove_fired_row(conversation_id, query_id, ctx);
+                            });
+                        } else if self.input.as_ref(ctx).buffer_text(ctx).is_empty() {
+                            self.input.update(ctx, |input, ctx| {
+                                input.replace_buffer_content(&command, ctx);
+                                input.set_input_mode_terminal(/* steal_focus */ false, ctx);
+                            });
+                            QueuedQueryModel::handle(ctx).update(ctx, |model, ctx| {
+                                model.remove_fired_row(conversation_id, query_id, ctx);
+                            });
+                        }
+                    }
+                    Some(AutofireAction::PopFromEditMode {
+                        query_id,
+                        text,
+                        attachments,
+                        is_command,
+                    }) => {
+                        if self.input.as_ref(ctx).buffer_text(ctx).is_empty() {
+                            self.input.update(ctx, |input, ctx| {
+                                input.replace_buffer_content(&text, ctx);
+                                if is_command {
+                                    // Keep a restored command in shell mode so it stays a command
+                                    // rather than being submitted as an agent prompt.
+                                    input.set_input_mode_terminal(/* steal_focus */ true, ctx);
+                                } else {
+                                    input.focus_input_box(ctx);
+                                }
+                            });
+                            // Commands never carry attachments; only restore them for prompts.
+                            if !is_command {
+                                self.ai_context_model.update(ctx, |context_model, ctx| {
+                                    context_model.append_pending_attachments(attachments, ctx);
+                                });
+                            }
+                        }
+                        QueuedQueryModel::handle(ctx).update(ctx, |model, ctx| {
+                            model.remove_fired_row(conversation_id, query_id, ctx);
+                        });
+                    }
+                    None => {}
+                }
+            }
+            FinishReason::Error
+            | FinishReason::Cancelled
+            | FinishReason::CancelledDuringRequestedCommandExecution => {
+                // Only restore the head into the input when the user is
+                // currently viewing this conversation in agent view. Cancels
+                // triggered by exiting the agent view leave `agent_view_state`
+                // Inactive by the time the cancel fires, so the head stays in
+                // the queue and re-entering the agent view shows the same
+                // queue the user left.
+                let is_active_in_agent_view = self
+                    .agent_view_controller
+                    .as_ref(ctx)
+                    .agent_view_state()
+                    .active_conversation_id()
+                    == Some(conversation_id);
+                if !is_active_in_agent_view {
+                    return;
+                }
+
+                let input_is_empty = self.input.as_ref(ctx).buffer_text(ctx).is_empty();
+                if !input_is_empty {
+                    return;
+                }
+
+                let popped = QueuedQueryModel::handle(ctx)
+                    .update(ctx, |model, ctx| model.pop_front(conversation_id, ctx));
+                if let Some(query) = popped {
+                    let is_command = query.is_command();
+                    self.input.update(ctx, |input, ctx| {
+                        input.replace_buffer_content(query.text(), ctx);
+                        if is_command {
+                            // Keep a restored command in shell mode so it stays a command
+                            // rather than being submitted as an agent prompt.
+                            input.set_input_mode_terminal(/* steal_focus */ false, ctx);
+                        }
+                    });
+                    // Commands never carry attachments; only restore them for prompts.
+                    if !is_command {
+                        // Re-stage the restored row's attachments so a manual re-submit keeps them.
+                        self.ai_context_model.update(ctx, |context_model, ctx| {
+                            context_model
+                                .append_pending_attachments(query.attachments().to_vec(), ctx);
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sends the leading prompts that were auto-queued during an agent-requested long-running
+    /// command ([`QueuedQueryOrigin::LrcAutoQueue`]) to the agent, in queue order.
+    ///
+    /// Command finish may happen before the CLI subagent has handed its result back to the main
+    /// agent. In that case the rows stay queued and fire when history shows the subagent is gone.
+    pub(crate) fn send_lrc_queued_prompts(
+        &mut self,
+        conversation_id: AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let has_active_subagent = BlocklistAIHistoryModel::as_ref(ctx)
+            .conversation(&conversation_id)
+            .is_some_and(|conversation| conversation.has_active_subagent());
+        if has_active_subagent {
+            self.last_observed_active_subagent
+                .insert(conversation_id, true);
+            return;
+        }
+        let editing_front_lrc_row = QueuedQueryModel::as_ref(ctx)
+            .editing_row(conversation_id)
+            .is_some_and(|query_id| {
+                QueuedQueryModel::as_ref(ctx)
+                    .queue(conversation_id)
+                    .first()
+                    .is_some_and(|row| {
+                        row.id() == query_id && row.origin() == QueuedQueryOrigin::LrcAutoQueue
+                    })
+            });
+        if editing_front_lrc_row {
+            let queued_prompts_panel = self.input.as_ref(ctx).queued_prompts_panel().cloned();
+            let Some(queued_prompts_panel) = queued_prompts_panel else {
+                return;
+            };
+            queued_prompts_panel.update(ctx, |panel, ctx| {
+                panel.commit_edit(ctx);
+            });
+        }
+
+        let rows: Vec<(QueuedQueryId, String)> = QueuedQueryModel::as_ref(ctx)
+            .queue(conversation_id)
+            .iter()
+            .take_while(|row| row.origin() == QueuedQueryOrigin::LrcAutoQueue)
+            .map(|row| (row.id(), row.text().to_owned()))
+            .collect();
+        for (query_id, text) in rows {
+            self.input.update(ctx, |input, ctx| {
+                input.submit_queued_prompt_for_active_pane(text, conversation_id, query_id, ctx);
+            });
+            QueuedQueryModel::handle(ctx).update(ctx, |model, ctx| {
+                model.remove_fired_row(conversation_id, query_id, ctx);
+            });
+        }
+    }
 
     /// Drains one queued prompt when the cloud setup phase completes for a promptless handoff run
     /// (a prompt will not be auto-sent by the worker so there's no normal event to initiate a queued prompt sending).
@@ -5050,6 +5630,21 @@ impl TerminalView {
     }
 
 
+    fn build_agent_todos_popup(
+        ai_context_model: ModelHandle<BlocklistAIContextModel>,
+        ctx: &mut ViewContext<Self>,
+    ) -> ViewHandle<AgentTodosPopupView> {
+        let terminal_view_id = ctx.view_id();
+        let agent_todos_popup = ctx.add_typed_action_view(move |ctx| {
+            AgentTodosPopupView::new(terminal_view_id, ai_context_model, ctx)
+        });
+
+        ctx.subscribe_to_view(&agent_todos_popup, |me, _, event, ctx| {
+            me.handle_agent_todos_popup_event(event, ctx);
+        });
+
+        agent_todos_popup
+    }
 
     pub fn attach_path_as_context(&mut self, path: &Path, ctx: &mut ViewContext<Self>) {
         let content = path.to_string_lossy().to_string();
@@ -5071,6 +5666,7 @@ impl TerminalView {
 
     pub fn attach_plan_as_context(
         &mut self,
+        ai_document_id: AIDocumentId,
         ctx: &mut ViewContext<Self>,
     ) {
         self.input.update(ctx, |input, ctx| {
@@ -5102,11 +5698,190 @@ impl TerminalView {
         self.is_orchestration_split_off
     }
 
+    /// Returns true if the given conversation is currently selected in this terminal.
+    pub fn is_conversation_selected(
+        &self,
+        conversation_id: &AIConversationId,
+        ctx: &AppContext,
+    ) -> bool {
+        self.ai_context_model
+            .as_ref(ctx)
+            .selected_conversation_id(ctx)
+            .map(|id| id == *conversation_id)
+            .unwrap_or(false)
+    }
 
+    fn handle_agent_todos_popup_event(
+        &mut self,
+        event: &AgentTodosPopupEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match event {
+            AgentTodosPopupEvent::Close => {
+                self.is_todo_popup_visible = false;
+                ctx.focus_self();
+                ctx.notify();
+            }
+        }
+    }
 
+    fn handle_ai_context_model_event(
+        &mut self,
+        context_model: ModelHandle<BlocklistAIContextModel>,
+        event: &BlocklistAIContextEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match event {
+            BlocklistAIContextEvent::UpdatedPendingContext {
+                previous_block_ids,
+                requires_block_resync,
+                requires_text_resync,
+            } => {
+                let pending_context_block_ids =
+                    context_model.as_ref(ctx).pending_context_block_ids();
+                let pending_context_selected_text = context_model
+                    .as_ref(ctx)
+                    .pending_context_selected_text()
+                    .cloned();
+
+                self.ai_render_context.borrow_mut().block_ids.insert(
+                    AIContextInclusionState::Pending,
+                    pending_context_block_ids.clone(),
+                );
+                self.ai_render_context
+                    .borrow_mut()
+                    .has_pending_context_selected_text = pending_context_selected_text.is_some();
+                if let Some(conversation_id) = self
+                    .agent_view_controller
+                    .as_ref(ctx)
+                    .agent_view_state()
+                    .active_conversation_id()
+                {
+                    // Associate newly added blocks with the conversation
+                    let added_block_ids = pending_context_block_ids
+                        .difference(previous_block_ids)
+                        .collect_vec();
+                    if !added_block_ids.is_empty() {
+                        let associated_blocks = self
+                            .model
+                            .lock()
+                            .block_list_mut()
+                            .associate_blocks_with_conversation(
+                                added_block_ids.into_iter(),
+                                conversation_id,
+                            );
+
+                        // Persist the updated visibility for each block
+                        if let Some(sender) = GlobalResourceHandlesProvider::as_ref(ctx)
+                            .get()
+                            .model_event_sender
+                            .as_ref()
+                        {
+                            for (block_id, agent_view_visibility) in associated_blocks {
+                                if let Err(e) = sender.send(
+                                    persistence::ModelEvent::UpdateBlockAgentViewVisibility {
+                                        block_id: block_id.to_string(),
+                                        agent_view_visibility: agent_view_visibility.into(),
+                                    },
+                                ) {
+                                    log::warn!(
+                                        "Error sending UpdateBlockAgentViewVisibility event: {e:#}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    // Dissociate removed blocks from the conversation
+                    let removed_block_ids = previous_block_ids
+                        .difference(pending_context_block_ids)
+                        .collect_vec();
+
+                    if !removed_block_ids.is_empty() {
+                        let dissociated_blocks = self
+                            .model
+                            .lock()
+                            .block_list_mut()
+                            .remove_pending_context_assocation_for_blocks(
+                                removed_block_ids.into_iter(),
+                                conversation_id,
+                            );
+
+                        if let Some(sender) = GlobalResourceHandlesProvider::as_ref(ctx)
+                            .get()
+                            .model_event_sender
+                            .as_ref()
+                        {
+                            for (block_id, agent_view_visibility) in dissociated_blocks {
+                                if let Err(e) = sender.send(
+                                    persistence::ModelEvent::UpdateBlockAgentViewVisibility {
+                                        block_id: block_id.to_string(),
+                                        agent_view_visibility: agent_view_visibility.into(),
+                                    },
+                                ) {
+                                    log::warn!(
+                                        "Error sending UpdateBlockAgentViewVisibility event: {e:#}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // If we updated the AI context as a result of changing block selection,
+                // we don't need to re-sync the selected blocks here.
+                if *requires_block_resync {
+                    let mut block_indices = Vec::with_capacity(pending_context_block_ids.len());
+                    for block_id in pending_context_block_ids.iter() {
+                        let Some(block_index) =
+                            self.model.lock().block_list().block_index_for_id(block_id)
+                        else {
+                            continue;
+                        };
+                        block_indices.push(block_index);
+                    }
+                    self.change_block_selections_to_match_ai_context(
+                        |selected_blocks| selected_blocks.reset_to_block_indices(block_indices),
+                        ctx,
+                    );
+                }
+
+                // If we updated the AI context as a result of changing text selection,
+                // we don't need to re-sync the selected text here.
+                //
+                // Note it's not possible to re-sync non-empty text selections because we have
+                // no way of locating text selections from the string alone. In any case, the
+                // only current use case for re-syncing selected text is when the pending
+                // context is cleared.
+                if *requires_text_resync && pending_context_selected_text.is_none() {
+                    self.clear_selected_text(ctx);
+                }
+
+                // Propagate context model's directory context to the most recent AI block.
+                let pwd = context_model.as_ref(ctx).current_pwd();
+                let home = context_model.as_ref(ctx).home_directory();
+                if let Some(last_block) = self.last_ai_block() {
+                    last_block.update(ctx, |block, ctx| {
+                        block.update_directory_context(pwd.clone(), home.clone(), ctx);
+                    });
+                }
+
+                ctx.notify();
+            }
+            BlocklistAIContextEvent::PendingQueryStateUpdated => {
+                self.update_context_blocks_and_exchanges(ctx);
+
+                // When the pending query state is updated (i.e. a conversation is selected or un-selected),
+                // update the title to reflect that selected conversation change.
+                self.update_pane_configuration(ctx);
+                ctx.notify();
+            }
+        }
+    }
 
     fn remove_pending_cloud_mode_query_if_exchange_has_renderable_user_query(
         &mut self,
+        ai_block_model: &AIBlockModelImpl<AIBlock>,
         ctx: &mut ViewContext<Self>,
     ) {
         let kind_is_cloud_mode =
@@ -5135,11 +5910,866 @@ impl TerminalView {
         }
         self.remove_cloud_mode_queue_row(ctx);
     }
+    fn render_owner_for_ai_history_event(
+        &self,
+        history_model: &BlocklistAIHistoryModel,
+        event: &BlocklistAIHistoryEvent,
+    ) -> Option<EntityId> {
+        match event {
+            BlocklistAIHistoryEvent::AppendedExchange {
+                conversation_id, ..
+            }
+            | BlocklistAIHistoryEvent::UpdatedStreamingExchange {
+                conversation_id, ..
+            }
+            | BlocklistAIHistoryEvent::UpdatedConversationStatus {
+                conversation_id, ..
+            }
+            | BlocklistAIHistoryEvent::UpdatedConversationArtifacts {
+                conversation_id, ..
+            }
+            | BlocklistAIHistoryEvent::UpdatedConversationTitle {
+                conversation_id, ..
+            } => history_model.terminal_surface_id_for_conversation(conversation_id),
+            BlocklistAIHistoryEvent::ReassignedExchange {
+                new_conversation_id,
+                ..
+            } => history_model.terminal_surface_id_for_conversation(new_conversation_id),
+            BlocklistAIHistoryEvent::UpdatedConversationMetadata {
+                conversation_id, ..
+            } => history_model.terminal_surface_id_for_conversation(conversation_id),
+            BlocklistAIHistoryEvent::StartedNewConversation { .. }
+            | BlocklistAIHistoryEvent::CreatedSubtask { .. }
+            | BlocklistAIHistoryEvent::UpgradedTask { .. }
+            | BlocklistAIHistoryEvent::SetActiveConversation { .. }
+            | BlocklistAIHistoryEvent::ClearedActiveConversation { .. }
+            | BlocklistAIHistoryEvent::ClearedConversationsForTerminalSurface { .. }
+            | BlocklistAIHistoryEvent::UpdatedTodoList { .. }
+            | BlocklistAIHistoryEvent::UpdatedAutoexecuteOverride { .. }
+            | BlocklistAIHistoryEvent::SplitConversation { .. }
+            | BlocklistAIHistoryEvent::RemoveConversation { .. }
+            | BlocklistAIHistoryEvent::DeletedConversation { .. }
+            | BlocklistAIHistoryEvent::RestoredConversations { .. }
+            | BlocklistAIHistoryEvent::ConversationServerTokenAssigned { .. }
+            | BlocklistAIHistoryEvent::ConversationTransferredBetweenTerminalSurfaces { .. }
+            | BlocklistAIHistoryEvent::NewConversationRequestComplete { .. }
+            | BlocklistAIHistoryEvent::OrchestrationConfigUpdated { .. }
+            | BlocklistAIHistoryEvent::ConversationUsageMetadataUpdated { .. }
+            | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. } => None,
+        }
+    }
 
+    fn handle_ai_history_model_event(
+        &mut self,
+        history_model: ModelHandle<BlocklistAIHistoryModel>,
+        event: &BlocklistAIHistoryEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let history_model_ref = history_model.as_ref(ctx);
+        let should_handle = match self.render_owner_for_ai_history_event(history_model_ref, event) {
+            Some(owner_terminal_view_id) => owner_terminal_view_id == self.view_id,
+            None => event
+                .terminal_surface_id()
+                .is_none_or(|terminal_view_id| terminal_view_id == self.view_id),
+        };
+        if !should_handle {
+            return;
+        }
+        // If the conversation details panel is open and showing an active local
+        // AI conversation in this terminal view, refresh its data when status,
+        // artifacts, exchanges, or metadata change. Mirrors the WASM transcript
+        // panel refresh logic in `Workspace::handle_history_model_event` for
+        // APP-3595.
+        if self.is_conversation_details_panel_open
+            && matches!(
+                event,
+                BlocklistAIHistoryEvent::UpdatedConversationStatus { .. }
+                    | BlocklistAIHistoryEvent::UpdatedConversationTitle { .. }
+                    | BlocklistAIHistoryEvent::UpdatedConversationMetadata { .. }
+                    | BlocklistAIHistoryEvent::UpdatedConversationArtifacts { .. }
+                    | BlocklistAIHistoryEvent::UpdatedStreamingExchange { .. }
+                    | BlocklistAIHistoryEvent::SetActiveConversation { .. }
+                    | BlocklistAIHistoryEvent::RestoredConversations { .. }
+            )
+        {
+            self.fetch_and_update_conversation_details_panel(ctx);
+        }
+        if matches!(
+            event,
+            BlocklistAIHistoryEvent::UpdatedConversationMetadata { .. }
+                | BlocklistAIHistoryEvent::ConversationServerTokenAssigned { .. }
+        ) {
+            self.maybe_insert_tombstone_for_non_running_shared_ambient_task(ctx);
+        }
+        match event {
+            BlocklistAIHistoryEvent::AppendedExchange {
+                exchange_id,
+                task_id,
+                conversation_id,
+                is_hidden,
+                response_stream_id,
+                ..
+            } => {
+                self.maybe_send_lrc_queued_prompts_after_subagent_handoff(*conversation_id, ctx);
+                // Hide telemetry banner forever after first AI input user sends.
+                if FeatureFlag::GlobalAIAnalyticsBanner.is_enabled()
+                    && !GeneralSettings::as_ref(ctx)
+                        .telemetry_banner_dismissed
+                        .value()
+                {
+                    self.hide_telemetry_banner_permanently(ctx);
+                }
 
+                // Close any open usage footer(s) when a new AI block is added
+                if !self.usage_footer_view_ids.is_empty() {
+                    let owner_block_ids: Vec<EntityId> =
+                        self.usage_footer_view_ids.keys().copied().collect();
+                    for owner_id in &owner_block_ids {
+                        if let Some(ai_block_handle) = self.ai_block_handle_by_view_id(*owner_id) {
+                            ai_block_handle.update(ctx, |block, ctx| {
+                                block.handle_action(
+                                    &AIBlockAction::ToggleIsUsageFooterExpanded,
+                                    ctx,
+                                );
+                            });
+                        }
+                    }
+                }
 
+                if self.is_ambient_agent_session(ctx)
+                    && self
+                        .model
+                        .lock()
+                        .block_list()
+                        .is_executing_oz_environment_startup_commands()
+                {
+                    self.model
+                        .lock()
+                        .block_list_mut()
+                        .set_is_executing_oz_environment_startup_commands(false);
+                }
 
+                // For an oz local-to-cloud handoff, the first `AppendedExchange` is the
+                // analogue of `HarnessCommandStarted` for non-oz harnesses: the moment we
+                // tear down the queued-prompt block in favor of the live agent UI.
+                if self
+                    .ambient_agent_view_model
+                    .as_ref()
+                    .is_some_and(|model| model.as_ref(ctx).is_local_to_cloud_handoff())
+                {
+                    self.remove_pending_user_query_block(ctx);
+                    self.remove_cloud_mode_queue_row(ctx);
+                }
 
+                let should_add_ai_block = history_model
+                    .as_ref(ctx)
+                    .conversation(conversation_id)
+                    .and_then(|conversation| conversation.get_task(task_id))
+                    .is_some_and(blocklist_filter::should_show_task_in_blocklist);
+                if !should_add_ai_block {
+                    // Only add AI blocks to the blocklist for root task exchanges (normal Agent Mode)
+                    // and advice subagent exchanges (so advice tool calls/results are visible).
+                    return;
+                }
+
+                let ai_block_model = match AIBlockModelImpl::<AIBlock>::new(
+                    *exchange_id,
+                    *conversation_id,
+                    false,
+                    false,
+                    ctx,
+                ) {
+                    Ok(ai_block_model) => ai_block_model,
+                    Err(err) => {
+                        log::warn!(
+                            "Failed to create model for AI block on AppendedExchange. {err}"
+                        );
+                        return;
+                    }
+                };
+                self.remove_pending_cloud_mode_query_if_exchange_has_renderable_user_query(
+                    &ai_block_model,
+                    ctx,
+                );
+                let ai_block = ctx.add_typed_action_view(|ctx| {
+                    AIBlock::new(
+                        Rc::new(ai_block_model),
+                        self.model.clone(),
+                        ClientIdentifiers {
+                            conversation_id: *conversation_id,
+                            client_exchange_id: *exchange_id,
+                            response_stream_id: response_stream_id.clone(),
+                        },
+                        self.ai_controller.clone(),
+                        self.get_relevant_files_controller.clone(),
+                        self.pwd(),
+                        self.shell_launch_data_if_local(ctx),
+                        self.ai_action_model.clone(),
+                        self.ai_context_model.clone(),
+                        self.find_model.clone(),
+                        self.active_session.clone(),
+                        &self.cli_subagent_controller,
+                        &self.model_events_handle,
+                        self.agent_view_controller.clone(),
+                        self.ambient_agent_view_model.clone(),
+                        self.view_handle.clone(),
+                        self.view_id,
+                        ctx,
+                    )
+                });
+
+                // Focus the AI block so that the user can cancel,
+                // unless the terminal is not even focused which can
+                // happen during autonomous execution.
+                self.focus_ai_block_if_self_focused(&ai_block, ctx);
+
+                ctx.subscribe_to_view(&ai_block, move |me, block, event, ctx| {
+                    me.handle_ai_block_event(
+                        block.clone(),
+                        false, // is_restored
+                        event,
+                        ctx,
+                    );
+                });
+                let ai_block_clone = ai_block.clone();
+                let is_passive_conversation =
+                    ai_block_clone.as_ref(ctx).is_passive_conversation(ctx);
+                self.find_model.update(ctx, move |find_model, _ctx| {
+                    find_model.register_findable_rich_content_view(ai_block_clone);
+                });
+
+                self.insert_rich_content(
+                    Some(RichContentType::AIBlock),
+                    ai_block.clone(),
+                    Some(RichContentMetadata::AIBlock(AIBlockMetadata {
+                        exchange_id: *exchange_id,
+                        conversation_id: *conversation_id,
+                        ai_block_handle: ai_block,
+                    })),
+                    RichContentInsertionPosition::Append {
+                        insert_below_long_running_block: false,
+                    },
+                    ctx,
+                );
+
+                if !is_hidden && !is_passive_conversation {
+                    // Clear agent mode query banners and hidden blocks when a new AI block is created.
+                    self.clear_prompt_suggestions(ctx);
+                    self.drop_hidden_passive_ai_blocks(ctx);
+                }
+
+                self.update_context_blocks_and_exchanges(ctx);
+
+                ctx.notify();
+            }
+            BlocklistAIHistoryEvent::ReassignedExchange {
+                exchange_id,
+                new_conversation_id,
+                ..
+            } => {
+                if let Some(ai_block_rich_content) =
+                    self.rich_content_views.iter_mut().find(|rich_content| {
+                        rich_content
+                            .ai_block_metadata()
+                            .is_some_and(|ai_metadata| ai_metadata.exchange_id == *exchange_id)
+                    })
+                {
+                    if let Some(RichContentMetadata::AIBlock(AIBlockMetadata {
+                        conversation_id,
+                        ai_block_handle,
+                        ..
+                    })) = ai_block_rich_content.metadata_mut()
+                    {
+                        *conversation_id = *new_conversation_id;
+                        let new_model = match AIBlockModelImpl::<AIBlock>::new(
+                            *exchange_id,
+                            *new_conversation_id,
+                            false,
+                            false,
+                            ctx,
+                        ) {
+                            Ok(new_model) => new_model,
+                            Err(err) => {
+                                log::warn!(
+                                    "Failed to create model for AI block on ReassignedExchange. {err}"
+                                );
+                                return;
+                            }
+                        };
+
+                        ai_block_handle.update(ctx, |block, ctx| {
+                            block.reset_conversation_id(
+                                *new_conversation_id,
+                                Rc::new(new_model),
+                                ctx,
+                            );
+                        });
+                    }
+
+                    if FeatureFlag::AgentView.is_enabled() {
+                        ai_block_rich_content
+                            .update_agent_view_conversation_id(*new_conversation_id);
+                        self.model
+                            .lock()
+                            .block_list_mut()
+                            .update_agent_view_conversation_id_for_rich_content(
+                                ai_block_rich_content.view_id(),
+                                Some(*new_conversation_id),
+                            );
+                    }
+                }
+            }
+            BlocklistAIHistoryEvent::StartedNewConversation {
+                new_conversation_id,
+                ..
+            } => {
+                // If a new conversation has been started, update context block and
+                // AI exchange IDs in the `ai_render_context` for the active and inactive
+                // conversations.
+                let mut ai_render_context = self.ai_render_context.borrow_mut();
+                ai_render_context.selected_conversation_id = Some(*new_conversation_id);
+
+                ai_render_context.exchange_ids = Some(HashSet::new());
+            }
+            BlocklistAIHistoryEvent::UpdatedStreamingExchange {
+                exchange_id,
+                conversation_id,
+                ..
+            } => {
+                self.maybe_send_lrc_queued_prompts_after_subagent_handoff(*conversation_id, ctx);
+                let ai_block_model = match AIBlockModelImpl::<AIBlock>::new(
+                    *exchange_id,
+                    *conversation_id,
+                    false,
+                    false,
+                    ctx,
+                ) {
+                    Ok(ai_block_model) => ai_block_model,
+                    Err(err) => {
+                        log::warn!(
+                            "Failed to create model for AI block on UpdatedStreamingExchange. {err}"
+                        );
+                        self.update_context_blocks_and_exchanges(ctx);
+                        return;
+                    }
+                };
+                self.remove_pending_cloud_mode_query_if_exchange_has_renderable_user_query(
+                    &ai_block_model,
+                    ctx,
+                );
+                self.update_context_blocks_and_exchanges(ctx);
+            }
+            BlocklistAIHistoryEvent::SetActiveConversation { .. } => {
+                // When the conversation state changes or a new conversation
+                // is selected, update the title to reflect that change.
+                self.update_pane_configuration(ctx);
+            }
+            BlocklistAIHistoryEvent::ClearedActiveConversation {
+                conversation_id, ..
+            } => {
+                // When the conversation state changes or a new conversation
+                // is selected, update the title to reflect that change.
+                self.update_pane_configuration(ctx);
+
+                if FeatureFlag::AgentView.is_enabled() {
+                    let rich_content_ids = self
+                        .rich_content_views
+                        .extract_if(.., |rich_content| {
+                            rich_content.agent_view_conversation_id() == Some(*conversation_id)
+                        })
+                        .map(|rich_content| rich_content.view_id());
+                    let mut terminal_model = self.model.lock();
+                    for id in rich_content_ids {
+                        terminal_model.block_list_mut().remove_rich_content(id);
+                    }
+                    ctx.notify();
+                }
+            }
+            BlocklistAIHistoryEvent::SplitConversation { .. } => {
+                // When the conversation state changes or a new conversation
+                // is selected, update the title to reflect that change.
+                self.update_pane_configuration(ctx);
+            }
+            BlocklistAIHistoryEvent::UpdatedConversationStatus {
+                conversation_id,
+                update,
+                new_status,
+                ..
+            } => {
+                self.maybe_send_lrc_queued_prompts_after_subagent_handoff(*conversation_id, ctx);
+                // When the conversation state changes or a new conversation
+                // is selected, update the title to reflect that change.
+                self.update_pane_configuration(ctx);
+
+                let previous_status = self
+                    .last_observed_conversation_status
+                    .insert(*conversation_id, new_status.clone())
+                    .or_else(|| match update {
+                        ConversationStatusUpdate::Changed { prev_status } => {
+                            Some(prev_status.clone())
+                        }
+                        ConversationStatusUpdate::Restored => None,
+                    });
+
+                // Don't send notifications or insert ambient agent session ended tombstone
+                // if we're restoring this conversation on startup.
+                if matches!(update, ConversationStatusUpdate::Restored) {
+                    return;
+                }
+
+                if FeatureFlag::QueuedPromptsV2.is_enabled()
+                    && self.is_ambient_agent_session(ctx)
+                    && previous_status.is_some_and(|status| {
+                        status.is_in_progress()
+                            || status.is_transient_error()
+                            || status.is_blocked()
+                    })
+                {
+                    let finish_reason = match new_status {
+                        ConversationStatus::Success => Some(FinishReason::Complete),
+                        ConversationStatus::Error => Some(FinishReason::Error),
+                        ConversationStatus::Cancelled => Some(FinishReason::Cancelled),
+                        // TransientError is non-terminal: an automatic recovery is pending.
+                        ConversationStatus::InProgress
+                        | ConversationStatus::TransientError
+                        | ConversationStatus::Blocked { .. }
+                        | ConversationStatus::WaitingForEvents => None,
+                    };
+                    if let Some(finish_reason) = finish_reason {
+                        self.handle_finished_conversation(*conversation_id, finish_reason, ctx);
+                    }
+                }
+
+                self.maybe_send_agent_mode_desktop_notification(conversation_id, ctx);
+
+                // Show AI credits modal for cloud-mode out-of-credits failures.
+                if FeatureFlag::CloudMode.is_enabled()
+                    && self.is_ambient_agent_session(ctx)
+                    && !self.model.lock().is_shared_ambient_agent_session()
+                    && let Some(conversation) =
+                        BlocklistAIHistoryModel::as_ref(ctx).conversation(conversation_id)
+                    && matches!(
+                        conversation_output_status_from_conversation(conversation),
+                        Some(AmbientConversationStatus::Error {
+                            error: RenderableAIError::QuotaLimit { .. }
+                        })
+                    )
+                {
+                    self.show_out_of_credits_modal(ctx);
+                }
+
+                // For conversation transcript viewers (on WASM) and shared ambient sessions on
+                // non-CloudModeSetupV2 paths, insert a conversation-ended tombstone when the
+                // conversation completes.
+                // We only insert the tombstone once per session (when the conversation finishes).
+                // Skip during historical replay to avoid premature tombstone insertion.
+                let should_insert_tombstone = if self.conversation_ended_tombstone_view_id.is_none()
+                    && !self.model.lock().is_receiving_agent_conversation_replay()
+                {
+                    #[cfg(target_family = "wasm")]
+                    {
+                        let model = self.model.lock();
+                        // On WASM, keep transcript viewers on the conversation-driven path.
+                        // Shared ambient sessions under CloudModeSetupV2 are handled via
+                        // AgentConversationsModel task liveness updates instead.
+                        model.is_conversation_transcript_viewer()
+                            || (!FeatureFlag::CloudModeSetupV2.is_enabled()
+                                && model.is_shared_ambient_agent_session())
+                    }
+                    #[cfg(not(target_family = "wasm"))]
+                    {
+                        // Show tombstone for shared ambient agent sessions
+                        self.model.lock().is_shared_ambient_agent_session()
+                            && !FeatureFlag::CloudModeSetupV2.is_enabled()
+                    }
+                } else {
+                    false
+                };
+
+                if should_insert_tombstone
+                    && let Some(conversation) =
+                        BlocklistAIHistoryModel::as_ref(ctx).conversation(conversation_id)
+                    && !conversation.status().is_in_progress()
+                    && conversation_output_status_from_conversation(conversation).is_some()
+                {
+                    self.insert_conversation_ended_tombstone_with_cta(None, ctx);
+                }
+            }
+            BlocklistAIHistoryEvent::UpdatedConversationTitle { .. } => {
+                self.update_pane_configuration(ctx);
+            }
+            BlocklistAIHistoryEvent::ClearedConversationsForTerminalSurface {
+                active_conversation_id,
+                ..
+            } => {
+                // The singleton's own history subscriber drops queue state for cleared
+                // conversations, so no `clear_all` call is needed here.
+                self.last_observed_conversation_status.clear();
+                self.last_observed_active_subagent.clear();
+                if let Some(active_conversation_id) = active_conversation_id {
+                    self.ai_controller.update(ctx, |controller, ctx| {
+                        controller.cancel_conversation_progress(
+                            *active_conversation_id,
+                            CancellationReason::ManuallyCancelled,
+                            ctx,
+                        );
+                    });
+                }
+                // When the active conversation is invalidated, fall back to the original pane title
+                self.pane_configuration.update(ctx, |pane_config, ctx| {
+                    pane_config.set_title(self.terminal_title.clone(), ctx);
+                });
+                self.is_using_conversation_for_pane_header_title = false;
+            }
+            BlocklistAIHistoryEvent::ConversationTransferredBetweenTerminalSurfaces {
+                conversation_id,
+                previous_terminal_surface_id,
+                ..
+            } => {
+                // The conversation has moved to another terminal view. We are
+                // the previous owner (the per-view filter at the top of this
+                // function uses `previous_terminal_view_id`), so drop any
+                // rendered blocks tagged to this conversation. Leave the
+                // agent-view entry in place so the user can click it to
+                // navigate to the current owner pane later.
+                if *previous_terminal_surface_id != self.view_id {
+                    return;
+                }
+                let view_ids_to_remove = self
+                    .rich_content_views
+                    .iter()
+                    .filter_map(|view| {
+                        let is_ai_block_for_conversation = matches!(
+                            view.metadata(),
+                            Some(RichContentMetadata::AIBlock(metadata))
+                                if metadata.conversation_id == *conversation_id
+                        );
+                        is_ai_block_for_conversation.then_some(view.view_id())
+                    })
+                    .collect_vec();
+                for view_id_to_remove in view_ids_to_remove.into_iter() {
+                    self.model
+                        .lock()
+                        .block_list_mut()
+                        .remove_rich_content(view_id_to_remove);
+                    self.rich_content_views
+                        .retain(|view| view.view_id() != view_id_to_remove);
+                }
+                self.model
+                    .lock()
+                    .block_list_mut()
+                    .remove_command_blocks_for_conversation(*conversation_id);
+            }
+            BlocklistAIHistoryEvent::RemoveConversation {
+                conversation_id, ..
+            }
+            | BlocklistAIHistoryEvent::DeletedConversation {
+                conversation_id, ..
+            } => {
+                // The queue is always for the currently active conversation; agent-view exit
+                // already wipes it via `ExitedAgentView`, so no per-conversation cleanup is
+                // needed here.
+                self.last_observed_conversation_status
+                    .remove(conversation_id);
+                self.last_observed_active_subagent.remove(conversation_id);
+            }
+            BlocklistAIHistoryEvent::CreatedSubtask {
+                conversation_id, ..
+            } => {
+                self.maybe_send_lrc_queued_prompts_after_subagent_handoff(*conversation_id, ctx);
+            }
+            BlocklistAIHistoryEvent::UpdatedAutoexecuteOverride { .. }
+            | BlocklistAIHistoryEvent::UpdatedTodoList { .. }
+            | BlocklistAIHistoryEvent::RestoredConversations { .. }
+            | BlocklistAIHistoryEvent::UpgradedTask { .. }
+            | BlocklistAIHistoryEvent::UpdatedConversationMetadata { .. }
+            | BlocklistAIHistoryEvent::UpdatedConversationArtifacts { .. }
+            | BlocklistAIHistoryEvent::ConversationServerTokenAssigned { .. }
+            | BlocklistAIHistoryEvent::NewConversationRequestComplete { .. }
+            | BlocklistAIHistoryEvent::OrchestrationConfigUpdated { .. }
+            | BlocklistAIHistoryEvent::ConversationUsageMetadataUpdated { .. }
+            | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. } => {}
+        }
+        ctx.notify();
+    }
+
+    fn maybe_send_lrc_queued_prompts_after_subagent_handoff(
+        &mut self,
+        conversation_id: AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let has_lrc_queued_prompt = QueuedQueryModel::as_ref(ctx)
+            .queue(conversation_id)
+            .first()
+            .is_some_and(|row| row.origin() == QueuedQueryOrigin::LrcAutoQueue);
+        if !has_lrc_queued_prompt {
+            return;
+        }
+        let has_active_subagent = BlocklistAIHistoryModel::as_ref(ctx)
+            .conversation(&conversation_id)
+            .is_some_and(|conversation| conversation.has_active_subagent());
+        let previously_had_active_subagent = self
+            .last_observed_active_subagent
+            .insert(conversation_id, has_active_subagent)
+            .unwrap_or(false);
+        if previously_had_active_subagent && !has_active_subagent {
+            self.send_lrc_queued_prompts(conversation_id, ctx);
+        }
+    }
+
+    fn handle_cli_subagent_controller_event(
+        &mut self,
+        _: ModelHandle<CLISubagentController>,
+        event: &CLISubagentEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match event {
+            CLISubagentEvent::SpawnedSubagent {
+                task_id,
+                block_id,
+                conversation_id,
+                initial_requested_command_action_id,
+            } => {
+                let subagent_view = ctx.add_typed_action_view(|ctx| {
+                    CLISubagentView::new(
+                        block_id.clone(),
+                        self.ai_action_model.clone(),
+                        self.cli_subagent_controller.clone(),
+                        self.model.clone(),
+                        *conversation_id,
+                        task_id.clone(),
+                        self.pwd(),
+                        self.shell_launch_data_if_local(ctx),
+                        ctx,
+                    )
+                });
+                self.cli_subagent_views
+                    .insert(block_id.clone(), subagent_view.clone());
+
+                ctx.subscribe_to_view(&subagent_view, |me, view, event, ctx| match event {
+                    CLISubagentViewEvent::TextSelected => {
+                        // Unlike AI blocks, CLI subagent view text selections should not coexist
+                        // with block list or alt screen text selections. Clear those first before
+                        // calling `clear_selected_text_except`, which handles the side effects
+                        // (clipboard sync, context model, etc.) and clears other rich content views.
+                        {
+                            let mut model = me.model.lock();
+                            model.block_list_mut().clear_selection();
+                            model.alt_screen_mut().clear_selection();
+                        }
+                        // Also reset transient terminal-side selection state so stale alt-screen
+                        // selection visuals don't persist after switching selection focus to the
+                        // CLI subagent view.
+                        me.is_selecting = false;
+                        me.block_text_selection_start_position = None;
+                        me.clear_selected_text_except(Some(view.id()), ctx);
+                        ctx.notify();
+                    }
+                    CLISubagentViewEvent::CopiedEmptyText => {
+                        me.copy(ctx);
+                    }
+                    #[cfg(windows)]
+                    CLISubagentViewEvent::WindowsCtrlC => {
+                        me.ctrl_c(ctx);
+                    }
+                });
+
+                if let Some(initial_requested_command_id) = initial_requested_command_action_id {
+                    // Remove the AI block for the request/response pair that resulted in spawning
+                    // the CLI subagent. You can think of this block as corresponding to the
+                    // initial action result input for the long running requested command (the
+                    // initial output snapshot) and the output containing the subagent tool call.
+                    //
+                    // This block doesn't actually have any renderable inputs or outputs (typically,
+                    // the output tool call would be rendered like all our other tool calls), but
+                    // the CLI subagent tool call is 'special' in that it corresponds to UI rendered
+                    // on the _command_ block for the previously requested command.
+                    //
+                    // We remove this block so the AI block originally containing the requested
+                    // command remains immediately above the actual command block in the blocklist,
+                    // which enables visual continuity in the requested command's expanded state
+                    // (e.g. the expanded requested command header appears right on top of the
+                    // running command block; they appear part of the same UI component).
+                    if let Some((result_ai_block_id, result_conversation_id, result_exchange_id)) =
+                        self.rich_content_views.iter().find_map(|view| {
+                            let ai_metadata = view.ai_block_metadata()?;
+                            ai_metadata
+                                .ai_block_handle
+                                .as_ref(ctx)
+                                .contains_action_result(initial_requested_command_id, ctx)
+                                .then_some((
+                                    view.view_id(),
+                                    ai_metadata.conversation_id,
+                                    ai_metadata.exchange_id,
+                                ))
+                        })
+                    {
+                        BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
+                            history_model.set_exchange_hidden_status(
+                                self.view_id,
+                                result_conversation_id,
+                                result_exchange_id,
+                                true,
+                                ctx,
+                            );
+                        });
+                        self.rich_content_views
+                            .retain(|rich_content| rich_content.view_id() != result_ai_block_id);
+                        self.model
+                            .lock()
+                            .block_list_mut()
+                            .remove_rich_content(result_ai_block_id);
+                    }
+                }
+            }
+            CLISubagentEvent::UpdatedControl {
+                block_id,
+                agent_has_control,
+                ..
+            } => {
+                self.redetermine_terminal_focus(ctx);
+                self.emit_long_running_command_agent_interaction_state_changed(
+                    *agent_has_control,
+                    block_id.clone(),
+                    ctx,
+                );
+            }
+            CLISubagentEvent::FinishedSubagent {
+                block_id,
+                conversation_id,
+                ..
+            } => {
+                self.cli_subagent_views.remove(block_id);
+
+                // The command ended — drop any LRC-scoped auto-queue override so the
+                // conversation reverts to its pre-command queue state, then try to deliver the
+                // prompts queued for this LRC. Delivery defers until subagent handoff if needed.
+                if let Some(conversation_id) = conversation_id {
+                    QueuedQueryModel::handle(ctx).update(ctx, |model, ctx| {
+                        model.clear_queue_next_lrc_prompt_override(*conversation_id, ctx);
+                    });
+                    self.send_lrc_queued_prompts(*conversation_id, ctx);
+                }
+
+                if FeatureFlag::AgentView.is_enabled() {
+                    let Some(conversation_id) = conversation_id else {
+                        return;
+                    };
+
+                    if self.has_existing_lrc_agent_view_block(*conversation_id)
+                        || self
+                            .agent_view_controller
+                            .as_ref(ctx)
+                            .agent_view_state()
+                            .is_active()
+                    {
+                        return;
+                    }
+
+                    // In the case that the user has taken control and already exited the agent view,
+                    // we insert the corresponding agent view block on command finish instead.
+                    self.insert_agent_view_entry_block(
+                        AgentViewEntryBlockParams {
+                            conversation_id: *conversation_id,
+                            is_new: true,
+                            is_restored: false,
+                            origin: AgentViewEntryOrigin::LongRunningCommand,
+                            agent_view_controller: self.agent_view_controller.clone(),
+                        },
+                        RichContentInsertionPosition::Append {
+                            insert_below_long_running_block: true,
+                        },
+                        ctx,
+                    );
+                    ctx.notify();
+                }
+            }
+            CLISubagentEvent::ToggledHideResponses
+            | CLISubagentEvent::UpdatedInstruction { .. }
+            | CLISubagentEvent::UpdatedLastSnapshot => {}
+            CLISubagentEvent::ControlHandedBackAfterTransfer => {
+                // Notify the shell command executor that control was handed back after transfer.
+                self.ai_action_model
+                    .as_ref(ctx)
+                    .shell_command_executor(ctx)
+                    .update(ctx, |executor, _| {
+                        executor.notify_control_handed_back();
+                    });
+            }
+        }
+    }
+
+    fn handle_continue_conversation(
+        &mut self,
+        conversation_id: &AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if FeatureFlag::AgentView.is_enabled() {
+            self.enter_agent_view_for_conversation(
+                None,
+                AgentViewEntryOrigin::ContinueConversationButton,
+                *conversation_id,
+                ctx,
+            );
+        } else {
+            // Set pending query as follow-up in context model
+            self.ai_context_model.update(ctx, |context_model, ctx| {
+                context_model.set_pending_query_state_for_existing_conversation(
+                    *conversation_id,
+                    AgentViewEntryOrigin::ContinueConversationButton,
+                    ctx,
+                );
+            });
+
+            // Set input config to AI mode, preserving user's autodetect preference
+            self.ai_input_model.update(ctx, |input_model, ctx| {
+                input_model.set_input_type(
+                    InputType::AI,
+                    Some(InputTypeAutoDetectionSource::ContinueConversation),
+                    ctx,
+                );
+            });
+        }
+
+        // Send telemetry for follow-up toggle
+        send_telemetry_from_ctx!(
+            TelemetryEvent::AgentModeContinueConversationButtonClicked {
+                conversation_id: *conversation_id,
+            },
+            ctx
+        );
+
+        // Focus the input
+        self.redetermine_global_focus(ctx);
+    }
+
+    fn handle_resume_conversation(
+        &mut self,
+        conversation_id: &AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        // If `AgentView` is enabled, this button is only rendered when the agent view is already
+        // active for the selected conversation, so this call is redundant.
+        if !FeatureFlag::AgentView.is_enabled() {
+            self.ai_context_model.update(ctx, |context_model, ctx| {
+                context_model.set_pending_query_state_for_existing_conversation(
+                    *conversation_id,
+                    AgentViewEntryOrigin::ResumeConversationButton,
+                    ctx,
+                )
+            });
+        }
+
+        self.ai_controller.update(ctx, |controller, ctx| {
+            controller.resume_conversation(
+                *conversation_id,
+                /*can_attempt_resume_on_error*/ true,
+                /*is_auto_resume_after_error*/ false,
+                vec![],
+                ctx,
+            );
+        });
+    }
 
     /// Handle the opening and closing of the usage footer.
     /// We insert the usage footer as a rich content view into the blocklist
@@ -5147,6 +6777,7 @@ impl TerminalView {
     fn handle_usage_footer_toggled(
         &mut self,
         source_ai_block_view_id: EntityId,
+        conversation_id: AIConversationId,
         is_expanded: bool,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -5181,6 +6812,7 @@ impl TerminalView {
 
         let conversation_usage_info = ConversationUsageInfo {
             credits_spent: conversation.inference_credits_spent(),
+            platform_credits_spent: conversation.platform_credits_spent(),
             credits_spent_for_last_block: conversation.credits_spent_for_last_block(),
             tool_calls: tool_usage.total_tool_calls(),
             models: conversation.token_usage().to_vec(),
@@ -5303,6 +6935,7 @@ impl TerminalView {
         &mut self,
         delta_pref: GitDeltaPreference,
         entrypoint: CodeReviewPaneEntrypoint,
+        cli_agent: Option<super::CLIAgent>,
         focus_new_pane: bool,
         event_constructor: impl Fn(CodeReviewPanelArg) -> Event,
         ctx: &mut ViewContext<Self>,
@@ -5359,6 +6992,7 @@ impl TerminalView {
         &mut self,
         delta_pref: GitDeltaPreference,
         entrypoint: CodeReviewPaneEntrypoint,
+        cli_agent: Option<super::CLIAgent>,
         focus_new_pane: bool,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -5376,6 +7010,7 @@ impl TerminalView {
         &mut self,
         delta_pref: GitDeltaPreference,
         entrypoint: CodeReviewPaneEntrypoint,
+        cli_agent: Option<super::CLIAgent>,
         focus_new_pane: bool,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -5422,6 +7057,7 @@ impl TerminalView {
             input.replace_at_symbol_with_text(&attachment_reference, ctx);
             input.ensure_agent_mode_for_ai_features(
                 true,
+                Some(InputTypeAutoDetectionSource::AttachmentForcedAi),
                 ctx,
             );
         });
@@ -5493,13 +7129,162 @@ impl TerminalView {
         let _ = ai_render_context.exchange_ids.insert(exchange_ids);
     }
 
+    fn handle_ai_input_model_event(
+        &mut self,
+        _ai_input_model: ModelHandle<BlocklistAIInputModel>,
+        event: &BlocklistAIInputEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match event {
+            BlocklistAIInputEvent::InputTypeChanged { config } => {
+                self.ai_render_context.borrow_mut().is_ai_input_enabled = config.input_type.is_ai();
+                #[cfg(feature = "local_fs")]
+                self.update_git_status_subscription(ctx);
 
+                // Force re-render all AIBlocks to ensure that selected text is recolored properly
+                self.rerender_rich_content_blocks(ctx);
+
+                // Emit AppStateChanged when the AI input mode changes to trigger pane state saving
+                ctx.emit(Event::AppStateChanged);
+                ctx.notify();
+            }
+            BlocklistAIInputEvent::LockChanged { .. } => {}
+        }
+    }
+
+    fn handle_ai_action_model_event(
+        &mut self,
+        action_model: ModelHandle<BlocklistAIActionModel>,
+        event: &BlocklistAIActionEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match event {
+            BlocklistAIActionEvent::ActionBlockedOnUserConfirmation(_) => {
+                let is_agent_in_control = self
+                    .model
+                    .lock()
+                    .block_list()
+                    .active_block()
+                    .is_agent_in_control();
+                if is_agent_in_control {
+                    self.redetermine_terminal_focus(ctx);
+                }
+            }
+            BlocklistAIActionEvent::ExecutingAction(..) => {
+                self.redetermine_terminal_focus(ctx);
+                ctx.notify();
+            }
+            BlocklistAIActionEvent::FinishedAction { action_id, .. } => {
+                // Refresh git line changes when files are potentially updated by an action
+                let action_result = action_model
+                    .as_ref(ctx)
+                    .get_action_result(action_id)
+                    .cloned();
+
+                let maybe_modified_files = action_result
+                    .as_ref()
+                    .map(|result| {
+                        matches!(
+                            result.result,
+                            AIAgentActionResultType::RequestCommandOutput { .. }
+                                | AIAgentActionResultType::RequestFileEdits { .. }
+                        )
+                    })
+                    .unwrap_or(false);
+
+                if maybe_modified_files {
+                    self.refresh_warp_prompt(ctx);
+                    ctx.notify();
+                }
+
+                // Auto-open code review pane on first accepted file edits
+                if let Some(result) = action_result
+                    && let AIAgentActionResultType::RequestFileEdits(
+                        crate::ai::agent::RequestFileEditsResult::Success { .. },
+                    ) = &result.result
+                {
+                    let history_model = BlocklistAIHistoryModel::handle(ctx);
+                    if let Some(conversation_id) = history_model
+                        .as_ref(ctx)
+                        .conversation_id_for_action(action_id, ctx.view_id())
+                    {
+                        let already_opened = history_model
+                            .as_ref(ctx)
+                            .conversation(&conversation_id)
+                            .map(|c| c.has_opened_code_review())
+                            .unwrap_or(false);
+
+                        let should_auto_open = *GeneralSettings::as_ref(ctx)
+                            .auto_open_code_review_pane_on_first_agent_change;
+
+                        if !already_opened
+                                && should_auto_open
+                                && FeatureFlag::AutoOpenCodeReviewPane.is_enabled()
+                                && self.can_auto_open_code_review_panel(ctx)
+                                // we shouldn't auto open if this was triggered from a passive code review diff
+                                && !BlocklistAIHistoryModel::as_ref(ctx)
+                                .is_entirely_passive_conversation(&conversation_id)
+                        {
+                            self.open_code_review_pane(
+                                GitDeltaPreference::Always,
+                                CodeReviewPaneEntrypoint::ForceOpened,
+                                None,  // cli_agent
+                                false, /* focus_new_pane */
+                                ctx,
+                            );
+                        }
+                    }
+                }
+            }
+            BlocklistAIActionEvent::InitProject(_) => {
+                self.on_next_conversation_finished(|me, _reason, ctx| {
+                    if let Some(path) = me.pwd() {
+                        CodebaseIndexManager::handle(ctx).update(ctx, |manager, ctx| {
+                            manager.index_directory(PathBuf::from(path), ctx);
+                        });
+                        me.ai_controller.update(ctx, |controller, ctx| {
+                            controller.send_slash_command_request(
+                                SlashCommandRequest::InitProjectRules,
+                                ctx,
+                            );
+                        });
+                    }
+                });
+            }
+            BlocklistAIActionEvent::ToggleCodeReview(_) => {
+                self.toggle_code_review_pane(
+                    GitDeltaPreference::Always,
+                    CodeReviewPaneEntrypoint::InvokedByAgent,
+                    None,  // cli_agent
+                    false, /* focus_new_pane */
+                    ctx,
+                );
+            }
+            BlocklistAIActionEvent::InsertCodeReviewComments {
+                action_id: _,
+                repo_path,
+                comments,
+                base_branch,
+            } => {
+                if !FeatureFlag::PRCommentsV2.is_enabled() {
+                    self.handle_insert_code_review_comments_event(
+                        repo_path,
+                        comments,
+                        base_branch.as_deref(),
+                        ctx,
+                    );
+                }
+            }
+            BlocklistAIActionEvent::QueuedAction(_) => {}
+        }
+    }
 
     fn handle_insert_code_review_comments_event(
         &mut self,
         repo_path: &Path,
         comments: &[InsertReviewComment],
         base_branch: Option<&str>,
+        ctx: &mut ViewContext<Self>,
     ) {
         let pending_comments = convert_insert_review_comments(comments);
 
@@ -5561,6 +7346,8 @@ impl TerminalView {
 
     fn handle_shell_command_executor_event(
         &mut self,
+        _: ModelHandle<ShellCommandExecutor>,
+        event: &ShellCommandExecutorEvent,
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
@@ -5715,6 +7502,7 @@ impl TerminalView {
                 // Transfer control of the long-running command to the user.
                 self.cli_subagent_controller.update(ctx, |controller, ctx| {
                     controller.switch_control_to_user(
+                        UserTakeOverReason::TransferFromAgent {
                             reason: reason.clone(),
                         },
                         ctx,
@@ -5724,7 +7512,123 @@ impl TerminalView {
         }
     }
 
+    fn handle_start_agent_executor_event(
+        &mut self,
+        _executor: ModelHandle<StartAgentExecutor>,
+        event: &StartAgentExecutorEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match event {
+            StartAgentExecutorEvent::CreateAgent(request) => {
+                ctx.emit(Event::StartAgentConversation(request.as_ref().clone()));
+            }
+            StartAgentExecutorEvent::CleanupFailedChildLaunch { conversation_id } => {
+                // The child failed at launch and never started a server-side
+                // run; reuse the Kill path to drop its hidden pane and
+                // conversation so the orchestration pill bar stops showing a
+                // dead chip.
+                ctx.emit(Event::KillAgentConversation {
+                    conversation_id: *conversation_id,
+                });
+            }
+        }
+    }
 
+    fn get_ai_notification_summary(
+        &self,
+        conversation: &AIConversation,
+        app: &AppContext,
+    ) -> Option<AIBlockNotificationSummary> {
+        let title = conversation.title()?.to_string();
+
+        if conversation.status().is_blocked() {
+            let reason = self
+                .ai_action_model
+                .as_ref(app)
+                .get_pending_action(app)
+                .map(|action| match &action.action {
+                    AIAgentActionType::RequestCommandOutput { command, .. } => {
+                        format!("Oz needs your permission to run `{command}`")
+                    }
+                    AIAgentActionType::ReadFiles(..) => {
+                        "Oz needs your permission to read files".to_string()
+                    }
+                    AIAgentActionType::SearchCodebase(..) => {
+                        "Oz needs your permission to search your codebase".to_string()
+                    }
+                    AIAgentActionType::RequestFileEdits { .. } => {
+                        "Oz needs your permission to edit a file".to_string()
+                    }
+                    AIAgentActionType::WriteToLongRunningShellCommand { .. } => {
+                        "Oz needs your permission to interact with a running shell command"
+                            .to_string()
+                    }
+                    _ => "Oz needs your confirmation to continue".to_string(),
+                })
+                .unwrap_or("Oz needs your confirmation to continue".to_string());
+            return Some(AIBlockNotificationSummary {
+                success: false,
+                title,
+                description: reason,
+            });
+        } else if conversation.status().is_in_progress() {
+            return None;
+        }
+
+        let last_exchange = conversation.root_task_exchanges().last()?;
+        match &last_exchange.output_status {
+            AIAgentOutputStatus::Finished {
+                finished_output, ..
+            } => {
+                match finished_output {
+                    FinishedAIAgentOutput::Success { output, .. } => {
+                        // Get last line of output for summary
+                        let last_line = output
+                            .get()
+                            .text_from_agent_output()
+                            .last()
+                            .and_then(|text| {
+                                text.sections.iter().find_map(|section| match section {
+                                    AIAgentTextSection::PlainText { text } => {
+                                        Some(text.text().to_string())
+                                    }
+                                    _ => None,
+                                })
+                            })
+                            .unwrap_or_default();
+
+                        Some(AIBlockNotificationSummary {
+                            success: true,
+                            title: title.clone(),
+                            description: last_line,
+                        })
+                    }
+                    FinishedAIAgentOutput::Error {
+                        error: RenderableAIError::Other { error_message, .. },
+                        ..
+                    } => Some(AIBlockNotificationSummary {
+                        success: false,
+                        title: title.clone(),
+                        description: error_message.clone(),
+                    }),
+                    FinishedAIAgentOutput::Error {
+                        error: error @ RenderableAIError::TransientNetworkError { .. },
+                        ..
+                    } => Some(AIBlockNotificationSummary {
+                        success: false,
+                        title: title.clone(),
+                        description: error.to_string(),
+                    }),
+                    _ => Some(AIBlockNotificationSummary {
+                        success: false,
+                        title,
+                        description: "An unknown error occurred".to_string(),
+                    }),
+                }
+            }
+            _ => None,
+        }
+    }
 
     fn handle_windowing_state_update(
         &mut self,
@@ -5904,6 +7808,7 @@ impl TerminalView {
     /// This bypasses normal event emission to prevent update loops.
     pub fn apply_external_input_mode_update(
         &mut self,
+        config: InputConfig,
         ctx: &mut ViewContext<Self>,
     ) {
         self.input.update(ctx, |input, ctx| {
@@ -5911,15 +7816,103 @@ impl TerminalView {
         });
     }
 
+    pub fn ai_controller(&self) -> &ModelHandle<BlocklistAIController> {
+        &self.ai_controller
+    }
 
+    pub fn ai_context_model(&self) -> &ModelHandle<BlocklistAIContextModel> {
+        &self.ai_context_model
+    }
 
+    pub fn ai_input_model(&self) -> &ModelHandle<BlocklistAIInputModel> {
+        &self.ai_input_model
+    }
 
+    pub fn agent_view_controller(&self) -> &ModelHandle<AgentViewController> {
+        &self.agent_view_controller
+    }
 
+    pub fn active_conversation_id(&self, app: &AppContext) -> Option<AIConversationId> {
+        self.agent_view_controller
+            .as_ref(app)
+            .agent_view_state()
+            .active_conversation_id()
+    }
 
+    pub fn active_conversation_task_id(&self, app: &AppContext) -> Option<AmbientAgentTaskId> {
+        let history = BlocklistAIHistoryModel::as_ref(app);
+        let conversation_id = self.active_conversation_id(app).or_else(|| {
+            self.ai_context_model
+                .as_ref(app)
+                .selected_conversation_id(app)
+        })?;
+        history.conversation(&conversation_id)?.task_id()
+    }
 
+    pub fn ambient_agent_view_model(
+        &self,
+    ) -> Option<&ModelHandle<ambient_agent::AmbientAgentViewModel>> {
+        self.ambient_agent_view_model.as_ref()
+    }
 
+    /// Ensures this pane has an [`ambient_agent::AmbientAgentViewModel`], creating and wiring
+    /// it into the input if absent. Idempotent: returns the existing model when already
+    /// present (the upfront cloud-mode construction path). Used by both the upfront and
+    /// `SessionJoined` paths so a shared-session viewer that only discovers it is viewing an
+    /// ambient run at join time (e.g. a raw `shared_session` link) still gets a fully wired
+    /// model.
+    fn ensure_ambient_agent_view_model(
+        &mut self,
+        ctx: &mut ViewContext<Self>,
+    ) -> ModelHandle<ambient_agent::AmbientAgentViewModel> {
+        if let Some(existing) = self.ambient_agent_view_model.clone() {
+            return existing;
+        }
+        let terminal_view_id = self.view_id;
+        let model =
+            ctx.add_model(|ctx| ambient_agent::AmbientAgentViewModel::new(terminal_view_id, ctx));
+        self.wire_ambient_agent_view_model(model.clone(), ctx);
+        // Notify observers (e.g. `PaneGroup::create_shared_session_viewer`) that the model
+        // now exists so they can wire the viewer `TerminalManager` to its session events.
+        ctx.emit(Event::AmbientAgentViewModelCreated);
+        model
+    }
 
+    /// Wires an ambient agent view model into this terminal view: stores it, routes its events to
+    /// [`Self::handle_ambient_agent_event`], and attaches it to the input. The single wiring point
+    /// shared by the upfront construction path (`TerminalView::new`) and the lazy `SessionJoined`
+    /// path (`ensure_ambient_agent_view_model`) so the two cannot drift.
+    fn wire_ambient_agent_view_model(
+        &mut self,
+        model: ModelHandle<ambient_agent::AmbientAgentViewModel>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        self.ambient_agent_view_model = Some(model.clone());
+        ctx.subscribe_to_model(&model, |me, _, event, ctx| {
+            me.handle_ambient_agent_event(event, ctx);
+        });
+        self.input.update(ctx, |input, ctx| {
+            input.attach_ambient_agent_view_model(model.clone(), ctx);
+        });
+    }
 
+    /// Begins viewing an existing ambient (cloud) run in this shared-session viewer pane.
+    /// Shared entry point for the upfront and `SessionJoined` paths: ensures the
+    /// [`ambient_agent::AmbientAgentViewModel`] exists, initializes it for viewing `task_id`,
+    /// and records the live `session_id` so `is_ready_for_cloud_followup_prompt` stays false
+    /// while the session is live and flips to the resumable follow-up state when it ends.
+    pub fn begin_viewing_ambient_session(
+        &mut self,
+        task_id: AmbientAgentTaskId,
+        session_id: session_sharing_protocol::common::SessionId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let model = self.ensure_ambient_agent_view_model(ctx);
+        model.update(ctx, |model, ctx| {
+            model.enter_viewing_existing_session(task_id, ctx);
+            model.set_live_execution_session(session_id);
+        });
+    }
 
     /// Tear down the Cloud Mode Setup V2 UI in response to a
     /// setup-phase-ended signal: clear the BlockList
@@ -5939,7 +7932,37 @@ impl TerminalView {
         }
     }
 
+    fn ambient_agent_task_id_for_details_panel_from_model(
+        &self,
+        model: &TerminalModel,
+        app: &AppContext,
+    ) -> Option<AmbientAgentTaskId> {
+        self.ambient_agent_view_model
+            .as_ref()
+            .and_then(|model| model.as_ref(app).task_id())
+            .or_else(|| model.ambient_agent_task_id())
+    }
+    pub fn ambient_agent_task_id_for_details_panel(
+        &self,
+        app: &AppContext,
+    ) -> Option<AmbientAgentTaskId> {
+        let model = self.model.lock();
+        self.ambient_agent_task_id_for_details_panel_from_model(&model, app)
+    }
 
+    /// Whether the conversation details side panel should be available in the
+    /// pane header / pane layout for this terminal view.
+    fn can_show_conversation_details_ui_from_model(
+        &self,
+        model: &TerminalModel,
+        app: &AppContext,
+    ) -> bool {
+        self.ambient_agent_task_id_for_details_panel_from_model(model, app)
+            .is_some()
+            || BlocklistAIHistoryModel::as_ref(app)
+                .active_conversation(self.view_id)
+                .is_some_and(|conversation| !conversation.is_empty())
+    }
 
     /// Convenience wrapper around
     /// [`Self::can_show_conversation_details_ui_from_model`] that locks the
@@ -5969,6 +7992,73 @@ impl TerminalView {
         )
     }
 
+    fn maybe_insert_tombstone_for_non_running_shared_ambient_task(
+        &mut self,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if !FeatureFlag::CloudModeSetupV2.is_enabled() {
+            return;
+        }
+
+        let (task_id, is_active_shared_session, is_finished_viewer) = {
+            let model = self.model.lock();
+            if model.is_receiving_agent_conversation_replay() {
+                return;
+            }
+
+            let status = model.shared_session_status();
+            // This method also handles restored cloud-mode panes that rendered
+            // a conservative tombstone before task data arrived. When the task
+            // cache updates, either the existing tombstone or FinishedViewer
+            // status tells us to re-resolve the CTA/input state.
+            let should_update = model.is_shared_ambient_agent_session()
+                || self.conversation_ended_tombstone_view_id.is_some()
+                || status.is_finished_viewer();
+            if !should_update {
+                return;
+            }
+
+            (
+                self.ambient_agent_task_id_for_details_panel_from_model(&model, ctx),
+                status.is_active_viewer() || status.is_active_sharer(),
+                status.is_finished_viewer(),
+            )
+        };
+
+        let Some(task_id) = task_id else {
+            return;
+        };
+        let Some(task) = AgentConversationsModel::as_ref(ctx).get_task_data(&task_id) else {
+            return;
+        };
+
+        if !task.is_no_longer_running() || self.pending_cloud_followup_task_id.is_some() {
+            return;
+        }
+
+        if FeatureFlag::HandoffCloudCloud.is_enabled() {
+            if is_active_shared_session {
+                return;
+            }
+            let Some(state) = self.cloud_conversation_continuation_ui_state(ctx) else {
+                return;
+            };
+            match state {
+                CloudConversationContinuationUiState::Tombstone { cta } => {
+                    self.insert_conversation_ended_tombstone_with_cta(cta, ctx);
+                }
+                CloudConversationContinuationUiState::FollowupInput => {
+                    if self.conversation_ended_tombstone_view_id.is_some() || is_finished_viewer {
+                        self.insert_conversation_ended_tombstone_with_resolved_cta(ctx);
+                    } else {
+                        self.enable_cloud_followup_input(task_id, ctx);
+                    }
+                }
+            }
+        } else {
+            self.insert_conversation_ended_tombstone_with_cta(None, ctx);
+        }
+    }
 
     pub fn active_session(&self) -> &ModelHandle<ActiveSession> {
         &self.active_session
@@ -6231,6 +8321,21 @@ impl TerminalView {
         true
     }
 
+    fn should_render_legacy_ambient_agent_loading_footer(
+        &self,
+        model: &TerminalModel,
+        app: &AppContext,
+    ) -> bool {
+        !model.is_read_only()
+            && !FeatureFlag::CloudModeSetupV2.is_enabled()
+            && !FeatureFlag::HandoffCloudCloud.is_enabled()
+            && ambient_agent::is_cloud_agent_pre_first_exchange(
+                self.ambient_agent_view_model.as_ref(),
+                &self.agent_view_controller,
+                model,
+                app,
+            )
+    }
 
     /// Give the agent control of the active long running command
     /// (which was started outside of a conversation).
@@ -6322,6 +8427,58 @@ impl TerminalView {
         });
     }
 
+    /// Applies a long-running command agent interaction state received from a shared session participant.
+    pub fn apply_long_running_command_agent_interaction_state(
+        &mut self,
+        state: LongRunningCommandAgentInteractionState,
+        block_id: Option<&BlockId>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if let Some(block_id) = block_id {
+            let (is_active_block_long_running, active_block_id) = {
+                let model = self.model.lock();
+                let active_block = model.block_list().active_block();
+                (
+                    active_block.is_active_and_long_running(),
+                    active_block.id().clone(),
+                )
+            };
+            let should_apply = is_active_block_long_running && active_block_id == *block_id;
+            if !should_apply {
+                log::info!(
+                    "Ignoring stale shared-session LRC interaction_state={state:?} for block_id={block_id:?}. Currently active block id={} is_active_and_long_running={}",
+                    active_block_id,
+                    is_active_block_long_running,
+                );
+                return;
+            }
+        }
+        if self.current_long_running_command_agent_interaction_state() == state {
+            return;
+        }
+        log::info!(
+            "Applying shared-session LRC interaction_state={state:?} to block_id={block_id:?}"
+        );
+        match state {
+            LongRunningCommandAgentInteractionState::InControl => {
+                self.cli_subagent_controller.update(ctx, |controller, ctx| {
+                    controller.handoff_active_command_control_to_agent(ctx);
+                });
+            }
+            LongRunningCommandAgentInteractionState::TaggedIn => {
+                self.cli_subagent_controller.update(ctx, |controller, ctx| {
+                    controller.switch_control_to_user(UserTakeOverReason::Manual, ctx);
+                });
+                self.tag_agent_in(ctx);
+            }
+            LongRunningCommandAgentInteractionState::NotInteracting => {
+                self.cli_subagent_controller.update(ctx, |controller, ctx| {
+                    controller.switch_control_to_user(UserTakeOverReason::Manual, ctx);
+                });
+                self.tag_agent_out(ctx);
+            }
+        }
+    }
 
     /// Applies a block-scoped long-running command agent interaction state received from a shared
     /// session participant.
@@ -6357,6 +8514,65 @@ impl TerminalView {
         ctx.emit(Event::ShutdownPty);
     }
 
+    pub(crate) fn stop_local_agent_conversation(
+        &mut self,
+        conversation_id: AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let had_active_stream = self
+            .ai_controller
+            .as_ref(ctx)
+            .has_active_stream_for_conversation(conversation_id, ctx);
+
+        self.ai_controller.update(ctx, |controller, ctx| {
+            controller.cancel_conversation_progress(
+                conversation_id,
+                CancellationReason::ManuallyCancelled,
+                ctx,
+            );
+        });
+
+        let visible_conversation_id = self
+            .agent_view_controller
+            .as_ref(ctx)
+            .agent_view_state()
+            .active_conversation_id();
+        let history_active_conversation_id =
+            BlocklistAIHistoryModel::as_ref(ctx).active_conversation_id(self.view_id);
+
+        let should_interrupt_active_command = {
+            let mut model = self.model.lock();
+            let active_block = model.block_list_mut().active_block_mut();
+            let active_block_matches = active_block.ai_conversation_id() == Some(conversation_id)
+                || visible_conversation_id == Some(conversation_id)
+                || history_active_conversation_id == Some(conversation_id);
+            let command_is_running = active_block.is_executing()
+                || active_block.is_command_grid_active()
+                || active_block.is_active_and_long_running();
+
+            if active_block_matches && command_is_running {
+                active_block.set_user_control_for_teardown();
+                true
+            } else {
+                false
+            }
+        };
+
+        if should_interrupt_active_command {
+            self.user_write_ctrl_c_to_pty(ctx);
+        }
+
+        if !had_active_stream {
+            BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, ctx| {
+                history.update_conversation_status(
+                    self.view_id,
+                    conversation_id,
+                    ConversationStatus::Cancelled,
+                    ctx,
+                );
+            });
+        }
+    }
 
     fn user_write_ctrl_c_to_pty(&mut self, ctx: &mut ViewContext<Self>) {
         self.write_user_bytes_to_pty(vec![escape_sequences::C0::ETX], ctx);
@@ -6392,6 +8608,7 @@ impl TerminalView {
             if self.should_ctrl_c_exit_agent_view(ctx) {
                 self.agent_view_controller.update(ctx, |controller, ctx| {
                     controller.exit_agent_view_with_required_confirmation(
+                        ExitConfirmationTrigger::CtrlC,
                         ctx,
                     );
                 });
@@ -6479,6 +8696,35 @@ impl TerminalView {
         self.ctrl_c_to_active_block(active_block_state, ctx);
     }
 
+    /// Focuses the provided AI block if this terminal view (or some part of it)
+    /// are focused. This helps ensure AI block interactions (which are primarily async)
+    /// don't steal focus from the user if they've focused another part of the app
+    /// (e.g. another session).
+    ///
+    /// Skips the steal when the user is navigating another AI block / code diff
+    /// (e.g. arrowing diff hunks), unless the target block is blocked on user input. Also skips
+    /// while the queued-prompt inline editor is focused so async AI/tool updates don't commit and
+    /// close the edit by blurring it.
+    ///
+    /// Warning: this should not be called when focusing the [`TerminalView`]. It could
+    /// lead to a focus cycle because [`AIBlock::try_focus`] conditionally yields focus
+    /// back to the [`TerminalView`].
+    fn focus_ai_block_if_self_focused(
+        &self,
+        block: &ViewHandle<AIBlock>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if !ctx.is_self_or_child_focused() {
+            return;
+        }
+        if self.is_queued_prompt_inline_editor_focused(ctx) {
+            return;
+        }
+        let target_needs_attention = block.as_ref(ctx).is_blocked_on_user_confirmation(ctx);
+        if target_needs_attention || !self.is_any_ai_block_focused(ctx) {
+            block.update(ctx, |block, ctx| block.try_steal_focus(ctx));
+        }
+    }
 
     /// Returns `true` if focus is inside any AI block (e.g. the user is arrowing
     /// through a code diff's hunks).
@@ -6529,6 +8775,7 @@ impl TerminalView {
         if active_block_state.is_agent_in_control_of_command {
             self.cli_subagent_controller.update(ctx, |controller, ctx| {
                 controller.switch_control_to_user(
+                    UserTakeOverReason::Stop {
                         should_auto_resume: true,
                     },
                     ctx,
@@ -6546,7 +8793,83 @@ impl TerminalView {
         }
     }
 
+    /// Returns whether ctrl-c should exit the agent view.
+    ///
+    /// This is true when:
+    /// - Agent view feature is enabled
+    /// - Agent view is active and can be exited
+    /// - No long-running command
+    /// - Conversation is not in progress and not blocked
+    fn should_ctrl_c_exit_agent_view(&self, app: &AppContext) -> bool {
+        if !FeatureFlag::AgentView.is_enabled() {
+            return false;
+        }
 
+        if !self.agent_view_controller.as_ref(app).is_active() {
+            return false;
+        }
+
+        if self
+            .agent_view_controller
+            .as_ref(app)
+            .can_exit_agent_view()
+            .is_err()
+        {
+            return false;
+        }
+
+        // Cannot use ctrl-c to exit agent view if there's a long-running command.
+        let model = self.model.lock();
+        if model
+            .block_list()
+            .active_block()
+            .is_active_and_long_running()
+        {
+            return false;
+        }
+
+        let history_model = BlocklistAIHistoryModel::as_ref(app);
+        if let Some(conversation) = history_model.active_conversation(self.view_id) {
+            let is_new_empty_conversation = self
+                .agent_view_controller
+                .as_ref(app)
+                .agent_view_state()
+                .is_new()
+                && conversation.is_empty();
+            let status = conversation.status();
+            // Additionally check if the conversation is empty, since the default status for a new
+            // conversation is `InProgress`, but you should be able to exit an empty conversation.
+            if (status.is_in_progress() || status.is_blocked()) && !is_new_empty_conversation {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Cancels the active agent conversation via the status bar's Ctrl+C handler.
+    /// Includes shared session notification if applicable.
+    fn cancel_active_conversation_via_status_bar(&mut self, ctx: &mut ViewContext<Self>) {
+        if FeatureFlag::AgentSharedSessions.is_enabled()
+            && self
+                .model
+                .lock()
+                .shared_session_status()
+                .is_sharer_or_viewer()
+        {
+            self.input.update(ctx, |input, ctx| {
+                input.cancel_active_agent_conversation_for_shared_session(
+                    CancellationReason::ManuallyCancelled,
+                    ctx,
+                );
+            });
+        }
+
+        let status_bar = self.input.as_ref(ctx).agent_status_bar().clone();
+        status_bar.update(ctx, |status_bar, ctx| {
+            status_bar.handle_ctrl_c(ctx);
+        });
+    }
 
     /// If there is an active rich content block that is set up to handle ctrl-c
     /// events, allow it to handle the event.
@@ -6847,6 +9170,17 @@ impl TerminalView {
         ctx.emit(Event::WriteBytesToPty { bytes: data.into() });
     }
 
+    fn write_agent_bytes_to_pty<B: Into<Cow<'static, [u8]>>>(
+        &mut self,
+        data: B,
+        mode: &AIAgentPtyWriteMode,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        ctx.emit(Event::WriteAgentInputToPty {
+            bytes: data.into(),
+            mode: *mode,
+        });
+    }
 
     /// Writes a shared session viewer's bytes to the pty
     pub fn write_viewer_bytes_to_pty(&mut self, bytes: Vec<u8>, ctx: &mut ViewContext<Self>) {
@@ -7604,6 +9938,142 @@ impl TerminalView {
         }
     }
 
+    fn resolve_prompt_suggestion(
+        &mut self,
+        resolution: PromptSuggestionResolution,
+        ctx: &mut ViewContext<Self>,
+    ) -> bool {
+        let interaction_source = match resolution {
+            PromptSuggestionResolution::Accept { interaction_source } => interaction_source,
+            PromptSuggestionResolution::Reject { ctrl_c } => {
+                // ctrl-c shouldn't clear prompt suggestions, but all other rejections should.
+                if !ctrl_c {
+                    self.clear_prompt_suggestions(ctx);
+                }
+                return false;
+            }
+        };
+
+        // Return early if we've run out of AI usage.
+        if !AIRequestUsageModel::as_ref(ctx).has_any_ai_remaining(ctx) {
+            return false;
+        }
+
+        let Some(banner_state) = &self.inline_banners_state.prompt_suggestions_banner else {
+            return false;
+        };
+
+        // Return early if the banner is not visible to the user.
+        if banner_state.should_hide {
+            return false;
+        }
+
+        let view = self.prompt_suggestion_view_type(ctx);
+        let suggestion = &banner_state.prompt_suggestion;
+        let prompt = suggestion.prompt.clone();
+        let suggestion_id = suggestion.id.clone();
+        let is_static_suggestion = suggestion.static_prompt_suggestion_name.is_some();
+        let trigger = banner_state.trigger.clone();
+        let should_start_new_conversation = suggestion.should_start_new_conversation;
+        let conversation_id = banner_state.conversation_id;
+        let trigger_block_id = trigger.as_ref().and_then(|t| t.block_id());
+        log::debug!(
+            "[passive-suggestions] accepting prompt suggestion: trigger={}, trigger_block_id={}",
+            if trigger.is_some() { "Some" } else { "None" },
+            if trigger_block_id.is_some() {
+                "Some"
+            } else {
+                "None"
+            },
+        );
+
+        if FeatureFlag::PromptSuggestionsViaMAA.is_enabled() {
+            let conversation_id = if let Some(conversation_id) = conversation_id {
+                conversation_id
+            } else {
+                match self.try_enter_agent_view(
+                    None,
+                    AgentViewEntryOrigin::AcceptedPromptSuggestion,
+                    None,
+                    ctx,
+                ) {
+                    Ok(conversation_id) => {
+                        if let Some(block_id) = trigger_block_id.as_ref() {
+                            self.associate_and_promote_block_for_conversation(
+                                block_id.clone(),
+                                conversation_id,
+                                ctx,
+                            );
+                        }
+                        conversation_id
+                    }
+                    Err(e) => {
+                        report_error!(
+                            anyhow::Error::new(e)
+                                .context("Failed to enter agent view for passive code diff")
+                        );
+                        return false;
+                    }
+                }
+            };
+
+            self.ai_controller.update(ctx, |controller, ctx| {
+                controller.send_passive_suggestion_result(
+                    Some(conversation_id),
+                    PassiveSuggestionResultType::Prompt { prompt },
+                    trigger,
+                    ctx,
+                );
+            });
+        } else {
+            if let Some(PassiveSuggestionTrigger::ShellCommandCompleted(c)) = &banner_state.trigger
+            {
+                let block_id = c.executed_shell_command.id.clone();
+                self.ai_context_model.update(ctx, |context_model, ctx| {
+                    context_model.set_pending_context_block_ids(vec![block_id], true, ctx);
+                });
+            }
+            // When `should_start_new_conversation` is false and agent view is already
+            // active, continue in the existing conversation rather than starting a new one.
+            let conversation_id = if !should_start_new_conversation {
+                self.agent_view_controller
+                    .as_ref(ctx)
+                    .agent_view_state()
+                    .active_conversation_id()
+            } else {
+                None
+            };
+            self.enter_agent_view(
+                Some(prompt),
+                conversation_id,
+                AgentViewEntryOrigin::AcceptedPromptSuggestion,
+                ctx,
+            );
+        }
+
+        // Send telemetry.
+        if is_static_suggestion {
+            send_telemetry_from_ctx!(
+                TelemetryEvent::StaticPromptSuggestionAccepted {
+                    id: suggestion_id,
+                    view,
+                    interaction_source,
+                },
+                ctx
+            );
+        } else {
+            send_telemetry_from_ctx!(
+                TelemetryEvent::PromptSuggestionAccepted {
+                    id: suggestion_id,
+                    view,
+                    interaction_source,
+                },
+                ctx
+            );
+        }
+
+        true
+    }
 
     /// Try clearing agent mode query banner's passive code generation state.
     /// Called when a suggested code diff fails and we need to fall back to prompt suggestions.
@@ -7629,6 +10099,42 @@ impl TerminalView {
         }
     }
 
+    fn associate_and_promote_block_for_conversation(
+        &mut self,
+        block_id: BlockId,
+        conversation_id: AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        self.ai_context_model.update(ctx, |context_model, ctx| {
+            context_model.set_pending_context_block_ids([block_id.clone()], false, ctx);
+        });
+        let associated_blocks = self
+            .model
+            .lock()
+            .block_list_mut()
+            .associate_blocks_with_conversation([&block_id].into_iter(), conversation_id);
+        self.model
+            .lock()
+            .block_list_mut()
+            .promote_blocks_to_attached_from_conversation(conversation_id);
+
+        if let Some(sender) = GlobalResourceHandlesProvider::as_ref(ctx)
+            .get()
+            .model_event_sender
+            .as_ref()
+        {
+            for (block_id, agent_view_visibility) in associated_blocks {
+                if let Err(e) =
+                    sender.send(persistence::ModelEvent::UpdateBlockAgentViewVisibility {
+                        block_id: block_id.to_string(),
+                        agent_view_visibility: agent_view_visibility.into(),
+                    })
+                {
+                    log::warn!("Error sending UpdateBlockAgentViewVisibility event: {e:#}");
+                }
+            }
+        }
+    }
 
     fn passive_code_diffs_enabled(ctx: &mut ViewContext<Self>) -> bool {
         // Prompt suggestions must be enabled since the current implementation of passive code diffs
@@ -7752,6 +10258,96 @@ impl TerminalView {
         }
     }
 
+    fn codebase_index_speedbump_banner_action(
+        &mut self,
+        action: CodebaseIndexSpeedbumpBannerAction,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match action {
+            CodebaseIndexSpeedbumpBannerAction::ToggleAlwaysAllow => {
+                if let Some(banner_state) =
+                    &mut self.inline_banners_state.codebase_index_speedbump_banner
+                {
+                    banner_state.toggle_always_allow_checked();
+                }
+                ctx.notify();
+            }
+            CodebaseIndexSpeedbumpBannerAction::AllowIndexing => {
+                if let Some(banner_state) =
+                    &mut self.inline_banners_state.codebase_index_speedbump_banner
+                {
+                    // Set "Read files" setting to true if the checkbox was checked
+                    if banner_state.always_allow_checked {
+                        CodeSettings::handle(ctx).update(ctx, |model, ctx| {
+                            report_if_error!(model.auto_indexing_enabled.set_value(true, ctx));
+                        });
+                    }
+
+                    // Index the codebase
+                    CodebaseIndexManager::handle(ctx).update(ctx, |manager, ctx| {
+                        manager.index_directory(banner_state.repo_path.clone(), ctx);
+                    });
+
+                    // Change state to indexing
+                    banner_state.show_indexing_banner();
+                }
+                ctx.notify();
+            }
+            CodebaseIndexSpeedbumpBannerAction::Close => {
+                if let Some(banner_state) = self
+                    .inline_banners_state
+                    .codebase_index_speedbump_banner
+                    .take()
+                {
+                    // If user dismissed the banner, we want to persist the dismissal (only if it's a speedbump banner).
+                    if banner_state.visibility_state == VisibilityState::Speedbump {
+                        let mut dismissed_repo_paths = AISettings::as_ref(ctx)
+                            .codebase_index_speedbump_banner_dismissed_for_repo_paths
+                            .clone();
+                        dismissed_repo_paths.push(banner_state.repo_path.clone());
+                        AISettings::handle(ctx).update(ctx, |ai_settings, ctx| {
+                            if let Err(e) = ai_settings
+                                .codebase_index_speedbump_banner_dismissed_for_repo_paths
+                                .set_value(dismissed_repo_paths, ctx) {
+                                    log::warn!("Failed to persist 'Codebase indexing speedbump banner dismissed' setting: {e:#}");
+                                }
+                        });
+                    }
+
+                    // Remove banner
+                    self.model
+                        .lock()
+                        .block_list_mut()
+                        .remove_inline_banner(banner_state.id);
+                }
+                ctx.notify();
+            }
+            CodebaseIndexSpeedbumpBannerAction::ViewStatus => {
+                ctx.emit(Event::OpenSettings(SettingsSection::CodeIndexing));
+            }
+            CodebaseIndexSpeedbumpBannerAction::DismissForever => {
+                AISettings::handle(ctx).update(ctx, |ai_settings, ctx| {
+                    if let Err(e) = ai_settings
+                        .codebase_index_speedbump_banner_globally_dismissed
+                        .set_value(true, ctx)
+                    {
+                        log::warn!("Failed to persist 'Codebase indexing speedbump banner globally dismissed' setting: {e:#}");
+                    }
+                });
+                if let Some(banner_state) = self
+                    .inline_banners_state
+                    .codebase_index_speedbump_banner
+                    .take()
+                {
+                    self.model
+                        .lock()
+                        .block_list_mut()
+                        .remove_inline_banner(banner_state.id);
+                }
+                ctx.notify();
+            }
+        }
+    }
 
     #[cfg(feature = "local_fs")]
     fn insert_agent_mode_setup_speedbump_banner(
@@ -7782,6 +10378,34 @@ impl TerminalView {
         ctx.notify();
     }
 
+    #[cfg(feature = "local_fs")]
+    fn insert_codebase_index_speedbump_banner(
+        &mut self,
+        repo_path: PathBuf,
+        show_is_indexing: bool,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        // Create new inline banner
+        let banner_id = self.inline_banners_state.next_banner_id();
+        let mut banner_state = CodebaseIndexSpeedbumpBannerState::new(banner_id, repo_path);
+        if show_is_indexing {
+            banner_state.show_indexing_banner(); // Set to indexing state
+        }
+
+        // Insert the banner into the block list
+        self.model
+            .lock()
+            .block_list_mut()
+            .append_inline_banner_with_custom_height(
+                InlineBannerItem::new(banner_id, InlineBannerType::CodebaseIndexSpeedbump),
+                4.0,
+            );
+
+        // Store the banner state
+        self.inline_banners_state.codebase_index_speedbump_banner = Some(banner_state);
+
+        ctx.notify();
+    }
 
     #[cfg(feature = "local_fs")]
     fn remove_codebase_index_speedbump_banner(&mut self, ctx: &mut ViewContext<Self>) {
@@ -7948,6 +10572,7 @@ impl TerminalView {
     /// The banner is shown when the user could be using AWS Bedrock to save on warp AI spend, but isn't.
     fn maybe_insert_aws_bedrock_login_banner(
         &mut self,
+        model_id: &LLMId,
         ctx: &mut ViewContext<Self>,
     ) {
         // Don't show if already displayed
@@ -7991,6 +10616,7 @@ impl TerminalView {
         self.inline_banners_state.aws_bedrock_login_banner = Some(AwsBedrockLoginBannerState {
             id: banner_id,
             login_button_mouse_state: Default::default(),
+            dismiss_button_mouse_state: Default::default(),
             dont_show_again_button_mouse_state: Default::default(),
         });
 
@@ -8467,8 +11093,153 @@ impl TerminalView {
     // passive suggestion models are gone, so there is nothing pending to abort.
     fn abort_prompt_and_code_suggestions(&mut self, _ctx: &mut ViewContext<Self>) {}
 
+    /// Cleans up and removes the conversation associated with the given AI block.
+    ///
+    /// This removes the AI block from the blocklist (and cached `rich_content_views` list) and
+    /// deletes its associated conversation.
+    ///
+    /// This assumes that the deleted conversation only contains a single block -- should there
+    /// be other blocks besides `passive_block` in the same conversation, we're left in invalid
+    /// state (AI blocks rely on conversation state in the history model to render). If there is
+    /// more than one AI block corresponding to the same conversation as `passive_block`, does
+    /// nothing.
+    fn cleanup_and_remove_conversation_for_ai_block(
+        &mut self,
+        passive_block: &ViewHandle<AIBlock>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let Some((rich_content_idx, _)) =
+            self.rich_content_views
+                .iter()
+                .enumerate()
+                .find_map(|(idx, rich_content)| {
+                    let ai_metadata = rich_content.ai_block_metadata()?;
+                    (ai_metadata.ai_block_handle.id() == passive_block.id())
+                        .then(|| (idx, ai_metadata.ai_block_handle.clone()))
+                })
+        else {
+            return;
+        };
 
+        let has_other_blocks_in_same_conversation =
+            self.rich_content_views.iter().any(|rich_content| {
+                if let Some(ai_metadata) = rich_content.ai_block_metadata() {
+                    ai_metadata.ai_block_handle.id() != passive_block.id()
+                        && ai_metadata.ai_block_handle.as_ref(ctx).conversation_id()
+                            == passive_block.as_ref(ctx).conversation_id()
+                } else {
+                    false
+                }
+            });
+        if has_other_blocks_in_same_conversation {
+            report_error!(
+                "Attempted to clean up and delete conversation for block with other blocks in the same conversation"
+            );
+            return;
+        }
 
+        passive_block.update(ctx, |ai_block, ctx| {
+            ai_block.cleanup_block(ctx);
+        });
+        let conversation_id = passive_block.as_ref(ctx).conversation_id();
+        conversation_utils::remove_conversation(conversation_id, self.view_id, true, ctx);
+        self.rich_content_views.remove(rich_content_idx);
+        self.model
+            .lock()
+            .block_list_mut()
+            .remove_rich_content(passive_block.id());
+        ctx.notify();
+    }
+
+    /// Sends telemetry if an AI-requested command caused the shell to exit, and
+    /// returns the conversation that issued that command so the caller can
+    /// finalize it as a shell-exit failure.
+    fn maybe_send_agent_exited_shell_telemetry(
+        &self,
+        ctx: &mut ViewContext<Self>,
+    ) -> Option<AIConversationId> {
+        let model = self.model.lock();
+        let block_list = model.block_list();
+        let blocks = block_list.blocks();
+        let active_block_index = block_list.active_block_index().0;
+
+        // There are two cases we need to handle:
+        // 1. The agent ran a shell command that directly exits the shell process
+        //    (e.g. `exit 1`). The requested command will be the active block.
+        // 2. The shell is in a state where it can choose to exit itself after a command
+        //    finishes as part of its command execution loop (e.g. earlier it ran
+        //    `set -euo pipefail`). In this case the requested command will be in the
+        //    block preceding the active block.
+        let agent_block = blocks
+            .get(active_block_index)
+            .filter(|b| b.requested_command_action_id().is_some())
+            .or_else(|| {
+                active_block_index.checked_sub(1).and_then(|prev_idx| {
+                    blocks
+                        .get(prev_idx)
+                        .filter(|b| b.requested_command_action_id().is_some())
+                })
+            })?;
+
+        let mut command = agent_block.command_to_string();
+        redact_secrets(&mut command);
+
+        let conversation_id = agent_block.ai_conversation_id();
+        let server_output_id = conversation_id.and_then(|conversation_id| {
+            BlocklistAIHistoryModel::as_ref(ctx)
+                .conversation(&conversation_id)
+                .and_then(|conversation| {
+                    conversation
+                        .latest_exchange()
+                        .and_then(|e| e.output_status.server_output_id())
+                })
+        });
+        send_telemetry_from_ctx!(
+            TelemetryEvent::AgentExitedShellProcess {
+                command,
+                server_output_id,
+            },
+            ctx
+        );
+        conversation_id
+    }
+
+    /// Updates the back button's state and label. For child agents the
+    /// label becomes "for Orchestrator" since ESC swaps to the parent
+    /// instead of exiting in place.
+    pub(crate) fn update_agent_view_back_button_state(&mut self, ctx: &mut ViewContext<Self>) {
+        let active_conv_id = self
+            .agent_view_controller
+            .as_ref(ctx)
+            .agent_view_state()
+            .active_conversation_id();
+        let is_child_agent = active_conv_id
+            .and_then(|id| BlocklistAIHistoryModel::as_ref(ctx).conversation(&id))
+            .and_then(|c| c.parent_conversation_id())
+            .is_some();
+
+        // Never disable for child agents: the swap-back path can't be blocked.
+        let disabled_reason = if is_child_agent {
+            None
+        } else {
+            self.agent_view_controller
+                .as_ref(ctx)
+                .can_exit_agent_view()
+                .err()
+                .map(|e| e.to_string())
+        };
+        let label = if is_child_agent {
+            "for Orchestrator"
+        } else {
+            "for terminal"
+        };
+
+        self.agent_view_back_button.update(ctx, |button, ctx| {
+            button.set_label(label, ctx);
+            button.set_disabled(disabled_reason.is_some(), ctx);
+            button.set_tooltip(disabled_reason, ctx);
+        });
+    }
 
     /// Apply a block metadata update from either the precmd hook
     /// ([`Event::BlockMetadataReceived`]) or an OSC 7 sequence emitted
@@ -9114,6 +11885,21 @@ impl TerminalView {
                                                         .auto_open_rich_input_on_cli_agent_start;
                                                 sessions_model.set_session(
                                                     view_id,
+                                                    CLIAgentSession {
+                                                        agent,
+                                                        status: CLIAgentSessionStatus::InProgress,
+                                                        session_context:
+                                                            CLIAgentSessionContext::default(),
+                                                        input_state: CLIAgentInputState::Closed,
+                                                        should_auto_toggle_input,
+                                                        listener: None,
+                                                        plugin_version: None,
+                                                        remote_host,
+                                                        draft_text: None,
+                                                        custom_command_prefix:
+                                                            custom_command_prefix.clone(),
+                                                        received_rich_notification: false,
+                                                    },
                                                     ctx,
                                                 );
                                             }
@@ -9294,6 +12080,7 @@ impl TerminalView {
                             self.enter_agent_view_after_pending_commands = false;
                             self.enter_agent_view_for_new_conversation(
                                 None,
+                                AgentViewEntryOrigin::Input {
                                     was_prompt_autodetected: false,
                                 },
                                 ctx,
@@ -9875,6 +12662,7 @@ impl TerminalView {
                 } else {
                     ctx.emit(Event::PluggableNotification {
                         title: title.clone(),
+                        body: body.clone(),
                     });
                 }
             }
@@ -10217,11 +13005,324 @@ impl TerminalView {
         ctx.notify();
     }
 
+    /// Handles an OSC 777 event with the `warp://cli-agent` sentinel title.
+    /// On `session_start`, creates a `CLIAgentSessionListener` that subscribes
+    /// to subsequent events from this terminal's PTY.
+    fn handle_cli_agent_notification(
+        &mut self,
+        title: Option<&str>,
+        body: &str,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let Some(notification) = parse_event(title, body) else {
+            return;
+        };
 
+        if !is_agent_supported(&notification.agent) {
+            return;
+        }
 
+        if notification.agent == CLIAgent::Codex && !FeatureFlag::CodexPlugin.is_enabled() {
+            return;
+        }
 
+        if !self.register_cli_agent_listener_from_event(&notification, ctx) {
+            return;
+        }
 
+        CLIAgentSessionsModel::handle(ctx).update(ctx, |sessions_model, ctx| {
+            sessions_model.update_from_event(self.view_id, &notification, ctx);
+        });
 
+        if notification.event == CLIAgentEventType::SessionStart {
+            send_telemetry_from_ctx!(
+                TelemetryEvent::CLIAgentPluginDetected {
+                    cli_agent: notification.agent.into(),
+                },
+                ctx
+            );
+            self.maybe_auto_open_cli_agent_rich_input(ctx);
+        }
+    }
+
+    fn register_cli_agent_listener_from_event(
+        &mut self,
+        notification: &CLIAgentEvent,
+        ctx: &mut ViewContext<Self>,
+    ) -> bool {
+        if !is_agent_supported(&notification.agent) {
+            return false;
+        }
+        let has_listener = CLIAgentSessionsModel::as_ref(ctx)
+            .session(self.view_id)
+            .is_some_and(|s| s.listener.is_some());
+        if has_listener {
+            return false;
+        }
+
+        let model_events_handle = self.model_events_handle.clone();
+        let view_id = self.view_id;
+        let agent = notification.agent;
+        let listener = ctx.add_model(|ctx| {
+            CLIAgentSessionListener::new(view_id, agent, &model_events_handle, ctx)
+        });
+        let remote_host = self.active_session_remote_host(ctx);
+        let should_auto_toggle_input = agent.supports_cli_agent_footer()
+            && *AISettings::as_ref(ctx).auto_open_rich_input_on_cli_agent_start;
+        // Seed context from the event that caused registration before the
+        // listener subscribes to future events.
+        CLIAgentSessionsModel::handle(ctx).update(ctx, |sessions_model, ctx| {
+            sessions_model.register_listener(
+                view_id,
+                agent,
+                notification.cwd.clone(),
+                notification.project.clone(),
+                notification.session_id.clone(),
+                notification.payload.plugin_version.clone(),
+                remote_host,
+                should_auto_toggle_input,
+                listener,
+                ctx,
+            );
+        });
+        true
+    }
+
+    /// Creates and registers a listener for flows without a `SessionStart` event.
+    fn register_cli_agent_listener_without_session_start_event(
+        &mut self,
+        agent: CLIAgent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        #[cfg(not(target_family = "wasm"))]
+        let plugin_version = if matches!(agent, CLIAgent::Codex) {
+            // We use the lack of a plugin version for codex to differentiate between
+            // OSC 9 notification fallback and real plugin.
+            None
+        } else {
+            // No SessionStart event in this path (mid-session install/update).
+            // Assume the just-installed plugin meets the minimum version for this agent
+            // so the update chip doesn't flash before the user runs /reload-plugins.
+            plugin_manager_for(agent).map(|m| m.minimum_plugin_version().to_owned())
+        };
+        #[cfg(target_family = "wasm")]
+        let plugin_version = None;
+        let notification = CLIAgentEvent {
+            source: CLIAgentEventSource::RichPlugin,
+            v: 1,
+            agent,
+            event: CLIAgentEventType::SessionStart,
+            session_id: None,
+            cwd: None,
+            project: None,
+            payload: CLIAgentEventPayload {
+                plugin_version,
+                ..Default::default()
+            },
+        };
+        if self.register_cli_agent_listener_from_event(&notification, ctx) {
+            self.maybe_auto_open_cli_agent_rich_input(ctx);
+        }
+    }
+
+    fn child_conversation_id_for_cli_status_updates(
+        &self,
+        ctx: &AppContext,
+    ) -> Option<AIConversationId> {
+        if let Some(conversation_id) = BlocklistAIHistoryModel::as_ref(ctx)
+            .active_conversation(self.view_id)
+            .and_then(|conversation| {
+                conversation
+                    .is_child_agent_conversation()
+                    .then_some(conversation.id())
+            })
+        {
+            return Some(conversation_id);
+        }
+
+        let mut child_conversation_ids = BlocklistAIHistoryModel::as_ref(ctx)
+            .all_live_conversations_for_terminal_surface(self.view_id)
+            .filter(|conversation| conversation.is_child_agent_conversation())
+            .map(|conversation| conversation.id());
+        let child_conversation_id = child_conversation_ids.next()?;
+        child_conversation_ids
+            .next()
+            .is_none()
+            .then_some(child_conversation_id)
+    }
+
+    /// If the startup auto-open setting is enabled, auto-opens rich input for a
+    /// CLI agent session. Called after creating a command-detected session or
+    /// registering a listener so rich input is shown immediately.
+    fn maybe_auto_open_cli_agent_rich_input(&mut self, ctx: &mut ViewContext<Self>) {
+        let ai_settings = AISettings::as_ref(ctx);
+        if !*ai_settings.auto_open_rich_input_on_cli_agent_start
+            || !ai_settings.is_any_ai_enabled(ctx)
+            || !*ai_settings.should_render_cli_agent_footer
+            || !is_rich_input_chip_in_cli_toolbar(ctx)
+        {
+            return;
+        }
+        let should_open = CLIAgentSessionsModel::as_ref(ctx)
+            .session(self.view_id)
+            .is_some_and(|s| s.agent.supports_cli_agent_footer() && s.should_auto_toggle_input);
+        if should_open && !self.has_active_cli_agent_input_session(ctx) {
+            self.open_cli_agent_rich_input(CLIAgentInputEntrypoint::AutoShow, ctx);
+        }
+    }
+
+    /// Handles CLI agent session status changes from the singleton model.
+    /// Sends a desktop notification when a CLI agent reaches a completed state
+    /// (blocked or succeeded) and the user is in a different window.
+    /// Also handles auto-show/hide of CLI agent rich input based on the
+    /// `auto_toggle_rich_input` setting: closes rich input when blocked
+    /// (agent requires keyboard interaction) and opens it when the agent resumes.
+    fn handle_cli_agent_sessions_event(
+        &mut self,
+        event: &CLIAgentSessionsModelEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match event {
+            CLIAgentSessionsModelEvent::Started {
+                terminal_view_id, ..
+            } if *terminal_view_id == self.view_id => {
+                let mut model = self.model.lock();
+                let active_block = model.block_list_mut().active_block_mut();
+                active_block.enable_full_grid_clear_behavior();
+                if FeatureFlag::TrimTrailingBlankLines.is_enabled() {
+                    active_block.set_trim_trailing_blank_rows(true);
+                }
+            }
+            CLIAgentSessionsModelEvent::Ended {
+                terminal_view_id, ..
+            } if *terminal_view_id == self.view_id => {
+                let mut model = self.model.lock();
+                let active_block = model.block_list_mut().active_block_mut();
+                if FeatureFlag::TrimTrailingBlankLines.is_enabled() {
+                    active_block.set_trim_trailing_blank_rows(false);
+                }
+            }
+            _ => {}
+        }
+        if event.terminal_view_id() == self.view_id
+            && matches!(
+                event,
+                CLIAgentSessionsModelEvent::Started { .. }
+                    | CLIAgentSessionsModelEvent::StatusChanged { .. }
+                    | CLIAgentSessionsModelEvent::SessionUpdated { .. }
+                    | CLIAgentSessionsModelEvent::Ended { .. }
+            )
+        {
+            self.update_pane_configuration(ctx);
+            ctx.notify();
+        }
+        if event.terminal_view_id() == self.view_id
+            && matches!(
+                event,
+                CLIAgentSessionsModelEvent::Started { .. }
+                    | CLIAgentSessionsModelEvent::Ended { .. }
+            )
+        {
+            self.update_git_status_subscription(ctx);
+        }
+
+        let CLIAgentSessionsModelEvent::StatusChanged {
+            terminal_view_id,
+            agent,
+            status,
+            session_context,
+        } = event
+        else {
+            return;
+        };
+
+        if *terminal_view_id != self.view_id {
+            return;
+        }
+
+        if let Some(conversation_id) = self.child_conversation_id_for_cli_status_updates(ctx) {
+            BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
+                history_model.update_conversation_status(
+                    self.view_id,
+                    conversation_id,
+                    status.to_conversation_status(),
+                    ctx,
+                );
+            });
+        }
+
+        // Auto-show/hide rich input based on the setting.
+        // Only applies when the session has a plugin listener (rich status info).
+        let ai_settings = AISettings::as_ref(ctx);
+        if *ai_settings.auto_toggle_rich_input
+            && ai_settings.is_any_ai_enabled(ctx)
+            && *ai_settings.should_render_cli_agent_footer
+            && is_rich_input_chip_in_cli_toolbar(ctx)
+        {
+            let should_auto_toggle_input = CLIAgentSessionsModel::as_ref(ctx)
+                .session(self.view_id)
+                .is_some_and(|s| {
+                    s.agent.supports_cli_agent_footer()
+                        && s.supports_rich_status()
+                        && s.should_auto_toggle_input
+                });
+            if should_auto_toggle_input {
+                match status {
+                    CLIAgentSessionStatus::Blocked { .. } => {
+                        // Auto-close rich input when the agent is blocked
+                        // (it requires direct keyboard interaction in the terminal).
+                        self.close_cli_agent_rich_input(
+                            CLIAgentRichInputCloseReason::AutoToggle,
+                            ctx,
+                        );
+                    }
+                    CLIAgentSessionStatus::InProgress
+                    | CLIAgentSessionStatus::Success
+                    | CLIAgentSessionStatus::Failed { .. } => {
+                        // Auto-open rich input when the agent resumes or completes.
+                        if !self.has_active_cli_agent_input_session(ctx) {
+                            self.open_cli_agent_rich_input(CLIAgentInputEntrypoint::AutoShow, ctx);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Desktop notifications — only when navigated away and not in-progress.
+        if !self.is_navigated_away_from_window(ctx)
+            || matches!(status, CLIAgentSessionStatus::InProgress)
+        {
+            return;
+        }
+
+        let title = session_context
+            .query
+            .as_deref()
+            .filter(|q| !q.is_empty())
+            .or(session_context.summary.as_deref().filter(|s| !s.is_empty()))
+            .unwrap_or(agent.command_prefix())
+            .to_owned();
+        let description = if let CLIAgentSessionStatus::Blocked { message } = status {
+            message.clone().unwrap_or_default()
+        } else {
+            session_context.response.clone().unwrap_or_default()
+        };
+
+        let trigger = if matches!(status, CLIAgentSessionStatus::Blocked { .. }) {
+            NotificationsTrigger::NeedsAttention
+        } else if matches!(status, CLIAgentSessionStatus::Failed { .. }) {
+            NotificationsTrigger::AgentTaskCompleted(false)
+        } else {
+            NotificationsTrigger::AgentTaskCompleted(true)
+        };
+        self.send_agent_desktop_notification_or_show_banner(
+            trigger,
+            title,
+            description,
+            Some(NotificationAgentVariant::CLIAgent((*agent).into())),
+            ctx,
+        );
+    }
 
     /// Handles the initialization of a session within this terminal pane.
     ///
@@ -10715,6 +13816,12 @@ impl TerminalView {
         }
     }
 
+    fn summarize_conversation(&mut self, ctx: &mut ViewContext<Self>) {
+        self.ai_controller.update(ctx, |controller, ctx| {
+            controller
+                .send_slash_command_request(SlashCommandRequest::Summarize { prompt: None }, ctx);
+        });
+    }
 
     fn init_project(
         &mut self,
@@ -10783,6 +13890,7 @@ impl TerminalView {
                         history.update_conversation_status(
                             me.view_id,
                             conversation_id,
+                            ConversationStatus::Cancelled,
                             ctx,
                         );
                     });
@@ -10800,6 +13908,7 @@ impl TerminalView {
                         history.update_conversation_status(
                             me.view_id,
                             conversation_id,
+                            ConversationStatus::Success,
                             ctx,
                         );
                     });
@@ -10996,6 +14105,7 @@ impl TerminalView {
         {
             self.enter_agent_view_for_new_conversation(
                 None,
+                AgentViewEntryOrigin::CreateEnvironment,
                 ctx,
             );
         }
@@ -11112,6 +14222,7 @@ impl TerminalView {
         {
             self.enter_agent_view_for_new_conversation(
                 None,
+                AgentViewEntryOrigin::CreateEnvironment,
                 ctx,
             );
         }
@@ -11152,6 +14263,7 @@ impl TerminalView {
         // Send the CreateEnvironment request (shows "/create-environment" instead of full prompt)
         self.ai_controller.update(ctx, |controller, ctx| {
             controller.send_slash_command_request(
+                SlashCommandRequest::CreateEnvironment {
                     repos,
                     use_current_dir,
                 },
@@ -11172,6 +14284,31 @@ impl TerminalView {
         // Repo setup is not supported without a local filesystem.
     }
 
+    #[cfg(feature = "local_fs")]
+    fn update_agent_mode_setup_speedbump_banner(
+        &mut self,
+        directory: PathBuf,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let should_insert_banner = self.should_show_agent_mode_setup_for_directory(&directory, ctx)
+            && !FeatureFlag::AgentView.is_enabled();
+
+        if !should_insert_banner {
+            self.remove_agent_setup_speedbump_banner(ctx);
+            return;
+        }
+
+        if let Some(banner_state) = &self.inline_banners_state.agent_setup_speedbump_banner {
+            if banner_state.repo_path != directory {
+                // If the banner is showing for a different repo, remove it, and insert it for the new repo.
+                self.remove_agent_setup_speedbump_banner(ctx);
+                self.insert_agent_mode_setup_speedbump_banner(directory, ctx);
+            }
+        } else {
+            // If no banner exists, insert it.
+            self.insert_agent_mode_setup_speedbump_banner(directory, ctx);
+        }
+    }
 
     #[cfg(feature = "local_fs")]
     fn should_show_agent_mode_setup_for_directory(
@@ -11453,6 +14590,7 @@ impl TerminalView {
                 if FeatureFlag::AgentView.is_enabled() {
                     self.enter_agent_view_for_new_conversation(
                         Some(prompt),
+                        AgentViewEntryOrigin::OnboardingCallout,
                         ctx,
                     )
                 } else {
@@ -11474,6 +14612,7 @@ impl TerminalView {
                 // Submit /init as an Agent Mode query
                 self.enter_agent_view_for_new_conversation(
                     Some("/init".to_string()),
+                    AgentViewEntryOrigin::Onboarding,
                     ctx,
                 );
                 self.onboarding_callout_view = None;
@@ -11509,6 +14648,7 @@ impl TerminalView {
                 // Enter agent view without submitting a prompt (mid-flow entry)
                 self.enter_agent_view_for_new_conversation(
                     None,
+                    AgentViewEntryOrigin::Onboarding,
                     ctx,
                 );
                 // Re-focus the callout so its keybindings continue to work
@@ -11524,6 +14664,7 @@ impl TerminalView {
 
     fn apply_natural_language_detection_setting(
         &mut self,
+        enable: bool,
         ctx: &mut ViewContext<Self>,
     ) {
         AISettings::handle(ctx).update(ctx, |settings, ctx| {
@@ -11607,6 +14748,7 @@ impl TerminalView {
                     // Force agent mode, overriding any shell lock
                     input.ensure_agent_mode_for_ai_features(
                         true,
+                        Some(InputTypeAutoDetectionSource::OnboardingAgentPrompt),
                         ctx,
                     );
                 }
@@ -11819,6 +14961,30 @@ impl TerminalView {
         };
     }
 
+    fn update_input_prompt_suggestions_banner_state(&mut self, ctx: &mut ViewContext<Self>) {
+        for rich_content in &self.rich_content_views {
+            if let Some(ai_metadata) = rich_content.ai_block_metadata() {
+                // If the passive code gen fails, show the prompt suggestion banner as a fallback
+                if ai_metadata
+                    .ai_block_handle
+                    .as_ref(ctx)
+                    .is_passive_conversation(ctx)
+                    && matches!(
+                        ai_metadata.ai_block_handle.as_ref(ctx).status(ctx),
+                        AIBlockOutputStatus::Failed { .. }
+                    )
+                {
+                    // Try to update the state of the prompt suggestions banner
+                    self.input.update(ctx, |input, ctx| {
+                        input.maybe_set_prompt_suggestions_banner_state_should_hide(false);
+                        input.notify_and_notify_children(ctx);
+                    });
+
+                    break;
+                }
+            }
+        }
+    }
 
     /// Removes hidden AI blocks for passive requests from the sumtree.
     ///
@@ -11854,6 +15020,7 @@ impl TerminalView {
     #[cfg(not(target_family = "wasm"))]
     pub(crate) fn remove_plugin_instructions_block(
         &mut self,
+        block_handle: ViewHandle<plugin_instructions_block::PluginInstructionsBlock>,
         ctx: &mut ViewContext<Self>,
     ) {
         let block_id = block_handle.id();
@@ -11866,10 +15033,403 @@ impl TerminalView {
         ctx.notify();
     }
 
+    /// Removes AI blocks from `rich_content_views` that match the given conversation and exchange IDs.
+    /// This handles cleanup of the block, removal from the block list model, and notifying the
+    /// new last AI block in the conversation so it re-renders with the footer.
+    fn remove_ai_blocks_for_exchanges(
+        &mut self,
+        conversation_id: &AIConversationId,
+        exchange_ids: &HashSet<AIAgentExchangeId>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let mut blocks_to_remove: Vec<(EntityId, ViewHandle<AIBlock>)> = vec![];
+        self.rich_content_views.retain(|rich_content| {
+            if let Some(ai_metadata) = rich_content.ai_block_metadata()
+                && ai_metadata.conversation_id == *conversation_id
+                && exchange_ids.contains(&ai_metadata.exchange_id)
+            {
+                blocks_to_remove.push((
+                    ai_metadata.ai_block_handle.id(),
+                    ai_metadata.ai_block_handle.clone(),
+                ));
+                return false;
+            }
+            true
+        });
+
+        // Close any open usage footers on blocks being removed to prevent them becoming orphaned
+        for (view_id, handle) in &blocks_to_remove {
+            if self.usage_footer_view_ids.contains_key(view_id) {
+                handle.update(ctx, |block, ctx| {
+                    block.handle_action(&AIBlockAction::ToggleIsUsageFooterExpanded, ctx);
+                });
+            }
+        }
+
+        blocks_to_remove.into_iter().for_each(|(view_id, handle)| {
+            handle.update(ctx, |block, ctx| {
+                block.cleanup_block(ctx);
+            });
+            self.model
+                .lock()
+                .block_list_mut()
+                .remove_rich_content(view_id);
+        });
+
+        // Notify the new last AI block so it re-renders with the footer
+        if let Some(new_last_block) = self.rich_content_views.iter().rev().find_map(|rc| {
+            let ai_metadata = rc.ai_block_metadata()?;
+            if ai_metadata.conversation_id == *conversation_id {
+                return Some(ai_metadata.ai_block_handle.clone());
+            }
+            None
+        }) {
+            new_last_block.update(ctx, |_, ctx| ctx.notify());
+        }
+
+        // Update scroll position to ensure we don't have blank space
+        self.update_scroll_position_locking(ScrollPositionUpdate::AfterEnd, ctx);
+    }
 
 
+    #[allow(clippy::too_many_arguments)]
+    fn on_maa_prompt_suggestion_generated(
+        &mut self,
+        prompt: &str,
+        label: &Option<String>,
+        _request_duration_ms: u64,
+        trigger: Option<PassiveSuggestionTrigger>,
+        conversation_id: Option<AIConversationId>,
+        server_request_token: Option<String>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if prompt.is_empty() {
+            return;
+        }
 
+        self.clear_prompt_suggestions(ctx);
+        let suggestion_id = Uuid::new_v4().to_string();
+        let banner_id = self.inline_banners_state.next_banner_id();
+        let banner_state = PromptSuggestionBannerState {
+            banner_id,
+            prompt_suggestion: PromptSuggestion {
+                id: suggestion_id.clone(),
+                label: label.clone(),
+                prompt: prompt.to_string(),
+                coding_query_context: None,
+                static_prompt_suggestion_name: None,
+                should_start_new_conversation: false,
+            },
+            accept_button_mouse_state: Default::default(),
+            llm_warning_learn_more_hyperlink: Default::default(),
+            should_hide: false,
+            trigger,
+            conversation_id,
+            server_request_token: server_request_token.clone(),
+        };
 
+        self.inline_banners_state.prompt_suggestions_banner = Some(banner_state.clone());
+        self.input.update(ctx, |input, ctx| {
+            input.set_prompt_suggestions_banner_state(Some(banner_state), ctx);
+            input.notify_and_notify_children(ctx);
+        });
+
+        ctx.notify();
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn on_maa_code_diff_generated(
+        &mut self,
+        diffs: Vec<FileDiff>,
+        edit_format_kind: RequestFileEditsFormatKind,
+        title: Option<String>,
+        original_edits: Vec<PassiveCodeDiffEntry>,
+        conversation_id: Option<AIConversationId>,
+        request_duration_ms: u64,
+        trigger: PassiveSuggestionTrigger,
+        server_request_token: Option<String>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let action_id = AIAgentActionId::from(uuid::Uuid::new_v4().to_string());
+        use crate::ai::agent::AIIdentifiers;
+        use crate::ai::blocklist::inline_action::code_diff_view::CodeDiffViewEvent;
+
+        let identifiers = AIIdentifiers::default();
+        let title_for_result = title.clone();
+
+        let session_platform = self
+            .active_session
+            .as_ref(ctx)
+            .shell_launch_data(ctx)
+            .map(Into::into);
+
+        let diff_view = ctx.add_typed_action_view(|ctx| {
+            CodeDiffView::new_passive(
+                &action_id,
+                title,
+                identifiers,
+                edit_format_kind,
+                false,
+                session_platform,
+                ctx,
+            )
+        });
+
+        diff_view.update(ctx, |view, ctx| {
+            view.set_candidate_diffs(diffs, ctx);
+        });
+
+        let wrapper_view = {
+            let diff_view_for_wrapper = diff_view.clone();
+            ctx.add_view(move |_ctx| inline_banner::PassiveCodeDiff {
+                diff_view: diff_view_for_wrapper,
+            })
+        };
+
+        let trigger_block_id = match &trigger {
+            PassiveSuggestionTrigger::ShellCommandCompleted(trigger) => {
+                Some(trigger.executed_shell_command.id.clone())
+            }
+            _ => None,
+        };
+        // Capture the string form for telemetry before `trigger_block_id` is
+        // moved into the subscribe_to_view closure below.
+        let trigger_block_id_str = trigger_block_id.as_ref().map(|id| id.to_string());
+
+        let wrapper_view_id = wrapper_view.id();
+        ctx.subscribe_to_view(&diff_view, move |me, view, event, ctx| {
+            match event {
+                CodeDiffViewEvent::TryAccept => {
+                    // Persist the accepted (possibly edited) passive suggestion
+                    // through the shared DiffStorageHelper flow. The result
+                    // isn't surfaced to the LLM on this path; failed writes
+                    // surface per-file toasts from the view's save
+                    // subscriptions.
+                    let _save_future = view.update(ctx, |diff_view, ctx| {
+                        diff_view.send_malformed_line_telemetry(ctx);
+                        DiffStorageHelper::accept_and_save(diff_view, ctx)
+                    });
+                    ctx.notify();
+                }
+                CodeDiffViewEvent::CancelPassive => {
+                    me.model
+                        .lock()
+                        .block_list_mut()
+                        .remove_rich_content(wrapper_view_id);
+                    me.rich_content_views
+                        .retain(|rc| rc.view_id() != wrapper_view_id);
+                    ctx.notify();
+                }
+                CodeDiffViewEvent::ContinuePassiveCodeDiffWithAgent { accepted } => {
+                    let conversation_id =
+                        if let Some(conversation_id) = conversation_id {
+                            conversation_id
+                        } else {
+                            // No existing conversation (ephemeral shell-command trigger): start a
+                            // new one and open the agent view.
+                            match me.try_enter_agent_view(
+                                None,
+                                AgentViewEntryOrigin::AcceptedPassiveCodeDiff,
+                                None,
+                                ctx,
+                            ) {
+                                Ok(conversation_id) => {
+                                    if let Some(block_id) = trigger_block_id.as_ref() {
+                                        me.associate_and_promote_block_for_conversation(
+                                            block_id.clone(),
+                                            conversation_id,
+                                            ctx,
+                                        );
+                                    }
+                                    me.set_rich_content_agent_view_conversation_id(
+                                        wrapper_view_id,
+                                        conversation_id,
+                                    );
+                                    conversation_id
+                                }
+                                Err(e) => {
+                                    report_error!(anyhow::Error::new(e).context(
+                                        "Failed to enter agent view for passive code diff"
+                                    ));
+                                    return;
+                                }
+                            }
+                        };
+
+                    // Use the passive diff summary as the conversation title.
+                    if let Some(title) = title_for_result.as_ref() {
+                        BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, _ctx| {
+                            if let Some(conversation) = history.conversation_mut(&conversation_id) {
+                                conversation.set_fallback_display_title(title.clone());
+                            }
+                        });
+                    }
+
+                    let summary = title_for_result.clone().unwrap_or_default();
+                    let diffs = original_edits.clone();
+                    if *accepted {
+                        me.ai_controller.update(ctx, |controller, ctx| {
+                            controller.send_passive_suggestion_result(
+                                Some(conversation_id),
+                                PassiveSuggestionResultType::CodeDiff {
+                                    diffs,
+                                    summary,
+                                    accepted: true,
+                                },
+                                Some(trigger.clone()),
+                                ctx,
+                            );
+                        });
+                    } else {
+                        // Queue the result so it's included with the next
+                        // user-initiated request on this conversation.
+                        me.ai_controller.update(ctx, |controller, _ctx| {
+                            controller.queue_passive_suggestion_result(
+                                conversation_id,
+                                PassiveSuggestionResultType::CodeDiff {
+                                    diffs,
+                                    summary,
+                                    accepted: false,
+                                },
+                                Some(trigger.clone()),
+                            );
+                        });
+                    }
+                }
+                CodeDiffViewEvent::EditModeChanged { enabled } => {
+                    if *enabled {
+                        me.open_code_diff(view.clone(), ctx);
+                    }
+                    ctx.notify();
+                }
+                CodeDiffViewEvent::ToggleCodeReviewPane { entrypoint } => {
+                    me.toggle_code_review_pane(
+                        GitDeltaPreference::Always,
+                        *entrypoint,
+                        None,
+                        true,
+                        ctx,
+                    );
+                }
+                CodeDiffViewEvent::DisplayModeChanged => {
+                    // Re-render wrapper when the diff view expands/collapses.
+                    ctx.notify();
+                }
+                CodeDiffViewEvent::Blur => {
+                    me.focus_terminal(ctx);
+                }
+                _ => {}
+            }
+        });
+
+        let suggestion_id = Uuid::new_v4().to_string();
+        send_telemetry_from_ctx!(
+            TelemetryEvent::SuggestedCodeDiffBannerShown {
+                prompt_suggestion_id: suggestion_id,
+                code_exchange_id: None,
+                block_id: trigger_block_id_str,
+                request_duration_ms,
+                server_request_token,
+            },
+            ctx
+        );
+
+        self.insert_rich_content(
+            None,
+            wrapper_view,
+            None,
+            RichContentInsertionPosition::Append {
+                insert_below_long_running_block: true,
+            },
+            ctx,
+        );
+    }
+
+    fn on_legacy_prompt_suggestion_generated(
+        &mut self,
+        prompt_suggestion: AgentModePromptSuggestion,
+        block_id: BlockId,
+        command: String,
+        request_duration_ms: u64,
+        ctx: &mut ViewContext<TerminalView>,
+    ) {
+        match prompt_suggestion {
+            AgentModePromptSuggestion::Success(suggestion) => {
+                if suggestion.prompt.is_empty() {
+                    return;
+                }
+
+                let (query_string, block_command) = if should_collect_ai_ugc_telemetry(
+                    ctx,
+                    PrivacySettings::as_ref(ctx).is_telemetry_enabled,
+                ) {
+                    (Some(suggestion.prompt.to_string()), Some(command))
+                } else {
+                    (None, None)
+                };
+
+                let banner_id = self.inline_banners_state.next_banner_id();
+
+                self.clear_prompt_suggestions(ctx);
+
+                // Don't show banner if is coding query
+                let is_coding_query =
+                    suggestion.is_coding_query() && Self::passive_code_diffs_enabled(ctx);
+                let static_prompt_suggestion_name =
+                    suggestion.static_prompt_suggestion_name.clone();
+                let suggestion_id = suggestion.id.clone();
+
+                let trigger = {
+                    let model = self.model.lock();
+                    let Some(block_context) =
+                        block_context_from_terminal_model(&model, &block_id, false)
+                    else {
+                        return;
+                    };
+                    PassiveSuggestionTrigger::ShellCommandCompleted(ShellCommandCompletedTrigger {
+                        executed_shell_command: Box::new(block_context),
+                        relevant_files: vec![],
+                    })
+                };
+
+                let banner_state = PromptSuggestionBannerState {
+                    banner_id,
+                    prompt_suggestion: suggestion,
+                    accept_button_mouse_state: Default::default(),
+                    llm_warning_learn_more_hyperlink: Default::default(),
+                    should_hide: is_coding_query,
+                    trigger: Some(trigger),
+                    conversation_id: None,
+                    server_request_token: None,
+                };
+
+                self.inline_banners_state.prompt_suggestions_banner = Some(banner_state.clone());
+
+                self.input.update(ctx, |input, ctx| {
+                    input.set_prompt_suggestions_banner_state(Some(banner_state), ctx);
+                    input.notify_and_notify_children(ctx);
+                });
+
+                if let Some(static_name) = static_prompt_suggestion_name {
+                    send_telemetry_from_ctx!(
+                        TelemetryEvent::StaticPromptSuggestionsBannerShown {
+                            id: suggestion_id,
+                            query: query_string,
+                            block_id: block_id.to_string(),
+                            block_command,
+                            static_prompt_suggestion_name: static_name,
+                            request_duration_ms,
+                            view: self.prompt_suggestion_view_type(ctx),
+                        },
+                        ctx
+                    );
+                }
+
+                ctx.notify();
+            }
+            AgentModePromptSuggestion::None | AgentModePromptSuggestion::Error => {}
+        }
+    }
 
     /// Generates command corrections, if applicable.
     fn maybe_generate_command_suggestions(
@@ -12035,6 +15595,47 @@ impl TerminalView {
         }
     }
 
+    /// Send a desktop notification that agent mode needs attention or has finished,
+    /// otherwise insert a callout banner if notifications are unset.
+    /// May become separate triggers if we show sub-tasks in the UI.
+    /// Note that this does NOT handle agent mode toast notifications in-app.
+    /// Those are handled in the workspace view on AgentManagementEvent::ConversationNeedsAttention.
+    fn maybe_send_agent_mode_desktop_notification(
+        &mut self,
+        conversation_id: &AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if !self.is_navigated_away_from_window(ctx) {
+            return;
+        }
+
+        let Some(conversation) = BlocklistAIHistoryModel::as_ref(ctx).conversation(conversation_id)
+        else {
+            return;
+        };
+        if conversation.is_entirely_passive()
+            || !conversation.status().should_trigger_notification()
+        {
+            return;
+        }
+
+        let Some(block_summary) = self.get_ai_notification_summary(conversation, ctx) else {
+            return;
+        };
+
+        let trigger = if conversation.status().is_blocked() {
+            NotificationsTrigger::NeedsAttention
+        } else {
+            NotificationsTrigger::AgentTaskCompleted(block_summary.success)
+        };
+        self.send_agent_desktop_notification_or_show_banner(
+            trigger,
+            block_summary.title,
+            block_summary.description,
+            Some(NotificationAgentVariant::Oz),
+            ctx,
+        );
+    }
 
     /// Shared logic for sending a desktop notification (or showing a discovery banner)
     /// for any agent status change (both Warp's agent and any CLI agent).
@@ -12635,6 +16236,11 @@ impl TerminalView {
         }
     }
 
+    fn has_active_cli_agent_session(&self, ctx: &AppContext) -> bool {
+        CLIAgentSessionsModel::as_ref(ctx)
+            .session(self.view_id)
+            .is_some()
+    }
 
     fn is_inverted_blocklist(&self, ctx: &ViewContext<Self>) -> bool {
         let input_mode = *InputModeSettings::as_ref(ctx).input_mode.value();
@@ -13985,6 +17591,73 @@ impl TerminalView {
         }
     }
 
+    /// Show the context menu that lists the context blocks or selected text attached to an AI query.
+    /// The query is the query in the exchange with the given [`AIAgentExchangeId`].
+    fn open_ai_block_attached_context_menu(
+        &mut self,
+        ai_block_view_id: EntityId,
+        ai_exchange_id: AIAgentExchangeId,
+        ai_conversation_id: AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let Some(contexts) = BlocklistAIHistoryModel::as_ref(ctx)
+            .conversation(&ai_conversation_id)
+            .map(|conversation| conversation.context_for_exchange(ai_exchange_id))
+        else {
+            debug_assert!(
+                false,
+                "Attempted to open attachments menu for AI block with unknown conversation."
+            );
+            return;
+        };
+
+        let font_family = Appearance::as_ref(ctx).monospace_font_family();
+        let font_size = Appearance::as_ref(ctx).monospace_font_size();
+
+        const MAX_TEXT_DISPLAY_LENGTH: usize = 23;
+        let truncate_text = |text: &String| truncate_from_end(text, MAX_TEXT_DISPLAY_LENGTH);
+
+        let menu_items = contexts
+            .filter_map(|context| {
+                if let AIAgentContext::Block(block_context) = context {
+                    let BlockContext {
+                        index: block_index,
+                        command,
+                        ..
+                    } = block_context.as_ref();
+                    Some(
+                        MenuItemFields::new(truncate_text(command))
+                            .with_on_select_action(TerminalAction::SelectAIAttachedBlock(
+                                *block_index,
+                            ))
+                            .with_icon(icons::Icon::Paperclip)
+                            .with_font_override(font_family)
+                            .with_font_size_override(font_size)
+                            .into_item(),
+                    )
+                } else if let AIAgentContext::SelectedText(selected_text) = context {
+                    Some(
+                        MenuItemFields::new(truncate_text(selected_text))
+                            .with_icon(icons::Icon::Paperclip)
+                            .with_font_override(font_family)
+                            .with_font_size_override(font_size)
+                            .with_no_interaction_on_hover()
+                            .into_item(),
+                    )
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        self.show_context_menu(
+            ContextMenuState {
+                menu_type: ContextMenuType::AIBlockAttachedContext { ai_block_view_id },
+            },
+            menu_items,
+            ctx,
+        );
+    }
 
     fn alt_mouse_action(&mut self, mouse_state: &MouseState, ctx: &mut ViewContext<Self>) {
         let escape_sequences = mouse_state
@@ -14114,18 +17787,21 @@ impl TerminalView {
     /// Sets the pending query follow-up state for this terminal view's AI context model.
     pub fn set_pending_query_state(
         &mut self,
+        state: PendingQueryState,
         ctx: &mut ViewContext<Self>,
     ) {
         self.ai_context_model
             .update(ctx, |context_model, ctx| match state {
                 PendingQueryState::New { .. } => {
                     context_model.set_pending_query_state_for_new_conversation(
+                        AgentViewEntryOrigin::ConversationSelector,
                         ctx,
                     );
                 }
                 PendingQueryState::Existing { conversation_id } => {
                     context_model.set_pending_query_state_for_existing_conversation(
                         conversation_id,
+                        AgentViewEntryOrigin::ConversationSelector,
                         ctx,
                     );
                 }
@@ -14148,6 +17824,22 @@ impl TerminalView {
         ctx.emit(Event::SelectedBlocksChanged);
     }
 
+    // Additionally handles side effects of changing block selections (i.e. CMD + F results, etc.),
+    // but without re-syncing Agent Mode context. The field `self.selected_blocks` should only be
+    // mutated as part of a `change_block_selections` or `change_block_selections_to_match_ai_context`
+    // invocation.
+    fn change_block_selections_to_match_ai_context<F>(
+        &mut self,
+        change_selection: F,
+        ctx: &mut ViewContext<Self>,
+    ) where
+        F: FnOnce(&mut SelectedBlocks),
+    {
+        change_selection(&mut self.selected_blocks);
+        self.update_find_selection(ctx);
+
+        ctx.emit(Event::SelectedBlocksChanged);
+    }
 
     pub fn integration_test_change_block_selection_to_single(
         &mut self,
@@ -14887,6 +18579,98 @@ impl TerminalView {
         self.clear_buffer(ctx);
     }
 
+    /// Performs a variant of the "clear buffer" action that is special for the agent view.
+    /// Returns true iff the clear was successful.
+    fn try_clear_buffer_in_agent_view(&mut self, ctx: &mut ViewContext<Self>) -> bool {
+        let at_least_one_visible_block = self
+            .model
+            .lock()
+            .block_list()
+            .has_visible_block_height_item_where(|_| true);
+
+        // If there are no visible blocks, then "clear buffer" is a no-op.
+        if !at_least_one_visible_block {
+            true
+        } else {
+            // Otherwise, there are some visible blocks and we need to clear stuff.
+            let (is_long_running, is_agent_monitoring, is_agent_driving_command) = {
+                let model = self.model.lock();
+                let active_block = model.block_list().active_block();
+                (
+                    active_block.is_active_and_long_running(),
+                    active_block.is_agent_monitoring(),
+                    active_block.is_agent_driving_command(),
+                )
+            };
+
+            // If there isn't an active long running block, then "clear buffer" just starts a new convo.
+            if !is_long_running {
+                // Cancel any in-progress work in the conversation being left.
+                if let Some(conversation_id) = self
+                    .agent_view_controller
+                    .as_ref(ctx)
+                    .agent_view_state()
+                    .active_conversation_id()
+                {
+                    let is_in_progress = BlocklistAIHistoryModel::as_ref(ctx)
+                        .conversation(&conversation_id)
+                        .is_some_and(|conversation| conversation.status().is_in_progress());
+                    if is_in_progress {
+                        self.ai_controller.update(ctx, |controller, ctx| {
+                            controller.cancel_conversation_progress(
+                                conversation_id,
+                                CancellationReason::ManuallyCancelled,
+                                ctx,
+                            );
+                        });
+                    }
+                }
+                self.enter_agent_view_for_new_conversation(
+                    None,
+                    AgentViewEntryOrigin::ClearBuffer,
+                    ctx,
+                );
+                true
+            } else if is_agent_monitoring || is_agent_driving_command {
+                // Otherwise, if the agent is monitoring this long-running block,
+                // then clear just that block and leave the rest of the blocklist in tact.
+                self.model.lock().clear_screen(ClearMode::ActiveBlock);
+                // In the agent-driving-but-not-monitoring state the terminal block is hidden. Make
+                // it visible and expand the header immediately so the user sees the cleared state
+                // right away, rather than waiting for the auto-expand timer (~3 s).
+                if is_agent_driving_command && !is_agent_monitoring {
+                    let requested_command_action_id = self
+                        .model
+                        .lock()
+                        .block_list()
+                        .active_block()
+                        .requested_command_action_id()
+                        .cloned();
+                    if let Some(action_id) = &requested_command_action_id {
+                        self.model
+                            .lock()
+                            .block_list_mut()
+                            .set_visibility_of_block_for_ai_action(action_id, true);
+                        if let Some(ai_block_handle) = self.active_ai_block(ctx).cloned() {
+                            ai_block_handle.update(ctx, |ai_block, ctx| {
+                                ai_block.expand_requested_command_view(action_id, ctx);
+                            });
+                        }
+                        self.redetermine_terminal_focus(ctx);
+                    }
+                }
+                self.find_model.update(ctx, |find_model, ctx| {
+                    find_model.clear_matches(ctx);
+                });
+                self.update_find_selection(ctx);
+                true
+            } else {
+                // Otherwise, if this is a long-running command that is not agent-monitored,
+                // just clear the buffer normally.
+                false
+            }
+        }
+    }
 
     fn clear_buffer(&mut self, ctx: &mut ViewContext<Self>) {
         let agent_view_state = self.agent_view_controller.as_ref(ctx).agent_view_state();
@@ -15335,8 +19119,217 @@ impl TerminalView {
         ctx.emit(Event::OpenPromptEditor);
     }
 
+    /// Handle AI entrypoints, routing to AI in blocklist when possible and falling back to the AI
+    /// Assistant panel.
+    fn ask_ai(&mut self, ask_source: &AskAISource, ctx: &mut ViewContext<Self>) {
+        let semantic_selection = SemanticSelection::as_ref(ctx);
+        let selection_string = self.model.lock().selection_to_string(
+            semantic_selection,
+            self.is_inverted_blocklist(ctx),
+            ctx,
+        );
 
+        let ask_data = match (ask_source, selection_string) {
+            (
+                AskAISource::SelectedBlockOrText | AskAISource::SelectedTerminalText,
+                Some(selection_string),
+            ) => {
+                // Explicitly snapshot and attach the selected text as pending context.
+                // This decouples context from the live selection so the text persists
+                // even if the user changes their selection afterward.
+                self.ai_context_model.update(ctx, |context_model, ctx| {
+                    context_model.set_pending_context_selected_text(
+                        Some(selection_string.clone()),
+                        false,
+                        ctx,
+                    );
+                });
 
+                AskAIType::FromTextSelection {
+                    text: Arc::new(selection_string),
+                    // In the block list terminal view, selected text is attached directly as Agent Mode context.
+                    // In this case, we don't want to re-surface the selected text by rendering "Explain the following..."
+                    // However, we want to keep this prompt for long-running commands and the alt-screen view.
+                    populate_input_box: !self.is_input_box_visible(&self.model.lock(), ctx),
+                }
+            }
+            (
+                AskAISource::Block { .. }
+                | AskAISource::LastBlock
+                | AskAISource::SelectedBlockOrText,
+                _,
+            ) => {
+                let model = self.model.lock();
+                let block_index = match ask_source {
+                    AskAISource::Block(block_index) => Some(*block_index),
+                    // Since we already checked the match arm for SelectedBlockOrText where there is text selection,
+                    // we must be in the selected block case now.
+                    AskAISource::SelectedBlockOrText => self.selected_blocks.tail(),
+                    AskAISource::LastBlock => model.block_list().last_non_hidden_block_by_index(),
+                    AskAISource::SelectedInputText
+                    | AskAISource::SelectedTerminalText
+                    | AskAISource::SelectedBlocks => None,
+                };
+
+                let Some(block) = block_index.and_then(|idx| model.block_list().block_at(idx))
+                else {
+                    return;
+                };
+
+                let input = block.command_to_string();
+                let output = block.output_to_string();
+                AskAIType::FromBlock {
+                    input: Arc::new(input),
+                    output: Arc::new(output),
+                    exit_code: block.exit_code(),
+                    block_index: block.index(),
+                }
+            }
+            (AskAISource::SelectedInputText, _) | (AskAISource::SelectedTerminalText, None) => {
+                let selected_input_text = self.input.read(ctx, |input, ctx| {
+                    input
+                        .editor()
+                        .read(ctx, |editor, ctx| editor.selected_text(ctx))
+                });
+
+                if selected_input_text.is_empty() {
+                    return;
+                }
+
+                send_telemetry_from_ctx!(TelemetryEvent::InputAskWarpAI, ctx);
+                AskAIType::FromTextSelection {
+                    text: Arc::new(selected_input_text),
+                    populate_input_box: true,
+                }
+            }
+            (AskAISource::SelectedBlocks, _) => AskAIType::FromBlocks {
+                block_indices: self.selected_blocks.block_indices().collect::<HashSet<_>>(),
+            },
+        };
+
+        if FeatureFlag::AgentMode.is_enabled() {
+            self.ask_blocklist_ai(&ask_data, ctx);
+        } else {
+            ctx.emit(Event::AskAIAssistant(ask_data.clone()));
+        }
+
+        self.close_context_menu(ctx, false);
+    }
+
+    /// Sets the input mode to AI and locks it. If `query` is `Some`, pre-fills the input box with
+    /// the given query and focuses the input box.
+    pub fn set_ai_input_mode_with_query(
+        &mut self,
+        query: Option<&str>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        self.ai_input_model.update(ctx, |ai_input, ctx| {
+            ai_input.set_input_config(
+                InputConfig {
+                    input_type: InputType::AI,
+                    is_locked: true,
+                },
+                query.is_none(),
+                Some(InputTypeAutoDetectionSource::AskAi),
+                ctx,
+            );
+        });
+
+        self.input().update(ctx, |input, ctx| {
+            if let Some(query) = query {
+                input.replace_buffer_content(query, ctx);
+            }
+
+            input.focus_input_box(ctx);
+        });
+    }
+
+    /// If the input box is visible, update the AI controller's state and potentially prefill the
+    /// terminal input with an AI query (depending on whether the text selection has already been
+    /// attached as context). If the input box is not visible, make a new pane and do the same.
+    pub fn ask_blocklist_ai(&mut self, ask_type: &AskAIType, ctx: &mut ViewContext<Self>) {
+        let mut context_block_indices = HashSet::new();
+
+        let (initial_query, auto_suggestion) = match ask_type {
+            AskAIType::FromTextSelection {
+                text,
+                populate_input_box,
+            } => {
+                if *populate_input_box {
+                    let query_prefix = "Explain the following:\n";
+                    let formatted_selection = { format!("```\n{}\n```", text.trim()) };
+                    let combined_query = Some(format!("{query_prefix}{formatted_selection}"));
+                    (combined_query, None)
+                } else {
+                    (None, None)
+                }
+            }
+
+            AskAIType::FromBlock { block_index, .. } => {
+                context_block_indices.insert(*block_index);
+                (None, Some(DEFAULT_ASK_AI_AUTOSUGGESTION_TEXT))
+            }
+            AskAIType::FromBlocks { block_indices } => {
+                context_block_indices.extend(block_indices);
+                (None, Some(DEFAULT_ASK_AI_AUTOSUGGESTION_TEXT))
+            }
+
+            AskAIType::FromAICommandSearch { query } => {
+                let query_prefix = "What is the command to: ";
+                (Some(format!("{}{}", query_prefix, query.trim())), None)
+            }
+        };
+
+        // We don't support attaching blocks as context in new panes.
+        if context_block_indices.is_empty() && !self.is_input_box_visible(&self.model.lock(), ctx) {
+            ctx.emit(Event::Pane(PaneEvent::NewPaneInAIMode { initial_query }));
+            return;
+        }
+
+        self.ai_input_model.update(ctx, |ai_input, ctx| {
+            ai_input.set_input_type(
+                InputType::AI,
+                Some(InputTypeAutoDetectionSource::AskAi),
+                ctx,
+            );
+        });
+
+        if !context_block_indices.is_empty() {
+            self.change_block_selections(
+                |selected_blocks| selected_blocks.reset_to_block_indices(context_block_indices),
+                ctx,
+            );
+        }
+
+        let selected_block_ids = self
+            .selected_blocks
+            .to_block_ids(self.model.lock().block_list())
+            .cloned()
+            .collect_vec();
+
+        self.input().update(ctx, |input, ctx| {
+            if let Some(initial_query) = initial_query {
+                input.replace_buffer_content(initial_query.as_str(), ctx);
+            }
+
+            // Don't interfere with potential autosuggestions based on text already in the input
+            // buffer.
+            if input.buffer_text(ctx).is_empty()
+                && let Some(autosuggestion) = auto_suggestion
+            {
+                input.set_autosuggestion(
+                    autosuggestion,
+                    AutosuggestionType::AgentModeQuery {
+                        context_block_ids: selected_block_ids,
+                        was_intelligent_autosuggestion: false,
+                    },
+                    ctx,
+                );
+            }
+
+            input.focus_input_box(ctx);
+        });
+    }
 
     fn show_find_bar(&mut self, ctx: &mut ViewContext<Self>) {
         let model = self.model.lock();
@@ -15934,7 +19927,366 @@ impl TerminalView {
         ctx.notify();
     }
 
+    /// Handles AI block events for both live and restored AI blocks.
+    fn handle_ai_block_event(
+        &mut self,
+        block: ViewHandle<AIBlock>,
+        is_restored: bool,
+        event: &AIBlockEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let conversation_id = block.as_ref(ctx).conversation_id();
+        match event {
+            // -- Live-only events (no-op for restored blocks) ---------------------------
+            AIBlockEvent::ActionBlockedOnUserConfirmation => {
+                if is_restored {
+                    return;
+                }
+                self.focus_ai_block_if_self_focused(&block, ctx);
+                self.maybe_send_agent_mode_desktop_notification(&conversation_id, ctx);
+            }
+            AIBlockEvent::PassiveCodeDiffLoaded => {
+                if is_restored {
+                    return;
+                }
+                self.model
+                    .lock()
+                    .block_list_mut()
+                    .refresh_heights_for_loaded_passive_code_diff(block.id());
+                ctx.notify();
+            }
+            AIBlockEvent::Finished => {
+                if is_restored {
+                    return;
+                }
+                // With MAA, it's possible for an exchange to contain many tasks.
+                // This means an AI block may "finish" before the entire AI response is complete.
+                if self.active_ai_block(ctx).is_none() {
+                    self.maybe_send_agent_mode_desktop_notification(&conversation_id, ctx);
+                    if self.is_todo_popup_visible {
+                        self.is_todo_popup_visible = false;
+                    }
+                }
+                self.redetermine_terminal_focus(ctx);
+                ctx.notify();
+            }
+            AIBlockEvent::OpenCodeWithDiff { view } => {
+                if is_restored {
+                    return;
+                }
+                self.open_code_diff(view.clone(), ctx);
+                ctx.notify();
+            }
+            AIBlockEvent::DismissedPassiveBlock => {
+                if is_restored {
+                    return;
+                }
+                self.cleanup_and_remove_conversation_for_ai_block(&block, ctx);
+            }
+            AIBlockEvent::ActionFinished => {
+                if is_restored {
+                    return;
+                }
+            }
 
+            // -- Shared events ---------------------------------------------------------
+            AIBlockEvent::UpdateInlineActionVisibility {
+                action_id,
+                is_visible,
+            } => {
+                self.model
+                    .lock()
+                    .block_list_mut()
+                    .set_visibility_of_block_for_ai_action(action_id, *is_visible);
+                if !is_restored {
+                    // Requested commands can auto-expand without user interaction so
+                    // we only want to take focus if the terminal view is still focused.
+                    self.redetermine_terminal_focus(ctx);
+                }
+                ctx.notify();
+            }
+            AIBlockEvent::ToggleCodeDiffVisibility => {
+                ctx.notify();
+            }
+            #[cfg(feature = "local_fs")]
+            AIBlockEvent::OpenDetectedFilePath {
+                absolute_path,
+                line_and_column_num,
+                target_override,
+            } => {
+                if let Some(target_override) = target_override {
+                    self.open_file_path_with_target(
+                        absolute_path.to_path_buf(),
+                        target_override.clone(),
+                        *line_and_column_num,
+                        ctx,
+                    );
+                } else {
+                    self.open_file_path(absolute_path.to_path_buf(), *line_and_column_num, ctx);
+                }
+            }
+            AIBlockEvent::ShowLinkTooltip(tooltip_info) => {
+                self.open_rich_content_link_tool_tip = Some(tooltip_info.clone());
+                // A plain click that opens a tooltip now skips `dismiss_ai_tooltips` (see the
+                // empty-selection guard in `AIBlock`'s `SelectText` handler), which previously
+                // also triggered a re-render via its own `ctx.notify()`. Without that incidental
+                // render the terminal view doesn't re-render to place the tooltip overlay, so we
+                // must notify here when tooltip visibility changes.
+                ctx.notify();
+            }
+            AIBlockEvent::DismissLinkTooltip => {
+                self.open_rich_content_link_tool_tip = None;
+                ctx.notify();
+            }
+            AIBlockEvent::ShowSecretTooltip(tooltip_info) => {
+                self.open_secret_tool_tip = Some(SecretTooltip::RichContent {
+                    is_agent_mode: true,
+                    tooltip: tooltip_info.clone(),
+                });
+                ctx.notify();
+            }
+            AIBlockEvent::DismissSecretTooltip => {
+                self.open_secret_tool_tip = None;
+                ctx.notify();
+            }
+            #[cfg(windows)]
+            AIBlockEvent::WindowsCtrlC => {
+                self.ctrl_c(ctx);
+            }
+            AIBlockEvent::AIOutputUpdated => {
+                self.model
+                    .lock()
+                    .block_list_mut()
+                    .mark_rich_content_dirty(block.id());
+                ctx.notify();
+            }
+            AIBlockEvent::OpenCitation(citation) => match citation {
+                AIAgentCitation::WarpDriveObject { uid } => {
+                    ctx.emit(Event::OpenWarpDriveObjectInPane(uid.clone()));
+                }
+                AIAgentCitation::WarpDocumentation { path } => {
+                    ctx.open_url(&format!("https://docs.warp.dev/{path}"));
+                }
+                AIAgentCitation::WebPage { url } => {
+                    ctx.open_url(url);
+                }
+                AIAgentCitation::AgentMemory {
+                    memory_store_id,
+                    memory_id,
+                    ..
+                } => {
+                    let oz_root_url = ChannelState::oz_root_url();
+                    let url = format!(
+                        "{oz_root_url}/memory/{}/memories/{}",
+                        urlencoding::encode(memory_store_id),
+                        urlencoding::encode(memory_id)
+                    );
+                    ctx.open_url(&url);
+                }
+            },
+            AIBlockEvent::OpenAIFactCollection { sync_id } => {
+                ctx.emit(Event::OpenAIFactCollection { sync_id: *sync_id });
+            }
+            AIBlockEvent::OpenWorkflow { sync_id } => {
+                if let Some(object) = CloudModel::as_ref(ctx).get_workflow(sync_id) {
+                    ctx.emit(Event::OpenWarpDriveObjectInPane(object.uid()));
+                }
+            }
+            AIBlockEvent::OpenSuggestedAgentModeWorkflowModal { workflow_and_id } => {
+                ctx.emit(Event::OpenSuggestedAgentModeWorkflowModal {
+                    workflow_and_id: workflow_and_id.clone(),
+                });
+            }
+            AIBlockEvent::OpenSuggestedRuleDialog { rule_and_id } => {
+                ctx.emit(Event::OpenSuggestedRuleDialog {
+                    rule_and_id: rule_and_id.clone(),
+                });
+            }
+            AIBlockEvent::FocusTerminal => {
+                self.redetermine_global_focus(ctx);
+            }
+            AIBlockEvent::ContinueConversation { conversation_id } => {
+                self.handle_continue_conversation(conversation_id, ctx);
+            }
+            AIBlockEvent::ContinuePassiveCodeDiffWithAgent {
+                conversation_id,
+                trigger_block_id,
+                auto_resume,
+            } => {
+                if let Some(block_id) = trigger_block_id {
+                    self.associate_and_promote_block_for_conversation(
+                        block_id.clone(),
+                        *conversation_id,
+                        ctx,
+                    );
+                }
+
+                if !self
+                    .agent_view_controller
+                    .as_ref(ctx)
+                    .agent_view_state()
+                    .is_active()
+                {
+                    self.set_rich_content_agent_view_conversation_id(block.id(), *conversation_id);
+                    self.handle_continue_conversation(conversation_id, ctx);
+                }
+
+                if *auto_resume {
+                    self.ai_controller.update(ctx, |controller, ctx| {
+                        controller.request_follow_up_after_actions(*conversation_id, ctx);
+                    });
+                }
+            }
+            AIBlockEvent::ResumeConversation { conversation_id } => {
+                self.handle_resume_conversation(conversation_id, ctx);
+            }
+            AIBlockEvent::InsertForkSlashCommand => {
+                #[cfg(target_family = "wasm")]
+                let command_name = commands::FORK.name;
+
+                #[cfg(not(target_family = "wasm"))]
+                let command_name = {
+                    let is_cloud_agent_context = self.is_ambient_agent_session(ctx)
+                        || self.input.as_ref(ctx).is_cloud_mode_input_v2_composing(ctx);
+                    let conversation_id = self
+                        .agent_view_controller
+                        .as_ref(ctx)
+                        .agent_view_state()
+                        .active_conversation_id()
+                        .or_else(|| {
+                            BlocklistAIHistoryModel::as_ref(ctx)
+                                .active_conversation(self.view_id)
+                                .map(|conv| conv.id())
+                        });
+                    fork_button_action(conversation_id, is_cloud_agent_context, ctx).command_name
+                };
+
+                self.input.update(ctx, |input, ctx| {
+                    input.replace_buffer_content(&format!("{} ", command_name), ctx);
+                    ctx.focus_self();
+                });
+            }
+            AIBlockEvent::ChildViewTextSelected => {
+                self.clear_selected_text_except(Some(block.id()), ctx);
+                self.sync_ai_block_model_selection(&block, ctx);
+            }
+            AIBlockEvent::SelectionChanged => {
+                self.sync_ai_block_model_selection(&block, ctx);
+            }
+            AIBlockEvent::CopiedEmptyText => {
+                self.copy(ctx);
+            }
+            AIBlockEvent::UsageFooterToggled {
+                conversation_id,
+                is_expanded,
+            } => {
+                self.handle_usage_footer_toggled(block.id(), *conversation_id, *is_expanded, ctx);
+            }
+            // LOCAL FORK: no agent settings page to open.
+            AIBlockEvent::OpenSettings => {}
+            #[cfg(feature = "local_fs")]
+            AIBlockEvent::OpenCodeInWarp { source, layout } => {
+                ctx.emit(Event::OpenCodeInWarp {
+                    source: source.clone(),
+                    layout: *layout,
+                });
+            }
+            AIBlockEvent::ToggleCodeReviewPane { entrypoint } => {
+                self.toggle_code_review_pane(
+                    GitDeltaPreference::Always,
+                    *entrypoint,
+                    None, // cli_agent
+                    true, /* focus_new_pane */
+                    ctx,
+                );
+            }
+            AIBlockEvent::OpenImportedCommentInCodeReview {
+                repo_path,
+                comment,
+                base_branch,
+            } => {
+                let arg = CodeReviewPanelArg {
+                    repo_path: Some(repo_path.clone()),
+                    terminal_view: self.view_handle.clone(),
+                    entrypoint: CodeReviewPaneEntrypoint::AgentModeRunning,
+                    focus_new_pane: true,
+                    cli_agent: None,
+                };
+                let diff_mode = self.diff_mode_for_branch(base_branch.as_deref(), ctx);
+                ctx.emit(Event::OpenCodeReviewPaneAndScrollToComment {
+                    open_code_review: arg,
+                    comment: (**comment).clone(),
+                    diff_mode,
+                });
+            }
+            AIBlockEvent::OpenAllImportedCommentsForConversation { conversation_id } => {
+                let (all_comments, base_branch) = self.all_comments_in_thread(conversation_id, ctx);
+                if !all_comments.is_empty() {
+                    let diff_mode = self.diff_mode_for_branch(base_branch.as_deref(), ctx);
+                    ctx.emit(Event::ImportAllCodeReviewComments {
+                        open_code_review: self.imported_comments_panel_arg(),
+                        comments: all_comments,
+                        diff_mode,
+                    });
+                }
+            }
+            AIBlockEvent::OpenAIDocumentPane {
+                document_id,
+                document_version,
+                is_auto_open,
+            } => {
+                ctx.emit(Event::OpenAIDocumentPane {
+                    document_id: *document_id,
+                    document_version: *document_version,
+                    is_auto_open: *is_auto_open,
+                });
+            }
+            AIBlockEvent::OpenActiveAgentProfileEditor => {
+                let profiles_model = AIExecutionProfilesModel::as_ref(ctx);
+                let active_profile = profiles_model.active_profile(Some(self.view_id), ctx);
+                ctx.emit(Event::OpenAgentProfileEditor {
+                    profile_id: active_profile.id().clone(),
+                });
+            }
+            AIBlockEvent::OpenThemeChooser => {
+                ctx.emit(Event::OpenThemeChooser);
+            }
+            AIBlockEvent::RunAwsLoginCommand => {
+                self.run_aws_login_command(ctx);
+            }
+        }
+        ctx.notify();
+    }
+
+    /// Keeps the terminal model's record of which rich content (AI) block has an
+    /// active text selection in sync with the block's own selection state.
+    ///
+    /// Rich content blocks render and own their text selections independently of
+    /// the point-based model selection used for regular command blocks, so the
+    /// model can't derive this on its own. Mirroring it here is what allows the
+    /// copy/insert paths (which go through
+    /// [`BlockList::selection_to_string`](crate::terminal::model::TerminalModel))
+    /// to find text selected inside an AI block.
+    fn sync_ai_block_model_selection(
+        &mut self,
+        block: &ViewHandle<AIBlock>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        // While a point-based block/text selection drag is in progress (which may
+        // span command and AI blocks), that selection owns the model state; don't
+        // clobber it with the AI block's own selection.
+        if self.is_selecting {
+            return;
+        }
+        let view_id = block.id();
+        let has_selection = block.as_ref(ctx).selected_text(ctx).is_some();
+        let mut model = self.model.lock();
+        if has_selection {
+            model.block_list_mut().set_rich_content_selection(view_id);
+        } else {
+            model.block_list_mut().clear_rich_content_selection(view_id);
+        }
+    }
 
     fn imported_comments_panel_arg(&self) -> CodeReviewPanelArg {
         CodeReviewPanelArg {
@@ -15951,6 +20303,7 @@ impl TerminalView {
     ///
     /// Returns `None` if the conversation has no user-query exchanges.
     fn thread_start_exchange_id(
+        conversation_id: &AIConversationId,
         ctx: &AppContext,
     ) -> Option<AIAgentExchangeId> {
         BlocklistAIHistoryModel::as_ref(ctx)
@@ -15962,12 +20315,48 @@ impl TerminalView {
             })
     }
 
+    /// Returns an iterator over the `AIBlockMetadata` entries that belong to the
+    /// current thread of `conversation_id` (newest first, bounded by the most
+    /// recent user query).
+    ///
+    /// This does **not** dereference view handles; callers add their own
+    /// `.map()` to obtain `&AIBlock` references.
+    fn ai_block_metadata_for_current_thread<'a>(
+        &'a self,
+        conversation_id: &'a AIConversationId,
+        ctx: &'a AppContext,
+    ) -> impl Iterator<Item = &'a AIBlockMetadata> + 'a {
+        let thread_start_exchange_id = Self::thread_start_exchange_id(conversation_id, ctx);
 
+        self.rich_content_views
+            .iter()
+            .rev()
+            .filter_map(move |rc| {
+                let ai_metadata = rc.ai_block_metadata()?;
+                (ai_metadata.conversation_id == *conversation_id).then_some(ai_metadata)
+            })
+            .take_while_inclusive(move |ai_metadata| {
+                Some(ai_metadata.exchange_id) != thread_start_exchange_id
+            })
+    }
+
+    /// Returns an iterator over the `AIBlock`s that belong to the current
+    /// thread of `conversation_id` (newest first, bounded by the most recent
+    /// user query).
+    fn ai_blocks_for_current_thread<'a>(
+        &'a self,
+        conversation_id: &'a AIConversationId,
+        ctx: &'a AppContext,
+    ) -> impl Iterator<Item = &'a AIBlock> + 'a {
+        self.ai_block_metadata_for_current_thread(conversation_id, ctx)
+            .map(move |ai_metadata| ai_metadata.ai_block_handle.as_ref(ctx))
+    }
 
     /// Collects all imported review comments from blocks in the current thread of the given
     /// conversation.
     fn all_comments_in_thread(
         &self,
+        conversation_id: &AIConversationId,
         ctx: &AppContext,
     ) -> (Vec<AttachedReviewComment>, Option<String>) {
         let mut all_comments = Vec::new();
@@ -15989,13 +20378,44 @@ impl TerminalView {
     /// review comments.
     pub(crate) fn has_imported_comments_in_thread(
         &self,
+        conversation_id: &AIConversationId,
         ctx: &AppContext,
     ) -> bool {
         self.ai_blocks_for_current_thread(conversation_id, ctx)
             .any(|ai_block| ai_block.has_any_imported_comments())
     }
 
+    fn active_ai_block(&self, ctx: &AppContext) -> Option<&ViewHandle<AIBlock>> {
+        // Skip trailing non-AI items (usage footers) as they don't impact the conversation state.
+        let candidate = self
+            .rich_content_views
+            .iter()
+            .rev()
+            .find(|rc| !rc.is_usage_footer() && !rc.is_pending_user_query());
 
+        candidate.and_then(|rich_content| {
+            let ai_metadata = rich_content.ai_block_metadata()?;
+            let ai_block = ai_metadata.ai_block_handle.as_ref(ctx);
+
+            (!ai_block.is_finished()
+                && !ai_block.is_hidden(ctx)
+                && !ai_block.is_passive_conversation(ctx))
+            .then_some(&ai_metadata.ai_block_handle)
+        })
+    }
+
+    /// Returns the finish reason of the most recent AI block belonging to
+    /// `conversation_id`, or `None` when the conversation has no AI blocks in
+    /// this view or its most recent block is still in flight.
+    fn finish_reason_for_conversation(
+        &self,
+        conversation_id: AIConversationId,
+        ctx: &AppContext,
+    ) -> Option<FinishReason> {
+        self.ai_block_metadata_for_current_thread(&conversation_id, ctx)
+            .next()
+            .and_then(|ai_metadata| ai_metadata.ai_block_handle.as_ref(ctx).finish_reason())
+    }
 
     /// Check if there's an active (non-completed, non-cancelled) /init in progress
     fn has_active_init_project(&self, ctx: &AppContext) -> bool {
@@ -16004,6 +20424,12 @@ impl TerminalView {
             .is_some_and(|model| model.as_ref(ctx).is_active())
     }
 
+    /// Check if there are any init step blocks for the given conversation
+    fn has_init_steps_for_conversation(&self, conversation_id: AIConversationId) -> bool {
+        self.rich_content_views
+            .iter()
+            .any(|rc| rc.is_init_step() && rc.agent_view_conversation_id() == Some(conversation_id))
+    }
 
     /// Returns whether the last block in the currently visible conversation is an `InitStepBlock`.
     fn is_last_block_init_step(&self, ctx: &AppContext) -> bool {
@@ -16052,7 +20478,28 @@ impl TerminalView {
         None
     }
 
+    fn ai_block_for_exchange(
+        &self,
+        exchange_id: &AIAgentExchangeId,
+    ) -> Option<&ViewHandle<AIBlock>> {
+        self.rich_content_views.iter().find_map(|rich_content| {
+            let ai_metadata = rich_content.ai_block_metadata()?;
+            if ai_metadata.exchange_id == *exchange_id {
+                return Some(&ai_metadata.ai_block_handle);
+            }
+            None
+        })
+    }
 
+    fn ai_block_handle_by_view_id(&self, view_id: EntityId) -> Option<&ViewHandle<AIBlock>> {
+        self.rich_content_views.iter().find_map(|rich_content| {
+            let ai_metadata = rich_content.ai_block_metadata()?;
+            if ai_metadata.ai_block_handle.id() == view_id {
+                return Some(&ai_metadata.ai_block_handle);
+            }
+            None
+        })
+    }
 
     /// Returns the last block's `EnvVarCollectionBlock` if it is uncompleted, scoped to the
     /// currently visible conversation.
@@ -16806,6 +21253,9 @@ impl TerminalView {
                         // If the active view is `self`, this cloud-mode terminal is the root of the
                         // pane stack and has no parent terminal to host a local agent conversation.
                         if active_view.id() == self.id() {
+                            log::warn!(
+                                "ExitCloudModeAndStartLocalAgent received but cloud-mode pane has no parent terminal"
+                            );
                         } else {
                             active_view.update(ctx, |view, ctx| {
                                 view.enter_agent_view_for_new_conversation(
@@ -16867,6 +21317,7 @@ impl TerminalView {
                         if !is_in_setup && !self.input.as_ref(ctx).buffer_text(ctx).is_empty() {
                             self.agent_view_controller.update(ctx, |session, ctx| {
                                 session.exit_agent_view_with_required_confirmation(
+                                    ExitConfirmationTrigger::Escape,
                                     ctx,
                                 );
                             });
@@ -16927,7 +21378,9 @@ impl TerminalView {
                         InputEmptyStateChangeReason::UserCommandCompleted => InputType::Shell,
                         InputEmptyStateChangeReason::Edited => {
                             if is_agent_view_active {
+                                InputType::AI
                             } else {
+                                InputType::Shell
                             }
                         }
                     };
@@ -16995,6 +21448,7 @@ impl TerminalView {
             }
             InputEvent::SignupAnonymousUser { entrypoint } => {
                 ctx.emit(Event::SignupAnonymousUser {
+                    entrypoint: *entrypoint,
                 });
             }
             InputEvent::OpenSettings(section) => {
@@ -17160,8 +21614,107 @@ impl TerminalView {
         }
     }
 
+    pub(crate) fn enter_ambient_agent_setup(
+        &mut self,
+        initial_prompt: Option<String>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        if !FeatureFlag::CloudMode.is_enabled()
+            || !self.model.lock().shared_session_status().is_view_pending()
+        {
+            // Ambient agent setup can only be done inside a shared session viewer; otherwise the backing terminal manager is incorrect.
+            return;
+        }
 
+        // Don't pass an initial prompt, which auto-sends the request.
+        self.enter_agent_view_for_new_conversation(None, AgentViewEntryOrigin::CloudAgent, ctx);
 
+        if let Some(prompt) = initial_prompt {
+            self.input.update(ctx, |input, ctx| {
+                input.replace_buffer_content(&prompt, ctx);
+            });
+        }
+        self.focus_input_box(ctx);
+    }
+
+    fn last_visible_item_is_agent_view_block_for_conversation(
+        &self,
+        conversation_id: AIConversationId,
+    ) -> bool {
+        let model = self.model.lock();
+        let block_list = model.block_list();
+
+        // When we insert rich content (including agent view blocks) we insert it immediately before
+        // the active block (unless explicitly inserting below a long-running block). The active
+        // block is a special "warp input" block that often exists even when it isn't user-visible.
+        //
+        // So, for dedupe we check the first visible (non-zero height) item *immediately before the
+        // active block*. This avoids false negatives caused by the active block itself.
+        let active_block_index = block_list.active_block_index();
+
+        let mut cursor = block_list
+            .block_heights()
+            .cursor::<BlockHeight, BlockHeightSummary>();
+        cursor.descend_to_last_item(block_list.block_heights());
+
+        // Seek backwards until we're at the active block's height item.
+        while let Some(item) = cursor.item() {
+            match item {
+                BlockHeightItem::Block(_) if cursor.start().block_count == active_block_index.0 => {
+                    break;
+                }
+                _ => cursor.prev(),
+            }
+        }
+
+        // Now walk backwards to find the first non-hidden item before the active block.
+        cursor.prev();
+        while let Some(item) = cursor.item() {
+            let is_hidden = item.height() == BlockHeight::zero();
+            match item {
+                // We use `should_hide` rather than height to determine visibility because agent view
+                // entry blocks render as 0 height while agent view is active, and when we call this
+                // on-agent-view-exit the sumtree hasn't been updated yet.
+                BlockHeightItem::RichContent(RichContentItem {
+                    view_id,
+                    should_hide,
+                    ..
+                }) if !should_hide => {
+                    if let Some(rich_content) = self
+                        .rich_content_views
+                        .iter()
+                        .find(|content| content.view_id() == *view_id)
+                        && let Some(agent_view_metadata) = rich_content.agent_view_entry_metadata()
+                        && agent_view_metadata.conversation_id == conversation_id
+                    {
+                        return true;
+                    };
+                    return false;
+                }
+                _ => {
+                    if FeatureFlag::AgentView.is_enabled() && is_hidden {
+                        cursor.prev();
+                        continue;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Returns true when there exists an AgentViewBlock with origin LongRunningCommand that matches
+    /// the given conversation id.
+    fn has_existing_lrc_agent_view_block(&self, conversation_id: AIConversationId) -> bool {
+        self.rich_content_views.iter().any(|content| {
+            content.agent_view_entry_metadata().is_some_and(|metadata| {
+                metadata.conversation_id == conversation_id
+                    && matches!(metadata.origin, AgentViewEntryOrigin::LongRunningCommand)
+            })
+        })
+    }
 
     fn update_block_filter_for_block_with_active_editor(
         &mut self,
@@ -17652,6 +22205,78 @@ impl TerminalView {
         }
     }
 
+    fn jump_to_latest_agent_message(&mut self, ctx: &mut ViewContext<Self>) {
+        // Agent messages only render inside the agent view; in the terminal they
+        // collapse to a hidden, zero-height block. So "jump to latest agent
+        // message" makes sure we're in the agent view for the most recent
+        // conversation and then scrolls to its latest exchange.
+        if !FeatureFlag::AgentView.is_enabled() {
+            return;
+        }
+        // Follow actual agent activity. Prefer the active conversation — the one
+        // currently or most recently streaming, which tracks where the latest
+        // agent message landed even after the user switches back to an older
+        // conversation — and target its latest visible exchange. When there is no
+        // active conversation, fall back to the single most-recently-streamed
+        // exchange across all conversations (rather than the most-recently-
+        // *created* conversation) and enter the conversation that owns it.
+        let history = BlocklistAIHistoryModel::as_ref(ctx);
+        let (conversation_id, exchange_id) =
+            if let Some(active_conversation_id) = history.active_conversation_id(self.id()) {
+                // Resolve the target exchange from the conversation model rather than
+                // from the currently-mounted blocks: when entering from the terminal
+                // the blocks mount over later frames, so the latest block may not
+                // exist yet this tick. Use the latest *visible* exchange so we land on
+                // a block that actually renders (skipping passive/hidden exchanges).
+                let Some(exchange_id) = history
+                    .conversation(&active_conversation_id)
+                    .and_then(|conversation| conversation.latest_visible_exchange())
+                    .map(|exchange| exchange.id)
+                else {
+                    return;
+                };
+                (active_conversation_id, exchange_id)
+            } else {
+                let Some(exchange_id) = history
+                    .latest_exchange_across_all_conversations(self.id())
+                    .map(|exchange| exchange.id)
+                else {
+                    return;
+                };
+                let Some(conversation_id) =
+                    history.conversation_id_for_exchange(exchange_id, self.id())
+                else {
+                    return;
+                };
+                (conversation_id, exchange_id)
+            };
+        // Only re-enter the agent view when we're not already in this
+        // conversation's view; re-entering when already there is needless churn.
+        let already_in_view = self
+            .agent_view_controller
+            .as_ref(ctx)
+            .agent_view_state()
+            .active_conversation_id()
+            == Some(conversation_id);
+        if already_in_view {
+            // Blocks are already mounted, so the exchange resolves immediately.
+            self.scroll_to_exchange(exchange_id, ctx);
+        } else {
+            self.enter_agent_view_for_conversation(
+                None,
+                AgentViewEntryOrigin::JumpToLatestAgentMessage,
+                conversation_id,
+                ctx,
+            );
+            // The target block doesn't exist on this frame — entering the agent view
+            // mounts it over the following layout. Record it and let
+            // `after_terminal_view_layout` scroll once the block is mounted, which
+            // also runs after the agent view's own entry scroll so it isn't
+            // overridden.
+            self.pending_agent_scroll_target = Some(exchange_id);
+        }
+        send_telemetry_from_ctx!(TelemetryEvent::JumpToLatestAgentMessage, ctx);
+    }
 
     fn terminal_down(&mut self, ctx: &mut ViewContext<Self>) {
         if !self.selected_blocks.is_empty() {
@@ -18021,6 +22646,14 @@ impl TerminalView {
         ai_block
     }
 
+    pub fn last_ai_block(&self) -> Option<ViewHandle<AIBlock>> {
+        self.rich_content_views
+            .iter()
+            .rev()
+            .find(|rc| !rc.is_usage_footer() && !rc.is_pending_user_query())
+            .and_then(|rich_content| rich_content.ai_block_metadata())
+            .map(|ai_metadata| ai_metadata.ai_block_handle.clone())
+    }
 
     /// Returns the environment setup mode selector view handle for tab-level rendering.
     pub fn environment_setup_mode_selector_handle(
@@ -18055,6 +22688,7 @@ impl TerminalView {
 
     pub fn send_inline_review(
         &mut self,
+        review_comments: AgentReviewCommentBatch,
         ctx: &mut ViewContext<Self>,
     ) -> anyhow::Result<()> {
         // Treat sending an inline review like executing a command/AI query for scrolling purposes.
@@ -18085,6 +22719,7 @@ impl TerminalView {
         {
             self.enter_agent_view_for_new_conversation(
                 None,
+                AgentViewEntryOrigin::InlineCodeReview,
                 ctx,
             );
         } else {
@@ -18098,6 +22733,7 @@ impl TerminalView {
                         .with_input_type(InputType::AI)
                         .unlocked_if_autodetection_enabled(false, ctx),
                     true,
+                    Some(InputTypeAutoDetectionSource::InlineCodeReviewSend),
                     ctx,
                 );
             });
@@ -18110,7 +22746,20 @@ impl TerminalView {
         Ok(())
     }
 
+    /// Returns the CLI agent currently active in this terminal, if any.
+    pub fn active_cli_agent(&self, ctx: &AppContext) -> Option<super::CLIAgent> {
+        if !FeatureFlag::HoaCodeReview.is_enabled() {
+            return None;
+        }
+        CLIAgentSessionsModel::as_ref(ctx)
+            .session(self.view_id)
+            .map(|s| s.agent)
+    }
 
+    /// Returns `true` if CLI agent rich input is currently open.
+    pub fn is_cli_agent_rich_input_open(&self, ctx: &AppContext) -> bool {
+        CLIAgentSessionsModel::as_ref(ctx).is_input_open(self.view_id)
+    }
 
     /// Appends `text` to CLI agent rich input and focuses it.
     fn append_to_rich_input(&mut self, text: &str, ctx: &mut ViewContext<Self>) {
@@ -18120,8 +22769,50 @@ impl TerminalView {
         self.focus_input_box(ctx);
     }
 
+    /// Sends `text` to the active CLI agent, routing to rich input when it is open
+    /// or directly to the PTY when it is closed.
+    ///
+    /// Returns `Some(CliAgentRouting)` indicating how the text was sent, or
+    /// `None` if no CLI agent is active.
+    pub fn try_send_text_to_cli_agent_or_rich_input(
+        &mut self,
+        text: String,
+        ctx: &mut ViewContext<Self>,
+    ) -> Option<CliAgentRouting> {
+        self.active_cli_agent(ctx)?;
+        if self.is_cli_agent_rich_input_open(ctx) {
+            self.append_to_rich_input(&text, ctx);
+            Some(CliAgentRouting::RichInput)
+        } else {
+            self.write_to_pty(text.into_bytes(), ctx);
+            self.focus_terminal(ctx);
+            Some(CliAgentRouting::Pty)
+        }
+    }
 
+    /// Sends code review comments to a running CLI agent, routing to the
+    /// rich input when it is open or directly to the PTY when closed.
+    pub fn send_review_to_cli_agent_or_rich_input(
+        &mut self,
+        review: &AgentReviewCommentBatch,
+        ctx: &mut ViewContext<Self>,
+    ) -> anyhow::Result<()> {
+        let text = cli_agent::build_review_prompt(review);
+        self.try_send_text_to_cli_agent_or_rich_input(text, ctx);
+        Ok(())
+    }
 
+    /// Sends diff file context hunks to a running CLI agent, routing to the
+    /// rich input when open or the PTY when closed.
+    #[cfg(feature = "local_fs")]
+    pub fn send_diff_context_to_cli_agent_or_rich_input(
+        &mut self,
+        file_diffs: &std::collections::HashMap<String, Vec<crate::ai::agent::DiffSetHunk>>,
+        ctx: &mut ViewContext<Self>,
+    ) -> Option<CliAgentRouting> {
+        let text = cli_agent::build_diff_context_prompt(file_diffs);
+        self.try_send_text_to_cli_agent_or_rich_input(text, ctx)
+    }
 
     /// Sends a diff hunk location to a running CLI agent, routing to the
     /// rich input when open or the PTY when closed.
@@ -19066,6 +23757,13 @@ impl TerminalView {
         .finish()
     }
 
+    /// Returns true when cursor rendering should be suppressed because the
+    /// CLI agent rich input is open.
+    fn should_hide_cli_agent_cursor_cell(&self, app: &AppContext) -> bool {
+        CLIAgentSessionsModel::as_ref(app)
+            .session(self.view_id)
+            .is_some_and(|s| matches!(s.input_state, CLIAgentInputState::Open { .. }))
+    }
 
     fn render_block_list_element(
         &self,
@@ -19959,6 +24657,8 @@ impl TerminalView {
     fn show_rewind_confirmation_dialog(
         &mut self,
         ai_block_view_id: EntityId,
+        exchange_id: AIAgentExchangeId,
+        conversation_id: AIConversationId,
         entrypoint: AgentModeRewindEntrypoint,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -19973,6 +24673,105 @@ impl TerminalView {
         });
     }
 
+    fn rewind_ai_conversation(
+        &mut self,
+        ai_block_view_id: EntityId,
+        exchange_id: AIAgentExchangeId,
+        conversation_id: AIConversationId,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        // First, cancel any in-progress conversation
+        self.ai_controller.update(ctx, |controller, ctx| {
+            controller.cancel_conversation_progress(
+                conversation_id,
+                CancellationReason::Reverted,
+                ctx,
+            );
+        });
+
+        // If the active block is a running command from this conversation, stop it and
+        // suppress automatic conversation resume when the command completes.
+        let should_stop_running_command = {
+            let mut model = self.model.lock();
+            let active_block = model.block_list_mut().active_block_mut();
+
+            let is_from_this_conversation = active_block.is_executing()
+                && active_block.ai_conversation_id() == Some(conversation_id);
+
+            if is_from_this_conversation {
+                active_block.set_user_control_for_teardown();
+            }
+
+            is_from_this_conversation
+        };
+
+        // Note: CTRL-C isn't guaranteed to stop everything, such as a Python REPL.
+        if should_stop_running_command {
+            self.user_write_ctrl_c_to_pty(ctx);
+        }
+
+        // Iterate from end backwards, reverting all diffs in each AIBlock from this conversation until the block the user clicked on (inclusive)
+        let mut num_blocks_reverted = 0;
+        for rich_content in self.rich_content_views.iter().rev() {
+            if let Some(ai_metadata) = rich_content.ai_block_metadata() {
+                // Only revert blocks from the same conversation
+                if ai_metadata.conversation_id == conversation_id {
+                    ai_metadata.ai_block_handle.update(ctx, |block, ctx| {
+                        block.revert_all_diffs(ctx);
+                    });
+                    num_blocks_reverted += 1;
+                    if ai_metadata.ai_block_handle.id() == ai_block_view_id {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Save a backup of the conversation before truncating, so users can restore it later.
+        BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
+            match history_model.conversation(&conversation_id).cloned() { Some(conversation) => {
+                if let Err(e) = history_model.fork_conversation(
+                    &conversation,
+                    PRE_REWIND_PREFIX,
+                    false, /* preserve_task_ids */
+                    None,
+                    ctx,
+                ) {
+                    log::warn!("Failed to save pre-rewind backup of conversation {conversation_id}: {e}");
+                }
+            } _ => {
+                log::warn!("Failed to save pre-rewind backup: conversation {conversation_id} not found in memory");
+            }}
+        });
+
+        // Truncate the conversation history
+        let removed_exchange_ids =
+            BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
+                history_model.truncate_conversation_from_exchange(conversation_id, exchange_id, ctx)
+            });
+
+        // Truncate the blocklist UI
+        match removed_exchange_ids {
+            Ok(removed_ids) => {
+                self.remove_ai_blocks_for_exchanges(&conversation_id, &removed_ids, ctx);
+            }
+            Err(e) => {
+                log::warn!("Failed to truncate conversation: {e}");
+            }
+        }
+
+        // Clear stale action results that reference truncated tool calls.
+        self.ai_controller.update(ctx, |controller, ctx| {
+            controller.clear_finished_action_results(conversation_id, ctx);
+        });
+
+        send_telemetry_from_ctx!(
+            TelemetryEvent::AgentModeRewindExecuted {
+                num_blocks_reverted
+            },
+            ctx
+        );
+    }
 
     fn handle_input_context_menu_action(
         &mut self,
@@ -20827,6 +25626,7 @@ impl TerminalView {
     /// Starts all enabled LSP servers for the current working directory.
     #[cfg(feature = "local_fs")]
     fn start_lsp_server_in_active_pwd(&self, ctx: &mut ViewContext<Self>) {
+        use crate::ai::persisted_workspace::LspTask;
 
         let Some(cwd) = self.canonical_session_pwd_if_local(ctx) else {
             return;
@@ -21823,6 +26623,7 @@ impl TypedActionView for TerminalView {
                             if !controller.is_inline()
                                 && let Err(e) = controller.try_enter_inline_agent_view(
                                     None,
+                                    AgentViewEntryOrigin::LongRunningCommand,
                                     ctx,
                                 )
                             {
@@ -22121,6 +26922,7 @@ impl TypedActionView for TerminalView {
                             }),
                             summarize_after_fork: false,
                             summarization_prompt: None,
+                            initial_prompt: None,
                             initial_attachments: vec![],
                             destination: ForkedConversationDestination::SplitPane,
                         });
@@ -22154,6 +26956,7 @@ impl TypedActionView for TerminalView {
                                 ctx.emit(Event::OpenAIDocumentPane {
                                     document_id: *document_id,
                                     document_version: doc.version,
+                                    is_auto_open: false,
                                 });
                             }
                             _ => {
@@ -22180,6 +26983,7 @@ impl TypedActionView for TerminalView {
             }
             ToggleCodeReviewPane { entrypoint } => {
                 ctx.emit(Event::ToggleCodeReviewPane(CodeReviewPanelArg {
+                    repo_path: self.current_repo_path.clone(),
                     terminal_view: self.view_handle.clone(),
                     entrypoint: *entrypoint,
                     focus_new_pane: true,
@@ -22193,6 +26997,13 @@ impl TypedActionView for TerminalView {
             SetupCloudEnvironmentAndStart(repos) => {
                 self.setup_cloud_environment_and_start(repos.clone(), ctx);
             }
+            TriggerEnvironmentSetupSelection(repos) => {
+                self.enter_environment_setup_selector(repos.clone(), ctx);
+            }
+            OpenEnvironmentManagementPane => {
+                self.open_environment_management_pane(ctx);
+            }
+            SummarizeConversation => self.summarize_conversation(ctx),
             IndexProjectSpeedbump => {
                 let codebase_context_enabled =
                     UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx);
@@ -22245,10 +27056,12 @@ impl TypedActionView for TerminalView {
             }
             OpenViewMCPPane => {
                 ctx.emit(Event::OpenMCPSettingsPage {
+                    page: Some(MCPServersSettingsPage::List),
                 });
             }
             OpenAddMCPPane => {
                 ctx.emit(Event::OpenMCPSettingsPage {
+                    page: Some(MCPServersSettingsPage::Edit { item_id: None }),
                 });
             }
             OpenBillingAndUsagePane => {
@@ -22271,6 +27084,7 @@ impl TypedActionView for TerminalView {
                                 source: CodeSource::Skill {
                                     reference: skill_reference.clone(),
                                     location: path.clone(),
+                                    origin: crate::ai::skills::SkillOpenOrigin::OpenSkillCommand,
                                 },
                                 layout:
                                     *crate::util::file::external_editor::EditorSettings::as_ref(ctx)
@@ -22466,6 +27280,7 @@ impl TypedActionView for TerminalView {
             CyclePreviousOrchestrationChildAgent | CycleNextOrchestrationChildAgent => {
                 let direction = match action {
                     CyclePreviousOrchestrationChildAgent => {
+                        OrchestrationNavigationDirection::Previous
                     }
                     CycleNextOrchestrationChildAgent => OrchestrationNavigationDirection::Next,
                     _ => unreachable!("matched orchestration cycle action"),
@@ -23309,6 +28124,7 @@ impl View for TerminalView {
 /// Readable summary for an AI block.
 struct AIBlockNotificationSummary {
     title: String,
+    description: String,
     success: bool,
 }
 

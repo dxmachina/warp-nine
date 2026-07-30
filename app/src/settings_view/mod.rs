@@ -1,4 +1,3 @@
-use crate::settings::{AISettings, BlockVisibilitySettings, SettingsFileError};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -13,6 +12,7 @@ use features_page::{FeaturesPageView, FeaturesSettingsPageEvent};
 use itertools::Itertools as _;
 use keybindings::KeybindingsView;
 use main_page::{MainPageAction, MainSettingsPageEvent, MainSettingsPageView};
+use mcp_servers_page::MCPServersSettingsPageView;
 // LOCAL FORK: `SettingsUmbrella` is unused now that the Agents / Code / Cloud
 // platform umbrellas are gone from the sidebar. The type is kept in `nav.rs`
 // rather than deleted so the diff against upstream stays small.
@@ -50,6 +50,8 @@ use warpui::{
 };
 
 use self::telemetry::SettingsTelemetryEvent;
+use crate::ai::custom_model_routers::CustomModelRouter;
+use crate::ai::execution_profiles::ExecutionProfileId;
 use crate::appearance::Appearance;
 use crate::editor::{
     EditorView, Event as EditorEvent, PropagateAndNoOpNavigationKeys, SingleLineEditorOptions,
@@ -61,6 +63,8 @@ use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, Direction, PaneConfiguration, PaneEvent, SplitPaneState};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::telemetry::MCPServerCollectionPaneEntrypoint;
+use crate::settings::{AISettings, BlockVisibilitySettings, SettingsFileError};
+use crate::settings_view::mcp_servers_page::{MCPServersSettingsPage, MCPServersSettingsPageEvent};
 use crate::terminal::SizeInfo;
 use crate::terminal::model::blockgrid::BlockGrid;
 use crate::ui_components::icons;
@@ -71,6 +75,7 @@ use crate::{GlobalResourceHandlesProvider, TelemetryEvent};
 
 mod about_page;
 mod admin_actions;
+mod agent_assisted_environment_modal;
 mod appearance_page;
 mod billing_and_usage;
 mod billing_and_usage_dispatch;
@@ -85,6 +90,8 @@ mod features_page;
 pub(crate) mod handoff_environment_creation_modal;
 pub mod keybindings;
 mod main_page;
+pub mod mcp_servers;
+pub mod mcp_servers_page;
 mod nav;
 pub mod pane_manager;
 mod platform;
@@ -215,7 +222,9 @@ pub enum SettingsViewEvent {
     },
     OpenAIFactCollection,
     OpenMCPServerCollection,
+    OpenCustomRouterEditor(Option<CustomModelRouter>),
     OpenCustomRouterFile(PathBuf),
+    OpenExecutionProfileEditor(ExecutionProfileId),
     OpenLspLogs {
         log_path: PathBuf,
     },
@@ -1751,6 +1760,22 @@ impl SettingsView {
         }
     }
 
+    fn handle_mcp_servers_page_event(
+        &mut self,
+        event: &MCPServersSettingsPageEvent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        match event {
+            MCPServersSettingsPageEvent::ShowModal => {
+                // Modal rendering is handled in get_modal_content_for_page
+                ctx.notify();
+            }
+            MCPServersSettingsPageEvent::HideModal => {
+                // Modal rendering is handled in get_modal_content_for_page
+                ctx.notify();
+            }
+        }
+    }
 
     pub fn search_for_keybinding(&mut self, keybinding_name: &str, ctx: &mut ViewContext<Self>) {
         self.set_and_refresh_current_page(SettingsSection::Keybindings, ctx);
@@ -1953,6 +1978,26 @@ impl SettingsView {
         }
     }
 
+    /// Open the MCP servers page, optionally to list page or edit page.
+    /// If `autoinstall_gallery_title` is provided, triggers auto-install of the specified gallery MCP.
+    pub fn open_mcp_servers_page(
+        &mut self,
+        page: MCPServersSettingsPage,
+        autoinstall_gallery_title: Option<&str>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        self.set_and_refresh_current_page(SettingsSection::MCPServers, ctx);
+        if let Some(mcp_page) = self.settings_page(SettingsSection::MCPServers)
+            && let SettingsPageViewHandle::MCPServers(view) = &mcp_page.view_handle
+        {
+            view.update(ctx, |view, ctx| {
+                view.update_page(page, ctx);
+                if let Some(title) = autoinstall_gallery_title {
+                    view.autoinstall_from_gallery(title, ctx);
+                }
+            })
+        }
+    }
 
     /// Updates the PS1 prompt that is shown on the Appearance page.
     pub fn set_ps1_info(

@@ -8,6 +8,9 @@ use warpui::elements::{MouseStateHandle, PartialClickableElement};
 use warpui::platform::Cursor;
 use warpui::text::char_slice;
 
+use crate::ai::agent::{AIAgentActionType, AIAgentOutput, AIAgentTextSection, ReadFilesRequest};
+use crate::ai::blocklist::block::TextLocation;
+use crate::ai::blocklist::block::view_impl::output::LinkActionConstructors;
 use crate::terminal::ShellLaunchData;
 use crate::terminal::links::should_directly_open_link;
 use crate::terminal::model::grid::grid_handler::{is_file_link_separator, is_url_link_separator};
@@ -27,10 +30,12 @@ pub const RICH_CONTENT_LINK_FIRST_CHAR_POSITION_ID: &str =
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct LinkLocation {
     pub(crate) link_range: Range<usize>,
+    pub(crate) location: TextLocation,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct DetectedLinksState {
+    pub(crate) detected_links_by_location: HashMap<TextLocation, DetectedLinksInTextLocation>,
     // The link that the mouse is currently hovered over.
     pub(crate) currently_hovered_link_location: Option<LinkLocation>,
     // The link that a tooltip is currently open for.
@@ -59,6 +64,7 @@ impl DetectedLinksState {
     /// Given a text location and char range, returns the detected link there if any.
     pub fn link_at(
         &self,
+        location: &TextLocation,
         range: &Range<usize>,
     ) -> Option<&DetectedLinkType> {
         Some(
@@ -76,10 +82,12 @@ impl DetectedLinksState {
         is_hovering: bool,
         is_selecting: bool,
         link_range: &Range<usize>,
+        location: &TextLocation,
     ) {
         if is_hovering && !is_selecting {
             self.currently_hovered_link_location = Some(LinkLocation {
                 link_range: link_range.clone(),
+                location: *location,
             });
         } else if self.currently_hovered_link_location.as_ref().is_some_and(
             |currently_hovered_link| {
@@ -94,6 +102,7 @@ impl DetectedLinksState {
     /// Replaces all detected links with the given background detection results.
     pub(crate) fn replace_all_links(
         &mut self,
+        all_links: HashMap<TextLocation, HashMap<Range<usize>, DetectedLinkType>>,
     ) {
         self.detected_links_by_location.clear();
         self.currently_hovered_link_location = None;
@@ -137,6 +146,8 @@ pub(crate) struct DetectedLinksInTextLocation {
 pub(crate) fn add_link_detection_mouse_interactions<T: PartialClickableElement, A: Action>(
     mut element: T,
     detected_links_state: &DetectedLinksState,
+    link_action_constructors: LinkActionConstructors<A>,
+    location: TextLocation,
 ) -> T {
     if let Some(detected_links) = detected_links_state
         .detected_links_by_location
@@ -575,6 +586,7 @@ type HyperlinksByLocation = Vec<(TextLocation, Vec<(Range<usize>, String)>)>;
 /// The returned data is designed to be fed into `detect_all_links` on a background thread.
 /// Returns raw text (no MD formatting) with location to run link detection on, and markdown hyperlinks.
 pub(crate) fn collect_output_data_for_link_detection(
+    output: &AIAgentOutput,
     current_working_directory: Option<&String>,
     shell_launch_data: Option<&ShellLaunchData>,
 ) -> (Vec<(String, TextLocation)>, HyperlinksByLocation) {
@@ -591,6 +603,7 @@ pub(crate) fn collect_output_data_for_link_detection(
                         current_working_directory,
                         None,
                     ),
+                    TextLocation::Action {
                         action_index,
                         line_index,
                     },
@@ -607,17 +620,41 @@ pub(crate) fn collect_output_data_for_link_detection(
     {
         match section {
             AIAgentTextSection::PlainText { text } => match &text.formatted_lines {
+                Some(formatted_lines) => {
+                    for (line_index, line) in formatted_lines.lines().iter().enumerate() {
+                        let location = TextLocation::Output {
+                            section_index,
+                            line_index,
+                        };
+                        texts.push((line.raw_text().to_owned(), location));
+
+                        let url_hyperlinks = line.hyperlinks();
+                        if !url_hyperlinks.is_empty() {
+                            hyperlinks.push((location, url_hyperlinks));
+                        }
+                    }
+                }
+                _ => {
+                    texts.push((
+                        text.text().to_owned(),
+                        TextLocation::Output {
+                            section_index,
+                            line_index: 0,
+                        },
+                    ));
                 }
             },
             AIAgentTextSection::Image { image } => {
                 texts.push((
                     image.markdown_source.clone(),
+                    TextLocation::Output {
                         section_index,
                         line_index: 0,
                     },
                 ));
                 texts.push((
                     image.source.clone(),
+                    TextLocation::Output {
                         section_index,
                         line_index: 1,
                     },
@@ -626,7 +663,9 @@ pub(crate) fn collect_output_data_for_link_detection(
             AIAgentTextSection::MermaidDiagram { diagram } => {
                 texts.push((
                     diagram.markdown_source.clone(),
+                    TextLocation::Output {
                         section_index,
+                        line_index: 0,
                     },
                 ));
             }
@@ -640,6 +679,7 @@ pub(crate) fn collect_output_data_for_link_detection(
 /// Runs URL and file path detection on the given texts and combines with pre-extracted markdown hyperlinks.
 /// Designed to run on a background thread (file path detection does filesystem I/O).
 pub(crate) fn detect_all_links(
+    texts: &[(String, TextLocation)],
     md_hyperlinks: HyperlinksByLocation,
     #[cfg_attr(not(feature = "local_fs"), allow(unused_variables))]
     current_working_directory: Option<&String>,
@@ -699,6 +739,7 @@ pub(crate) fn detect_all_links(
 pub(crate) fn detect_links(
     detected_links_state: &mut DetectedLinksState,
     text: &str,
+    text_location: TextLocation,
     #[cfg_attr(not(feature = "local_fs"), allow(unused_variables))]
     current_working_directory: Option<&String>,
     #[cfg_attr(not(feature = "local_fs"), allow(unused_variables))] shell_launch_data: Option<
@@ -717,6 +758,10 @@ pub(crate) fn detect_links(
             .detected_links
             .insert(
                 url_range.clone(),
+                HoverableDetectedLink {
+                    link: DetectedLinkType::Url(link.to_owned()),
+                    mouse_state: Default::default(),
+                },
             );
     }
     #[cfg(feature = "local_fs")]
@@ -737,6 +782,10 @@ pub(crate) fn detect_links(
                 .detected_links
                 .insert(
                     range,
+                    HoverableDetectedLink {
+                        link,
+                        mouse_state: Default::default(),
+                    },
                 );
         }
     }

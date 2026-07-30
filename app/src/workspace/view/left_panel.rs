@@ -1,4 +1,3 @@
-use crate::settings::AISettings;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -22,6 +21,8 @@ use warpui::{
 };
 
 use crate::TelemetryEvent;
+use crate::ai::agent::conversation::AIConversationId;
+use crate::ai::agent_conversations_model::AgentConversationsModel;
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
 use crate::code::buffer_location::LocalOrRemotePath;
@@ -42,6 +43,7 @@ use crate::pane_group::{
 #[cfg(feature = "local_fs")]
 use crate::server::telemetry::CodePanelsFileOpenEntrypoint;
 use crate::server::telemetry::{FileTreeSource, WarpDriveSource};
+use crate::settings::AISettings;
 use crate::settings_view::keybindings::{KeybindingChangedEvent, KeybindingChangedNotifier};
 use crate::terminal::resizable_data::{ModalType, ResizableData};
 use crate::ui_components::buttons::{icon_button, icon_button_with_color};
@@ -55,6 +57,9 @@ use crate::util::openable_file_type::{
     EditorLayout, is_markdown_file, resolve_file_target_with_editor_choice,
 };
 use crate::workspace::WorkspaceAction;
+use crate::workspace::view::conversation_list::view::{
+    ConversationListView, Event as ConversationListViewEvent,
+};
 use crate::workspace::view::global_search::view::{
     Event as GlobalSearchViewEvent, GlobalSearchEntryFocus, GlobalSearchView,
 };
@@ -132,6 +137,7 @@ pub enum LeftPanelEvent {
     },
     NewConversationInNewTab,
     ShowDeleteConfirmationDialog {
+        conversation_id: AIConversationId,
         conversation_title: String,
         terminal_view_id: Option<warpui::EntityId>,
     },
@@ -210,6 +216,7 @@ pub struct LeftPanelView {
     mouse_state_handles: MouseStateHandles,
     close_button_mouse_state: MouseStateHandle,
     warp_drive_view: ViewHandle<DrivePanel>,
+    conversation_list_view: ViewHandle<ConversationListView>,
     active_view: active_view_state::ActiveViewState,
     toolbelt_buttons: Vec<ToolbeltButtonConfig>,
     active_pane_group: Option<WeakViewHandle<PaneGroup>>,
@@ -354,6 +361,7 @@ impl LeftPanelView {
             ConversationListViewEvent::NewConversationInNewTab => {
                 ctx.emit(LeftPanelEvent::NewConversationInNewTab);
             }
+            ConversationListViewEvent::ShowDeleteConfirmationDialog {
                 conversation_id,
                 conversation_title,
                 terminal_view_id,
@@ -1230,6 +1238,26 @@ impl LeftPanelView {
         }
     }
 
+    /// When the conversation list view's visibility changes,
+    /// we need to update the conversation and tasks model to reflect the new state
+    /// (this information is used to decide whether or not we should poll for new tasks).
+    fn on_conversation_list_view_visibility_changed(
+        &self,
+        is_now_open: bool,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let is_available = self.active_view.get() == ToolPanelView::ConversationListView
+            && self.active_view_availability(ctx) == ToolPanelAvailability::Available;
+        let window_id = ctx.window_id();
+        let view_id = self.conversation_list_view.id();
+        AgentConversationsModel::handle(ctx).update(ctx, |model, ctx| {
+            if is_now_open && is_available {
+                model.register_view_open(window_id, view_id, ctx);
+            } else {
+                model.register_view_closed(window_id, view_id, ctx);
+            }
+        });
+    }
 }
 
 impl TypedActionView for LeftPanelView {

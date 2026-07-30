@@ -8,10 +8,15 @@
 //! The [`PaneContent`] interface requires implementers to maintain a [`PaneId`] for their pane.
 //! The [`PaneId`] must be created via a [`PaneView<BackingView>`]. The [`PaneId`] is consequently
 //! used to render a [`PaneView`] which internally renders the pane, including the [`BackingView`].
+pub(super) mod ai_document_pane;
+pub(super) mod ai_fact_pane;
+pub(super) mod code_diff_pane;
+pub(super) mod code_diff_pane_model;
 pub(super) mod code_pane;
 pub(super) mod custom_router_editor_pane;
 pub(super) mod env_var_collection_pane;
 pub(crate) mod environment_management_pane;
+pub(super) mod execution_profile_editor_pane;
 pub(super) mod file_pane;
 pub(super) mod get_started_pane;
 pub(super) mod get_started_view;
@@ -38,6 +43,10 @@ use warpui::{
 
 pub use self::view::{PaneHeaderAction, PaneHeaderCustomAction, PaneView, PaneViewEvent};
 use super::{ActivationReason, LeafContents, PaneGroup, PaneGroupAction};
+use crate::ai::ai_document_view::AIDocumentView;
+use crate::ai::blocklist::inline_action::code_diff_view::CodeDiffView;
+use crate::ai::execution_profiles::editor::ExecutionProfileEditorView;
+use crate::ai::facts::AIFactView;
 #[cfg(feature = "local_fs")]
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code::view::CodeView;
@@ -231,7 +240,15 @@ impl PaneId {
         Self::new_from_ctx(IPaneType::Settings, ctx)
     }
 
+    /// Creates a [`PaneId`] from a [`ViewContext<PaneView<AIFactView>>`]
+    pub fn from_ai_fact_pane_ctx(ctx: &ViewContext<PaneView<AIFactView>>) -> Self {
+        Self::new_from_ctx(IPaneType::AIFact, ctx)
+    }
 
+    /// Creates a [`PaneId`] from a [`ViewContext<PaneView<AIDocumentView>>`]
+    pub fn from_ai_document_pane_ctx(ctx: &ViewContext<PaneView<AIDocumentView>>) -> Self {
+        Self::new_from_ctx(IPaneType::AIDocument, ctx)
+    }
 
     /// Creates a [`PaneId`] from a [`ViewContext<PaneView<CustomRouterEditorView>>`]
     pub fn from_custom_router_editor_pane_ctx(
@@ -240,6 +257,12 @@ impl PaneId {
         Self::new_from_ctx(IPaneType::CustomRouterEditor, ctx)
     }
 
+    /// Creates a [`PaneId`] from a [`ViewContext<PaneView<ExecutionProfileEditorView>>`]
+    pub fn from_execution_profile_editor_pane_ctx(
+        ctx: &ViewContext<PaneView<ExecutionProfileEditorView>>,
+    ) -> Self {
+        Self::new_from_ctx(IPaneType::ExecutionProfileEditor, ctx)
+    }
 
     pub fn from_get_started_pane_ctx(ctx: &ViewContext<PaneView<GetStartedView>>) -> Self {
         Self::new_from_ctx(IPaneType::GetStarted, ctx)
@@ -276,6 +299,7 @@ impl PaneId {
 
     /// Creates a [`PaneId`] from a [`PaneView<CodeDiffView>`] entity ID.
     pub fn from_code_diff_pane_view(
+        code_diff_pane_view: &ViewHandle<PaneView<CodeDiffView>>,
     ) -> Self {
         Self::new(IPaneType::CodeDiff, code_diff_pane_view)
     }
@@ -311,7 +335,17 @@ impl PaneId {
         Self::new(IPaneType::Settings, settings_pane_view)
     }
 
+    /// Creates a [`PaneId`] from a [`PaneView<AIFactView>`] entity ID.
+    pub fn from_ai_fact_pane_view(ai_fact_pane_view: &ViewHandle<PaneView<AIFactView>>) -> Self {
+        Self::new(IPaneType::AIFact, ai_fact_pane_view)
+    }
 
+    /// Creates a [`PaneId`] from a [`PaneView<AIDocumentView>`] entity ID.
+    pub fn from_ai_document_pane_view(
+        ai_document_pane_view: &ViewHandle<PaneView<AIDocumentView>>,
+    ) -> Self {
+        Self::new(IPaneType::AIDocument, ai_document_pane_view)
+    }
 
     /// Creates a [`PaneId`] from a [`PaneView<CustomRouterEditorView>`] entity ID.
     pub fn from_custom_router_editor_pane_view(
@@ -320,6 +354,15 @@ impl PaneId {
         Self::new(IPaneType::CustomRouterEditor, view)
     }
 
+    /// Creates a [`PaneId`] from a [`PaneView<ExecutionProfileEditorView>`] entity ID.
+    pub fn from_execution_profile_editor_pane_view(
+        execution_profile_editor_pane_view: &ViewHandle<PaneView<ExecutionProfileEditorView>>,
+    ) -> Self {
+        Self::new(
+            IPaneType::ExecutionProfileEditor,
+            execution_profile_editor_pane_view,
+        )
+    }
 
     pub fn from_get_started_pane_view(
         get_started_pane_view: &ViewHandle<PaneView<GetStartedView>>,

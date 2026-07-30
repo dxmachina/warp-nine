@@ -25,6 +25,17 @@ use super::network::{
     command_execution_failure_reason_string, control_action_failure_reason_string,
     session_ended_reason_string, viewer_removed_reason_string, write_to_pty_failure_reason_string,
 };
+use super::orchestration_viewer_model::OrchestrationViewerModel;
+use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
+use crate::ai::agent::conversation::ConversationStatus;
+use crate::ai::ambient_agents::AmbientAgentTaskId;
+use crate::ai::blocklist::agent_view::{AgentViewController, AgentViewControllerEvent};
+use crate::ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer;
+use crate::ai::blocklist::{
+    BlocklistAIContextEvent, BlocklistAIContextModel, BlocklistAIHistoryEvent,
+    BlocklistAIHistoryModel,
+};
+use crate::ai::llms::{LLMPreferences, LLMPreferencesEvent};
 use crate::context_chips::prompt_snapshot::PromptSnapshot;
 use crate::context_chips::prompt_type::PromptType;
 use crate::features::FeatureFlag;
@@ -32,6 +43,9 @@ use crate::network::{NetworkStatus, NetworkStatusEvent, NetworkStatusKind};
 use crate::pane_group::TerminalViewResources;
 use crate::pane_group::pane::DetachType;
 use crate::settings::{InputModeSettings, WarpPromptSeparator};
+use crate::terminal::cli_agent_sessions::{
+    CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
+};
 use crate::terminal::event_listener::ChannelEventListener;
 use crate::terminal::input::CommandExecutionSource;
 use crate::terminal::model::ObfuscateSecrets;
@@ -43,10 +57,12 @@ use crate::terminal::shared_session::manager::Manager;
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::terminal::shared_session::shared_handlers::{
     ActiveRemoteUpdate, RemoteUpdateGuard, apply_auto_approve_agent_actions_update,
+    apply_cli_agent_state_update, apply_input_mode_update, apply_selected_agent_model_update,
     apply_selected_conversation_update, build_selected_conversation_update,
 };
 use crate::terminal::terminal_manager::{BlockSpacing, compute_block_size, terminal_colors_list};
 use crate::terminal::view::ExecuteCommandEvent;
+use crate::terminal::view::ambient_agent::is_cloud_agent_pre_first_exchange;
 use crate::terminal::{
     Event as TerminalViewEvent, PTY_READS_BROADCAST_CHANNEL_SIZE, TerminalModel, TerminalView,
 };
@@ -88,6 +104,7 @@ pub struct TerminalManager {
     /// ambient session join. `Arc<FairMutex<Option<...>>>` matches
     /// `current_network` so the network-event closure can write into it
     /// without `&mut self`.
+    orchestration_viewer_model: Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
     /// `true` for the root viewer pane of an orchestrator, `false` for
     /// per-child viewer panes. Skipping polling on children avoids
     /// duplicated REST traffic and grandchild double-registration via the
@@ -101,6 +118,28 @@ pub struct TerminalManagerInit {
 }
 
 impl TerminalManager {
+    fn send_selected_conversation_update_for_viewer_to_current_network(
+        guard: &RemoteUpdateGuard,
+        model: &Arc<FairMutex<TerminalModel>>,
+        current_network: &Arc<FairMutex<Option<ModelHandle<Network>>>>,
+        agent_view_controller: &ModelHandle<AgentViewController>,
+        ai_context_model: &ModelHandle<BlocklistAIContextModel>,
+        ctx: &mut AppContext,
+    ) {
+        let Some(update) =
+            build_selected_conversation_update(agent_view_controller, ai_context_model, ctx)
+        else {
+            return;
+        };
+
+        Self::send_input_context_update_to_current_network(
+            guard,
+            model,
+            current_network,
+            update,
+            ctx,
+        );
+    }
 
     fn current_network(
         current_network: &Arc<FairMutex<Option<ModelHandle<Network>>>>,
@@ -632,6 +671,7 @@ impl TerminalManager {
                     // are forced to be handled here
                     #[allow(clippy::single_match)]
                     match event {
+                        BlocklistAIHistoryEvent::UpdatedAutoexecuteOverride {
                             terminal_surface_id,
                         } => {
                             if *terminal_surface_id != view_id_for_auto {
@@ -670,6 +710,7 @@ impl TerminalManager {
             let view_id_for_cli = self.view.id();
             let cli_remote_update_guard = self.viewer_remote_update_guard.clone();
             ctx.subscribe_to_model(&CLIAgentSessionsModel::handle(ctx), move |_, event, ctx| {
+                let CLIAgentSessionsModelEvent::InputSessionChanged {
                     terminal_view_id,
                     new_input_state,
                     ..
@@ -686,6 +727,7 @@ impl TerminalManager {
                     let sessions_model = CLIAgentSessionsModel::as_ref(ctx);
                     match sessions_model.session(view_id_for_cli) {
                         Some(session) => CLIAgentSessionState::Active {
+                            cli_agent: session.agent.to_serialized_name(),
                             is_rich_input_open: matches!(
                                 new_input_state,
                                 CLIAgentInputState::Open { .. }
@@ -723,6 +765,7 @@ impl TerminalManager {
         current_network: Arc<FairMutex<Option<ModelHandle<Network>>>>,
         prompt_type: ModelHandle<PromptType>,
         viewer_remote_update_guard: RemoteUpdateGuard,
+        orchestration_viewer_model: Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
         enable_orchestration_polling: bool,
         ctx: &mut AppContext,
     ) {
@@ -1652,6 +1695,34 @@ impl TerminalManager {
         });
     }
 
+    /// Drops the [`OrchestrationViewerModel`] from the shared slot if one
+    /// exists. Called from terminal session-end paths. The model's
+    /// `ctx.spawn` continuations are entity-scoped, so dropping the
+    /// entity makes them no-ops; no explicit `.abort()` needed.
+    ///
+    /// The model also holds a viewer-mode registration on the shared
+    /// [`OrchestrationEventStreamer`]; we unregister explicitly here so
+    /// the streamer can refcount-tear-down the ancestor SSE on the last
+    /// pane close. The unregister API is idempotent.
+    fn stop_orchestration_polling(
+        orchestration_viewer_model: &Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
+        ctx: &mut AppContext,
+    ) {
+        let Some(handle) = orchestration_viewer_model.lock().take() else {
+            return;
+        };
+        let parent_task_id = handle.as_ref(ctx).parent_task_id();
+        let consumer_id = handle.id();
+        log::debug!(
+            "[orch-viewer] stopping orchestration viewer model parent_task_id={parent_task_id} \
+             consumer_id={consumer_id:?}"
+        );
+        OrchestrationEventStreamer::handle(ctx).update(ctx, move |streamer, _ctx| {
+            streamer.unregister_viewer_mode_consumer(parent_task_id, consumer_id);
+        });
+        // `handle` drops here, releasing the per-pane viewer model.
+        drop(handle);
+    }
 
     /// Common teardown for the viewer session-end network events
     /// (`SessionEnded`, `ViewerRemoved`, `FailedToReconnect`).
@@ -1673,6 +1744,7 @@ impl TerminalManager {
         model: Arc<FairMutex<TerminalModel>>,
         current_network: &Arc<FairMutex<Option<ModelHandle<Network>>>>,
         ended_network: &ModelHandle<Network>,
+        orchestration_viewer_model: &Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
         is_ambient_agent: bool,
         ctx: &mut AppContext,
     ) -> bool {
@@ -1722,6 +1794,7 @@ impl TerminalManager {
                     history_model.update_conversation_status(
                         terminal_view_id,
                         conversation_id,
+                        ConversationStatus::Cancelled,
                         ctx,
                     )
                 });

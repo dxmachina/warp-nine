@@ -12,6 +12,10 @@ use warpui::{
     ViewHandle,
 };
 
+use crate::ai::blocklist::agent_view::AgentViewController;
+use crate::ai::blocklist::block::cli_controller::{CLISubagentController, CLISubagentEvent};
+use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
+use crate::ai::llms::{LLMId, LLMPreferences, LLMPreferencesEvent};
 use crate::features::FeatureFlag;
 use crate::search::data_source::{Query, QueryFilter};
 use crate::search::mixer::{SearchMixer, SearchMixerEvent};
@@ -24,6 +28,7 @@ use crate::terminal::input::models::data_source::{AcceptModel, ModelSelectorData
 use crate::terminal::input::suggestions_mode_model::{
     InputSuggestionsModeEvent, InputSuggestionsModeModel,
 };
+use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::ui_components::icons::Icon;
 use crate::view_components::action_button::{ActionButton, ActionButtonTheme, ButtonSize};
 use crate::view_components::alert::{Alert, AlertConfig};
@@ -60,6 +65,7 @@ pub enum InlineModelSelectorTab {
 #[derive(Debug, Clone)]
 pub enum InlineModelSelectorEvent {
     SelectedModel {
+        id: LLMId,
         selected_tab: InlineModelSelectorTab,
         set_as_default: bool,
     },
@@ -84,6 +90,7 @@ static TAB_CONFIGS: LazyLock<Vec<InlineMenuTabConfig<InlineModelSelectorTab>>> =
     });
 
 struct TabSwitchSelection {
+    model_id: Option<LLMId>,
     index: Option<usize>,
 }
 
@@ -113,8 +120,11 @@ impl InlineModelSelectorView {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         terminal_view_id: EntityId,
+        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
+        agent_view_controller: ModelHandle<AgentViewController>,
         input_buffer_model: &ModelHandle<InputBufferModel>,
+        cli_subagent_controller: ModelHandle<CLISubagentController>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
@@ -290,6 +300,7 @@ impl InlineModelSelectorView {
         ctx.subscribe_to_model(
             &LLMPreferences::handle(ctx),
             |me, _, event, ctx| match event {
+                LLMPreferencesEvent::UpdatedAvailableLLMs
                 | LLMPreferencesEvent::UpdatedActiveAgentModeLLM
                     if me
                         .suggestions_mode_model
@@ -337,6 +348,7 @@ impl InlineModelSelectorView {
         ctx.subscribe_to_model(
             &BlocklistAIHistoryModel::handle(ctx),
             move |me, _, event, ctx| {
+                if let BlocklistAIHistoryEvent::UpdatedConversationStatus {
                     terminal_surface_id: event_terminal_surface_id,
                     ..
                 } = event
@@ -411,6 +423,19 @@ impl InlineModelSelectorView {
         me
     }
 
+    /// Attaches a lazily-created ambient agent view model to the picker's data source so a
+    /// shared-session viewer's follow-up lists the correct (cloud-pane) model set. Used when a
+    /// raw-link viewer only learns the run is ambient at `SessionJoined`. Idempotent.
+    pub fn set_ambient_agent_view_model(
+        &mut self,
+        ambient_agent_view_model: ModelHandle<AmbientAgentViewModel>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        self.model_selector_data_source
+            .update(ctx, |data_source, ctx| {
+                data_source.set_ambient_agent_view_model(ambient_agent_view_model, ctx);
+            });
+    }
 
     fn menu_model<'a>(
         &self,

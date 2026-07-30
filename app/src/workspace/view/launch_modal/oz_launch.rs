@@ -5,6 +5,7 @@ use warpui::assets::asset_cache::AssetSource;
 use warpui::{AppContext, SingletonEntity};
 
 use super::{CTAButton, CheckboxConfig, LaunchModalEvent, Slide};
+use crate::ai::ambient_agents::telemetry::{CloudAgentTelemetryEvent, CloudModeEntryPoint};
 use crate::terminal::view::OnboardingIntention;
 use crate::ui_components::icons::Icon;
 use crate::workspace::action::WorkspaceAction;
@@ -144,6 +145,8 @@ impl Slide for OzLaunchSlide {
             }
             OzLaunchSlide::LaunchCredits => CTAButton::custom("Try it out", |ctx| {
                 send_telemetry_from_ctx!(
+                    CloudAgentTelemetryEvent::EnteredCloudMode {
+                        entry_point: CloudModeEntryPoint::OzLaunchModal,
                     },
                     ctx
                 );

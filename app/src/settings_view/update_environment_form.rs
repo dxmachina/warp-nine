@@ -29,6 +29,10 @@ use warpui::{
 use super::editor_text_colors;
 use super::settings_page::{InputListItem, render_input_list};
 use crate::ChannelState;
+use crate::ai::ambient_agents::github_auth_notifier::{GitHubAuthEvent, GitHubAuthNotifier};
+use crate::ai::ambient_agents::github_auth_url::{self, AuthSource, GithubAuthRedirectTarget};
+use crate::ai::ambient_agents::telemetry::CloudAgentTelemetryEvent;
+use crate::ai::cloud_environments::{AmbientAgentEnvironment, GithubRepo};
 use crate::appearance::Appearance;
 use crate::editor::{
     EditorOptions, EditorView, PropagateAndNoOpNavigationKeys, SingleLineEditorOptions, TextOptions,
@@ -84,11 +88,46 @@ pub fn init(app: &mut AppContext) {
 pub struct EnvironmentFormValues {
     pub name: String,
     pub description: String,
+    pub selected_repos: Vec<GithubRepo>,
     pub docker_image: String,
     pub setup_commands: Vec<String>,
 }
 
 impl EnvironmentFormValues {
+    /// Converts form values to an AmbientAgentEnvironment for submission.
+    pub fn to_ambient_agent_environment(&self) -> AmbientAgentEnvironment {
+        let setup_commands: Vec<String> = self
+            .setup_commands
+            .iter()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(ToString::to_string)
+            .collect();
+
+        let description = {
+            let trimmed = self.description.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        };
+
+        let docker_image = self.docker_image.trim();
+        let mut environment = AmbientAgentEnvironment::new(
+            self.name.trim().to_string(),
+            description,
+            self.selected_repos.clone(),
+            docker_image.to_string(),
+            setup_commands,
+        );
+        // An empty docker image field means the environment does not pin a base
+        // image; preserve that as `None` rather than an empty image string.
+        if docker_image.is_empty() {
+            environment.base_image = None;
+        }
+        environment
+    }
 
     /// Validates the form values. Only the name is required — an environment may
     /// omit its base image, so the docker image field is optional.
@@ -120,10 +159,12 @@ pub enum EnvironmentFormMode {
 #[derive(Debug, Clone)]
 pub enum UpdateEnvironmentFormEvent {
     Created {
+        environment: AmbientAgentEnvironment,
         share_with_team: bool,
     },
     Updated {
         env_id: SyncId,
+        environment: AmbientAgentEnvironment,
     },
     DeleteRequested {
         env_id: SyncId,
@@ -160,6 +201,7 @@ pub enum UpdateEnvironmentFormAction {
 /// State for the GitHub repos dropdown.
 #[derive(Clone, Default)]
 pub struct GithubReposDropdownState {
+    pub available_repos: Vec<GithubRepo>,
     pub is_loading: bool,
     pub is_expanded: bool,
     pub auth_url: Option<String>,
@@ -255,6 +297,7 @@ pub struct UpdateEnvironmentForm {
     mode: EnvironmentFormMode,
     form_state: EnvironmentFormValues,
     repos_input: String,
+    github_auth_redirect_target: GithubAuthRedirectTarget,
     copy: EnvironmentFormCopy,
     field_max_width: f32,
     field_spacing: f32,
@@ -321,6 +364,9 @@ pub struct UpdateEnvironmentForm {
     /// This should only be enabled for contexts where the form is used as a modal (e.g., first-time setup).
     should_handle_escape_from_editor: bool,
 
+    /// Indicates where the GitHub authorization flow was initiated from.
+    /// Affects the redirect URL used after auth completes.
+    auth_source: AuthSource,
 }
 
 const DESCRIPTION_MAX_CHARS: usize = 240;
@@ -579,6 +625,7 @@ impl UpdateEnvironmentForm {
             mode,
             form_state: EnvironmentFormValues::default(),
             repos_input: String::new(),
+            github_auth_redirect_target: GithubAuthRedirectTarget::SettingsEnvironments,
             copy,
             field_max_width: DROPDOWN_MAX_WIDTH,
             field_spacing: FORM_FIELD_SPACING,
@@ -620,6 +667,7 @@ impl UpdateEnvironmentForm {
             show_footer_cancel_button: false,
             show_share_with_team_controls: true,
             should_handle_escape_from_editor: false,
+            auth_source: AuthSource::default(),
         };
 
         // Initialize based on init args
@@ -1432,6 +1480,7 @@ impl UpdateEnvironmentForm {
         };
 
         send_telemetry_from_ctx!(
+            CloudAgentTelemetryEvent::ImageSuggested {
                 image,
                 needs_custom_image,
             },
@@ -1517,6 +1566,7 @@ impl UpdateEnvironmentForm {
                         warp_graphql::queries::suggest_cloud_environment_image::SuggestCloudEnvironmentImageResult::UserFacingError(_) => {
                             let error_message = "Failed to suggest a Docker image".to_string();
                             send_telemetry_from_ctx!(
+                                CloudAgentTelemetryEvent::ImageSuggestionFailed {
                                     error: error_message.clone(),
                                 },
                                 ctx
@@ -1529,6 +1579,7 @@ impl UpdateEnvironmentForm {
                         warp_graphql::queries::suggest_cloud_environment_image::SuggestCloudEnvironmentImageResult::Unknown => {
                             let error_message = "Unknown response from suggestCloudEnvironmentImage".to_string();
                             send_telemetry_from_ctx!(
+                                CloudAgentTelemetryEvent::ImageSuggestionFailed {
                                     error: error_message.clone(),
                                 },
                                 ctx
@@ -1542,6 +1593,7 @@ impl UpdateEnvironmentForm {
                     Err(e) => {
                         let error_message = format!("Failed to suggest a Docker image: {}", e);
                         send_telemetry_from_ctx!(
+                            CloudAgentTelemetryEvent::ImageSuggestionFailed {
                                 error: error_message.clone(),
                             },
                             ctx
@@ -3255,6 +3307,7 @@ impl TypedActionView for UpdateEnvironmentForm {
                     }
                     EnvironmentFormMode::Edit { env_id } => {
                         send_telemetry_from_ctx!(
+                            CloudAgentTelemetryEvent::EnvironmentUpdated {
                                 environment_id: env_id.into_server(),
                             },
                             ctx
@@ -3269,6 +3322,7 @@ impl TypedActionView for UpdateEnvironmentForm {
             UpdateEnvironmentFormAction::Delete => {
                 if let EnvironmentFormMode::Edit { env_id } = &self.mode {
                     send_telemetry_from_ctx!(
+                        CloudAgentTelemetryEvent::EnvironmentDeleted {
                             environment_id: env_id.into_server(),
                         },
                         ctx
@@ -3395,6 +3449,7 @@ impl TypedActionView for UpdateEnvironmentForm {
             }
             UpdateEnvironmentFormAction::LaunchAgentForSelectedRepos => {
                 send_telemetry_from_ctx!(
+                    CloudAgentTelemetryEvent::LaunchedAgentFromEnvironmentForm,
                     ctx
                 );
 
@@ -3429,6 +3484,7 @@ impl TypedActionView for UpdateEnvironmentForm {
             }
             UpdateEnvironmentFormAction::StartGithubAuth => {
                 send_telemetry_from_ctx!(
+                    CloudAgentTelemetryEvent::GitHubAuthFromEnvironmentForm,
                     ctx
                 );
                 self.start_github_auth(ctx);

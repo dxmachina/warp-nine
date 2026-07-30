@@ -284,6 +284,55 @@ come out as a unit. Start with modules that are wholly agent with no shared
 helpers — verify by reading the module's exports before deleting, not by
 grepping its name.
 
+### The phases are not independent (measured)
+
+An attempt to cut the terminal↔AI-block seam on its own established the real
+shape of the remaining work. Numbers below are measured, not estimated.
+
+Removing the agent variants of `RichContentMetadata` / `RichContentType` alone:
+**117 errors**. Then deleting the 13 wholly-agent functions in
+`terminal/view.rs` (`remove_ai_blocks_for_exchanges`,
+`handle_ai_history_model_event`, `toggle_usage_footer`,
+`cleanup_and_remove_conversation_for_ai_block`, `drop_hidden_passive_ai_blocks`,
+`active_ai_block`, `last_ai_block`, `rewind_ai_conversation`,
+`is_any_ai_block_focused`, `ai_block_metadata_for_current_thread`,
+`handle_ai_controller_event`, `handle_cli_subagent_controller_event`,
+`handle_usage_footer_toggled`) took it **up to 132**, because their callers
+broke.
+
+Only 3 of those 166 error sites were inside `app/src/ai`. The work is in
+`terminal/`, so deleting `app/src/ai` first does not help.
+
+**It cannot be staged smaller.** `terminal/view/agent_view.rs`,
+`terminal/view/pending_user_query.rs`, `terminal/view/ambient_agent/` and
+`terminal/view/load_ai_conversation.rs` all *construct* the removed variants, so
+they must come out in the same change. The minimum atomic unit is roughly
+15–20K LOC:
+
+- `terminal/view/rich_content.rs` — agent variants, `AIBlockMetadata`,
+  `AgentViewEntryMetadata`, `RichContent::agent_view_conversation_id`
+- `terminal/model/rich_content.rs` — agent `RichContentType` variants
+- `terminal/view.rs` — 13 functions plus ~20 mixed call sites across
+  `context_menu_action`, `new`, `dismiss_tooltips`,
+  `context_color_for_rich_content`, `rerender_rich_content_blocks`,
+  `clear_selected_text_except`, `handle_session_bootstrapped`
+- `terminal/view/{agent_view, pending_user_query, load_ai_conversation}.rs`
+- `terminal/view/ambient_agent/` (10,134 LOC, 96 externally-referenced names)
+- `terminal/view/context_menu.rs`, `terminal/block_list_element.rs`,
+  `terminal/model/blocks.rs`
+
+Must survive: `RichContentMetadata::{InitStep, InitEnvironment,
+EnvVarCollectionBlock, SshRemoteServerChoiceBlock, SshRemoteServerFailedBanner,
+SshTmuxDeprecationBanner, WarpifySuccessBlock, TelemetryBanner,
+TerminalViewZeroState, PluginInstructionsBlock}` and
+`RichContentType::{WarpifySuccessBlock, TerminalViewZeroState,
+PluginInstructionsBlock}`.
+
+Practical consequence: do this on a scratch branch, not on
+`local/slim-arm64-no-cloud`. The tree does not compile part-way through, so the
+usual "commit at every green checkpoint" discipline does not apply within the
+change — there is no green checkpoint until it is finished.
+
 ### Leave for last
 
 `ai/blocklist` (121,932 LOC, 381 external sites) and `ai/agent` (24,616 LOC,

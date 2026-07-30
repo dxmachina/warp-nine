@@ -1,4 +1,3 @@
-pub mod conversations;
 mod data_sources;
 mod files;
 mod filter_chip_renderer;

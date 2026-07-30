@@ -1,6 +1,4 @@
 mod action;
-mod agent_view;
-pub mod ambient_agent;
 mod block_banner;
 pub mod block_onboarding;
 pub(crate) mod blocklist_filter;
@@ -8,7 +6,6 @@ mod bookmarks;
 mod context_menu;
 pub mod init;
 pub mod inline_banner;
-pub mod load_ai_conversation;
 pub(crate) mod queued_prompts_panel;
 #[cfg(test)]
 #[path = "view/queued_prompts_tests.rs"]
@@ -49,7 +46,6 @@ mod tab_metadata;
 mod testing;
 mod tooltips;
 pub(crate) mod docker_sandbox;
-pub mod use_agent_footer;
 mod zero_state_block;
 
 use std::any::Any;

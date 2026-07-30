@@ -75,7 +75,6 @@ use crate::{GlobalResourceHandlesProvider, TelemetryEvent};
 
 mod about_page;
 mod admin_actions;
-mod agent_assisted_environment_modal;
 mod appearance_page;
 mod billing_and_usage;
 mod billing_and_usage_dispatch;
@@ -90,8 +89,6 @@ mod features_page;
 pub(crate) mod handoff_environment_creation_modal;
 pub mod keybindings;
 mod main_page;
-pub mod mcp_servers;
-pub mod mcp_servers_page;
 mod nav;
 pub mod pane_manager;
 mod platform;

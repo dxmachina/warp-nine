@@ -172,7 +172,6 @@ use crate::workspace::{
 use crate::{cmd_or_ctrl_shift, send_telemetry_from_ctx};
 
 mod ambient_pane_restoration;
-mod child_agent;
 pub mod focus_state;
 pub mod pane;
 pub mod tree;

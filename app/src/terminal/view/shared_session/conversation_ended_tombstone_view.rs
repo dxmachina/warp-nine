@@ -40,7 +40,6 @@ struct TombstoneDisplayData {
     credits: Option<String>,
     /// Working directory at start of conversation
     working_directory: Option<String>,
-    /// Artifacts from the conversation
 }
 
 #[derive(Debug, Clone)]
@@ -170,8 +169,6 @@ impl ConversationEndedTombstoneView {
             |_, _, event, ctx| match event {
                 ArtifactButtonsRowEvent::OpenPlan { notebook_uid } => {
                     send_telemetry_from_ctx!(
-                        AgentManagementTelemetryEvent::TombstoneArtifactClicked {
-                            artifact_type: ArtifactType::Plan
                         },
                         ctx
                     );
@@ -181,8 +178,6 @@ impl ConversationEndedTombstoneView {
                 }
                 ArtifactButtonsRowEvent::CopyBranch { branch } => {
                     send_telemetry_from_ctx!(
-                        AgentManagementTelemetryEvent::TombstoneArtifactClicked {
-                            artifact_type: ArtifactType::Branch
                         },
                         ctx
                     );
@@ -193,8 +188,6 @@ impl ConversationEndedTombstoneView {
                 }
                 ArtifactButtonsRowEvent::OpenPullRequest { url } => {
                     send_telemetry_from_ctx!(
-                        AgentManagementTelemetryEvent::TombstoneArtifactClicked {
-                            artifact_type: ArtifactType::PullRequest
                         },
                         ctx
                     );
@@ -205,8 +198,6 @@ impl ConversationEndedTombstoneView {
                 }
                 ArtifactButtonsRowEvent::DownloadFile { artifact_uid } => {
                     send_telemetry_from_ctx!(
-                        AgentManagementTelemetryEvent::TombstoneArtifactClicked {
-                            artifact_type: ArtifactType::File
                         },
                         ctx
                     );
@@ -540,7 +531,6 @@ impl TypedActionView for ConversationEndedTombstoneView {
         match action {
             ConversationEndedTombstoneAction::ContinueInCloud { task_id } => {
                 send_telemetry_from_ctx!(
-                    AgentManagementTelemetryEvent::TombstoneContinueInCloud {
                         task_id: task_id.to_string()
                     },
                     ctx
@@ -550,7 +540,6 @@ impl TypedActionView for ConversationEndedTombstoneView {
             #[cfg(not(target_family = "wasm"))]
             ConversationEndedTombstoneAction::ContinueLocally(conversation_id) => {
                 send_telemetry_from_ctx!(
-                    AgentManagementTelemetryEvent::TombstoneContinueLocally,
                     ctx
                 );
                 ctx.dispatch_typed_action(&WorkspaceAction::ContinueConversationLocally {

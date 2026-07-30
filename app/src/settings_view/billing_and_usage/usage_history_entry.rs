@@ -58,8 +58,6 @@ impl UsageHistoryEntry {
                 .with_child(
                     ConversationUsageView::new(
                         ConversationUsageInfo::from(entry),
-                        DisplayMode::Settings,
-                        None,
                         self.tooltip_mouse_state.clone(),
                     )
                     .render(app),

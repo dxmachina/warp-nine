@@ -37,15 +37,11 @@ pub enum RichContentInsertionPosition {
 /// Metadata for an AI block rich content.
 #[derive(Clone, Debug)]
 pub struct AIBlockMetadata {
-    /// The ID corresponding to the `AIAgentExchange` represented in this block.
-    /// The ID of the conversation to which this block belongs.
-    /// The ViewHandle for the AI block.
 }
 
 /// Metadata for an agent view entry rich content.
 #[derive(Clone, Debug)]
 pub struct AgentViewEntryMetadata {
-    /// The origin when this block was created (not the current session origin).
 }
 
 /// Wrapper type to hold rich content views and allow generating typed `ChildView` instances
@@ -59,10 +55,6 @@ pub struct RichContent {
     /// rendering.
     metadata: Option<RichContentMetadata>,
 
-    /// The conversation ID of the active agent view when this rich content was created, if any.
-    /// This is used to determine visibility when switching between agent view conversations.
-    /// Rich content created within an agent view should only be visible when that conversation
-    /// is active.
 }
 
 impl RichContent {
@@ -195,7 +187,6 @@ impl RichContent {
 pub enum RichContentMetadata {
     AIBlock(AIBlockMetadata),
     AIOnboardingBlock {
-        /// The ID corresponding to the `AIAgentExchange` represented in this block.
     },
     UsageFooter,
     InitStep {

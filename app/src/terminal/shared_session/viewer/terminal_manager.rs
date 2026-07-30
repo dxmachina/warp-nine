@@ -43,7 +43,6 @@ use crate::terminal::shared_session::manager::Manager;
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::terminal::shared_session::shared_handlers::{
     ActiveRemoteUpdate, RemoteUpdateGuard, apply_auto_approve_agent_actions_update,
-    apply_cli_agent_state_update, apply_input_mode_update, apply_selected_agent_model_update,
     apply_selected_conversation_update, build_selected_conversation_update,
 };
 use crate::terminal::terminal_manager::{BlockSpacing, compute_block_size, terminal_colors_list};
@@ -633,7 +632,6 @@ impl TerminalManager {
                     // are forced to be handled here
                     #[allow(clippy::single_match)]
                     match event {
-                        BlocklistAIHistoryEvent::UpdatedAutoexecuteOverride {
                             terminal_surface_id,
                         } => {
                             if *terminal_surface_id != view_id_for_auto {
@@ -672,7 +670,6 @@ impl TerminalManager {
             let view_id_for_cli = self.view.id();
             let cli_remote_update_guard = self.viewer_remote_update_guard.clone();
             ctx.subscribe_to_model(&CLIAgentSessionsModel::handle(ctx), move |_, event, ctx| {
-                let CLIAgentSessionsModelEvent::InputSessionChanged {
                     terminal_view_id,
                     new_input_state,
                     ..
@@ -689,7 +686,6 @@ impl TerminalManager {
                     let sessions_model = CLIAgentSessionsModel::as_ref(ctx);
                     match sessions_model.session(view_id_for_cli) {
                         Some(session) => CLIAgentSessionState::Active {
-                            cli_agent: session.agent.to_serialized_name(),
                             is_rich_input_open: matches!(
                                 new_input_state,
                                 CLIAgentInputState::Open { .. }
@@ -1726,7 +1722,6 @@ impl TerminalManager {
                     history_model.update_conversation_status(
                         terminal_view_id,
                         conversation_id,
-                        ConversationStatus::Cancelled,
                         ctx,
                     )
                 });

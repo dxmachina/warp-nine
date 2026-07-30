@@ -80,7 +80,6 @@ use crate::settings::cloud_preferences_syncer::{
     CloudPreferencesSyncer, CloudPreferencesSyncerEvent,
 };
 use crate::settings::{
-    apply_onboarding_settings,
 };
 use crate::settings_view::{OpenTeamsSettingsModalArgs, SettingsSection, flags};
 use crate::terminal::available_shells::AvailableShell;

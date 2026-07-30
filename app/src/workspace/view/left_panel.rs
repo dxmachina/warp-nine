@@ -354,7 +354,6 @@ impl LeftPanelView {
             ConversationListViewEvent::NewConversationInNewTab => {
                 ctx.emit(LeftPanelEvent::NewConversationInNewTab);
             }
-            ConversationListViewEvent::ShowDeleteConfirmationDialog {
                 conversation_id,
                 conversation_title,
                 terminal_view_id,

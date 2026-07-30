@@ -156,7 +156,6 @@ impl SlashCommandModel {
             // In the new modality, slash commands _are_ accessible in the terminal view, which is
             // in locked shell mode if NLD is disabled.
             ctx.subscribe_to_model(ai_input_model, |me, _, event, ctx| match event {
-                BlocklistAIInputEvent::InputTypeChanged { config }
                 | BlocklistAIInputEvent::LockChanged { config } => {
                     if config.is_locked {
                         if config.is_shell() && !me.is_disabled() {

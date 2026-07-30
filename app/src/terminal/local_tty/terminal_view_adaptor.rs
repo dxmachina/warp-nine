@@ -40,10 +40,8 @@ use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedE
 use crate::terminal::shared_session::manager::Manager;
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::terminal::shared_session::presence_manager::PresenceManager;
-use crate::terminal::shared_session::replay_agent_conversations::reconstruct_response_events_from_conversations;
 use crate::terminal::shared_session::settings::SharedSessionSettings;
 use crate::terminal::shared_session::shared_handlers::{
-    RemoteUpdateGuard, apply_auto_approve_agent_actions_update, apply_cli_agent_state_update,
     apply_input_mode_update, apply_selected_agent_model_update, apply_selected_conversation_update,
     build_selected_conversation_update,
 };
@@ -370,7 +368,6 @@ fn wire_up_terminal_view_session_sharing(
                         );
                     }
                 }
-                AgentViewControllerEvent::ExitedAgentView {
                     origin,
                     final_exchange_count,
                     ..
@@ -442,7 +439,6 @@ fn wire_up_terminal_view_session_sharing(
         &BlocklistAIHistoryModel::handle(ctx),
         move |_, event, ctx| {
             match event {
-                BlocklistAIHistoryEvent::UpdatedStreamingExchange {
                     terminal_surface_id,
                     conversation_id,
                     ..
@@ -484,7 +480,6 @@ fn wire_up_terminal_view_session_sharing(
                         ctx,
                     );
                 }
-                BlocklistAIHistoryEvent::UpdatedAutoexecuteOverride {
                     terminal_surface_id,
                 } => {
                     if *terminal_surface_id != view_id_for_stream_init {
@@ -523,7 +518,6 @@ fn wire_up_terminal_view_session_sharing(
                 // on the old value (the protocol has no
                 // `UpdateSourceType` upstream message) until they
                 // reconnect.
-                BlocklistAIHistoryEvent::ConversationServerTokenAssigned {
                     terminal_surface_id,
                     conversation_id,
                 } => {
@@ -1592,7 +1586,6 @@ impl TerminalManager<TerminalView> {
         // Clone before the subscribe_to_view closure moves the original.
         let sharer_remote_update_guard_for_cli = sharer_remote_update_guard.clone();
         ctx.subscribe_to_view(terminal_view, move |view, event, ctx| match event {
-            TerminalViewEvent::StartSharingCurrentSession {
                 scrollback_type,
                 source,
             } if FeatureFlag::CreatingSharedSessions.is_enabled() => {
@@ -1635,7 +1628,6 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
-            TerminalViewEvent::UpdateRole {
                 participant_id,
                 role,
             } => {
@@ -1687,7 +1679,6 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
-            TerminalViewEvent::RespondToRoleRequest {
                 participant_id,
                 role_request_id,
                 response,
@@ -1702,7 +1693,6 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
-            TerminalViewEvent::InputEditorUpdated {
                 block_id,
                 operations,
             } => {
@@ -1740,7 +1730,6 @@ impl TerminalManager<TerminalView> {
                     });
                 }
             }
-            TerminalViewEvent::LongRunningCommandAgentInteractionStateChanged {
                 state,
                 block_id,
             } => {
@@ -1785,13 +1774,11 @@ impl TerminalManager<TerminalView> {
                 CLIAgentSessionsModelEvent::Started { agent, .. } => {
                     UniversalDeveloperInputContextUpdate {
                         cli_agent_session: Some(CLIAgentSessionState::Active {
-                            cli_agent: agent.to_serialized_name(),
                             is_rich_input_open: false,
                         }),
                         ..Default::default()
                     }
                 }
-                CLIAgentSessionsModelEvent::InputSessionChanged {
                     agent,
                     new_input_state,
                     ..

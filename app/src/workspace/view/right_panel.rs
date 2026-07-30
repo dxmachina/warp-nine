@@ -64,7 +64,6 @@ pub enum ReviewDestination {
     None,
     /// A Warp agent terminal is available (input box visible, not executing).
     Warp,
-    /// A CLI agent (e.g. Claude Code, Gemini) is running in a terminal.
 }
 
 /// Result of attempting to submit review comments to a terminal.

@@ -290,7 +290,6 @@ impl HarnessSupportClient for ServerApi {
         self.post_public_api(
             "harness-support/transcript",
             &GetUploadTargetRequest {
-                conversation_id: conversation_id.to_string(),
             },
         )
         .await
@@ -302,7 +301,6 @@ impl HarnessSupportClient for ServerApi {
         self.post_public_api(
             "harness-support/block-snapshot",
             &GetUploadTargetRequest {
-                conversation_id: conversation_id.to_string(),
             },
         )
         .await

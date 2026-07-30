@@ -451,12 +451,10 @@ impl UniversalDeveloperInputButtonBar {
             SegmentedControlEvent::OptionSelected(input_mode) => match input_mode {
                 InputToggleMode::Terminal => {
                     ctx.emit(UniversalDeveloperInputButtonBarEvent::InputTypeSelected(
-                        InputType::Shell,
                     ));
                 }
                 InputToggleMode::AgentMode => {
                     ctx.emit(UniversalDeveloperInputButtonBarEvent::InputTypeSelected(
-                        InputType::AI,
                     ));
                 }
                 InputToggleMode::AutoDetection => {

@@ -643,19 +643,7 @@ impl ServerModel {
                 }
             });
         }
-        {
-            let skill_manager = SkillManager::handle(ctx);
-            ctx.subscribe_to_model(&skill_manager, |me, _, event, ctx| match event {
-                SkillManagerEvent::SkillsChanged {
-                    home_skills_changed: true,
-                } => {
-                    me.refresh_remote_agent_context_snapshot(ctx);
-                }
-                SkillManagerEvent::SkillsChanged {
-                    home_skills_changed: false,
-                } => {}
-            });
-        }
+        // LOCAL FORK: agent event handler removed with its event type.
         {
             let project_context = ProjectContextModel::handle(ctx);
             ctx.subscribe_to_model(&project_context, |me, _, event, ctx| match event {
@@ -2323,11 +2311,6 @@ impl ServerModel {
             .into_iter()
             .map(|f| FileLocations {
                 name: f.path,
-                lines: f
-                    .line_ranges
-                    .into_iter()
-                    .map(|r| r.start as usize..r.end as usize)
-                    .collect(),
             })
             .collect();
         let request_id_for_response = request_id.clone();
@@ -2338,7 +2321,6 @@ impl ServerModel {
                 read_local_file_context(
                     &file_locations,
                     None,
-                    None,
                     max_file_bytes,
                     max_batch_bytes,
                 )
@@ -2346,7 +2328,6 @@ impl ServerModel {
             },
             move |me, result: anyhow::Result<ReadFileContextResult>, _ctx| {
                 let response = match result {
-                    Ok(result) => file_context_result_to_proto(result),
                     Err(err) => ReadFileContextResponse {
                         file_contexts: vec![],
                         failed_files: vec![FailedFileRead {

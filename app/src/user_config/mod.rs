@@ -92,10 +92,6 @@ pub struct WarpConfig {
     tab_config_errors: Vec<TabConfigError>,
     theme_config: WarpThemeConfig,
     local_user_workflows: Vec<Workflow>,
-    /// User-defined custom model routers loaded from `~/.warp/custom_model_routers/`.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    /// Errors for `custom_model_routers/` files that failed to parse.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
 }
 
 /// Platform-independent parts of WarpConfig.

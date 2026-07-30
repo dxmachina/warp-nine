@@ -506,13 +506,11 @@ pub enum WorkspaceAction {
     NewTabInAgentMode {
         /// The entrypoint that triggered this action.
         entrypoint: AgentModeEntrypoint,
-        /// The type of zero state prompt suggestion to start with (optional).
     },
     /// Open a new pane with its input in AI mode.
     NewPaneInAgentMode {
         /// The entrypoint that triggered this action.
         entrypoint: AgentModeEntrypoint,
-        /// The type of zero state prompt suggestion to start with (optional).
     },
     OpenCloudAgentSetupGuide,
     AttemptLoginGatedAIUpgrade,

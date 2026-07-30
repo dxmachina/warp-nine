@@ -687,7 +687,6 @@ pub struct DisplayChipConfig {
     pub current_repo_path: Option<PathBuf>,
     pub model_events: ModelHandle<ModelEventDispatcher>,
     pub is_shared_session_viewer: bool,
-    /// Optional because `DisplayChip` sometimes should be disabled, depending on if it is in an ambient agent view.
 }
 
 #[derive(Debug, Clone)]
@@ -893,17 +892,8 @@ impl DisplayChip {
                     )
                 });
 
-                ctx.subscribe_to_view(&plan_and_todo_list, |_me, _, event, ctx| match event {
-                    PlanAndTodoListEvent::OpenAIDocument {
-                        document_id,
-                        document_version,
-                    } => {
-                        ctx.emit(PromptDisplayChipEvent::OpenAIDocument {
-                            document_id: *document_id,
-                            document_version: *document_version,
-                        });
-                    }
-                });
+                // LOCAL FORK: this forwarded plan/todo-list events into an AIDocument pane.
+                // The list, the event and the pane are all agent surfaces and are gone.
 
                 DisplayChipKind::AgentPlanAndTodoList { plan_and_todo_list }
             }

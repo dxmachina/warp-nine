@@ -831,7 +831,6 @@ impl View for BuyCreditsBanner {
 
         // Override with spend limit error if set (from failed purchase attempt)
         let display_state = if self.should_display_banner {
-            BuyCreditsBannerDisplayState::MonthlyLimitReached
         } else {
             ai_request_usage.compute_buy_addon_credits_banner_display_state(app)
         };

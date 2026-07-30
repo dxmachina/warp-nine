@@ -80,7 +80,6 @@ impl DetectedLinksState {
         if is_hovering && !is_selecting {
             self.currently_hovered_link_location = Some(LinkLocation {
                 link_range: link_range.clone(),
-                location: *location,
             });
         } else if self.currently_hovered_link_location.as_ref().is_some_and(
             |currently_hovered_link| {
@@ -592,7 +591,6 @@ pub(crate) fn collect_output_data_for_link_detection(
                         current_working_directory,
                         None,
                     ),
-                    TextLocation::Action {
                         action_index,
                         line_index,
                     },
@@ -609,41 +607,17 @@ pub(crate) fn collect_output_data_for_link_detection(
     {
         match section {
             AIAgentTextSection::PlainText { text } => match &text.formatted_lines {
-                Some(formatted_lines) => {
-                    for (line_index, line) in formatted_lines.lines().iter().enumerate() {
-                        let location = TextLocation::Output {
-                            section_index,
-                            line_index,
-                        };
-                        texts.push((line.raw_text().to_owned(), location));
-
-                        let url_hyperlinks = line.hyperlinks();
-                        if !url_hyperlinks.is_empty() {
-                            hyperlinks.push((location, url_hyperlinks));
-                        }
-                    }
-                }
-                _ => {
-                    texts.push((
-                        text.text().to_owned(),
-                        TextLocation::Output {
-                            section_index,
-                            line_index: 0,
-                        },
-                    ));
                 }
             },
             AIAgentTextSection::Image { image } => {
                 texts.push((
                     image.markdown_source.clone(),
-                    TextLocation::Output {
                         section_index,
                         line_index: 0,
                     },
                 ));
                 texts.push((
                     image.source.clone(),
-                    TextLocation::Output {
                         section_index,
                         line_index: 1,
                     },
@@ -652,9 +626,7 @@ pub(crate) fn collect_output_data_for_link_detection(
             AIAgentTextSection::MermaidDiagram { diagram } => {
                 texts.push((
                     diagram.markdown_source.clone(),
-                    TextLocation::Output {
                         section_index,
-                        line_index: 0,
                     },
                 ));
             }
@@ -745,10 +717,6 @@ pub(crate) fn detect_links(
             .detected_links
             .insert(
                 url_range.clone(),
-                HoverableDetectedLink {
-                    link: DetectedLinkType::Url(link.to_owned()),
-                    mouse_state: Default::default(),
-                },
             );
     }
     #[cfg(feature = "local_fs")]
@@ -769,10 +737,6 @@ pub(crate) fn detect_links(
                 .detected_links
                 .insert(
                     range,
-                    HoverableDetectedLink {
-                        link,
-                        mouse_state: Default::default(),
-                    },
                 );
         }
     }

@@ -223,8 +223,6 @@ impl EventLoop {
                             // reflect that in the viewer's metadata so the command can be rendered as an agent long-running command.
                             // Further state will be inferred from the sharer's agent events.
                             ai_metadata.is_agent_monitored.then_some(
-                                LongRunningCommandControlState::Agent {
-                                    is_blocked: false,
                                     should_hide_responses: false,
                                 },
                             ),

@@ -67,8 +67,6 @@ pub struct SkillSelectorDataSource {
     /// Whether bundled skills should be included in results.
     /// False for `/open-skill` (bundled skills can't be edited), true for `/skills` (they can be invoked).
     include_bundled: bool,
-    /// Ambient agent view model for the pane, if it is a cloud pane. Used to detect when this
-    /// is a disconnected cloud follow-up composer and skills should be hidden (they run locally).
 }
 
 impl SkillSelectorDataSource {

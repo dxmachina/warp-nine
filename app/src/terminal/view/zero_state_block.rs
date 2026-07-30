@@ -74,7 +74,6 @@ impl TerminalViewZeroStateBlock {
 
         let model_events_clone = model_events_dispatcher.clone();
         ctx.subscribe_to_model(agent_view_controller, move |me, controller, event, ctx| {
-            if let AgentViewControllerEvent::ExitedAgentView {
                 original_exchange_count,
                 final_exchange_count,
                 ..

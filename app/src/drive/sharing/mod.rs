@@ -40,7 +40,6 @@ pub enum ShareableObject {
         session_id: SessionId,
         started_at: DateTime<Local>,
     },
-    /// An AI conversation.
 }
 
 impl ShareableObject {

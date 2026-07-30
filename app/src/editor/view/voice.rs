@@ -313,9 +313,7 @@ impl EditorView {
                         .as_ref(ctx)
                         .is_universal_developer_input_enabled(ctx);
                     let current_input_mode = if self.is_ai_input {
-                        InputType::AI
                     } else {
-                        InputType::Shell
                     };
                     send_telemetry_from_ctx!(
                         TelemetryEvent::VoiceInputUsed {
@@ -431,9 +429,7 @@ impl EditorView {
             .as_ref(ctx)
             .is_universal_developer_input_enabled(ctx);
         let current_input_mode = if self.is_ai_input {
-            InputType::AI
         } else {
-            InputType::Shell
         };
 
         match result {

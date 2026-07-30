@@ -8,18 +8,11 @@ pub mod inline_banner;
 #[cfg(test)]
 #[path = "view/queued_prompts_tests.rs"]
 mod queued_prompts_tests;
-use super::{CLIAgent, GridType, cli_agent};
-use crate::terminal::cli_agent_sessions::event::{
-    CLI_AGENT_NOTIFICATION_SENTINEL, CLIAgentEvent, CLIAgentEventPayload, CLIAgentEventSource,
-    CLIAgentEventType, parse_event,
-};
 use crate::terminal::view::inline_banner::{
     AgentModeSetupSpeedbumpBannerAction, AgentModeSetupSpeedbumpBannerState,
     AliasExpansionBannerState, NotificationsDiscoveryBannerState, NotificationsErrorBannerState,
-    PromptSuggestionBannerState, VimModeBannerState, render_agent_mode_setup_banner,
 };
 use crate::{
-    AIAgentActionResultType, AIRequestUsageModel, ActiveSession as WindowActiveSession, safe_error,
     safe_warn, send_telemetry_from_ctx, send_telemetry_sync_from_ctx,
 };
 use crate::settings::ai::FocusedTerminalInfo;
@@ -288,11 +281,6 @@ use crate::session_management::{CommandContext, SessionNavigationPromptElements}
 use crate::settings::import::model::ImportedConfigModel;
 use crate::settings::import::view::{SettingsImportEvent, SettingsImportView};
 use crate::settings::{
-    BlockVisibilitySettings, BlockVisibilitySettingsChangedEvent, CodeSettings, DebugSettings,
-    DebugSettingsChangedEvent, EmacsBindingsSettings, FontSettings, FontSettingsChangedEvent,
-    InputModeSettings, InputModeSettingsChangedEvent, InputSettings, PaneSettings,
-    PaneSettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
-    PrivacySettingsSnapshot, SelectionSettings, VimBannerSettings,
 };
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::settings_view::{SettingsSection, flags};
@@ -387,8 +375,6 @@ use crate::terminal::view::init_environment::mode_selector::{
 };
 use crate::terminal::view::init_environment::{InitEnvironmentBlock, InitEnvironmentBlockEvent};
 use crate::terminal::view::inline_banner::{
-    AgentModeSetupSpeedbumpBannerAction, AgentModeSetupSpeedbumpBannerState,
-    AliasExpansionBannerState, NotificationsDiscoveryBannerState, NotificationsErrorBannerState,
 };
 use crate::terminal::view::passive_suggestions::PromptSuggestionResolution;
 pub use crate::terminal::view::rich_content::{
@@ -458,7 +444,6 @@ use crate::workspace::{
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 use crate::workspaces::workspace::CustomerType;
 use crate::{
-    safe_warn, send_telemetry_from_ctx, send_telemetry_sync_from_ctx,
 };
 
 lazy_static! {
@@ -2157,7 +2142,6 @@ impl BlocklistAIRenderContext {
 /// Groups together some structs to represent the state of the Terminal View for the
 /// current frame. Passed to `AltScreenElement` and `BlockListElement`.
 pub struct TerminalViewRenderContext {
-    pub size_info: SizeInfo,
     pub scroll_position: ScrollPosition,
     pub highlighted_url: Option<GridHighlightedLink>,
     pub link_tool_tip: Option<GridHighlightedLink>,
@@ -2978,7 +2962,6 @@ impl TerminalView {
 
         ctx.subscribe_to_model(&agent_view_controller, |me, _, event, ctx| {
             match event {
-                AgentViewControllerEvent::EnteredAgentView {
                     display_mode,
                     conversation_id,
                     is_new,
@@ -3019,7 +3002,6 @@ impl TerminalView {
                                 && !has_pending_blocks
                                 && !matches!(
                                     origin,
-                                    AgentViewEntryOrigin::CreateEnvironment
                                         | AgentViewEntryOrigin::SlashInit
                                         | AgentViewEntryOrigin::ThirdPartyCloudAgent
                                 );
@@ -3058,12 +3040,10 @@ impl TerminalView {
                                                 );
                                             });
                                         }
-                                        AgentViewZeroStateEvent::OpenConversation {
                                             conversation_id,
                                         } => {
                                             me.enter_agent_view_for_conversation(
                                                 None,
-                                                AgentViewEntryOrigin::ConversationListView,
                                                 *conversation_id,
                                                 ctx,
                                             );
@@ -3094,7 +3074,6 @@ impl TerminalView {
                         }
                     }
                 }
-                AgentViewControllerEvent::ExitedAgentView {
                     conversation_id,
                     origin,
                     original_exchange_count,
@@ -3470,7 +3449,6 @@ impl TerminalView {
             |me, _, event, ctx| {
                 let is_task_update = matches!(
                     event,
-                    AgentConversationsModelEvent::TasksUpdated
                         | AgentConversationsModelEvent::NewTasksReceived
                 );
                 if is_task_update {
@@ -3478,7 +3456,6 @@ impl TerminalView {
                 }
                 let should_refresh_details_panel = matches!(
                     event,
-                    AgentConversationsModelEvent::TasksUpdated
                         | AgentConversationsModelEvent::NewTasksReceived
                         | AgentConversationsModelEvent::ConversationUpdated { .. }
                         | AgentConversationsModelEvent::ConversationArtifactsUpdated { .. }
@@ -3601,7 +3578,6 @@ impl TerminalView {
                 ),
                 (AIContextInclusionState::Active, Default::default()),
             ]),
-            selected_conversation_id: None,
             exchange_ids: None,
             should_highlight_context: false,
             is_ai_input_enabled: ai_input_model.as_ref(ctx).is_ai_input_enabled(),
@@ -3619,7 +3595,6 @@ impl TerminalView {
         ctx.subscribe_to_model(&ai_input_model, Self::handle_ai_input_model_event);
         ctx.subscribe_to_model(&ai_action_model, Self::handle_ai_action_model_event);
         ctx.subscribe_to_model(&CLIAgentSessionsModel::handle(ctx), |me, _, event, ctx| {
-            if let CLIAgentSessionsModelEvent::Ended {
                 terminal_view_id, ..
             } = event
                 && *terminal_view_id == me.view_id
@@ -4062,7 +4037,6 @@ impl TerminalView {
             inline_menu_positioner,
             view_handle: ctx.handle(),
             size_info: size_info.into(),
-            snackbar_header_state: Default::default(),
             colors,
             scroll_position: ScrollState::new(ScrollPosition::FollowsBottomOfMostRecentBlock),
             scroll_position_before_entering_agent_view: None,
@@ -5013,7 +4987,6 @@ impl TerminalView {
     pub fn enqueue_initial_cloud_mode_prompt(
         &mut self,
         prompt: String,
-        ctx: &mut ViewContext<Self>,
     ) -> Option<QueuedQueryId> {
         self.enqueue_prompt(prompt, QueuedQueryOrigin::InitialCloudMode, ctx)
     }
@@ -5208,7 +5181,6 @@ impl TerminalView {
 
         let conversation_usage_info = ConversationUsageInfo {
             credits_spent: conversation.inference_credits_spent(),
-            platform_credits_spent: conversation.platform_credits_spent(),
             credits_spent_for_last_block: conversation.credits_spent_for_last_block(),
             tool_calls: tool_usage.total_tool_calls(),
             models: conversation.token_usage().to_vec(),
@@ -5528,7 +5500,6 @@ impl TerminalView {
         repo_path: &Path,
         comments: &[InsertReviewComment],
         base_branch: Option<&str>,
-        ctx: &mut ViewContext<Self>,
     ) {
         let pending_comments = convert_insert_review_comments(comments);
 
@@ -5744,7 +5715,6 @@ impl TerminalView {
                 // Transfer control of the long-running command to the user.
                 self.cli_subagent_controller.update(ctx, |controller, ctx| {
                     controller.switch_control_to_user(
-                        UserTakeOverReason::TransferFromAgent {
                             reason: reason.clone(),
                         },
                         ctx,
@@ -6422,7 +6392,6 @@ impl TerminalView {
             if self.should_ctrl_c_exit_agent_view(ctx) {
                 self.agent_view_controller.update(ctx, |controller, ctx| {
                     controller.exit_agent_view_with_required_confirmation(
-                        ExitConfirmationTrigger::CtrlC,
                         ctx,
                     );
                 });
@@ -6560,7 +6529,6 @@ impl TerminalView {
         if active_block_state.is_agent_in_control_of_command {
             self.cli_subagent_controller.update(ctx, |controller, ctx| {
                 controller.switch_control_to_user(
-                    UserTakeOverReason::Stop {
                         should_auto_resume: true,
                     },
                     ctx,
@@ -8023,7 +7991,6 @@ impl TerminalView {
         self.inline_banners_state.aws_bedrock_login_banner = Some(AwsBedrockLoginBannerState {
             id: banner_id,
             login_button_mouse_state: Default::default(),
-            dismiss_button_mouse_state: Default::default(),
             dont_show_again_button_mouse_state: Default::default(),
         });
 
@@ -9327,7 +9294,6 @@ impl TerminalView {
                             self.enter_agent_view_after_pending_commands = false;
                             self.enter_agent_view_for_new_conversation(
                                 None,
-                                AgentViewEntryOrigin::Input {
                                     was_prompt_autodetected: false,
                                 },
                                 ctx,
@@ -9909,7 +9875,6 @@ impl TerminalView {
                 } else {
                     ctx.emit(Event::PluggableNotification {
                         title: title.clone(),
-                        body: body.clone(),
                     });
                 }
             }
@@ -10818,7 +10783,6 @@ impl TerminalView {
                         history.update_conversation_status(
                             me.view_id,
                             conversation_id,
-                            ConversationStatus::Cancelled,
                             ctx,
                         );
                     });
@@ -10836,7 +10800,6 @@ impl TerminalView {
                         history.update_conversation_status(
                             me.view_id,
                             conversation_id,
-                            ConversationStatus::Success,
                             ctx,
                         );
                     });
@@ -11033,7 +10996,6 @@ impl TerminalView {
         {
             self.enter_agent_view_for_new_conversation(
                 None,
-                AgentViewEntryOrigin::CreateEnvironment,
                 ctx,
             );
         }
@@ -11150,7 +11112,6 @@ impl TerminalView {
         {
             self.enter_agent_view_for_new_conversation(
                 None,
-                AgentViewEntryOrigin::CreateEnvironment,
                 ctx,
             );
         }
@@ -11191,7 +11152,6 @@ impl TerminalView {
         // Send the CreateEnvironment request (shows "/create-environment" instead of full prompt)
         self.ai_controller.update(ctx, |controller, ctx| {
             controller.send_slash_command_request(
-                SlashCommandRequest::CreateEnvironment {
                     repos,
                     use_current_dir,
                 },
@@ -11212,31 +11172,6 @@ impl TerminalView {
         // Repo setup is not supported without a local filesystem.
     }
 
-    #[cfg(feature = "local_fs")]
-    fn update_agent_mode_setup_speedbump_banner(
-        &mut self,
-        directory: PathBuf,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let should_insert_banner = self.should_show_agent_mode_setup_for_directory(&directory, ctx)
-            && !FeatureFlag::AgentView.is_enabled();
-
-        if !should_insert_banner {
-            self.remove_agent_setup_speedbump_banner(ctx);
-            return;
-        }
-
-        if let Some(banner_state) = &self.inline_banners_state.agent_setup_speedbump_banner {
-            if banner_state.repo_path != directory {
-                // If the banner is showing for a different repo, remove it, and insert it for the new repo.
-                self.remove_agent_setup_speedbump_banner(ctx);
-                self.insert_agent_mode_setup_speedbump_banner(directory, ctx);
-            }
-        } else {
-            // If no banner exists, insert it.
-            self.insert_agent_mode_setup_speedbump_banner(directory, ctx);
-        }
-    }
 
     #[cfg(feature = "local_fs")]
     fn should_show_agent_mode_setup_for_directory(
@@ -11518,7 +11453,6 @@ impl TerminalView {
                 if FeatureFlag::AgentView.is_enabled() {
                     self.enter_agent_view_for_new_conversation(
                         Some(prompt),
-                        AgentViewEntryOrigin::OnboardingCallout,
                         ctx,
                     )
                 } else {
@@ -11540,7 +11474,6 @@ impl TerminalView {
                 // Submit /init as an Agent Mode query
                 self.enter_agent_view_for_new_conversation(
                     Some("/init".to_string()),
-                    AgentViewEntryOrigin::Onboarding,
                     ctx,
                 );
                 self.onboarding_callout_view = None;
@@ -11576,7 +11509,6 @@ impl TerminalView {
                 // Enter agent view without submitting a prompt (mid-flow entry)
                 self.enter_agent_view_for_new_conversation(
                     None,
-                    AgentViewEntryOrigin::Onboarding,
                     ctx,
                 );
                 // Re-focus the callout so its keybindings continue to work
@@ -11592,7 +11524,6 @@ impl TerminalView {
 
     fn apply_natural_language_detection_setting(
         &mut self,
-        enable: bool,
         ctx: &mut ViewContext<Self>,
     ) {
         AISettings::handle(ctx).update(ctx, |settings, ctx| {
@@ -14189,14 +14120,12 @@ impl TerminalView {
             .update(ctx, |context_model, ctx| match state {
                 PendingQueryState::New { .. } => {
                     context_model.set_pending_query_state_for_new_conversation(
-                        AgentViewEntryOrigin::ConversationSelector,
                         ctx,
                     );
                 }
                 PendingQueryState::Existing { conversation_id } => {
                     context_model.set_pending_query_state_for_existing_conversation(
                         conversation_id,
-                        AgentViewEntryOrigin::ConversationSelector,
                         ctx,
                     );
                 }
@@ -14219,22 +14148,6 @@ impl TerminalView {
         ctx.emit(Event::SelectedBlocksChanged);
     }
 
-    // Additionally handles side effects of changing block selections (i.e. CMD + F results, etc.),
-    // but without re-syncing Agent Mode context. The field `self.selected_blocks` should only be
-    // mutated as part of a `change_block_selections` or `change_block_selections_to_match_ai_context`
-    // invocation.
-    fn change_block_selections_to_match_ai_context<F>(
-        &mut self,
-        change_selection: F,
-        ctx: &mut ViewContext<Self>,
-    ) where
-        F: FnOnce(&mut SelectedBlocks),
-    {
-        change_selection(&mut self.selected_blocks);
-        self.update_find_selection(ctx);
-
-        ctx.emit(Event::SelectedBlocksChanged);
-    }
 
     pub fn integration_test_change_block_selection_to_single(
         &mut self,
@@ -16893,9 +16806,6 @@ impl TerminalView {
                         // If the active view is `self`, this cloud-mode terminal is the root of the
                         // pane stack and has no parent terminal to host a local agent conversation.
                         if active_view.id() == self.id() {
-                            log::warn!(
-                                "ExitCloudModeAndStartLocalAgent received but cloud-mode pane has no parent terminal"
-                            );
                         } else {
                             active_view.update(ctx, |view, ctx| {
                                 view.enter_agent_view_for_new_conversation(
@@ -16957,7 +16867,6 @@ impl TerminalView {
                         if !is_in_setup && !self.input.as_ref(ctx).buffer_text(ctx).is_empty() {
                             self.agent_view_controller.update(ctx, |session, ctx| {
                                 session.exit_agent_view_with_required_confirmation(
-                                    ExitConfirmationTrigger::Escape,
                                     ctx,
                                 );
                             });
@@ -17018,9 +16927,7 @@ impl TerminalView {
                         InputEmptyStateChangeReason::UserCommandCompleted => InputType::Shell,
                         InputEmptyStateChangeReason::Edited => {
                             if is_agent_view_active {
-                                InputType::AI
                             } else {
-                                InputType::Shell
                             }
                         }
                     };
@@ -17088,7 +16995,6 @@ impl TerminalView {
             }
             InputEvent::SignupAnonymousUser { entrypoint } => {
                 ctx.emit(Event::SignupAnonymousUser {
-                    entrypoint: *entrypoint,
                 });
             }
             InputEvent::OpenSettings(section) => {
@@ -18179,7 +18085,6 @@ impl TerminalView {
         {
             self.enter_agent_view_for_new_conversation(
                 None,
-                AgentViewEntryOrigin::InlineCodeReview,
                 ctx,
             );
         } else {
@@ -18215,26 +18120,6 @@ impl TerminalView {
         self.focus_input_box(ctx);
     }
 
-    /// Sends `text` to the active CLI agent, routing to rich input when it is open
-    /// or directly to the PTY when it is closed.
-    ///
-    /// Returns `Some(CliAgentRouting)` indicating how the text was sent, or
-    /// `None` if no CLI agent is active.
-    pub fn try_send_text_to_cli_agent_or_rich_input(
-        &mut self,
-        text: String,
-        ctx: &mut ViewContext<Self>,
-    ) -> Option<CliAgentRouting> {
-        self.active_cli_agent(ctx)?;
-        if self.is_cli_agent_rich_input_open(ctx) {
-            self.append_to_rich_input(&text, ctx);
-            Some(CliAgentRouting::RichInput)
-        } else {
-            self.write_to_pty(text.into_bytes(), ctx);
-            self.focus_terminal(ctx);
-            Some(CliAgentRouting::Pty)
-        }
-    }
 
 
 
@@ -21938,7 +21823,6 @@ impl TypedActionView for TerminalView {
                             if !controller.is_inline()
                                 && let Err(e) = controller.try_enter_inline_agent_view(
                                     None,
-                                    AgentViewEntryOrigin::LongRunningCommand,
                                     ctx,
                                 )
                             {
@@ -22237,7 +22121,6 @@ impl TypedActionView for TerminalView {
                             }),
                             summarize_after_fork: false,
                             summarization_prompt: None,
-                            initial_prompt: None,
                             initial_attachments: vec![],
                             destination: ForkedConversationDestination::SplitPane,
                         });
@@ -22271,7 +22154,6 @@ impl TypedActionView for TerminalView {
                                 ctx.emit(Event::OpenAIDocumentPane {
                                     document_id: *document_id,
                                     document_version: doc.version,
-                                    is_auto_open: false,
                                 });
                             }
                             _ => {
@@ -22298,7 +22180,6 @@ impl TypedActionView for TerminalView {
             }
             ToggleCodeReviewPane { entrypoint } => {
                 ctx.emit(Event::ToggleCodeReviewPane(CodeReviewPanelArg {
-                    repo_path: self.current_repo_path.clone(),
                     terminal_view: self.view_handle.clone(),
                     entrypoint: *entrypoint,
                     focus_new_pane: true,
@@ -22312,13 +22193,6 @@ impl TypedActionView for TerminalView {
             SetupCloudEnvironmentAndStart(repos) => {
                 self.setup_cloud_environment_and_start(repos.clone(), ctx);
             }
-            TriggerEnvironmentSetupSelection(repos) => {
-                self.enter_environment_setup_selector(repos.clone(), ctx);
-            }
-            OpenEnvironmentManagementPane => {
-                self.open_environment_management_pane(ctx);
-            }
-            SummarizeConversation => self.summarize_conversation(ctx),
             IndexProjectSpeedbump => {
                 let codebase_context_enabled =
                     UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx);
@@ -22592,7 +22466,6 @@ impl TypedActionView for TerminalView {
             CyclePreviousOrchestrationChildAgent | CycleNextOrchestrationChildAgent => {
                 let direction = match action {
                     CyclePreviousOrchestrationChildAgent => {
-                        OrchestrationNavigationDirection::Previous
                     }
                     CycleNextOrchestrationChildAgent => OrchestrationNavigationDirection::Next,
                     _ => unreachable!("matched orchestration cycle action"),
@@ -23436,7 +23309,6 @@ impl View for TerminalView {
 /// Readable summary for an AI block.
 struct AIBlockNotificationSummary {
     title: String,
-    description: String,
     success: bool,
 }
 

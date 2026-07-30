@@ -321,8 +321,6 @@ pub struct UpdateEnvironmentForm {
     /// This should only be enabled for contexts where the form is used as a modal (e.g., first-time setup).
     should_handle_escape_from_editor: bool,
 
-    /// Indicates where the GitHub authorization flow was initiated from.
-    /// Affects the redirect URL used after auth completes.
 }
 
 const DESCRIPTION_MAX_CHARS: usize = 240;
@@ -1434,7 +1432,6 @@ impl UpdateEnvironmentForm {
         };
 
         send_telemetry_from_ctx!(
-            CloudAgentTelemetryEvent::ImageSuggested {
                 image,
                 needs_custom_image,
             },
@@ -1520,7 +1517,6 @@ impl UpdateEnvironmentForm {
                         warp_graphql::queries::suggest_cloud_environment_image::SuggestCloudEnvironmentImageResult::UserFacingError(_) => {
                             let error_message = "Failed to suggest a Docker image".to_string();
                             send_telemetry_from_ctx!(
-                                CloudAgentTelemetryEvent::ImageSuggestionFailed {
                                     error: error_message.clone(),
                                 },
                                 ctx
@@ -1533,7 +1529,6 @@ impl UpdateEnvironmentForm {
                         warp_graphql::queries::suggest_cloud_environment_image::SuggestCloudEnvironmentImageResult::Unknown => {
                             let error_message = "Unknown response from suggestCloudEnvironmentImage".to_string();
                             send_telemetry_from_ctx!(
-                                CloudAgentTelemetryEvent::ImageSuggestionFailed {
                                     error: error_message.clone(),
                                 },
                                 ctx
@@ -1547,7 +1542,6 @@ impl UpdateEnvironmentForm {
                     Err(e) => {
                         let error_message = format!("Failed to suggest a Docker image: {}", e);
                         send_telemetry_from_ctx!(
-                            CloudAgentTelemetryEvent::ImageSuggestionFailed {
                                 error: error_message.clone(),
                             },
                             ctx
@@ -3261,7 +3255,6 @@ impl TypedActionView for UpdateEnvironmentForm {
                     }
                     EnvironmentFormMode::Edit { env_id } => {
                         send_telemetry_from_ctx!(
-                            CloudAgentTelemetryEvent::EnvironmentUpdated {
                                 environment_id: env_id.into_server(),
                             },
                             ctx
@@ -3276,7 +3269,6 @@ impl TypedActionView for UpdateEnvironmentForm {
             UpdateEnvironmentFormAction::Delete => {
                 if let EnvironmentFormMode::Edit { env_id } = &self.mode {
                     send_telemetry_from_ctx!(
-                        CloudAgentTelemetryEvent::EnvironmentDeleted {
                             environment_id: env_id.into_server(),
                         },
                         ctx
@@ -3403,7 +3395,6 @@ impl TypedActionView for UpdateEnvironmentForm {
             }
             UpdateEnvironmentFormAction::LaunchAgentForSelectedRepos => {
                 send_telemetry_from_ctx!(
-                    CloudAgentTelemetryEvent::LaunchedAgentFromEnvironmentForm,
                     ctx
                 );
 
@@ -3438,7 +3429,6 @@ impl TypedActionView for UpdateEnvironmentForm {
             }
             UpdateEnvironmentFormAction::StartGithubAuth => {
                 send_telemetry_from_ctx!(
-                    CloudAgentTelemetryEvent::GitHubAuthFromEnvironmentForm,
                     ctx
                 );
                 self.start_github_auth(ctx);

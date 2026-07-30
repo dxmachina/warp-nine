@@ -126,7 +126,6 @@ impl InlineProfileSelectorView {
                 }
 
                 match event {
-                    AIExecutionProfilesModelEvent::ProfileCreated
                     | AIExecutionProfilesModelEvent::ProfileDeleted
                     | AIExecutionProfilesModelEvent::ProfileUpdated(_) => {
                         me.mixer.update(ctx, |mixer, ctx| {

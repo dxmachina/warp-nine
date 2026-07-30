@@ -85,7 +85,6 @@ pub enum TranscriptScope {
     /// Includes top-level terminal blocks.
     #[default]
     Terminal,
-    /// Includes blocks visible in one conversation.
 }
 
 impl TranscriptScope {
@@ -148,14 +147,9 @@ pub enum AgentViewVisibility {
     /// Block was created in terminal mode. It should always be visible in terminal view,
     /// and may also be attached to conversations as context.
     Terminal {
-        /// Conversation IDs where this block is in pending context.
-        /// Conversation IDs where this block was attached as context.
     },
     /// Block was created inside an agent view conversation.
     Agent {
-        /// The conversation where this block originally executed (the one where users saw this command run).
-        /// Other conversations where users currently see this block as pending context before send.
-        /// Other conversations where users see this block as attached context after send.
     },
 }
 
@@ -936,10 +930,6 @@ impl Block {
             leading_linefeeds_ignored: 0,
             is_ai_ugc_telemetry_enabled,
             restored_block_was_local: None,
-            agent_view_visibility: match conversation_id {
-                Some(id) => AgentViewVisibility::new_from_conversation(id),
-                None => AgentViewVisibility::new_from_terminal(),
-            },
             nld_overridden: false,
             is_oz_environment_startup_command: false,
             visible_bootstrap_block_event_sent: false,

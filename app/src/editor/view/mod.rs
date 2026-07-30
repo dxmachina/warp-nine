@@ -106,7 +106,6 @@ use crate::features::FeatureFlag;
 use crate::server::telemetry::TelemetryEvent;
 #[cfg(feature = "voice_input")]
 use crate::settings::{
-    InputSettings, SelectionSettings,
 };
 use crate::settings_view::flags;
 use crate::suggestions::ignored_suggestions_model::{IgnoredSuggestionsModel, SuggestionType};
@@ -2968,7 +2967,6 @@ impl EditorView {
         self,
     ) -> Self {
         Self {
-            next_command_model: Some(next_command_model),
             ..self
         }
     }
@@ -3078,12 +3076,9 @@ impl EditorView {
                     let is_udi_enabled =
                         InputSettings::as_ref(ctx).is_universal_developer_input_enabled(ctx);
                     let current_input_mode = if me.is_ai_input {
-                        InputType::AI
                     } else {
-                        InputType::Shell
                     };
                     match event {
-                        AIContextMenuEvent::Close {
                             item_count,
                             query_length,
                         } => {
@@ -3102,7 +3097,6 @@ impl EditorView {
                             ctx.focus_self();
                             ctx.notify();
                         }
-                        AIContextMenuEvent::ResultAccepted {
                             action,
                             item_count,
                             query_length,

@@ -268,8 +268,9 @@ impl InitStepBlock {
                     keyboard_nav_buttons,
                 },
             ) => {
-                let buttons = Self::create_codebase_context_buttons(pwd_path, mouse_states);
-                *keyboard_nav_buttons =
+                // LOCAL FORK: the button strip was KeyboardNavigableButtons,
+                // which lived in the agent blocklist. Nothing renders here now.
+                *keyboard_nav_buttons = None;
             }
             (
                 InitStepStatus::Ready(InitStepData::LanguageServers { servers, repo_path }),
@@ -278,8 +279,9 @@ impl InitStepBlock {
                     keyboard_nav_buttons,
                 },
             ) if servers.len() == 1 => {
-                let buttons = Self::create_single_lsp_buttons(&servers[0], repo_path, mouse_states);
-                *keyboard_nav_buttons =
+                // LOCAL FORK: the button strip was KeyboardNavigableButtons,
+                // which lived in the agent blocklist. Nothing renders here now.
+                *keyboard_nav_buttons = None;
             }
             (
                 InitStepStatus::Ready(InitStepData::LanguageServers { servers, repo_path }),
@@ -298,8 +300,9 @@ impl InitStepBlock {
                     keyboard_nav_buttons,
                 },
             ) => {
-                let buttons = Self::create_project_rules_buttons(linkable_files, mouse_states);
-                *keyboard_nav_buttons =
+                // LOCAL FORK: the button strip was KeyboardNavigableButtons,
+                // which lived in the agent blocklist. Nothing renders here now.
+                *keyboard_nav_buttons = None;
             }
             (
                 InitStepStatus::Ready(InitStepData::CreateEnvironment),
@@ -308,8 +311,9 @@ impl InitStepBlock {
                     keyboard_nav_buttons,
                 },
             ) => {
-                let buttons = Self::create_environment_buttons(mouse_states);
-                *keyboard_nav_buttons =
+                // LOCAL FORK: the button strip was KeyboardNavigableButtons,
+                // which lived in the agent blocklist. Nothing renders here now.
+                *keyboard_nav_buttons = None;
             }
             _ => {}
         }

@@ -22,12 +22,8 @@ use crate::util::extensions::TrimStringExt;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SerializedAgentViewVisibility {
     Terminal {
-        #[serde(default)]
     },
     Agent {
-        #[serde(alias = "conversation_id")]
-        #[serde(default)]
-        #[serde(default)]
     },
 }
 

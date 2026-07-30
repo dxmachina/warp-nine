@@ -29,7 +29,6 @@ use warpui::{AppContext, Entity, ModelContext, SingletonEntity, UpdateModel};
 
 use crate::auth::AuthStateProvider;
 use crate::settings::PrivacySettings;
-use crate::terminal::CLIAgent;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 pub enum FocusedTerminalInfoEvent {
@@ -1431,18 +1430,6 @@ define_settings_group!(AISettings, settings: [
         private: false,
         toml_path: "agents.profiles.agent_mode_coding_file_read_allowlist",
         description: "File paths the agent can read without asking for permission.",
-    }
-    // The complete execution-profile collection shared by GUI and TUI.
-    // GUI cloud synchronization respects the user's settings-sync preference;
-    // TUI settings mode keeps this value local.
-    execution_profiles: ExecutionProfiles {
-        supported_platforms: SupportedPlatforms::ALL,
-        sync_to_cloud: SyncToCloud::Globally(RespectUserSyncSetting::Yes),
-        surface: settings::SettingSurfaces::ALL,
-        private: false,
-        toml_path: "agents.execution_profiles",
-        max_table_depth: 2,
-        description: "AI execution profiles and their permissions.",
     }
     // Which unit the TUI footer's usage entry displays (credits or provider
     // cost), flipped by clicking the entry.

@@ -78,18 +78,6 @@ use crate::search::command_search::settings::{
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings::native_preference::{NativePreferenceSettings, UserNativePreference};
 use crate::settings::{
-    AtContextMenuInTerminalMode, AutocompleteSymbols, AutosuggestionKeybindingHint,
-    ChangelogSettings, CloudPreferencesSettings, CodeEditorLineNumberMode,
-    CodeEditorLineNumberModeSetting, CodeSettings, CommandCorrections, CompletionsOpenWhileTyping,
-    CopyOnSelect, CtrlTabBehavior, DEFAULT_QUAKE_MODE_SIZE_PERCENTAGES, DefaultSessionMode,
-    EnableSlashCommandsInTerminal, ErrorUnderliningEnabled, ExtraMetaKeys, GPUSettings,
-    GlobalHotkeyMode, InputSettings, InputSettingsChangedEvent, LinuxSelectionClipboard,
-    MiddleClickPasteEnabled, MouseScrollMultiplier, OutlineCodebaseSymbolsForAtContextMenu,
-    PreferLowPowerGPU, PreferredGraphicsBackend, QUAKE_WINDOW_AUTOHIDE_SUPPORTED,
-    QuakeModeSettings, ScrollSettings, ScrollSettingsChangedEvent, SelectionSettings,
-    ShowAutosuggestionIgnoreButton, ShowChangelogAfterUpdate, ShowTerminalInputMessageBar,
-    SshSettings, SyntaxHighlighting, TabBehavior, UserNativeRedirectPreference, VimModeEnabled,
-    VimStatusBar, VimUnnamedSystemClipboard,
 };
 use crate::terminal::alt_screen_reporting::{
     AltScreenReporting, FocusReportingEnabled, MouseReportingEnabled, ScrollReportingEnabled,

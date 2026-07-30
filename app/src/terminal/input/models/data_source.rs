@@ -362,7 +362,6 @@ impl ModelSearchItem {
             credential_icon,
             byo_key_source,
             display_text: llm.display_name.clone(),
-            is_selected: &llm.id == active_llm_id,
             is_custom_router,
             description: llm.description.clone(),
             disable_reason: choice.disable_reason,

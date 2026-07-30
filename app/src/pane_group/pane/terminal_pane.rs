@@ -302,7 +302,6 @@ impl PaneContent for TerminalPane {
             controller.set_pane_group_id(pane_group_id);
         });
         ctx.subscribe_to_model(&agent_view_controller, move |group, _, event, ctx| {
-            if let AgentViewControllerEvent::EnteredAgentView {
                 conversation_id,
                 display_mode,
                 ..
@@ -1331,7 +1330,6 @@ fn launch_local_no_harness_child(
                 ctx,
             ) {
                 Some(HiddenChildAgentConversation {
-                    terminal_view: new_terminal_view,
                     terminal_view_id,
                     conversation_id,
                     ..
@@ -1369,7 +1367,6 @@ fn launch_local_no_harness_child(
                         terminal_view.enter_agent_view(
                             None,
                             Some(conversation_id),
-                            AgentViewEntryOrigin::ChildAgent,
                             ctx,
                         );
                     });
@@ -1465,7 +1462,6 @@ fn launch_remote_child(
                 history_model.update_conversation_status_with_error(
                     terminal_view_id,
                     conversation_id,
-                    ConversationStatus::Error,
                     ctx,
                 );
             });
@@ -1477,7 +1473,6 @@ fn launch_remote_child(
         terminal_view.enter_agent_view(
             None,
             Some(conversation_id),
-            AgentViewEntryOrigin::CloudAgent,
             ctx,
         );
         if let Some(ambient_agent_view_model) = terminal_view.ambient_agent_view_model() {

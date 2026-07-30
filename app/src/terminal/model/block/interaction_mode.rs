@@ -352,7 +352,6 @@ impl AgentInteractionMetadata {
     pub fn new_hidden(
     ) -> Self {
         Self::new(
-            Some(requested_command_action_id),
             conversation_id,
             None,
             None,

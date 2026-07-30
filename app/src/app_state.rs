@@ -203,8 +203,6 @@ pub struct TerminalPaneSnapshot {
     pub is_read_only: bool,
     pub llm_model_override: Option<String>,
     pub active_profile_id: Option<SyncId>,
-    /// The active conversation ID if the agent view was open in fullscreen mode.
-    /// When `Some`, the agent view should be restored to fullscreen for this conversation.
 }
 
 #[derive(Clone, Debug, PartialEq)]

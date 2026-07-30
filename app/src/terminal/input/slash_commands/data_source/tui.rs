@@ -22,7 +22,6 @@ use crate::search::slash_command_menu::static_commands::commands::{COMMAND_REGIS
 use crate::terminal::TerminalModel;
 use crate::terminal::input::slash_commands::AcceptSlashCommandOrSavedPrompt;
 use crate::terminal::model::session::active_session::ActiveSession;
-use crate::terminal::view::resolve_ai_query_routing;
 #[cfg(feature = "voice_input")]
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 

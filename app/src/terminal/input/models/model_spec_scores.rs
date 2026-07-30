@@ -53,7 +53,6 @@ pub fn render_model_spec_scores(
     let mut rows = vec![render_score_row(
         "Intelligence",
         ScoreRowKind::Bar {
-            value: spec.as_ref().map(|spec| spec.quality),
         },
         None,
         layout.bg_bar_color,
@@ -63,7 +62,6 @@ pub fn render_model_spec_scores(
     rows.push(render_score_row(
         "Speed",
         ScoreRowKind::Bar {
-            value: spec.as_ref().map(|spec| spec.speed),
         },
         None,
         layout.bg_bar_color,

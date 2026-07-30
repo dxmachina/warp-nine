@@ -144,7 +144,6 @@ impl Slide for OzLaunchSlide {
             }
             OzLaunchSlide::LaunchCredits => CTAButton::custom("Try it out", |ctx| {
                 send_telemetry_from_ctx!(
-                    CloudAgentTelemetryEvent::EnteredCloudMode {
                     },
                     ctx
                 );

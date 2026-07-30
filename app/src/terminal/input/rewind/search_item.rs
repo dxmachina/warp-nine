@@ -55,7 +55,6 @@ impl RewindSearchItem {
         file_changes: FileChangesInfo,
     ) -> Self {
         Self {
-            exchange_id: Some(exchange_id),
             query_text,
             file_changes,
             query_match_result: None,

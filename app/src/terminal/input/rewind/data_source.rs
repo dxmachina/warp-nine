@@ -15,7 +15,6 @@ use crate::terminal::input::rewind::search_item::RewindSearchItem;
 /// Action emitted when a rewind point is selected.
 #[derive(Clone, Debug)]
 pub struct SelectRewindPoint {
-    /// The exchange ID to rewind to, or None for "Current" (dismiss without rewinding).
 }
 
 /// Information about file changes for a rewind point.

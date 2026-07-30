@@ -383,7 +383,6 @@ impl<A: InlineMenuAction, T: 'static + Send + Sync> InlineMenuView<A, T> {
     ) -> Self {
         let menu_bar_args = InlineMenuMessageBarArgs {
             inline_menu_model: inline_menu_model.clone(),
-            agent_view_controller: agent_view_controller.clone(),
             positioner: positioner.clone(),
         };
         let message_bar = ctx.add_view(|ctx| InlineMenuMessageBar::new(menu_bar_args, ctx));

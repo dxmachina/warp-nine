@@ -97,7 +97,6 @@ impl InlineMenuPositioner {
             input_save_position_id,
             window_id,
             suggestions_mode_model: suggestions_mode_model.clone(),
-            agent_view_controller: agent_view_controller.clone(),
             should_render_below_input: false,
             custom_content_heights: persisted_heights,
         }

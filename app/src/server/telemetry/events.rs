@@ -1071,59 +1071,7 @@ pub enum TelemetryAgentViewEntryOrigin {
     JumpToLatestAgentMessage,
 }
 
-impl From<AgentViewEntryOrigin> for TelemetryAgentViewEntryOrigin {
-    fn from(origin: AgentViewEntryOrigin) -> Self {
-        match origin {
-            AgentViewEntryOrigin::Input {
-                was_prompt_autodetected,
-            } => Self::Input {
-                was_prompt_autodetected,
-            },
-            AgentViewEntryOrigin::ConversationSelector => Self::ConversationSelector,
-            AgentViewEntryOrigin::AgentModeHomepage => Self::AgentModeHomepage,
-            AgentViewEntryOrigin::AgentViewBlock => Self::AgentViewBlock,
-            AgentViewEntryOrigin::AIDocument => Self::AIDocument,
-            AgentViewEntryOrigin::AutoFollowUp => Self::AutoFollowUp,
-            AgentViewEntryOrigin::RestoreExistingConversation => Self::RestoreExistingConversation,
-            AgentViewEntryOrigin::SharedSessionSelection => Self::SharedSessionSelection,
-            AgentViewEntryOrigin::AgentRequestedNewConversation => {
-                Self::AgentRequestedNewConversation
-            }
-            AgentViewEntryOrigin::AcceptedPromptSuggestion => Self::AcceptedPromptSuggestion,
-            AgentViewEntryOrigin::AcceptedUnitTestSuggestion => Self::AcceptedUnitTestSuggestion,
-            AgentViewEntryOrigin::AcceptedPassiveCodeDiff => Self::AcceptedPassiveCodeDiff,
-            AgentViewEntryOrigin::InlineCodeReview => Self::InlineCodeReview,
-            AgentViewEntryOrigin::CloudAgent => Self::AmbientAgent,
-            AgentViewEntryOrigin::ThirdPartyCloudAgent => Self::ThirdPartyCloudAgent,
-            AgentViewEntryOrigin::Cli => Self::Cli,
-            AgentViewEntryOrigin::Tui => Self::Tui,
-            AgentViewEntryOrigin::ImageAdded => Self::ImageAdded,
-            AgentViewEntryOrigin::SlashCommand { .. } => Self::SlashCommand,
-            AgentViewEntryOrigin::CodeReviewContext => Self::CodeReviewContext,
-            AgentViewEntryOrigin::LongRunningCommand => Self::LongRunningCommand,
-            AgentViewEntryOrigin::ContinueConversationButton => Self::ContinueConversationButton,
-            AgentViewEntryOrigin::ViewPassiveCodeDiffDetails => Self::ViewPassiveCodeDiffDetails,
-            AgentViewEntryOrigin::ResumeConversationButton => Self::ResumeConversationButton,
-            AgentViewEntryOrigin::CodexModal => Self::CodexModal,
-            AgentViewEntryOrigin::InlineHistoryMenu => Self::HistoryMenu,
-            AgentViewEntryOrigin::InlineConversationMenu => Self::InlineConversationMenu,
-            AgentViewEntryOrigin::PromptChip => Self::PromptChip,
-            AgentViewEntryOrigin::OnboardingCallout => Self::OnboardingCallout,
-            AgentViewEntryOrigin::ConversationListView => Self::ConversationListView,
-            AgentViewEntryOrigin::Onboarding => Self::Onboarding,
-            AgentViewEntryOrigin::Keybinding(_) => Self::Keybinding,
-            AgentViewEntryOrigin::SlashInit => Self::SlashInit,
-            AgentViewEntryOrigin::CreateEnvironment => Self::CreateEnvironment,
-            AgentViewEntryOrigin::ProjectEntry => Self::ProjectEntry,
-            AgentViewEntryOrigin::ClearBuffer => Self::ClearBuffer,
-            AgentViewEntryOrigin::DefaultSessionMode => Self::DefaultSessionMode,
-            AgentViewEntryOrigin::ChildAgent => Self::ChildAgent,
-            AgentViewEntryOrigin::LinearDeepLink => Self::LinearDeepLink,
-            AgentViewEntryOrigin::OrchestrationPillBar => Self::OrchestrationPillBar,
-            AgentViewEntryOrigin::JumpToLatestAgentMessage => Self::JumpToLatestAgentMessage,
-        }
-    }
-}
+// LOCAL FORK: TelemetryAgentViewEntryOrigin conversion removed with the agent.
 
 #[derive(Clone, Copy, Debug, Serialize)]
 pub enum SlashMenuSource {
@@ -1859,12 +1807,6 @@ pub enum TelemetryEvent {
         /// Whether or not Universal Developer Input mode is enabled
         is_udi_enabled: bool,
     },
-    /// Rated a blocklist AI response via thumbs up/down.
-    AgentModeRatedResponse {
-        /// The server-generated ID for the output corresponding to this rating.
-
-        /// The ID of the conversation to which the rated output belongs.
-    },
     AgentModeClickedEntrypoint {
         entrypoint: AgentModeEntrypoint,
     },
@@ -2013,8 +1955,6 @@ pub enum TelemetryEvent {
     /// Emitted when a user makes their first edit to any file in a code diff suggestion from Agent
     /// Mode.
     AgentModeCodeSuggestionEditedByUser {
-        /// Server-generated unique ID associated with the AI API output that generated the
-        /// suggestion. Used to join client-side telemetry with server-side logs.
     },
 
     /// Emitted when a user switches between files while viewing a code diff suggestion from Agent
@@ -2349,7 +2289,6 @@ pub enum TelemetryEvent {
         session_duration_ms: Option<u64>,
         /// Whether or not Universal Developer Input mode is enabled
         is_udi_enabled: bool,
-        /// Current input mode when voice was used
     },
     /// User interacted with @-menu for context attachment
     AtMenuInteracted {
@@ -2361,7 +2300,6 @@ pub enum TelemetryEvent {
         item_count: Option<usize>,
         /// Whether or not Universal Developer Input mode is enabled
         is_udi_enabled: bool,
-        /// Current input mode when @ menu was used
     },
     TabCloseButtonPositionUpdated {
         position: TabCloseButtonPosition,
@@ -2556,13 +2494,11 @@ pub enum TelemetryEvent {
     CLIAgentRichInputOpened {
         /// The CLI agent being used.
         cli_agent: CLIAgentType,
-        /// How the editor was opened (Ctrl-G or footer button).
     },
     /// Emitted when the CLI agent rich input editor is closed.
     CLIAgentRichInputClosed {
         /// The CLI agent being used.
         cli_agent: CLIAgentType,
-        /// Why the editor was closed.
     },
     /// Emitted when the user submits a prompt via the CLI agent rich input editor.
     CLIAgentRichInputSubmitted {

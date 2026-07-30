@@ -23,12 +23,10 @@ mod vertical_tabs;
 mod wasm_view;
 
 use crate::terminal::view::{
-    AgentOnboardingVersion, ConversationRestorationInNewPaneType, LeftPanelTargetView,
     NOTIFICATIONS_TROUBLESHOOT_URL, OnboardingIntention, OnboardingVersion, SyncEvent,
     SyncInputType, TerminalAction,
 };
 use crate::{
-    AgentNotificationsModel, BlocklistAIHistoryModel, GlobalResourceHandles, TelemetryEvent,
     autoupdate, send_telemetry_from_ctx, settings,
 };
 use crate::settings::{
@@ -255,7 +253,6 @@ use crate::palette::PaletteMode;
 use crate::pane_group::FilePane;
 use crate::pane_group::pane::ActionOrigin;
 use crate::pane_group::{
-    self, AIFactPane, AnyPaneContent, ChildAgentOrigin, CodeDiffPane, CodePane, CodeReviewPanelArg,
     CustomRouterEditorPane, Direction as PaneGroupDirection, Direction, EnvironmentManagementPane,
     ExecutionProfileEditorPane, NetworkLogPane, NewTerminalOptions, PaneGroup, PaneId, PanesLayout,
     TabBarHoverIndex, TerminalPaneId,
@@ -303,11 +300,6 @@ use crate::server::telemetry::{
 use crate::session_management::{SessionNavigationData, SessionSource, TabNavigationData};
 use crate::settings::cloud_preferences::CloudPreferencesSettings;
 use crate::settings::{
-    AppEditorSettings, BlockVisibilitySettings, ChangelogSettings, CodeSettings,
-    CodeSettingsChangedEvent, CtrlTabBehavior, CursorBlink, DebugSettings, DefaultSessionMode,
-    FontSettings, GPUSettings, InputModeSettings, InputSettings, MonospaceFontSize, PaneSettings,
-    PrivacySettings, SelectionSettings, Settings, SshSettings, ThemeSettings, active_theme_kind,
-    respect_system_theme,
 };
 use crate::settings_view::environments_page::EnvironmentsPage;
 use crate::settings_view::handoff_environment_creation_modal::{
@@ -375,8 +367,6 @@ use crate::terminal::shell::ShellType;
 use crate::terminal::view::docker_sandbox::DEFAULT_DOCKER_SANDBOX_BASE_IMAGE;
 use crate::terminal::view::ssh_file_upload::FileUploadId;
 use crate::terminal::view::{
-    NOTIFICATIONS_TROUBLESHOOT_URL, OnboardingIntention, OnboardingVersion, SyncEvent,
-    SyncInputType, TerminalAction,
 };
 use crate::terminal::warpify::settings::WarpifySettings;
 use crate::terminal::{self, BlockListSettings, SizeInfo, TerminalModel, TerminalView};
@@ -483,7 +473,6 @@ use crate::workspace::{ForkFromExchange, ForkedConversationDestination};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::AdminEnablementSetting;
 use crate::{
-    autoupdate, send_telemetry_from_ctx, settings,
 };
 
 /// The padding that should be applied to the workspace as a whole.
@@ -1113,9 +1102,6 @@ pub struct Workspace {
     tab_config_action_sidecar_mouse_states: crate::tab_configs::action_sidecar::SidecarMouseStates,
     remove_tab_config_confirmation_dialog: ViewHandle<RemoveTabConfigConfirmationDialog>,
     handoff_environment_creation_modal: Option<ViewHandle<HandoffEnvironmentCreationModal>>,
-    /// Workspace-level modal hosting `AuthSecretFtuxView` for the
-    /// orchestration cards' "New API key…" flow. Cloud mode renders the
-    /// FTUX view inline and does not use this.
 }
 
 impl Workspace {
@@ -2952,7 +2938,6 @@ impl Workspace {
         let notification_mailbox_view = if FeatureFlag::HOANotifications.is_enabled() {
             let view = ctx.add_typed_action_view(NotificationMailboxView::new);
             ctx.subscribe_to_view(&view, move |me, _, event, ctx| match event {
-                NotificationMailboxViewEvent::NavigateToTerminal {
                     terminal_view_id, ..
                 } => {
                     me.current_workspace_state.is_notification_mailbox_open = false;
@@ -12197,9 +12182,6 @@ impl Workspace {
                 ctx.notify();
             });
         } else {
-            log::warn!(
-                "Failed to find terminal view with id {terminal_view_id} to set pending query state"
-            );
         }
     }
 
@@ -12271,7 +12253,6 @@ impl Workspace {
                     terminal_view.restore_conversation_after_view_creation(
                         RestoredAIConversation::new(forked_conversation.clone()),
                         true,
-                        RestoreConversationEntryBehavior::EnterRestoredConversation,
                         ctx,
                     );
                     terminal_view
@@ -13585,7 +13566,6 @@ impl Workspace {
                 .with_compact_mode(ctx)
         });
         ctx.subscribe_to_view(&body, |me, _, event, ctx| match event {
-            AuthSecretFtuxViewEvent::SecretSelected { harness, name }
             | AuthSecretFtuxViewEvent::Created { harness, name } => {
                 let harness = *harness;
                 let name = name.clone();
@@ -13607,7 +13587,6 @@ impl Workspace {
         let title = "New API key".to_string();
         let modal = ctx.add_typed_action_view(|ctx| {
             Modal::new(Some(title), body, ctx).with_modal_style(UiComponentStyles {
-                width: Some(520.),
                 ..Default::default()
             })
         });
@@ -13942,12 +13921,10 @@ impl Workspace {
                 let page = if sync_id.is_some() {
                     AIFactPage::RuleEditor { sync_id: *sync_id }
                 } else {
-                    AIFactPage::Rules
                 };
                 self.open_ai_fact_collection_pane(None, Some(page), ctx);
                 send_telemetry_from_ctx!(
                     TelemetryEvent::KnowledgePaneOpened {
-                        entrypoint: KnowledgePaneEntrypoint::AIBlocklist,
                     },
                     ctx
                 );
@@ -16908,7 +16885,6 @@ impl Workspace {
                 terminal_view.update(ctx, |terminal_view, ctx| {
                     terminal_view.enter_agent_view_for_new_conversation(
                         Some(initial_prompt),
-                        AgentViewEntryOrigin::CodexModal,
                         ctx,
                     );
                 });
@@ -16959,7 +16935,6 @@ impl Workspace {
         self.active_tab_pane_group().update(ctx, |pane_group, ctx| {
             let pane_id = pane_group.add_terminal_pane_ignoring_default_session_mode(
                 pane_group::Direction::Right,
-                None,
                 ctx,
             );
 
@@ -17033,7 +17008,6 @@ impl Workspace {
         terminal_view.update(ctx, |terminal_view, ctx| {
             terminal_view.enter_agent_view_for_new_conversation(
                 prompt,
-                AgentViewEntryOrigin::LinearDeepLink,
                 ctx,
             );
         });
@@ -21729,7 +21703,6 @@ impl TypedActionView for Workspace {
                                     terminal_view_ctx,
                                     |controller, ctx| {
                                         controller.send_slash_command_request(
-                                            SlashCommandRequest::InvokeSkill {
                                                 skill,
                                                 user_query: Some(query),
                                             },
@@ -22301,7 +22274,6 @@ impl TypedActionView for Workspace {
                     self.set_is_agent_management_view_open(is_open, ctx);
 
                     send_telemetry_from_ctx!(
-                        AgentManagementTelemetryEvent::ViewToggled { is_open },
                         ctx
                     );
 
@@ -22753,7 +22725,6 @@ impl TypedActionView for Workspace {
                                     controller.send_user_query_in_new_conversation(
                                         query.to_owned(),
                                         None,
-                                        EntrypointType::UserInitiated,
                                         None,
                                         ctx,
                                     );

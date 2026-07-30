@@ -1,9 +1,6 @@
 use crate::terminal::view::{
-    BlockNotification, ConversationRestorationInNewPaneType, ExecuteCommandEvent,
     LeftPanelTargetView, SyncEvent, TerminalViewState,
 };
-pub use pane::ai_document_pane::AIDocumentPane;
-pub use pane::ai_fact_pane::AIFactPane;
 use crate::settings::{AISettings, DefaultSessionMode, PaneSettings};
 use std::any::Any;
 use std::cell::RefCell;
@@ -127,9 +124,6 @@ use crate::terminal::shared_session::{
 use crate::terminal::view::inline_banner::{
 };
 use crate::terminal::view::ssh_file_upload::FileUploadId;
-use crate::terminal::view::{
-    LeftPanelTargetView, SyncEvent, TerminalViewState,
-};
 use crate::terminal::{
     MockTerminalManager, ShareBlockModal, ShareBlockModalEvent, ShellLaunchData, ShellLaunchState,
     TerminalManager, TerminalModel, TerminalView,
@@ -729,7 +723,6 @@ pub enum Event {
     ShowCloudAgentCapacityModal {
         variant: crate::workspace::view::cloud_agent_capacity_modal::CloudAgentCapacityModalVariant,
     },
-    #[cfg(not(target_family = "wasm"))]
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -933,7 +926,6 @@ pub struct PaneGroup {
 pub struct ChildAgentOrigin {
     /// Source pane group; weak so we don't keep the source tab alive.
     pub source_pane_group: WeakViewHandle<PaneGroup>,
-    /// The child agent conversation hosted in this tab's lone pane.
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -1361,7 +1353,6 @@ impl PaneGroup {
                         view.update(ctx, |terminal_view, ctx| {
                             terminal_view.enter_agent_view_for_new_conversation(
                                 None,
-                                AgentViewEntryOrigin::Input {
                                     was_prompt_autodetected: false,
                                 },
                                 ctx,
@@ -1833,7 +1824,6 @@ impl PaneGroup {
                             AgentConversationNavigationSubject::Entry(
                                 AgentConversationEntryId::AmbientRun(*task_id),
                             ),
-                            None,
                             ctx,
                         ) {
                             Some(WorkspaceAction::OpenOrAttachAmbientAgentConversation {
@@ -1899,7 +1889,6 @@ impl PaneGroup {
                 }
 
                 let focus = InitialFocus {
-                    focused_pane: leaf.is_focused.then_some(pane_id),
                     active_session: None,
                 };
                 Ok((PaneData::new(pane_id), focus))
@@ -2934,7 +2923,6 @@ impl PaneGroup {
         ctx.subscribe_to_model(
             &BlocklistAIHistoryModel::handle(ctx),
             |me, _, event, ctx| {
-                if let BlocklistAIHistoryEvent::LocalSharedSessionEstablished {
                     conversation_id,
                     ..
                 } = event
@@ -3394,7 +3382,6 @@ impl PaneGroup {
                     view.restore_conversation_after_view_creation(
                         RestoredAIConversation::new(*conversation),
                         true,
-                        RestoreConversationEntryBehavior::EnterRestoredConversation,
                         ctx,
                     );
                 });
@@ -3416,7 +3403,6 @@ impl PaneGroup {
                     view.restore_conversation_and_directory_context(
                         CloudConversationData::CLIAgent(cli_conversation),
                         true,
-                        RestoreConversationEntryBehavior::PreserveAgentViewState,
                         false,
                         |_, _| {},
                         ctx,
@@ -5672,7 +5658,6 @@ impl PaneGroup {
                 }
                 ConversationRestorationInNewPaneType::HistoricalCLIAgent {
                     conversation: *cli_conversation,
-                    should_use_live_appearance: true,
                 }
             }
         };
@@ -5872,7 +5857,6 @@ impl PaneGroup {
             view.update(ctx, |terminal_view, ctx| {
                 terminal_view.enter_agent_view_for_new_conversation(
                     None,
-                    AgentViewEntryOrigin::DefaultSessionMode,
                     ctx,
                 );
             });

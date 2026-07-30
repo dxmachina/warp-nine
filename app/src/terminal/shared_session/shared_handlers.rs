@@ -1,4 +1,3 @@
-use crate::terminal::{CLIAgent, TerminalView};
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -38,7 +37,6 @@ pub(crate) fn apply_input_mode_update(
         ProtocolInputType::AI => InputType::AI,
     };
     let new_config = InputConfig {
-        input_type: client_input_type,
         is_locked: input_mode.is_locked,
     };
 

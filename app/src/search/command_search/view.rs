@@ -820,7 +820,6 @@ impl CommandSearchView {
                         .map(|generate_commands_error| {
                             matches!(
                                 generate_commands_error,
-                                GenerateCommandsFromNaturalLanguageError::RateLimited
                             )
                         })
                         .unwrap_or(false);

@@ -115,8 +115,6 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
     ctx.subscribe_to_model(
         &CLIAgentSessionsModel::handle(ctx),
         move |me, _, event, ctx| {
-            if let CLIAgentSessionsModelEvent::InputSessionChanged {
-                terminal_view_id: event_terminal_view_id,
                 ..
             } = event
                 && *event_terminal_view_id == terminal_view_id
@@ -146,7 +144,6 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
         move |me, _, event, ctx| {
             if matches!(
                 event,
-                AgentConversationsModelEvent::TasksUpdated
                     | AgentConversationsModelEvent::NewTasksReceived
             ) {
                 recompute_active_commands(me, ctx);
@@ -175,7 +172,6 @@ impl SlashCommandDataSourceState {
             active_session,
             cli_subagent_controller,
             terminal_view_id,
-            active_commands_by_id: HashMap::new(),
             active_repo_root: None,
         }
     }

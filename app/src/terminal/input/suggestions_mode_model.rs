@@ -1,4 +1,3 @@
-use super::{BufferState, DynamicEnumSuggestionStatus, InputConfig, InputSuggestionsMode};
 use warpui::{Entity, ModelContext, ModelHandle};
 
 use crate::terminal::input::buffer_model::InputBufferModel;

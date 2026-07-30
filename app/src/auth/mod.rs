@@ -42,7 +42,6 @@ use crate::server::sync_queue::SyncQueue;
 use crate::server::telemetry::{PaletteSource, TelemetryEvent};
 use crate::session_management::{RunningSessionSummary, SessionNavigationData};
 use crate::settings::{
-    TELEMETRY_ENABLED_DEFAULTS_KEY,
 };
 use crate::terminal::general_settings::GeneralSettings;
 use crate::terminal::shared_session::manager::Manager as SharedSessionManager;

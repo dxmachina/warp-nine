@@ -1,5 +1,4 @@
 use super::{
-    AIAgentExchangeId, AIConversationId, AgentModeRewindEntrypoint, AppContext,
     BlocklistAIHistoryModel, CONTEXT_MENU_WIDTH, ChannelState, ClipboardContent, ContextMenuAction,
     ContextMenuState, ContextMenuType, EntityId, FeatureFlag, ForkAIConversationParams,
     ForkFromExchange, ForkedConversationDestination, MenuItem, MenuItemFields, RichContentLink,
@@ -10,12 +9,6 @@ use super::{
 use warpui::{SingletonEntity, UpdateView};
 
 use super::{
-    BlocklistAIHistoryModel, CONTEXT_MENU_WIDTH, ChannelState, ClipboardContent, ContextMenuAction,
-    ContextMenuState, ContextMenuType, EntityId, FeatureFlag, ForkAIConversationParams,
-    ForkFromExchange, ForkedConversationDestination, MenuItem, MenuItemFields, RichContentLink,
-    ServerConversationToken, ServerOutputId, ShareableObject, TerminalAction, TerminalModel,
-    TerminalView, Tip, TipHint, Vector2F, ViewContext, fork_label_for_query,
-    mark_feature_used_and_write_to_user_defaults,
 };
 
 impl TerminalView {

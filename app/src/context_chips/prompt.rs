@@ -11,7 +11,6 @@ use warpui::{
 
 pub use super::ContextChipKind;
 use crate::settings::{
-    WarpPromptSeparator,
 };
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 

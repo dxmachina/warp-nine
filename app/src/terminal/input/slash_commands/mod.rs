@@ -1089,7 +1089,6 @@ impl Input {
                     ForkedConversationDestination::for_fork_trigger(trigger.is_cmd_or_ctrl_enter());
 
                 send_telemetry_from_ctx!(
-                    AgentManagementTelemetryEvent::SlashCommandContinueLocally,
                     ctx
                 );
 
@@ -1212,7 +1211,6 @@ impl Input {
                             conversation_id,
                             QueuedQuery::new_with_attachments(
                                 prompt,
-                                QueuedQueryOrigin::QueueSlashCommand,
                                 attachments,
                             ),
                             ctx,
@@ -1278,7 +1276,6 @@ impl Input {
             self.agent_view_controller.update(ctx, |controller, ctx| {
                 let _ = controller.try_enter_agent_view(
                     None,
-                    AgentViewEntryOrigin::SlashCommand {
                         trigger: SlashCommandTrigger::input(),
                     },
                     ctx,
@@ -1477,7 +1474,6 @@ impl Input {
             .to_vec();
         self.ai_controller.update(ctx, move |controller, ctx| {
             controller.send_queued_slash_command_request(
-                SlashCommandRequest::Summarize { prompt: None },
                 queued_query_id,
                 Some(conversation_id),
                 ctx,
@@ -1492,7 +1488,6 @@ impl Input {
                 conversation_id,
                 QueuedQuery::new_with_attachments(
                     initial_prompt,
-                    QueuedQueryOrigin::CompactAndSlashCommand,
                     followup_attachments,
                 ),
                 ctx,

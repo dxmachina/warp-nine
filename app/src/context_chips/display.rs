@@ -108,21 +108,8 @@ impl PromptDisplay {
             }
         });
 
-        // Subscribe todo list updates to refresh the todo list chip visibility
-        ctx.subscribe_to_model(
-            &BlocklistAIHistoryModel::handle(ctx),
-            |me, _, event, ctx| {
-                if let BlocklistAIHistoryEvent::UpdatedTodoList {
-                    terminal_surface_id,
-                } = event
-                {
-                    if *terminal_surface_id != me.terminal_view_id {
-                        return;
-                    }
-                    ctx.notify();
-                }
-            },
-        );
+        // LOCAL FORK: a BlocklistAIHistoryModel subscription refreshed the todo-list
+        // chip here. Both the model and the chip are agent surfaces and are gone.
 
         ctx.subscribe_to_model(&agent_view_controller, |_, _, _, ctx| {
             ctx.notify();
@@ -139,7 +126,6 @@ impl PromptDisplay {
             current_repo_path,
             model_events,
             agent_view_controller,
-            pane_is_focused: true,
             is_shared_session_viewer,
         }
     }

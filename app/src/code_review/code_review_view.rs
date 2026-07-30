@@ -5952,7 +5952,6 @@ impl CodeReviewView {
                     {
                         terminal_view.enter_agent_view_for_new_conversation(
                             None,
-                            AgentViewEntryOrigin::CodeReviewContext,
                             ctx,
                         );
                     }
@@ -6138,7 +6137,6 @@ impl CodeReviewView {
                 );
                 // Create the DiffHunk attachment
                 let attachment = AIAgentAttachment::DiffHunk {
-                    file_path: filename.clone(),
                     line_range: line_range.clone(),
                     diff_content,
                     lines_added,
@@ -6164,7 +6162,6 @@ impl CodeReviewView {
                     {
                         terminal_view.enter_agent_view_for_new_conversation(
                             None,
-                            AgentViewEntryOrigin::CodeReviewContext,
                             ctx,
                         );
                     }

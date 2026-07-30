@@ -802,7 +802,6 @@ pub struct LlmHostSettings {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct LlmSettings {
     pub enabled: bool,
-    #[serde(default)]
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

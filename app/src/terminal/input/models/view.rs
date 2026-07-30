@@ -290,7 +290,6 @@ impl InlineModelSelectorView {
         ctx.subscribe_to_model(
             &LLMPreferences::handle(ctx),
             |me, _, event, ctx| match event {
-                LLMPreferencesEvent::UpdatedAvailableLLMs
                 | LLMPreferencesEvent::UpdatedActiveAgentModeLLM
                     if me
                         .suggestions_mode_model
@@ -338,7 +337,6 @@ impl InlineModelSelectorView {
         ctx.subscribe_to_model(
             &BlocklistAIHistoryModel::handle(ctx),
             move |me, _, event, ctx| {
-                if let BlocklistAIHistoryEvent::UpdatedConversationStatus {
                     terminal_surface_id: event_terminal_surface_id,
                     ..
                 } = event

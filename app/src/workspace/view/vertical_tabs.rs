@@ -1,6 +1,5 @@
 pub mod telemetry;
 
-use crate::terminal::{CLIAgent, TerminalView};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -929,8 +928,6 @@ struct VerticalTabsSummaryBranchEntry {
 #[derive(Clone, Debug, PartialEq)]
 struct VerticalTabsSummaryPrimaryLabel {
     text: String,
-    /// Some when the contributing pane is a conversation with a known status. Drives the
-    /// per-line status pill prefix in Summary mode.
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -3278,7 +3275,6 @@ fn resolve_icon_with_status_variant(
             let terminal_view = terminal_pane.terminal_view(app);
             let terminal_view = terminal_view.as_ref(app);
             match terminal_view_agent_icon_variant(terminal_view, app) {
-                Some(variant) => variant,
                 _ => {
                     // Plain terminal: use foreground color per design spec
                     IconWithStatusVariant::Neutral {
@@ -3481,12 +3477,6 @@ impl TypedPane<'_> {
                 // Route through the shared helper so summary mode agrees with
                 // `resolve_icon_with_status_variant` on what the tab represents.
                 match terminal_view_agent_icon_variant(terminal_view, app) {
-                    Some(IconWithStatusVariant::OzAgent { is_ambient, .. }) => {
-                        SummaryPaneKind::OzAgent { is_ambient }
-                    }
-                    Some(IconWithStatusVariant::CLIAgent {
-                        agent, is_ambient, ..
-                    }) => SummaryPaneKind::CLIAgent { agent, is_ambient },
                     Some(_) | None => SummaryPaneKind::Terminal,
                 }
             }

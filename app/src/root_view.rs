@@ -2,7 +2,6 @@ use crate::settings::{
     AISettings, QuakeModeSettings, ThemeSettings, apply_account_first_onboarding_settings,
     apply_onboarding_settings,
 };
-        use crate::settings::AISettings;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

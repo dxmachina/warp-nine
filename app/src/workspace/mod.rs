@@ -1,7 +1,5 @@
 mod action;
 mod active_session;
-pub(crate) mod auto_handoff;
-pub mod bonus_grant_notification_model;
 #[cfg(target_os = "macos")]
 pub(crate) mod cli_install;
 mod close_session_confirmation_dialog;

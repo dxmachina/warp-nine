@@ -817,11 +817,8 @@ impl CommandSearchView {
                     let is_ratelimit_error = error
                         .as_any()
                         .downcast_ref::<GenerateCommandsFromNaturalLanguageError>()
-                        .map(|generate_commands_error| {
-                            matches!(
-                                generate_commands_error,
-                            )
-                        })
+                        // LOCAL FORK: the rate-limit variant was agent-only.
+                        .map(|_generate_commands_error| false)
                         .unwrap_or(false);
                     column.add_child(self.render_error_header(
                         app,

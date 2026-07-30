@@ -1,17 +1,14 @@
-mod agent;
 pub mod buffer_model;
 mod classic;
 mod cli_agent;
 mod cloud_mode_v2_history_menu;
 mod common;
-pub mod conversations;
 pub mod decorations;
 pub(crate) mod handoff_compose;
 pub mod inline_history;
 pub mod inline_menu;
 pub mod message_bar;
 pub mod models;
-pub mod plans;
 pub mod profiles;
 pub mod prompts;
 pub mod repos;
@@ -24,7 +21,6 @@ pub mod suggestions_mode_model;
 mod terminal;
 mod terminal_message_bar;
 mod universal;
-pub mod user_query;
 
 use std::any::Any;
 use std::borrow::Cow;

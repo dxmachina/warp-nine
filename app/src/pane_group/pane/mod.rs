@@ -8,15 +8,10 @@
 //! The [`PaneContent`] interface requires implementers to maintain a [`PaneId`] for their pane.
 //! The [`PaneId`] must be created via a [`PaneView<BackingView>`]. The [`PaneId`] is consequently
 //! used to render a [`PaneView`] which internally renders the pane, including the [`BackingView`].
-pub(super) mod ai_document_pane;
-pub(super) mod ai_fact_pane;
-pub(super) mod code_diff_pane;
-pub(super) mod code_diff_pane_model;
 pub(super) mod code_pane;
 pub(super) mod custom_router_editor_pane;
 pub(super) mod env_var_collection_pane;
 pub(crate) mod environment_management_pane;
-pub(super) mod execution_profile_editor_pane;
 pub(super) mod file_pane;
 pub(super) mod get_started_pane;
 pub(super) mod get_started_view;

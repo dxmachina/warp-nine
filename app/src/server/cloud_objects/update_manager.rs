@@ -1096,23 +1096,6 @@ impl UpdateManager {
         self.refresh_updated_objects(ctx);
     }
 
-    fn handle_ambient_task_changed(
-        &mut self,
-        task_id: String,
-        timestamp: DateTime<Utc>,
-        ctx: &mut ModelContext<UpdateManager>,
-    ) {
-        let task_id = match task_id.parse::<AmbientAgentTaskId>() {
-            Ok(task_id) => task_id,
-            Err(err) => {
-                report_error!(anyhow::Error::from(err).context(format!(
-                    "AmbientTaskUpdated has unparseable task_id: {task_id}"
-                )));
-                return;
-            }
-        };
-        ctx.emit(UpdateManagerEvent::AmbientTaskUpdated { task_id, timestamp });
-    }
 
     /// Fetches environment "last used" timestamps from the server and merges them
     /// into the in-memory environment objects.
@@ -1888,31 +1871,7 @@ impl UpdateManager {
         }
     }
 
-    pub fn update_ai_fact(
-        &mut self,
-        ai_fact: AIFact,
-        ai_fact_id: SyncId,
-        revision_ts: Option<Revision>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.update_object(CloudAIFactModel::new(ai_fact), ai_fact_id, revision_ts, ctx);
-    }
 
-    #[cfg(not(target_family = "wasm"))]
-    pub fn update_templatable_mcp_server(
-        &mut self,
-        templatable_mcp_server: TemplatableMCPServer,
-        templatable_mcp_server_id: SyncId,
-        revision_ts: Option<Revision>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.update_object(
-            CloudTemplatableMCPServerModel::new(templatable_mcp_server),
-            templatable_mcp_server_id,
-            revision_ts,
-            ctx,
-        );
-    }
 
     pub fn update_workflow(
         &mut self,
@@ -1959,20 +1918,6 @@ impl UpdateManager {
         );
     }
 
-    pub fn update_ambient_agent_environment(
-        &mut self,
-        environment: AmbientAgentEnvironment,
-        environment_id: SyncId,
-        revision_ts: Option<Revision>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.update_object(
-            CloudAmbientAgentEnvironmentModel::new(environment),
-            environment_id,
-            revision_ts,
-            ctx,
-        );
-    }
 
     pub fn update_notebook_data(
         &mut self,
@@ -2564,185 +2509,10 @@ impl UpdateManager {
         );
     }
 
-    /// Add guests to an AI conversation.
-    pub fn add_ai_conversation_guests(
-        &mut self,
-        server_id: ServerId,
-        conversation_id: AIConversationId,
-        guest_emails: Vec<String>,
-        access_level: AccessLevel,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.update_ai_conversation_permissions(
-            conversation_id,
-            "add guests",
-            move |object_client| {
-                let guest_emails = guest_emails.clone();
-                async move {
-                    object_client
-                        .add_object_guests(server_id, guest_emails, access_level)
-                        .await
-                }
-            },
-            |data, ctx| {
-                // Update UserProfiles with any new profiles returned
-                if !data.profiles.is_empty() {
-                    UserProfiles::handle(ctx).update(ctx, |user_profiles, _| {
-                        user_profiles.insert_profiles(&data.profiles);
-                    });
-                }
-                Some(data.permissions)
-            },
-            ctx,
-        );
-    }
 
-    /// Update guest access for an AI conversation.
-    pub fn update_ai_conversation_guests(
-        &mut self,
-        server_id: ServerId,
-        conversation_id: AIConversationId,
-        guest_emails: Vec<String>,
-        access_level: AccessLevel,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.update_ai_conversation_permissions(
-            conversation_id,
-            "update guests",
-            move |object_client| {
-                let guest_emails = guest_emails.clone();
-                async move {
-                    object_client
-                        .update_object_guests(server_id, guest_emails, access_level)
-                        .await
-                }
-            },
-            |permissions, _ctx| Some(permissions),
-            ctx,
-        );
-    }
 
-    /// Remove a guest from an AI conversation.
-    pub fn remove_ai_conversation_guest(
-        &mut self,
-        server_id: ServerId,
-        conversation_id: AIConversationId,
-        guest: GuestIdentifier,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.update_ai_conversation_permissions(
-            conversation_id,
-            "remove guest",
-            move |object_client| {
-                let guest = guest.clone();
-                async move { object_client.remove_object_guest(server_id, guest).await }
-            },
-            |permissions, _ctx| Some(permissions),
-            ctx,
-        );
-    }
 
-    /// Set or remove link sharing permissions for an AI conversation.
-    pub fn set_ai_conversation_link_permissions(
-        &mut self,
-        server_id: ServerId,
-        conversation_id: AIConversationId,
-        access_level: Option<SharingAccessLevel>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.update_ai_conversation_permissions(
-            conversation_id,
-            "set link permissions",
-            move |object_client| async move {
-                if let Some(access_level) = access_level {
-                    object_client
-                        .set_object_link_permissions(server_id, access_level)
-                        .await
-                        .map(|_| ())
-                } else {
-                    object_client
-                        .remove_object_link_permissions(server_id)
-                        .await
-                        .map(|_| ())
-                }
-            },
-            move |_result, ctx| {
-                // For link permissions, we manually construct the permissions update
-                // since the API only returns success/failure.
-                // Use the unified helper that checks both in-memory and historical metadata.
-                let mut permissions = BlocklistAIHistoryModel::as_ref(ctx)
-                    .get_server_conversation_metadata(&conversation_id)
-                    .map(|metadata| metadata.permissions.clone())?;
-                permissions.anyone_link_sharing =
-                    access_level.map(|level| crate::cloud_object::ServerLinkSharing {
-                        access_level: level.into(),
-                        source: None,
-                    });
-                Some(permissions)
-            },
-            ctx,
-        );
-    }
 
-    /// Helper for updating AI conversation permissions.
-    ///
-    /// This centralizes the common pattern of:
-    /// 1. Making an API request
-    /// 2. Processing the result to extract permissions
-    /// 3. Updating BlocklistAIHistoryModel with new permissions
-    /// 4. Emitting ConversationMetadataUpdated event
-    fn update_ai_conversation_permissions<P, S, R, F>(
-        &mut self,
-        conversation_id: AIConversationId,
-        operation_name: &'static str,
-        mut update_fn: P,
-        mut get_updated_permissions: F,
-        ctx: &mut ModelContext<Self>,
-    ) where
-        P: 'static + FnMut(Arc<dyn ObjectClient>) -> S,
-        S: warpui::r#async::Spawnable + Future<Output = anyhow::Result<R>>,
-        <S as Future>::Output: warpui::r#async::SpawnableOutput,
-        F: 'static + FnMut(R, &mut AppContext) -> Option<ServerPermissions>,
-    {
-        let object_client = self.object_client.clone();
-
-        ctx.spawn_with_retry_on_error(
-            move || {
-                let object_client = object_client.clone();
-                update_fn(object_client)
-            },
-            *ONLINE_ONLY_OPERATION_RETRY_STRATEGY,
-            move |_me, res, ctx| match res {
-                RequestState::RequestSucceeded(data) => {
-                    if let Some(permissions) = get_updated_permissions(data, ctx) {
-                        // Update BlocklistAIHistoryModel (handles both in-memory and historical)
-                        BlocklistAIHistoryModel::handle(ctx).update(ctx, |model, ctx| {
-                            // Get current metadata from either in-memory conversation or historical
-                            let current_metadata = model
-                                .get_server_conversation_metadata(&conversation_id)
-                                .cloned();
-                            if let Some(mut metadata) = current_metadata {
-                                metadata.permissions = permissions;
-                                model.set_server_metadata_for_conversation(
-                                    conversation_id,
-                                    metadata,
-                                    ctx,
-                                );
-                            }
-                        });
-                    }
-                }
-                RequestState::RequestFailedRetryPending(error) => {
-                    log::warn!("Failed to {operation_name} for AI conversation: {error}. Retrying");
-                }
-                RequestState::RequestFailed(error) => {
-                    log::warn!(
-                        "Failed to {operation_name} for AI conversation: {error}. Not retrying"
-                    );
-                }
-            },
-        );
-    }
 
     /// Helper for implementing *pessimistic* permission changes.
     ///
@@ -3151,161 +2921,13 @@ impl UpdateManager {
         );
     }
 
-    pub fn create_ai_fact(
-        &mut self,
-        ai_fact: AIFact,
-        client_id: ClientId,
-        owner: Owner,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.create_object(
-            CloudAIFactModel::new(ai_fact),
-            owner,
-            client_id,
-            Default::default(),
-            false,
-            None,
-            // When adding the initiated_by parameter to this function call, InitiatedBy::User was set as a default value.
-            // This can be changed to InitiatedBy::System if this action was automatically kicked off by the system and we do not want a user facing toast.
-            InitiatedBy::User,
-            ctx,
-        );
-    }
 
-    #[cfg(not(target_family = "wasm"))]
-    pub fn create_templatable_mcp_server(
-        &mut self,
-        templatable_mcp_server: TemplatableMCPServer,
-        client_id: ClientId,
-        owner: Owner,
-        initiated_by: InitiatedBy,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.create_object(
-            CloudTemplatableMCPServerModel::new(templatable_mcp_server),
-            owner,
-            client_id,
-            Default::default(),
-            false,
-            None,
-            initiated_by,
-            ctx,
-        );
-    }
 
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    pub fn create_ambient_agent_environment(
-        &mut self,
-        ambient_agent_environment: AmbientAgentEnvironment,
-        client_id: ClientId,
-        owner: Owner,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.create_object(
-            CloudAmbientAgentEnvironmentModel::new(ambient_agent_environment),
-            owner,
-            client_id,
-            Default::default(),
-            false,
-            None,
-            // When adding the initiated_by parameter to this function call, InitiatedBy::User was set as a default value.
-            // This can be changed to InitiatedBy::System if this action was automatically kicked off by the system and we do not want a user facing toast.
-            InitiatedBy::User,
-            ctx,
-        )
-    }
 
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    pub fn create_ambient_agent_environment_online(
-        &mut self,
-        ambient_agent_environment: AmbientAgentEnvironment,
-        client_id: ClientId,
-        owner: Owner,
-        ctx: &mut ModelContext<Self>,
-    ) -> impl Future<Output = anyhow::Result<ServerId>> + use<> {
-        self.create_object_online(
-            CloudAmbientAgentEnvironmentModel::new(ambient_agent_environment),
-            owner,
-            client_id,
-            Default::default(),
-            false,
-            None,
-            ctx,
-        )
-    }
 
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    pub fn create_scheduled_ambient_agent_online(
-        &mut self,
-        scheduled_ambient_agent: ScheduledAmbientAgent,
-        client_id: ClientId,
-        owner: Owner,
-        ctx: &mut ModelContext<Self>,
-    ) -> impl Future<Output = anyhow::Result<ServerId>> + use<> {
-        self.create_object_online(
-            CloudScheduledAmbientAgentModel::new(scheduled_ambient_agent),
-            owner,
-            client_id,
-            Default::default(),
-            false,
-            None,
-            ctx,
-        )
-    }
 
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    pub fn update_scheduled_ambient_agent_online(
-        &mut self,
-        scheduled_ambient_agent: ScheduledAmbientAgent,
-        scheduled_ambient_agent_id: SyncId,
-        revision_ts: Option<Revision>,
-        ctx: &mut ModelContext<Self>,
-    ) -> impl Future<Output = anyhow::Result<()>> + use<> {
-        self.update_object_online(
-            CloudScheduledAmbientAgentModel::new(scheduled_ambient_agent),
-            scheduled_ambient_agent_id,
-            revision_ts,
-            ctx,
-        )
-    }
 
-    #[allow(dead_code)]
-    pub fn create_ai_execution_profile(
-        &mut self,
-        ai_execution_profile: AIExecutionProfile,
-        client_id: ClientId,
-        owner: Owner,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.create_object(
-            CloudAIExecutionProfileModel::new(ai_execution_profile),
-            owner,
-            client_id,
-            Default::default(),
-            false,
-            None,
-            // When adding the initiated_by parameter to this function call, InitiatedBy::User was set as a default value.
-            // This can be changed to InitiatedBy::System if this action was automatically kicked off by the system and we do not want a user facing toast.
-            InitiatedBy::User,
-            ctx,
-        );
-    }
 
-    #[allow(dead_code)]
-    pub fn update_ai_execution_profile(
-        &mut self,
-        ai_execution_profile: AIExecutionProfile,
-        ai_execution_profile_id: SyncId,
-        revision_ts: Option<Revision>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.update_object(
-            CloudAIExecutionProfileModel::new(ai_execution_profile),
-            ai_execution_profile_id,
-            revision_ts,
-            ctx,
-        );
-    }
 
     pub fn delete_ai_execution_profile(
         &mut self,

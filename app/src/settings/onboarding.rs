@@ -189,80 +189,6 @@ fn apply_ui_customization_settings(
     }
 }
 
-fn apply_agent_settings(agent_settings: &AgentDevelopmentSettings, app: &mut AppContext) {
-    // Apply session default mode.
-    let default_mode = match agent_settings.session_default {
-        SessionDefault::Agent => DefaultSessionMode::Agent,
-        SessionDefault::Terminal => DefaultSessionMode::Terminal,
-    };
-    AISettings::handle(app).update(app, |settings, ctx| {
-        report_if_error!(
-            settings
-                .default_session_mode_internal
-                .set_value(default_mode, ctx)
-        );
-    });
-
-    let workspace_autonomy_settings = UserWorkspaces::as_ref(app).ai_autonomy_settings();
-
-    AISettings::handle(app).update(app, |settings, ctx| {
-        report_if_error!(
-            settings
-                .should_render_cli_agent_footer
-                .set_value(agent_settings.cli_agent_toolbar_enabled, ctx)
-        );
-        report_if_error!(
-            settings
-                .show_agent_notifications
-                .set_value(agent_settings.show_agent_notifications, ctx)
-        );
-    });
-
-    AIExecutionProfilesModel::handle(app).update(app, |profiles, ctx| {
-        let default_profile_info = profiles.default_profile(ctx);
-        let default_profile_id = default_profile_info.id().clone();
-
-        // Preserve profiles loaded for an existing account, regardless of
-        // whether the active source is legacy cloud objects or the settings
-        // collection. Fresh local profiles still receive onboarding values.
-        if profiles.should_preserve_onboarding_profile(ctx) {
-            log::info!(
-                "Preserving existing account execution profile; skipping \
-                 onboarding-driven overrides for profile {default_profile_id:?}"
-            );
-            return;
-        }
-
-        profiles.set_base_model(
-            &default_profile_id,
-            Some(agent_settings.selected_model_id.clone()),
-            ctx,
-        );
-
-        // If autonomy is None, the workspace enforces autonomy settings, so skip setting them.
-        let Some(autonomy) = agent_settings.autonomy else {
-            return;
-        };
-
-        let permissions = action_permissions_for_onboarding_autonomy(autonomy);
-
-        // Only set permissions that are not enforced by the workspace
-        if !workspace_autonomy_settings.has_override_for_code_diffs() {
-            profiles.set_apply_code_diffs(&default_profile_id, &permissions.apply_code_diffs, ctx);
-        }
-        if !workspace_autonomy_settings.has_override_for_read_files() {
-            profiles.set_read_files(&default_profile_id, &permissions.read_files, ctx);
-        }
-        if !workspace_autonomy_settings.has_override_for_execute_commands() {
-            profiles.set_execute_commands(&default_profile_id, &permissions.execute_commands, ctx);
-        }
-        // Note: MCP permissions don't have a workspace-level override, so always set them
-        profiles.set_mcp_permissions(&default_profile_id, &permissions.mcp_permissions, ctx);
-        if !workspace_autonomy_settings.has_override_for_write_to_pty() {
-            profiles.set_write_to_pty(&default_profile_id, &permissions.write_to_pty, ctx);
-        }
-    });
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct OnboardingAutonomyPermissions {
@@ -273,40 +199,6 @@ struct OnboardingAutonomyPermissions {
     write_to_pty: WriteToPtyPermission,
 }
 
-fn action_permissions_for_onboarding_autonomy(
-    autonomy: AgentAutonomy,
-) -> OnboardingAutonomyPermissions {
-    match autonomy {
-        // Full autonomy promises "Runs commands, writes code, and reads files
-        // without asking," so every permission is `AlwaysAllow`. The command
-        // denylist still takes precedence at runtime when a specific command
-        // is considered unsafe.
-        AgentAutonomy::Full => OnboardingAutonomyPermissions {
-            apply_code_diffs: ActionPermission::AlwaysAllow,
-            read_files: ActionPermission::AlwaysAllow,
-            execute_commands: ActionPermission::AlwaysAllow,
-            mcp_permissions: ActionPermission::AlwaysAllow,
-            write_to_pty: WriteToPtyPermission::AlwaysAllow,
-        },
-        // Partial autonomy: reads are always allowed, applying code diffs
-        // always asks, and the agent decides on command / MCP execution
-        // (asking only for sensitive actions).
-        AgentAutonomy::Partial => OnboardingAutonomyPermissions {
-            apply_code_diffs: ActionPermission::AlwaysAsk,
-            read_files: ActionPermission::AlwaysAllow,
-            execute_commands: ActionPermission::AgentDecides,
-            mcp_permissions: ActionPermission::AgentDecides,
-            write_to_pty: WriteToPtyPermission::AlwaysAsk,
-        },
-        AgentAutonomy::None => OnboardingAutonomyPermissions {
-            apply_code_diffs: ActionPermission::AlwaysAsk,
-            read_files: ActionPermission::AlwaysAsk,
-            execute_commands: ActionPermission::AlwaysAsk,
-            mcp_permissions: ActionPermission::AlwaysAsk,
-            write_to_pty: WriteToPtyPermission::AlwaysAsk,
-        },
-    }
-}
 
 #[cfg(test)]
 #[path = "onboarding_tests.rs"]

@@ -114,21 +114,6 @@ impl GuiSlashCommandDataSource {
         me
     }
 
-    /// Attaches an ambient agent view model after construction. Used on the shared-session viewer
-    /// path where the model is created lazily at `SessionJoined`, after the data source was built
-    /// with `None`. Keeps cloud-mode command and skill gating correct for a link-join viewer.
-    /// Idempotent: a no-op when a model is already set.
-    pub fn set_ambient_agent_view_model(
-        &mut self,
-        ambient_agent_view_model: ModelHandle<AmbientAgentViewModel>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        if self.ambient_agent_view_model.is_some() {
-            return;
-        }
-        self.ambient_agent_view_model = Some(ambient_agent_view_model);
-        self.recompute_active_commands(ctx);
-    }
 
     pub(super) fn is_cloud_mode_v2(&self) -> bool {
         self.is_cloud_mode_v2
@@ -248,55 +233,7 @@ impl GuiSlashCommandDataSource {
                     .is_some_and(|model| model.as_ref(ctx).is_ambient_agent()))
     }
 
-    #[cfg(not(target_family = "wasm"))]
-    fn active_conversation_id(&self, ctx: &AppContext) -> Option<AIConversationId> {
-        self.agent_view_controller
-            .as_ref(ctx)
-            .agent_view_state()
-            .active_conversation_id()
-            .or_else(|| {
-                BlocklistAIHistoryModel::as_ref(ctx)
-                    .active_conversation(self.terminal_view_id())
-                    .map(|conversation| conversation.id())
-            })
-    }
 
-    /// Returns true when the active conversation is associated with a cloud Oz
-    /// `AmbientAgentTask`. Used to gate `/continue-locally` to runs that can
-    /// actually be forked into a local Warp conversation.
-    ///
-    /// Permissive when the harness is not yet known: we consider an absent task or
-    /// missing `agent_config_snapshot.harness` to be Oz, matching the existing
-    /// tombstone gate (`conversation_ended_tombstone_view::render_action_buttons`).
-    /// Only an explicit non-Oz harness (Claude, Gemini, OpenCode, Unknown) hides the
-    /// command. Conversations without a `task_id` are local and never qualify.
-    #[cfg(not(target_family = "wasm"))]
-    fn active_conversation_is_cloud_oz(&self, ctx: &AppContext) -> bool {
-        let Some(conversation_id) = self.active_conversation_id(ctx) else {
-            return false;
-        };
-        let history = BlocklistAIHistoryModel::as_ref(ctx);
-        let Some(conversation) = history.conversation(&conversation_id) else {
-            return false;
-        };
-        let Some(task_id) = conversation.task_id() else {
-            return false;
-        };
-        let Some(task) = AgentConversationsModel::as_ref(ctx).get_task_data(&task_id) else {
-            // Task data not yet fetched. Permissive default: assume Oz so the command
-            // is reachable while the fetch is in flight; once the fetch resolves,
-            // `TasksUpdated` triggers a recompute and a non-Oz task hides the command.
-            return true;
-        };
-        match task
-            .agent_config_snapshot
-            .as_ref()
-            .and_then(|s| s.harness.as_ref())
-        {
-            Some(config) => config.harness_type == Harness::Oz,
-            None => true,
-        }
-    }
 }
 
 impl SyncDataSource for GuiSlashCommandDataSource {

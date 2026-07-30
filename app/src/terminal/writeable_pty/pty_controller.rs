@@ -608,21 +608,6 @@ impl<T: EventLoopSender> PtyController<T> {
         }
     }
 
-    /// Writes agent input to the PTY.
-    pub fn write_agent_bytes<B: Into<Cow<'static, [u8]>>>(
-        &mut self,
-        bytes: B,
-        mode: &AIAgentPtyWriteMode,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        self.send_write_to_event_loop(
-            PtyWrite::AgentInput {
-                bytes: bytes.into(),
-                mode: *mode,
-            },
-            ctx,
-        );
-    }
 
     /// Writes user input to the PTY.
     ///

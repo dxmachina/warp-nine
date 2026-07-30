@@ -1727,81 +1727,7 @@ fn get_all_ignored_suggestions(
         .collect())
 }
 
-fn get_all_mcp_server_installations(
-    conn: &mut SqliteConnection,
-) -> Result<HashMap<Uuid, TemplatableMCPServerInstallation>, diesel::result::Error> {
-    use schema::mcp_server_installations::dsl::*;
 
-    let rows: Vec<(String, String, String)> = mcp_server_installations
-        .select((id, templatable_mcp_server, variable_values))
-        .load::<(String, String, String)>(conn)?;
-    let rows_len = rows.len();
-
-    let result: HashMap<Uuid, TemplatableMCPServerInstallation> = rows
-        .into_iter()
-        .filter_map(|(id_str, templ_mcp, vars_json)| {
-            let uuid = uuid::Uuid::parse_str(&id_str).ok()?;
-
-            // Parse variable_values JSON into a flat HashMap<String, String>
-            let vars: HashMap<String, VariableValue> =
-                match serde_json::from_str::<HashMap<String, VariableValue>>(&vars_json) {
-                    Ok(map) => map,
-                    Err(_) => return None,
-                };
-
-            let mcp_server = match serde_json::from_str::<TemplatableMCPServer>(&templ_mcp) {
-                Ok(map) => map,
-                Err(_) => return None,
-            };
-
-            Some((
-                uuid,
-                TemplatableMCPServerInstallation::new(uuid, mcp_server, vars),
-            ))
-        })
-        .collect();
-
-    let improper_rows = rows_len - result.len();
-    if improper_rows > 0 {
-        log::warn!(
-            "Skipping {improper_rows} rows from mcp_server_installations table due to malformation."
-        );
-    }
-
-    Ok(result)
-}
-
-fn upsert_mcp_server_installation(
-    conn: &mut SqliteConnection,
-    mcp_server_installation: TemplatableMCPServerInstallation,
-) -> Result<()> {
-    use schema::mcp_server_installations::dsl::*;
-
-    let new_installation = model::NewMCPServerInstallation {
-        id: mcp_server_installation.uuid().to_string(),
-        templatable_mcp_server: serde_json::to_string(
-            mcp_server_installation.templatable_mcp_server(),
-        )?,
-        // TODO(pei): Change this to be the timestamp of the Cloud object
-        template_version_ts: Utc::now().naive_utc(),
-        variable_values: serde_json::to_string(mcp_server_installation.variable_values())?,
-        restore_running: false,
-        last_modified_at: Utc::now().naive_utc(),
-    };
-
-    conn.transaction::<_, Error, _>(|conn| {
-        diesel::insert_into(mcp_server_installations)
-            .values(&new_installation)
-            .on_conflict(id)
-            .do_update()
-            .set(&new_installation)
-            .execute(conn)?;
-
-        Ok(())
-    })?;
-
-    Ok(())
-}
 
 fn delete_mcp_server_installations(conn: &mut SqliteConnection, uuids: Vec<Uuid>) -> Result<()> {
     use schema::mcp_server_installations::dsl::*;
@@ -2166,26 +2092,6 @@ fn upsert_generic_string_objects(
     upsert_generic_string_object_rows(conn, objects)
 }
 
-/// Parse conversation IDs from JSON string.
-fn parse_conversation_ids(ids_json: &Option<String>) -> Vec<AIConversationId> {
-    let Some(ids_str) = ids_json.as_ref() else {
-        return vec![];
-    };
-
-    let Ok(id_strings) = serde_json::from_str::<Vec<String>>(ids_str) else {
-        log::warn!("Failed to deserialize conversation IDs from column");
-        return vec![];
-    };
-
-    id_strings
-        .into_iter()
-        .map(AIConversationId::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap_or_else(|_| {
-            log::warn!("Failed to parse conversation IDs");
-            vec![]
-        })
-}
 
 fn read_root_node(conn: &mut SqliteConnection, tab_id_val: i32) -> Result<PaneNodeSnapshot> {
     use schema::pane_nodes::dsl::*;

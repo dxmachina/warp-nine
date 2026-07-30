@@ -1233,26 +1233,6 @@ impl LeftPanelView {
         }
     }
 
-    /// When the conversation list view's visibility changes,
-    /// we need to update the conversation and tasks model to reflect the new state
-    /// (this information is used to decide whether or not we should poll for new tasks).
-    fn on_conversation_list_view_visibility_changed(
-        &self,
-        is_now_open: bool,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let is_available = self.active_view.get() == ToolPanelView::ConversationListView
-            && self.active_view_availability(ctx) == ToolPanelAvailability::Available;
-        let window_id = ctx.window_id();
-        let view_id = self.conversation_list_view.id();
-        AgentConversationsModel::handle(ctx).update(ctx, |model, ctx| {
-            if is_now_open && is_available {
-                model.register_view_open(window_id, view_id, ctx);
-            } else {
-                model.register_view_closed(window_id, view_id, ctx);
-            }
-        });
-    }
 }
 
 impl TypedActionView for LeftPanelView {

@@ -90,40 +90,6 @@ pub struct EnvironmentFormValues {
 }
 
 impl EnvironmentFormValues {
-    /// Converts form values to an AmbientAgentEnvironment for submission.
-    pub fn to_ambient_agent_environment(&self) -> AmbientAgentEnvironment {
-        let setup_commands: Vec<String> = self
-            .setup_commands
-            .iter()
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .map(ToString::to_string)
-            .collect();
-
-        let description = {
-            let trimmed = self.description.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        };
-
-        let docker_image = self.docker_image.trim();
-        let mut environment = AmbientAgentEnvironment::new(
-            self.name.trim().to_string(),
-            description,
-            self.selected_repos.clone(),
-            docker_image.to_string(),
-            setup_commands,
-        );
-        // An empty docker image field means the environment does not pin a base
-        // image; preserve that as `None` rather than an empty image string.
-        if docker_image.is_empty() {
-            environment.base_image = None;
-        }
-        environment
-    }
 
     /// Validates the form values. Only the name is required — an environment may
     /// omit its base image, so the docker image field is optional.

@@ -35,9 +35,6 @@ impl RewindDataSource {
         Self { conversation_id }
     }
 
-    pub fn set_conversation_id(&mut self, conversation_id: AIConversationId) {
-        self.conversation_id = conversation_id;
-    }
 
     /// Get file changes info for a "block" of exchanges (from user query to next user query)
     fn get_file_changes_for_block(

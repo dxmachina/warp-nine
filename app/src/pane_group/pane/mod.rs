@@ -231,15 +231,7 @@ impl PaneId {
         Self::new_from_ctx(IPaneType::Settings, ctx)
     }
 
-    /// Creates a [`PaneId`] from a [`ViewContext<PaneView<AIFactView>>`]
-    pub fn from_ai_fact_pane_ctx(ctx: &ViewContext<PaneView<AIFactView>>) -> Self {
-        Self::new_from_ctx(IPaneType::AIFact, ctx)
-    }
 
-    /// Creates a [`PaneId`] from a [`ViewContext<PaneView<AIDocumentView>>`]
-    pub fn from_ai_document_pane_ctx(ctx: &ViewContext<PaneView<AIDocumentView>>) -> Self {
-        Self::new_from_ctx(IPaneType::AIDocument, ctx)
-    }
 
     /// Creates a [`PaneId`] from a [`ViewContext<PaneView<CustomRouterEditorView>>`]
     pub fn from_custom_router_editor_pane_ctx(
@@ -248,12 +240,6 @@ impl PaneId {
         Self::new_from_ctx(IPaneType::CustomRouterEditor, ctx)
     }
 
-    /// Creates a [`PaneId`] from a [`ViewContext<PaneView<ExecutionProfileEditorView>>`]
-    pub fn from_execution_profile_editor_pane_ctx(
-        ctx: &ViewContext<PaneView<ExecutionProfileEditorView>>,
-    ) -> Self {
-        Self::new_from_ctx(IPaneType::ExecutionProfileEditor, ctx)
-    }
 
     pub fn from_get_started_pane_ctx(ctx: &ViewContext<PaneView<GetStartedView>>) -> Self {
         Self::new_from_ctx(IPaneType::GetStarted, ctx)
@@ -326,17 +312,7 @@ impl PaneId {
         Self::new(IPaneType::Settings, settings_pane_view)
     }
 
-    /// Creates a [`PaneId`] from a [`PaneView<AIFactView>`] entity ID.
-    pub fn from_ai_fact_pane_view(ai_fact_pane_view: &ViewHandle<PaneView<AIFactView>>) -> Self {
-        Self::new(IPaneType::AIFact, ai_fact_pane_view)
-    }
 
-    /// Creates a [`PaneId`] from a [`PaneView<AIDocumentView>`] entity ID.
-    pub fn from_ai_document_pane_view(
-        ai_document_pane_view: &ViewHandle<PaneView<AIDocumentView>>,
-    ) -> Self {
-        Self::new(IPaneType::AIDocument, ai_document_pane_view)
-    }
 
     /// Creates a [`PaneId`] from a [`PaneView<CustomRouterEditorView>`] entity ID.
     pub fn from_custom_router_editor_pane_view(
@@ -345,15 +321,6 @@ impl PaneId {
         Self::new(IPaneType::CustomRouterEditor, view)
     }
 
-    /// Creates a [`PaneId`] from a [`PaneView<ExecutionProfileEditorView>`] entity ID.
-    pub fn from_execution_profile_editor_pane_view(
-        execution_profile_editor_pane_view: &ViewHandle<PaneView<ExecutionProfileEditorView>>,
-    ) -> Self {
-        Self::new(
-            IPaneType::ExecutionProfileEditor,
-            execution_profile_editor_pane_view,
-        )
-    }
 
     pub fn from_get_started_pane_view(
         get_started_pane_view: &ViewHandle<PaneView<GetStartedView>>,

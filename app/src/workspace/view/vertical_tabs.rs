@@ -1042,30 +1042,6 @@ fn normalize_summary_text(text: &str) -> Option<String> {
     (!normalized.is_empty()).then_some(normalized)
 }
 
-/// Returns the conversation status for a terminal pane, used to render the per-line status
-/// pill prefix in Summary mode. Mirrors the status sources used by `render_detail_status_pill`
-/// in the detail sidecar — CLI agent sessions with rich status, Oz agent conversations, or
-/// ambient agent sessions. Returns `None` for plain terminals or conversations without status.
-fn summary_conversation_status_for_terminal(
-    terminal_view: &TerminalView,
-    app: &AppContext,
-) -> Option<ConversationStatus> {
-    let cli_agent_session = CLIAgentSessionsModel::as_ref(app).session(terminal_view.id());
-    if let Some(session) = cli_agent_session
-        .filter(|s| s.supports_rich_status())
-        .filter(|s| !matches!(s.agent, CLIAgent::Unknown))
-    {
-        return Some(session.status.to_conversation_status());
-    }
-
-    let is_ambient = terminal_view.is_ambient_agent_session(app);
-    let has_conversation = terminal_view
-        .selected_conversation_display_title(app)
-        .is_some();
-    (has_conversation || is_ambient)
-        .then(|| terminal_view.selected_conversation_status_for_display(app))
-        .flatten()
-}
 
 fn coalesce_summary_branch_entries(
     entries: Vec<VerticalTabsSummaryBranchEntry>,
@@ -4128,34 +4104,6 @@ fn preferred_agent_tab_titles(
     (conversation_title, cli_agent_title)
 }
 
-fn terminal_agent_text(terminal_view: &TerminalView, app: &AppContext) -> TerminalAgentText {
-    let cli_agent_session = CLIAgentSessionsModel::as_ref(app).session(terminal_view.id());
-    let is_plugin_backed = cli_agent_session.is_some_and(|session| session.listener.is_some());
-    let is_ambient_agent = terminal_view.is_ambient_agent_session(app);
-
-    let mut agent_text = TerminalAgentText {
-        is_oz_agent: is_ambient_agent,
-        cli_agent: cli_agent_session.map(|session| session.agent),
-        ..Default::default()
-    };
-
-    if cli_agent_session.is_some() && !is_plugin_backed {
-        return agent_text;
-    }
-
-    agent_text.conversation_display_title = terminal_view.selected_conversation_display_title(app);
-    agent_text.conversation_latest_user_prompt =
-        terminal_view.selected_conversation_latest_user_prompt_for_tab_name(app);
-    agent_text.is_oz_agent =
-        agent_text.conversation_display_title.is_some() || agent_text.is_oz_agent;
-
-    if let Some(session) = cli_agent_session {
-        agent_text.cli_agent_title = session.session_context.title_like_text();
-        agent_text.cli_agent_latest_user_prompt = session.session_context.latest_user_prompt();
-    }
-
-    agent_text
-}
 
 fn terminal_pull_request_badge_label(pull_request_url: &str) -> String {
     github_pr_display_text_from_url(pull_request_url)
@@ -4262,33 +4210,6 @@ fn resolved_terminal_working_directory(
         .or(working_directory)
 }
 
-/// For cloud agent panes, builds a composite string from the environment name,
-/// setup status, and/or working directory. Returns `None` for non-cloud sessions.
-fn cloud_agent_working_directory_and_env(
-    terminal_view: &TerminalView,
-    working_directory: Option<&str>,
-    app: &AppContext,
-) -> Option<String> {
-    if !terminal_view.is_ambient_agent_session(app) {
-        return None;
-    }
-    let model_ref = terminal_view.ambient_agent_view_model()?.as_ref(app);
-
-    let env_name = model_ref
-        .selected_environment_id()
-        .and_then(|id| CloudAmbientAgentEnvironment::get_by_id(id, app))
-        .map(|env| env.model().string_model.display_name());
-
-    let setup_status: Option<&str> = model_ref.agent_progress().map(|p| p.setup_status_text());
-
-    match (env_name, setup_status, working_directory) {
-        (Some(env), Some(status), _) => Some(format!("{env} · {status}")),
-        (Some(env), None, Some(wd)) => Some(format!("{env} · {wd}")),
-        (Some(env), None, None) => Some(env),
-        (None, Some(status), _) => Some(status.to_string()),
-        (None, None, _) => None,
-    }
-}
 
 fn render_terminal_row_content(
     props: &PaneProps<'_>,

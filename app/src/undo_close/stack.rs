@@ -104,36 +104,6 @@ impl ClosedItem {
         }
     }
 
-    /// Marks conversations as historical for all terminal panes in a pane group so they remain searchable.
-    /// Historical conversations consist of non-live conversations that were read from disk on startup,
-    /// and conversations (recorded here) that were live this session but have now been cleared.
-    fn mark_conversations_historical_for_pane_group(
-        pane_group: &ViewHandle<PaneGroup>,
-        history_model: &ModelHandle<BlocklistAIHistoryModel>,
-        ctx: &mut AppContext,
-    ) {
-        // Check if the window and view still exist before attempting to read
-        let window_id = pane_group.window_id(ctx);
-        let view_id = pane_group.id();
-
-        if ctx.view_with_id::<PaneGroup>(window_id, view_id).is_some() {
-            let terminal_view_ids: Vec<EntityId> = pane_group.read(ctx, |pg, ctx| {
-                pg.terminal_pane_ids()
-                    .filter_map(|pane_id| {
-                        pg.terminal_view_from_pane_id(pane_id, ctx)
-                            .map(|terminal_view| terminal_view.id())
-                    })
-                    .collect()
-            });
-
-            for terminal_view_id in terminal_view_ids {
-                history_model.update(ctx, |history_model, _| {
-                    history_model
-                        .mark_conversations_historical_for_terminal_surface(terminal_view_id);
-                });
-            }
-        }
-    }
 
     fn clean_up_pane_group(pane_group: &ViewHandle<PaneGroup>, ctx: &mut AppContext) {
         let window_id = pane_group.window_id(ctx);

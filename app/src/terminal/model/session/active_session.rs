@@ -123,10 +123,6 @@ impl ActiveSession {
         self.location_for_path(cwd.as_str(), app)
     }
 
-    /// Returns the `WarpAiExecutionContext` for the active session.
-    pub fn ai_execution_environment(&self, app: &AppContext) -> Option<WarpAiExecutionContext> {
-        self.session(app).as_ref().map(WarpAiExecutionContext::new)
-    }
 }
 
 pub enum ActiveSessionEvent {

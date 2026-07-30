@@ -107,40 +107,6 @@ fn daemon_bundled_resources_dir() -> Option<PathBuf> {
     let dir = dirs::home_dir()?.join(suffix);
     dir.is_dir().then_some(dir)
 }
-fn remote_agent_context_snapshot(
-    revision: u64,
-    bundled_skills: &[RemoteSkillProto],
-    ctx: &warpui::AppContext,
-) -> RemoteAgentContextSnapshot {
-    let home_dir = dirs::home_dir()
-        .map(|path| path.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let mut skills = bundled_skills.to_vec();
-    skills.extend(
-        SkillManager::as_ref(ctx)
-            .home_skills()
-            .map(|skill| RemoteSkillProto {
-                path: skill.path.display_path(),
-                content: skill.content.clone(),
-                source: Some(remote_skill_proto::Source::Home(HomeSkillMetadata {})),
-            }),
-    );
-    skills.sort_by(|a, b| a.path.cmp(&b.path));
-    let mut global_rules = ProjectContextModel::as_ref(ctx)
-        .global_rules()
-        .map(|rule| RemoteContextFileProto {
-            path: rule.path.display_path(),
-            content: rule.content,
-        })
-        .collect::<Vec<_>>();
-    global_rules.sort_by(|a, b| a.path.cmp(&b.path));
-    RemoteAgentContextSnapshot {
-        revision,
-        home_dir,
-        skills,
-        global_rules,
-    }
-}
 
 /// Outcome of dispatching a request-style `ClientMessage`.
 ///
@@ -740,15 +706,6 @@ impl ServerModel {
         model
     }
 
-    fn refresh_remote_agent_context_snapshot(&mut self, ctx: &warpui::AppContext) {
-        let revision = self
-            .remote_agent_context_snapshot
-            .revision
-            .saturating_add(1);
-        self.remote_agent_context_snapshot =
-            remote_agent_context_snapshot(revision, &self.bundled_skills, ctx);
-        self.broadcast_remote_agent_context_snapshot();
-    }
 
     fn broadcast_remote_agent_context_snapshot(&mut self) {
         self.send_server_message(
@@ -2851,61 +2808,6 @@ impl ServerModel {
         }
     }
 
-    /// Handles `UploadHandoffSnapshot` by gathering the workspace snapshot
-    /// from the daemon's local filesystem and uploading it to GCS.
-    ///
-    /// Extracts the `AIClient` and HTTP client from `ServerApiProvider`, then
-    /// spawns the async gather+upload pipeline. Returns an
-    /// `UploadHandoffSnapshotResponse` with the token on success.
-    fn handle_upload_handoff_snapshot(
-        &mut self,
-        msg: UploadHandoffSnapshot,
-        request_id: &RequestId,
-        conn_id: ConnectionId,
-        ctx: &mut ModelContext<Self>,
-    ) -> HandlerOutcome {
-        log::info!(
-            "Handling UploadHandoffSnapshot ({} paths, request_id={request_id})",
-            msg.paths.len(),
-        );
-
-        let server_api = ServerApiProvider::handle(ctx);
-        let ai_client = server_api.as_ref(ctx).get_ai_client();
-        let http = server_api.as_ref(ctx).get_http_client();
-
-        // Convert proto strings → StandardizedPath at the boundary; invalid
-        // entries are logged and dropped.
-        let paths: Vec<StandardizedPath> = msg
-            .paths
-            .into_iter()
-            .filter_map(|raw| match StandardizedPath::try_new(&raw) {
-                Ok(sp) => Some(sp),
-                Err(e) => {
-                    log::warn!("UploadHandoffSnapshot: skipping invalid path: {e}");
-                    None
-                }
-            })
-            .collect();
-        let request_id_for_response = request_id.clone();
-
-        let handle = self.spawn_request_handler(
-            request_id.clone(),
-            async move {
-                super::handoff_snapshot::gather_and_upload_handoff_snapshot(paths, ai_client, &http)
-                    .await
-            },
-            move |me, result, _ctx| {
-                let response = upload_result_to_proto(result);
-                me.send_server_message(
-                    Some(conn_id),
-                    Some(&request_id_for_response),
-                    server_message::Message::UploadHandoffSnapshotResponse(response),
-                );
-            },
-            ctx,
-        );
-        HandlerOutcome::Async(Some(handle))
-    }
 
     /// Handles `GetBranches` — request/response.
     ///

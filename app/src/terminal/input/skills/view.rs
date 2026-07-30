@@ -135,16 +135,6 @@ impl InlineSkillSelectorView {
         }
     }
 
-    /// Attaches an ambient agent view model after construction. Idempotent.
-    pub fn set_ambient_agent_view_model(
-        &self,
-        view_model: ModelHandle<AmbientAgentViewModel>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.data_source.update(ctx, |ds, ctx| {
-            ds.set_ambient_agent_view_model(view_model, ctx);
-        });
-    }
 
     /// Sets whether bundled skills are included in results.
     /// Should be called before opening the menu.

@@ -418,19 +418,6 @@ impl InlineModelSelectorView {
         me
     }
 
-    /// Attaches a lazily-created ambient agent view model to the picker's data source so a
-    /// shared-session viewer's follow-up lists the correct (cloud-pane) model set. Used when a
-    /// raw-link viewer only learns the run is ambient at `SessionJoined`. Idempotent.
-    pub fn set_ambient_agent_view_model(
-        &mut self,
-        ambient_agent_view_model: ModelHandle<AmbientAgentViewModel>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.model_selector_data_source
-            .update(ctx, |data_source, ctx| {
-                data_source.set_ambient_agent_view_model(ambient_agent_view_model, ctx);
-            });
-    }
 
     fn menu_model<'a>(
         &self,

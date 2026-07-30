@@ -1525,37 +1525,6 @@ pub fn slash_command_is_submitted_as_prompt(command: &StaticCommand) -> bool {
     )
 }
 
-/// Returns true when the conversation with `conversation_id` is associated with an Oz
-/// `AmbientAgentTask`. Callers deciding between `/fork` and `/continue-locally` should also
-/// check the same `CLOUD_AGENT` context that gates `/continue-locally`.
-#[cfg(not(target_family = "wasm"))]
-pub(crate) fn conversation_is_cloud_oz_for_slash_command(
-    conversation_id: AIConversationId,
-    ctx: &AppContext,
-) -> bool {
-    let history = BlocklistAIHistoryModel::as_ref(ctx);
-    let Some(conversation) = history.conversation(&conversation_id) else {
-        return false;
-    };
-    let Some(task_id) = conversation.task_id() else {
-        return false;
-    };
-
-    let Some(task) = AgentConversationsModel::as_ref(ctx).get_task_data(&task_id) else {
-        // Permissive: not yet fetched. Matches the data-source default so the command isn't
-        // wrongly blocked while the task fetch is in flight.
-        return true;
-    };
-
-    match task
-        .agent_config_snapshot
-        .as_ref()
-        .and_then(|s| s.harness.as_ref())
-    {
-        Some(config) => config.harness_type == Harness::Oz,
-        None => true,
-    }
-}
 
 /// Tooltip and slash command name for the fork button, returned as a unit so
 /// callers rendering the button and callers inserting the command always agree.

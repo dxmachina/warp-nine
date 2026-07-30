@@ -505,71 +505,6 @@ impl OneTimeModalModel {
         self.check_and_trigger_free_ai_removal_modal(ctx);
     }
 
-    fn check_and_trigger_free_ai_removal_modal(&mut self, ctx: &mut ModelContext<Self>) -> bool {
-        // Gated on the OpenWarpNewSettingsModes rollout flag (the server experiment
-        // that previously gated this was removed in C1).
-        if !FeatureFlag::OpenWarpNewSettingsModes.is_enabled() {
-            return false;
-        }
-
-        if *AISettings::as_ref(ctx).did_check_to_trigger_free_ai_removal_modal {
-            return false;
-        }
-
-        // Anonymous users have no BYOK or upgrade path; leave them unmarked so the
-        // decision is made after they sign in.
-        if AuthStateProvider::as_ref(ctx)
-            .get()
-            .is_anonymous_or_logged_out()
-        {
-            return false;
-        }
-
-        let customer_type = UserWorkspaces::as_ref(ctx)
-            .current_workspace()
-            .map(|workspace| workspace.billing_metadata.customer_type);
-        let is_warp_ai_enabled = *AISettings::as_ref(ctx).is_any_ai_enabled;
-        let has_byok_or_byoe = ApiKeyManager::as_ref(ctx).has_any_key();
-        let completed_new_onboarding = has_completed_local_onboarding(ctx);
-        let has_zero_base_credits = AIRequestUsageModel::as_ref(ctx).request_limit() == 0;
-
-        let decision = free_ai_removal_modal_decision(
-            customer_type,
-            is_warp_ai_enabled,
-            has_byok_or_byoe,
-            completed_new_onboarding,
-            has_zero_base_credits,
-            self.has_fetched_workspaces,
-        );
-        if decision == FreeAiRemovalModalDecision::Defer {
-            return false;
-        }
-
-        AISettings::handle(ctx).update(ctx, |settings, ctx| {
-            if let Err(e) = settings
-                .did_check_to_trigger_free_ai_removal_modal
-                .set_value(true, ctx)
-            {
-                log::warn!("Failed to mark free AI removal modal as seen: {e}");
-            }
-        });
-
-        if decision == FreeAiRemovalModalDecision::MarkSeenSilently {
-            return false;
-        }
-
-        let should_show = !matches!(ChannelState::channel(), Channel::Integration);
-        if should_show {
-            send_telemetry_from_ctx!(
-                FreeAiRemovalModalTelemetryEvent::Shown {
-                    variant: FreeAiRemovalModalVariant::Notice,
-                },
-                ctx
-            );
-        }
-        self.set_free_ai_removal_modal_open(should_show, ctx);
-        should_show
-    }
 
     fn set_hoa_onboarding_open(&mut self, is_open: bool, ctx: &mut ModelContext<Self>) -> bool {
         if self.is_hoa_onboarding_open != is_open {
@@ -795,57 +730,6 @@ impl OneTimeModalModel {
     }
 }
 
-/// One-time migration: if the user has a custom agent toolbar layout that
-/// predates the handoff-to-cloud chip, append the chip so they get the
-/// new feature without losing their customization.
-///
-/// Users on `Default` already see the chip via `AgentToolbarItemKind::default_right()`.
-fn maybe_ensure_handoff_chip_in_toolbar(ctx: &mut ModelContext<OneTimeModalModel>) {
-    if !FeatureFlag::OzHandoff.is_enabled()
-        || !FeatureFlag::HandoffLocalCloud.is_enabled()
-        || !cfg!(all(feature = "local_fs", not(target_family = "wasm")))
-    {
-        return;
-    }
-
-    let session_settings = SessionSettings::as_ref(ctx);
-    if *session_settings.did_add_handoff_chip_to_toolbar {
-        return;
-    }
-
-    // Mark as done so future app starts skip this path.
-    SessionSettings::handle(ctx).update(ctx, |settings, ctx| {
-        if let Err(e) = settings
-            .did_add_handoff_chip_to_toolbar
-            .set_value(true, ctx)
-        {
-            log::warn!("Failed to mark handoff chip toolbar migration as done: {e}");
-        }
-    });
-
-    // `Default` already includes the chip — nothing to do.
-    let selection = SessionSettings::as_ref(ctx)
-        .agent_footer_chip_selection
-        .clone();
-    let AgentToolbarChipSelection::Custom { mut left, right } = selection else {
-        return;
-    };
-
-    let handoff = AgentToolbarItemKind::HandoffToCloud;
-    if left.contains(&handoff) || right.contains(&handoff) {
-        return;
-    }
-
-    left.push(handoff);
-    SessionSettings::handle(ctx).update(ctx, |settings, ctx| {
-        if let Err(e) = settings
-            .agent_footer_chip_selection
-            .set_value(AgentToolbarChipSelection::Custom { left, right }, ctx)
-        {
-            log::warn!("Failed to add handoff chip to toolbar: {e}");
-        }
-    });
-}
 
 /// Marks the free-AI-removal notice as seen without showing it.
 pub fn mark_free_ai_removal_notice_seen(app: &mut AppContext) {

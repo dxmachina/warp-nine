@@ -7,13 +7,6 @@ use crate::terminal::TerminalView;
 use crate::terminal::view::PendingUserQueryKind;
 
 impl TerminalView {
-    pub(super) fn pending_user_query_conversation_id(&self) -> Option<AIConversationId> {
-        let view_id = self.pending_user_query_view_id?;
-        self.rich_content_views
-            .iter()
-            .find(|rich_content| rich_content.view_id() == view_id)
-            .and_then(|rich_content| rich_content.agent_view_conversation_id())
-    }
 
     /// Inserts a pending user query block into the blocklist, showing the user that
     /// a follow-up query is queued and will be sent after the current conversation completes.
@@ -131,89 +124,5 @@ impl TerminalView {
         }
     }
 
-    /// Removes the pending block and immediately submits the queued prompt.
-    ///
-    /// The plain-text submission path cancels any in-flight stream itself (via
-    /// `send_query` -> `cancel_conversation_progress`), but slash- and skill-command
-    /// submissions route through `send_request_input` directly without cancelling,
-    /// which trips the in-flight-request assertion when the agent is still streaming.
-    ///
-    /// Cancel the active stream explicitly here so "Send now" works for any prompt type.
-    /// Use `FollowUpSubmitted { is_for_same_conversation: true }` so the conversation
-    /// status stays `InProgress` across the cancel+resend (see `mark_request_cancelled`
-    /// in `conversation.rs`), keeping the warping indicator visible throughout.
-    fn send_queued_prompt_now(&mut self, prompt: String, ctx: &mut ViewContext<Self>) {
-        self.remove_pending_user_query_block(ctx);
-        if let Some(conversation_id) = self
-            .ai_context_model
-            .as_ref(ctx)
-            .selected_conversation_id(ctx)
-        {
-            self.ai_controller.update(ctx, |controller, ctx| {
-                controller.cancel_conversation_progress(
-                    conversation_id,
-                    CancellationReason::FollowUpSubmitted {
-                        is_for_same_conversation: true,
-                    },
-                    ctx,
-                );
-            });
-        }
 
-        self.input.update(ctx, |input, ctx| {
-            input.submit_user_query_now(prompt, ctx);
-        });
-    }
-
-    /// Shows a pending user query indicator and queues the query to be sent after
-    /// the current conversation finishes. If the conversation completes successfully,
-    /// the queued prompt is re-submitted through the normal input flow (so slash
-    /// commands, skill commands, and session sharing are all handled correctly).
-    /// The pending indicator is removed regardless of the finish reason.
-    ///
-    /// `show_close_button` controls whether a dismiss ("X") button appears on the pending
-    /// block. `show_send_now_button` controls whether a "Send now" button appears that
-    /// interrupts the active conversation and sends the queued prompt immediately. This
-    /// should be false for summarization-triggered queuing (e.g. `/compact-and`).
-    pub fn send_user_query_after_next_conversation_finished(
-        &mut self,
-        prompt: String,
-        show_close_button: bool,
-        show_send_now_button: bool,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if FeatureFlag::PendingUserQueryIndicator.is_enabled() {
-            self.insert_pending_user_query_block(
-                prompt.clone(),
-                show_close_button,
-                show_send_now_button,
-                PendingUserQueryKind::QueuedPrompt,
-                ctx,
-            );
-        }
-        // Replace any previously queued prompt so the latest one always wins.
-        self.queued_prompt_callback = Some(Box::new(move |terminal_view, reason, ctx| {
-            if FeatureFlag::PendingUserQueryIndicator.is_enabled() {
-                terminal_view.remove_pending_user_query_block(ctx);
-            }
-            match reason {
-                FinishReason::Complete => {
-                    terminal_view.input.update(ctx, |input, ctx| {
-                        input.submit_user_query_now(prompt, ctx);
-                    });
-                }
-                FinishReason::Error
-                | FinishReason::Cancelled
-                | FinishReason::CancelledDuringRequestedCommandExecution => {
-                    // Conversation failed or was cancelled — reinsert the pending
-                    // query into the input so the user doesn't lose it.
-                    terminal_view.input.update(ctx, |input, ctx| {
-                        if input.buffer_text(ctx).is_empty() {
-                            input.replace_buffer_content(&prompt, ctx);
-                        }
-                    });
-                }
-            }
-        }));
-    }
 }

@@ -364,23 +364,6 @@ impl SharingDialog {
         }
     }
 
-    fn handle_ai_history_event(
-        &mut self,
-        event: &BlocklistAIHistoryEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if let BlocklistAIHistoryEvent::UpdatedConversationMetadata {
-            conversation_id, ..
-        } = event
-        {
-            // Check if this event is for the conversation we're currently showing
-            if let Some(ShareableObject::AIConversation(target_id)) = &self.target
-                && target_id == conversation_id
-            {
-                self.refresh_object_permission_states(ctx);
-            }
-        }
-    }
 
     /// Sets the target object whose ACLs are shown.
     pub fn set_target(&mut self, target: Option<ShareableObject>, ctx: &mut ViewContext<Self>) {
@@ -410,15 +393,6 @@ impl SharingDialog {
         }
     }
 
-    /// Returns `true` if the target is an AI conversation that cannot be shared.
-    /// This happens when the conversation hasn't been synced to the cloud.
-    pub fn is_unsharable_conversation(&self, app: &AppContext) -> bool {
-        if let Some(ShareableObject::AIConversation(id)) = &self.target {
-            !BlocklistAIHistoryModel::as_ref(app).can_conversation_be_shared(id)
-        } else {
-            false
-        }
-    }
 
     /// The Warp Drive server ID for the target object. `None` if the target is not a Warp Drive
     /// object or AI conversation.
@@ -1213,119 +1187,8 @@ impl SharingDialog {
         self.set_open_menu(OpenMenuState::None, ctx);
     }
 
-    fn remove_targeted_guest_for_conversation(
-        &mut self,
-        guest_idx: usize,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let Some(guest) = self.guest_states.get(guest_idx) else {
-            return;
-        };
 
-        // Get the conversation's server_id from metadata
-        let server_id = match BlocklistAIHistoryModel::as_ref(ctx)
-            .get_server_conversation_metadata(&conversation_id)
-            .map(|m| ServerId::from_string_lossy(m.metadata.uid.uid()))
-        {
-            Some(id) => id,
-            None => {
-                log::warn!(
-                    "AI conversation {:?} has no server_id for permission update",
-                    conversation_id
-                );
-                return;
-            }
-        };
 
-        let guest_identifier = guest.subject.to_guest_identifier(ctx);
-        let Some(guest_identifier) = guest_identifier else {
-            return;
-        };
-
-        // Call UpdateManager to remove the guest
-        UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-            update_manager.remove_ai_conversation_guest(
-                server_id,
-                conversation_id,
-                guest_identifier,
-                ctx,
-            );
-        });
-    }
-
-    fn set_targeted_guest_access_for_conversation(
-        &mut self,
-        guest_idx: usize,
-        access_level: SharingAccessLevel,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let guest_email = match self.guest_states.get(guest_idx) {
-            Some(guest) => match guest.subject.email(ctx) {
-                Some(email) => email.to_owned(),
-                None => return,
-            },
-            None => return,
-        };
-
-        // Get the conversation's server_id from metadata
-        let server_id = match BlocklistAIHistoryModel::as_ref(ctx)
-            .get_server_conversation_metadata(&conversation_id)
-            .map(|m| ServerId::from_string_lossy(m.metadata.uid.uid()))
-        {
-            Some(id) => id,
-            None => {
-                log::warn!(
-                    "AI conversation {:?} has no server_id for permission update",
-                    conversation_id
-                );
-                return;
-            }
-        };
-
-        // Call UpdateManager to update the guest's access level
-        UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-            update_manager.update_ai_conversation_guests(
-                server_id,
-                conversation_id,
-                vec![guest_email],
-                access_level.into(),
-                ctx,
-            );
-        });
-    }
-
-    fn add_guests_for_conversation(
-        &mut self,
-        guest_emails: Vec<String>,
-        access_level: SharingAccessLevel,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        // Get the conversation's server_id from metadata
-        let server_id = match BlocklistAIHistoryModel::as_ref(ctx)
-            .get_server_conversation_metadata(&conversation_id)
-            .map(|m| ServerId::from_string_lossy(m.metadata.uid.uid()))
-        {
-            Some(id) => id,
-            None => {
-                log::warn!(
-                    "AI conversation {:?} has no server_id for permission update",
-                    conversation_id
-                );
-                return;
-            }
-        };
-
-        // Call UpdateManager to add guests
-        UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-            update_manager.add_ai_conversation_guests(
-                server_id,
-                conversation_id,
-                guest_emails,
-                access_level.into(),
-                ctx,
-            );
-        });
-    }
 
     /// Create the access level selector dropdown for the email invitation form.
     fn build_invite_access_level_menu(

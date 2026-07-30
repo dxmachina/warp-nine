@@ -103,28 +103,6 @@ pub struct TerminalManagerInit {
 }
 
 impl TerminalManager {
-    fn send_selected_conversation_update_for_viewer_to_current_network(
-        guard: &RemoteUpdateGuard,
-        model: &Arc<FairMutex<TerminalModel>>,
-        current_network: &Arc<FairMutex<Option<ModelHandle<Network>>>>,
-        agent_view_controller: &ModelHandle<AgentViewController>,
-        ai_context_model: &ModelHandle<BlocklistAIContextModel>,
-        ctx: &mut AppContext,
-    ) {
-        let Some(update) =
-            build_selected_conversation_update(agent_view_controller, ai_context_model, ctx)
-        else {
-            return;
-        };
-
-        Self::send_input_context_update_to_current_network(
-            guard,
-            model,
-            current_network,
-            update,
-            ctx,
-        );
-    }
 
     fn current_network(
         current_network: &Arc<FairMutex<Option<ModelHandle<Network>>>>,
@@ -1680,34 +1658,6 @@ impl TerminalManager {
         });
     }
 
-    /// Drops the [`OrchestrationViewerModel`] from the shared slot if one
-    /// exists. Called from terminal session-end paths. The model's
-    /// `ctx.spawn` continuations are entity-scoped, so dropping the
-    /// entity makes them no-ops; no explicit `.abort()` needed.
-    ///
-    /// The model also holds a viewer-mode registration on the shared
-    /// [`OrchestrationEventStreamer`]; we unregister explicitly here so
-    /// the streamer can refcount-tear-down the ancestor SSE on the last
-    /// pane close. The unregister API is idempotent.
-    fn stop_orchestration_polling(
-        orchestration_viewer_model: &Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
-        ctx: &mut AppContext,
-    ) {
-        let Some(handle) = orchestration_viewer_model.lock().take() else {
-            return;
-        };
-        let parent_task_id = handle.as_ref(ctx).parent_task_id();
-        let consumer_id = handle.id();
-        log::debug!(
-            "[orch-viewer] stopping orchestration viewer model parent_task_id={parent_task_id} \
-             consumer_id={consumer_id:?}"
-        );
-        OrchestrationEventStreamer::handle(ctx).update(ctx, move |streamer, _ctx| {
-            streamer.unregister_viewer_mode_consumer(parent_task_id, consumer_id);
-        });
-        // `handle` drops here, releasing the per-pane viewer model.
-        drop(handle);
-    }
 
     /// Common teardown for the viewer session-end network events
     /// (`SessionEnded`, `ViewerRemoved`, `FailedToReconnect`).

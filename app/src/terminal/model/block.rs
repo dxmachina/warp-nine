@@ -90,13 +90,6 @@ pub enum TranscriptScope {
 }
 
 impl TranscriptScope {
-    /// Returns the scoped conversation, if any.
-    pub fn conversation_id(self) -> Option<AIConversationId> {
-        match self {
-            Self::Conversation(conversation_id) => Some(conversation_id),
-            Self::Unfiltered | Self::Terminal => None,
-        }
-    }
 
     /// Returns whether the scope displays a conversation transcript.
     pub fn is_conversation(self) -> bool {
@@ -181,68 +174,9 @@ impl AgentViewVisibility {
         }
     }
 
-    /// Visibility for a block created inside an agent view conversation.
-    pub fn new_from_conversation(conversation_id: AIConversationId) -> Self {
-        Self::Agent {
-            origin_conversation_id: conversation_id,
-            pending_other_conversation_ids: HashSet::new(),
-            other_conversation_ids: HashSet::new(),
-        }
-    }
 
-    pub fn agent_view_conversation_id(&self) -> Option<AIConversationId> {
-        match self {
-            Self::Terminal { .. } => None,
-            Self::Agent {
-                origin_conversation_id,
-                ..
-            } => Some(*origin_conversation_id),
-        }
-    }
 
-    /// Adds a conversation ID to the set of conversations where this block was attached as context in a request.
-    fn add_attached_conversation_id(&mut self, id: AIConversationId) {
-        match self {
-            Self::Terminal {
-                conversation_ids, ..
-            } => {
-                conversation_ids.insert(id);
-            }
-            Self::Agent {
-                origin_conversation_id,
-                other_conversation_ids,
-                ..
-            } => {
-                if id == *origin_conversation_id {
-                    return;
-                }
-                other_conversation_ids.insert(id);
-            }
-        }
-    }
 
-    /// Marks the block as pending context in the conversation with the given ID.
-    /// It maybe removed if the user removes the block attachment before sending the request, else if it is attached it will be 'promoted'.
-    fn add_pending_conversation_id(&mut self, id: AIConversationId) {
-        match self {
-            Self::Terminal {
-                pending_conversation_ids,
-                ..
-            } => {
-                pending_conversation_ids.insert(id);
-            }
-            Self::Agent {
-                origin_conversation_id,
-                pending_other_conversation_ids,
-                ..
-            } => {
-                if id == *origin_conversation_id {
-                    return;
-                }
-                pending_other_conversation_ids.insert(id);
-            }
-        }
-    }
 
     /// Moves the block from pending context to attached context for the given conversation ID.
     /// Returns true if the conversation was in pending and was promoted, false otherwise.
@@ -274,20 +208,6 @@ impl AgentViewVisibility {
         }
     }
 
-    /// Removes a pending conversation ID from the set of conversations where this block should be visible.
-    /// Returns true if the conversation ID was present and removed, false if it wasn't present.
-    fn remove_pending_conversation_id(&mut self, id: AIConversationId) -> bool {
-        match self {
-            Self::Terminal {
-                pending_conversation_ids,
-                ..
-            } => pending_conversation_ids.remove(&id),
-            Self::Agent {
-                pending_other_conversation_ids,
-                ..
-            } => pending_other_conversation_ids.remove(&id),
-        }
-    }
 }
 
 pub struct Block {
@@ -1045,11 +965,6 @@ impl Block {
         &self.interaction_mode
     }
 
-    /// Replaces this block's visibility to be associated with the given conversation.
-    /// Use this when a block is being created/assigned to a conversation (e.g., entering agent view).
-    pub fn set_conversation_id(&mut self, conversation_id: AIConversationId) {
-        self.agent_view_visibility = AgentViewVisibility::new_from_conversation(conversation_id);
-    }
 
     /// Resets this block's visibility to terminal mode.
     /// Use this when a block is being returned to terminal context (e.g., exiting agent view).
@@ -1063,28 +978,8 @@ impl Block {
         self.agent_view_visibility = visibility;
     }
 
-    /// Adds a conversation ID to the set of conversations where this block is attached as context.
-    pub(super) fn add_attached_conversation_id(&mut self, conversation_id: AIConversationId) {
-        self.agent_view_visibility
-            .add_attached_conversation_id(conversation_id);
-    }
 
-    /// Adds a conversation ID to the set of conversations where this block is pending context.
-    /// It maybe removed if the user removes the block attachment before sending the request, else if it is attached it will be 'promoted'.
-    pub(super) fn add_pending_conversation_id(&mut self, conversation_id: AIConversationId) {
-        self.agent_view_visibility
-            .add_pending_conversation_id(conversation_id);
-    }
 
-    /// Removes a conversation ID from the set of conversations where this block should be visible.
-    /// Returns true if the conversation ID was present and removed, false if it wasn't present.
-    pub(super) fn remove_pending_conversation_id(
-        &mut self,
-        conversation_id: AIConversationId,
-    ) -> bool {
-        self.agent_view_visibility
-            .remove_pending_conversation_id(conversation_id)
-    }
 
     /// Moves the block from pending context to attached context for the given conversation ID.
     pub(super) fn promote_pending_to_attached(

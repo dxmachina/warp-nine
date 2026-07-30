@@ -34,17 +34,6 @@ pub mod ssh_transport;
 #[cfg(unix)]
 pub mod unix;
 
-#[cfg(not(target_family = "wasm"))]
-fn current_codebase_index_limits(
-    ctx: &warpui::AppContext,
-) -> remote_server::proto::CodebaseIndexLimits {
-    let limits = AIRequestUsageModel::as_ref(ctx).codebase_context_limits();
-    remote_server::proto::CodebaseIndexLimits {
-        max_indices_allowed: limits.max_indices_allowed.map(|limit| limit as u64),
-        max_files_per_repo: limits.max_files_per_repo as u64,
-        embedding_generation_batch_size: limits.embedding_generation_batch_size as u64,
-    }
-}
 
 /// Run the `remote-server-proxy` subcommand.
 #[cfg(unix)]

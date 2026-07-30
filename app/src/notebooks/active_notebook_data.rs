@@ -238,15 +238,6 @@ impl ActiveNotebookData {
         }
     }
 
-    pub fn ai_document_id(&self, ctx: &AppContext) -> Option<AIDocumentId> {
-        match &self.active_notebook {
-            ActiveNotebook::None => None,
-            ActiveNotebook::CommittedNotebook(id) => CloudModel::as_ref(ctx)
-                .get_notebook(id)
-                .and_then(|n| n.model().ai_document_id),
-            ActiveNotebook::NewNotebook(notebook) => notebook.model().ai_document_id,
-        }
-    }
 
     pub fn active_notebook(&self) -> ActiveNotebook {
         self.active_notebook.clone()

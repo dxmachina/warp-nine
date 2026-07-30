@@ -556,16 +556,6 @@ impl EnvironmentsPageView {
             .then_some(&self.environment_setup_mode_selector)
     }
 
-    /// Returns the agent-assisted environment modal view handle for tab-level rendering.
-    pub fn agent_assisted_environment_modal_handle(
-        &self,
-        app: &AppContext,
-    ) -> Option<&ViewHandle<AgentAssistedEnvironmentModal>> {
-        self.agent_assisted_environment_modal
-            .as_ref(app)
-            .is_visible()
-            .then_some(&self.agent_assisted_environment_modal)
-    }
 
     /// Returns the pane configuration for BackingView support.
     pub fn pane_configuration(&self) -> ModelHandle<crate::pane_group::pane::PaneConfiguration> {

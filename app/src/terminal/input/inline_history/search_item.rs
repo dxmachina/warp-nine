@@ -44,24 +44,6 @@ enum HistoryItemType {
 }
 
 impl InlineHistoryItem {
-    pub fn conversation(
-        conversation_id: AIConversationId,
-        title: String,
-        status: ConversationStatus,
-        timestamp: DateTime<Local>,
-    ) -> Self {
-        Self {
-            item_type: HistoryItemType::Conversation {
-                conversation_id,
-                title,
-                status,
-            },
-            name_match_result: None,
-            prefix_match_len: 0,
-            score: OrderedFloat(f64::MIN),
-            timestamp,
-        }
-    }
 
     pub fn command(
         command: String,

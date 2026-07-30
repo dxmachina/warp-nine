@@ -73,33 +73,8 @@ impl Block {
         self.is_agent_in_control() || self.is_agent_tagged_in()
     }
 
-    pub fn cli_subagent_task_id(&self) -> Option<&TaskId> {
-        self.agent_interaction_metadata()
-            .and_then(|metadata| metadata.subagent_task_id())
-    }
 
-    pub fn upgrade_cli_subagent_task_id(&mut self, new_task_id: TaskId) -> anyhow::Result<()> {
-        if let InteractionMode::Agent(AgentInteractionMetadata {
-            subagent_task_id: Some(task_id),
-            ..
-        }) = &mut self.interaction_mode
-        {
-            *task_id = new_task_id;
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "Tried to upgrade CLI subagent task ID for block with no prior CLI subagent task ID."
-            ))
-        }
-    }
 
-    /// Returns `true` if this command is active and the agent is in control.
-    pub fn is_agent_in_control(&self) -> bool {
-        self.is_active_and_long_running()
-            && self
-                .long_running_control_state()
-                .is_some_and(LongRunningCommandControlState::is_agent_in_control)
-    }
 
     /// Returns `true` if the agent is actively driving this command.
     ///
@@ -121,35 +96,8 @@ impl Block {
             })
     }
 
-    /// Returns `true` if the agent's interaction with this command is currently blocked by user
-    /// approval.
-    pub fn is_agent_blocked(&self) -> bool {
-        self.is_active_and_long_running()
-            && self
-                .long_running_control_state()
-                .is_some_and(LongRunningCommandControlState::is_agent_blocked)
-    }
 
-    /// Returns `true` if the command is eligible to be handed off to an agent.
-    pub fn is_eligible_for_agent_handoff(&self) -> bool {
-        self.is_active_and_long_running()
-            && self
-                .long_running_control_state()
-                .is_some_and(LongRunningCommandControlState::is_user_in_control)
-    }
 
-    pub fn update_is_agent_blocked(&mut self, new_value: bool) {
-        if let InteractionMode::Agent(AgentInteractionMetadata {
-            long_running_control_state:
-                Some(LongRunningCommandControlState::Agent {
-                    ref mut is_blocked, ..
-                }),
-            ..
-        }) = self.interaction_mode
-        {
-            *is_blocked = new_value;
-        }
-    }
 
     /// Hands control to the user with a non-resuming `Stop`. Used by teardown paths (rewind,
     /// stop) where the conversation has been cancelled and must not resume when the command
@@ -179,12 +127,6 @@ impl Block {
         self.interaction_mode.agent_interaction_metadata()
     }
 
-    pub fn ai_conversation_id(&self) -> Option<AIConversationId> {
-        match &self.interaction_mode {
-            InteractionMode::Agent(metadata) => Some(metadata.conversation_id),
-            _ => None,
-        }
-    }
 
     pub fn requested_command_action_id(&self) -> Option<&AIAgentActionId> {
         match &self.interaction_mode {
@@ -219,33 +161,7 @@ impl Block {
         self.interaction_mode.set_should_hide_block(value);
     }
 
-    pub fn set_agent_interaction_mode_for_requested_command(
-        &mut self,
-        requested_command_action_id: AIAgentActionId,
-        subagent_task_id: Option<TaskId>,
-        conversation_id: AIConversationId,
-    ) {
-        self.interaction_mode = InteractionMode::Agent(AgentInteractionMetadata {
-            requested_command_action_id: Some(requested_command_action_id),
-            conversation_id,
-            subagent_task_id,
-            long_running_control_state: None,
-            has_agent_written_to_block: false,
-            should_hide_block: true,
-        })
-    }
 
-    pub fn set_agent_interaction_mode_for_agent_monitored_command(
-        &mut self,
-        task_id: &TaskId,
-        conversation_id: AIConversationId,
-    ) -> Result<(), UpdateInteractionModeError> {
-        let new_mode = self
-            .interaction_mode
-            .to_agent_monitored(task_id, conversation_id)?;
-        self.interaction_mode = new_mode;
-        Ok(())
-    }
 
     pub fn set_agent_interaction_mode(
         &mut self,
@@ -272,23 +188,6 @@ impl Block {
         self.interaction_mode.handoff_to_agent()
     }
 
-    /// Returns true if the interaction mode is agent-monitored and subagent response visibility was actually toggled.
-    pub fn toggle_subagent_response_visibility(&mut self) -> bool {
-        match &mut self.interaction_mode {
-            InteractionMode::Agent(AgentInteractionMetadata {
-                long_running_control_state:
-                    Some(LongRunningCommandControlState::Agent {
-                        should_hide_responses,
-                        ..
-                    }),
-                ..
-            }) => {
-                *should_hide_responses = !*should_hide_responses;
-                true
-            }
-            _ => false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -340,33 +239,6 @@ pub enum InteractionMode {
 }
 
 impl InteractionMode {
-    fn to_agent_monitored(
-        &self,
-        task_id: &TaskId,
-        conversation_id: AIConversationId,
-    ) -> Result<Self, UpdateInteractionModeError> {
-        let requested_command_action_id = match self {
-            InteractionMode::User(_) => None,
-            InteractionMode::Agent(metadata) => {
-                if metadata.conversation_id != conversation_id {
-                    return Err(UpdateInteractionModeError::UnexpectedConversationId);
-                }
-                metadata.requested_command_action_id.clone()
-            }
-        };
-
-        Ok(Self::Agent(AgentInteractionMetadata {
-            requested_command_action_id,
-            conversation_id,
-            subagent_task_id: Some(task_id.clone()),
-            long_running_control_state: Some(LongRunningCommandControlState::Agent {
-                is_blocked: false,
-                should_hide_responses: false,
-            }),
-            has_agent_written_to_block: false,
-            should_hide_block: false,
-        }))
-    }
 
     fn new_agent(metadata: AgentInteractionMetadata) -> Self {
         Self::Agent(metadata)
@@ -435,28 +307,6 @@ impl InteractionMode {
         Ok(())
     }
 
-    fn handoff_to_agent(&mut self) -> Result<(), UpdateInteractionModeError> {
-        let Self::Agent(AgentInteractionMetadata {
-            long_running_control_state,
-            ..
-        }) = self
-        else {
-            return Err(UpdateInteractionModeError::InvalidHandOff);
-        };
-
-        if !long_running_control_state
-            .as_ref()
-            .is_some_and(|state| state.is_user_in_control())
-        {
-            return Err(UpdateInteractionModeError::InvalidHandOff);
-        }
-
-        *long_running_control_state = Some(LongRunningCommandControlState::Agent {
-            is_blocked: false,
-            should_hide_responses: false,
-        });
-        Ok(())
-    }
 }
 
 impl Default for InteractionMode {
@@ -530,13 +380,7 @@ impl AgentInteractionMetadata {
         self.requested_command_action_id.as_ref()
     }
 
-    pub fn conversation_id(&self) -> &AIConversationId {
-        &self.conversation_id
-    }
 
-    pub fn subagent_task_id(&self) -> Option<&TaskId> {
-        self.subagent_task_id.as_ref()
-    }
 
     pub fn is_agent_in_control(&self) -> bool {
         self.long_running_control_state

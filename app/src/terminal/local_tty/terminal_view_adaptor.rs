@@ -602,66 +602,7 @@ fn wire_up_terminal_view_session_sharing(
 }
 
 impl TerminalManager<TerminalView> {
-    /// Streams all historical agent conversations from this terminal to viewers.
-    /// This is called when starting a shared  session mid-conversation so that viewers
-    /// can see all conversation history and properly continue conversations.
-    fn stream_historical_agent_conversations(
-        terminal_view: &ViewHandle<TerminalView>,
-        model: &Arc<FairMutex<TerminalModel>>,
-        ctx: &mut AppContext,
-    ) {
-        // Get all conversations for this terminal view
-        // Any conversation could be continued during session sharing
-        let conversations: Vec<AIConversation> = BlocklistAIHistoryModel::as_ref(ctx)
-            .all_live_conversations_for_terminal_surface(terminal_view.id())
-            .filter(|conv| conv.exchange_count() > 0)
-            .cloned()
-            .collect();
 
-        if conversations.is_empty() {
-            return;
-        }
-
-        // Get the sharer's participant id to use for historical conversations
-        let sharer_id = terminal_view
-            .as_ref(ctx)
-            .shared_session_presence_manager()
-            .map(|manager| manager.as_ref(ctx).sharer_id());
-
-        model
-            .lock()
-            .send_agent_conversation_replay_started_for_shared_session();
-
-        // Reconstruct and send all conversations' messages as ResponseEvent objects
-        // Exchanges are sorted chronologically to handle interleaved conversations
-        // Historical events use the original conversation token, so no need to pass forked_from.
-        let events = reconstruct_response_events_from_conversations(&conversations);
-        for event in events {
-            model
-                .lock()
-                .send_agent_response_for_shared_session(&event, sharer_id.clone(), None);
-        }
-        model
-            .lock()
-            .send_agent_conversation_replay_ended_for_shared_session();
-    }
-
-    /// Send selected_conversation update to viewers based on current selection.
-    fn send_selected_conversation_update_for_sharer(
-        session_sharer: &Rc<RefCell<Option<ModelHandle<Network>>>>,
-        agent_view_controller: &ModelHandle<AgentViewController>,
-        ai_context_model: &ModelHandle<BlocklistAIContextModel>,
-        ctx: &mut AppContext,
-    ) {
-        if let Some(network) = session_sharer.borrow().as_ref()
-            && let Some(update) =
-                build_selected_conversation_update(agent_view_controller, ai_context_model, ctx)
-        {
-            network.update(ctx, |network, _| {
-                network.send_universal_developer_input_context_update(update)
-            });
-        }
-    }
 
     #[allow(clippy::too_many_arguments)]
     fn start_sharing_session(

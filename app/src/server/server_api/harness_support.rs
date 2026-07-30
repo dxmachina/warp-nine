@@ -172,70 +172,6 @@ impl ReportShutdownRequest {
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 pub trait HarnessSupportClient: 'static + Send + Sync {
-    /// Create a new external conversation for a third-party harness.
-    async fn create_external_conversation(&self, format: &str) -> Result<AIConversationId>;
-
-    /// Get a presigned upload target for the conversation's raw transcript.
-    async fn get_transcript_upload_target(
-        &self,
-        conversation_id: &AIConversationId,
-    ) -> Result<UploadTarget>;
-
-    /// Get a presigned upload target for the conversation's block snapshot.
-    async fn get_block_snapshot_upload_target(
-        &self,
-        conversation_id: &AIConversationId,
-    ) -> Result<UploadTarget>;
-
-    /// Resolve the prompt for a third-party harness run for a task stored on the server.
-    async fn resolve_prompt(&self, request: ResolvePromptRequest) -> Result<ResolvedHarnessPrompt>;
-
-    /// Report an artifact created by a third-party harness back to the Oz platform.
-    async fn report_artifact(&self, artifact: &Artifact) -> Result<ReportArtifactResponse>;
-
-    /// Send a progress notification to the task's originating platform.
-    async fn notify_user(&self, message: &str) -> Result<()>;
-
-    /// Report task completion or failure. The server derives PR links/branches from
-    /// artifacts already reported via `report_artifact`.
-    async fn finish_task(&self, success: bool, summary: &str) -> Result<()>;
-
-    /// Report a clean shutdown of the agent process.
-    async fn report_clean_shutdown(&self) -> Result<()>;
-
-    /// Report an error shutdown of the agent process.
-    async fn report_error_shutdown(
-        &self,
-        error_category: String,
-        error_message: String,
-    ) -> Result<()>;
-
-    /// Get presigned upload targets for a workspace state snapshot.
-    ///
-    /// The returned list is aligned by index with `request.files`. See
-    /// [`SnapshotUploadResponse`] for details on the server contract.
-    async fn get_snapshot_upload_targets(
-        &self,
-        request: &SnapshotUploadRequest,
-    ) -> Result<Vec<UploadTarget>>;
-
-    /// Download the raw third-party harness transcript bytes for the current task's
-    /// conversation.
-    ///
-    /// Hits `GET /harness-support/transcript`, which redirects to a signed GCS URL.
-    /// The conversation is resolved from the task's `agent_conversation_id` server-side,
-    /// so callers do not pass a conversation id. Each harness deserializes the returned
-    /// bytes into its own envelope shape (e.g. Claude Code parses
-    /// `ClaudeTranscriptEnvelope`). Transient failures retry with bounded exponential
-    /// backoff; permanent 4xx (e.g. 404 "no transcript") fail fast so the caller can
-    /// surface a resume-specific error.
-    async fn fetch_transcript(&self) -> Result<bytes::Bytes>;
-
-    /// Get an HTTP client to use with [`UploadTarget`]s for saving blobs.
-    fn http_client(&self) -> &http_client::Client;
-}
-
-impl ServerApi {
     pub(crate) async fn get_public_api_response_for_task(
         &self,
         task_id: &AmbientAgentTaskId,
@@ -351,19 +287,6 @@ impl ServerApi {
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 impl HarnessSupportClient for ServerApi {
-    async fn create_external_conversation(&self, format: &str) -> Result<AIConversationId> {
-        let response: CreateExternalConversationResponse = self
-            .post_public_api(
-                "harness-support/external-conversation",
-                &CreateExternalConversationRequest {
-                    format: format.to_string(),
-                },
-            )
-            .await?;
-
-        AIConversationId::try_from(response.conversation_id)
-            .context("Server returned an invalid conversation ID")
-    }
 
     async fn get_transcript_upload_target(
         &self,

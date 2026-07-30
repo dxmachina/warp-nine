@@ -16,15 +16,6 @@ pub trait AttachedContextArgs {
     fn terminal_model(&self) -> &TerminalModel;
     fn input_buffer_model(&self) -> &InputBufferModel;
     fn input_model(&self) -> &BlocklistAIInputModel;
-    fn agent_view_controller(&self) -> &AgentViewController;
-    fn context_model(&self) -> &BlocklistAIContextModel;
-    fn mouse_states(&self) -> &AgentMessageBarMouseStates;
-}
-
-/// Produces a message when blocks or selected text are attached as context.
-pub struct AttachedBlocksMessageProducer;
-
-impl<Args: AttachedContextArgs + Copy> MessageProvider<Args> for AttachedBlocksMessageProducer {
     fn produce_message(&self, args: Args) -> Option<Message> {
         // When AgentViewBlockContext is enabled, user-executed blocks are auto-attached
         // as context, so we don't need to show this message.

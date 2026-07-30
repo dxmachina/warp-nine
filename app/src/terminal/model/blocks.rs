@@ -1161,43 +1161,6 @@ impl BlockList {
         }
     }
 
-    pub fn update_agent_view_conversation_id_for_rich_content(
-        &mut self,
-        rich_content_view_id: EntityId,
-        agent_view_conversation_id: Option<AIConversationId>,
-    ) {
-        let Some(&index) = self
-            .removable_blocklist_item_positions
-            .get(&RemovableBlocklistItem::RichContent(rich_content_view_id))
-        else {
-            return;
-        };
-
-        let transcript_scope = &self.transcript_scope;
-        self.block_heights = {
-            let mut cursor = self.block_heights.cursor::<TotalIndex, ()>();
-            let mut new_tree = cursor.slice(&index, SeekBias::Right);
-
-            if let Some(BlockHeightItem::RichContent(item)) = cursor.item() {
-                let should_hide = RichContentItem {
-                    agent_view_conversation_id,
-                    ..*item
-                }
-                .should_hide_for_transcript_scope(transcript_scope);
-                new_tree.push(BlockHeightItem::RichContent(RichContentItem {
-                    agent_view_conversation_id,
-                    should_hide,
-                    ..*item
-                }));
-                cursor.next();
-            }
-
-            new_tree.push_tree(cursor.suffix());
-            new_tree
-        };
-
-        self.event_proxy.send_wakeup_event();
-    }
 
     /// Marks the rich content item with the given view ID as needing its height
     /// to be remeasured on the next layout.
@@ -1494,49 +1457,6 @@ impl BlockList {
         Some(block)
     }
 
-    pub fn clear_user_executed_command_blocks_for_conversation(
-        &mut self,
-        conversation_id: AIConversationId,
-    ) {
-        let active_block_index = self.active_block_index();
-
-        let mut indices_to_remove = Vec::new();
-        for (i, block) in self.blocks.iter().enumerate() {
-            let index: BlockIndex = i.into();
-            if index == active_block_index {
-                continue;
-            }
-
-            // Only clear blocks that were created inside this agent view conversation. Blocks
-            // created in the top-level terminal (even if later attached as context) should not be
-            // removed by a conversation-scoped clear.
-            match block.agent_view_visibility() {
-                AgentViewVisibility::Agent {
-                    origin_conversation_id: block_conversation_id,
-                    ..
-                } => {
-                    if block_conversation_id != &conversation_id {
-                        continue;
-                    }
-                }
-                AgentViewVisibility::Terminal { .. } => continue,
-            }
-
-            // Skip agent-requested command blocks.
-            if block.requested_command_action_id().is_some() {
-                continue;
-            }
-
-            // Only clear blocks that are currently visible in the agent view.
-            if block.is_empty(&self.transcript_scope) {
-                continue;
-            }
-
-            indices_to_remove.push(index);
-        }
-
-        self.remove_command_blocks_at_indices(indices_to_remove);
-    }
 
     /// Removes command blocks at stable pre-removal indices.
     fn remove_command_blocks_at_indices(&mut self, indices_to_remove: Vec<BlockIndex>) {
@@ -1557,28 +1477,6 @@ impl BlockList {
         self.event_proxy.send_wakeup_event();
     }
 
-    pub fn remove_command_blocks_for_conversation(&mut self, conversation_id: AIConversationId) {
-        let active_block_index = self.active_block_index();
-
-        let mut indices_to_remove = Vec::new();
-        for (i, block) in self.blocks.iter().enumerate() {
-            let index: BlockIndex = i.into();
-            if index == active_block_index {
-                continue;
-            }
-
-            if matches!(
-                block.agent_view_visibility(),
-                AgentViewVisibility::Agent {
-                    origin_conversation_id,
-                    ..
-                } if *origin_conversation_id == conversation_id
-            ) {
-                indices_to_remove.push(index);
-            }
-        }
-        self.remove_command_blocks_at_indices(indices_to_remove);
-    }
 
     /// Gets the active background block, if one exists.
     pub(super) fn background_block_mut(&mut self) -> Option<&mut Block> {
@@ -1644,11 +1542,6 @@ impl BlockList {
         &self.transcript_scope
     }
 
-    /// Returns the conversation associated with newly created command blocks.
-    pub fn active_conversation_id(&self) -> Option<AIConversationId> {
-        self.active_conversation_context
-            .map(|context| context.conversation_id)
-    }
 
     /// Returns whether the active conversation executes in a cloud context.
     pub fn is_cloud_conversation_context(&self) -> bool {
@@ -1666,26 +1559,6 @@ impl BlockList {
         self.update_blocks_and_sumtree(None, None, |_| {}, |_| {});
     }
 
-    /// Associates subsequent command blocks with an active conversation.
-    pub fn set_active_conversation_context(
-        &mut self,
-        conversation_id: AIConversationId,
-        is_cloud: bool,
-        attach_to_terminal: bool,
-    ) {
-        self.active_conversation_context = Some(ActiveConversationContext {
-            conversation_id,
-            is_cloud,
-        });
-        if !self.active_block().finished() {
-            if attach_to_terminal {
-                self.active_block_mut()
-                    .add_attached_conversation_id(conversation_id);
-            } else {
-                self.active_block_mut().set_conversation_id(conversation_id);
-            }
-        }
-    }
 
     /// Clears the active conversation association without changing transcript scope.
     pub fn clear_active_conversation_context(&mut self) {
@@ -1700,21 +1573,6 @@ impl BlockList {
         }
     }
 
-    /// Associates command blocks with a GUI conversation and updates its transcript scope.
-    pub fn enter_conversation_context(
-        &mut self,
-        conversation_id: AIConversationId,
-        is_inline: bool,
-        is_cloud: bool,
-    ) {
-        self.set_active_conversation_context(conversation_id, is_cloud, is_inline);
-        let scope = if is_inline {
-            TranscriptScope::Terminal
-        } else {
-            TranscriptScope::Conversation(conversation_id)
-        };
-        self.set_transcript_scope(scope);
-    }
 
     /// Clears the active conversation association and returns to terminal scope.
     pub fn exit_conversation_context(&mut self) {
@@ -1755,53 +1613,7 @@ impl BlockList {
 
     pub fn refresh_block_heights_for_passive_code_diff(&mut self) {}
 
-    /// Associates the given blocks with a conversation, making them visible in that conversation's agent view.
-    /// Returns a Vec of (block_id, visibility) for blocks that were found.
-    pub fn associate_blocks_with_conversation<'a>(
-        &mut self,
-        block_ids: impl Iterator<Item = &'a BlockId>,
-        conversation_id: AIConversationId,
-    ) -> Vec<(BlockId, AgentViewVisibility)> {
-        let mut modified_blocks = Vec::new();
-        for block_id in block_ids {
-            if let Some(block) = self.mut_block_from_id(block_id) {
-                if let AgentViewVisibility::Agent {
-                    origin_conversation_id,
-                    ..
-                } = block.agent_view_visibility()
-                    && *origin_conversation_id == conversation_id
-                {
-                    continue;
-                }
-                block.add_pending_conversation_id(conversation_id);
-                modified_blocks.push((block_id.clone(), block.agent_view_visibility().clone()));
-            }
-        }
-        modified_blocks
-    }
 
-    /// Attaches every non-oz-startup block in the list to `conversation_id` so each block is
-    /// visible while that conversation is the active one in agent view. Skips blocks flagged
-    /// as `is_oz_environment_startup_command` since those are hidden by their own mechanism.
-    pub fn attach_non_startup_blocks_to_conversation(&mut self, conversation_id: AIConversationId) {
-        for block in &mut self.blocks {
-            if block.is_oz_environment_startup_command() {
-                continue;
-            }
-            if let AgentViewVisibility::Agent {
-                origin_conversation_id,
-                ..
-            } = block.agent_view_visibility()
-                && *origin_conversation_id == conversation_id
-            {
-                continue;
-            }
-            block.add_attached_conversation_id(conversation_id);
-        }
-
-        self.mark_agent_view_rich_content_dirty();
-        self.update_blocks_and_sumtree(None, None, |_| {}, |_| {});
-    }
 
     /// Removes the conversation association from the given blocks, making them disappear from that conversation's agent view.
     /// Returns a Vec of (block_id, visibility) for blocks that were modified.
@@ -1821,20 +1633,6 @@ impl BlockList {
         modified_blocks
     }
 
-    /// Promotes all blocks that are pending for the given conversation to attached.
-    /// Returns a Vec of (block_id, visibility) for blocks that were modified.
-    pub fn promote_blocks_to_attached_from_conversation(
-        &mut self,
-        conversation_id: AIConversationId,
-    ) -> Vec<(BlockId, AgentViewVisibility)> {
-        let mut modified_blocks = Vec::new();
-        for block in &mut self.blocks {
-            if block.promote_pending_to_attached(conversation_id) {
-                modified_blocks.push((block.id().clone(), block.agent_view_visibility().clone()));
-            }
-        }
-        modified_blocks
-    }
 
     /// Update the height of an active block in the block heights SumTree. In general,
     /// blocks are immutable once finished. Only the active block and the most
@@ -1988,15 +1786,6 @@ impl BlockList {
         self.block_id_to_block_index.get(id).copied()
     }
 
-    pub fn block_for_ai_action_id(&self, id: &AIAgentActionId) -> Option<&Block> {
-        self.blocks.iter().find(|block| {
-            block.agent_interaction_metadata().is_some_and(|metadata| {
-                metadata
-                    .requested_command_action_id()
-                    .is_some_and(|action_id| action_id == id)
-            })
-        })
-    }
 
     /// Scans the block at `block_index` for secrets.
     pub fn scan_block_for_secrets(&mut self, block_index: BlockIndex) {
@@ -2009,34 +1798,6 @@ impl BlockList {
         &self.block_heights
     }
 
-    pub fn is_requested_command_block_immediately_after_ai_block(
-        &self,
-        ai_block_id: EntityId,
-        block_requested_command_action_id: &AIAgentActionId,
-    ) -> bool {
-        let Some(ai_block_total_idx) = self
-            .removable_blocklist_item_positions
-            .get(&RemovableBlocklistItem::RichContent(ai_block_id))
-        else {
-            return false;
-        };
-        let mut cursor = self
-            .block_heights
-            .cursor::<TotalIndex, BlockHeightSummary>();
-        cursor.seek(ai_block_total_idx, SeekBias::Right);
-        cursor.next();
-        let Some(BlockHeightItem::Block(..)) = cursor.item() else {
-            return false;
-        };
-        let block_idx = cursor.start().block_count;
-        self.block_at(block_idx.into()).is_some_and(|block| {
-            block.agent_interaction_metadata().is_some_and(|metadata| {
-                metadata
-                    .requested_command_action_id()
-                    .is_some_and(|action_id| action_id == block_requested_command_action_id)
-            })
-        })
-    }
 
     /// Finds the first block out of the given indices that matches the filter.
     /// This function respects the blocklist ordering, regardless of whether it renders as inverted.
@@ -2347,26 +2108,6 @@ impl BlockList {
         );
     }
 
-    pub fn set_visibility_of_block_for_ai_action(
-        &mut self,
-        id: &AIAgentActionId,
-        is_visible: bool,
-    ) {
-        let id = id.clone();
-        self.update_blocks_and_sumtree(
-            None,
-            None,
-            move |block| {
-                if block
-                    .requested_command_action_id()
-                    .is_some_and(|action_id| *action_id == id)
-                {
-                    block.set_should_hide(!is_visible);
-                }
-            },
-            |_| {},
-        );
-    }
 
     pub fn toggle_visibility_of_block_for_env_var(&mut self, block_id: &str) {
         let block_id = block_id.to_owned();
@@ -3555,14 +3296,6 @@ impl BlockList {
         active_block.clear_marked_text();
     }
 
-    pub fn last_non_hidden_ai_block_handle(&self, app: &AppContext) -> Option<ViewHandle<AIBlock>> {
-        let rich_content_view_id = self
-            .last_non_hidden_rich_content_block_after_block(None)?
-            .1
-            .view_id;
-        let active_window_id = app.windows().active_window()?;
-        app.view_with_id::<AIBlock>(active_window_id, rich_content_view_id)
-    }
 
     pub fn has_active_ai_block(&self, app: &AppContext) -> bool {
         self.last_non_hidden_ai_block_handle(app)

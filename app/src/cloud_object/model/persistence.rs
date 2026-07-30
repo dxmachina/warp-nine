@@ -1191,14 +1191,6 @@ impl CloudModel {
             .and_then(|object| object.into())
     }
 
-    pub fn get_ai_execution_profile(
-        &self,
-        profile_id: &SyncId,
-    ) -> Option<&CloudAIExecutionProfile> {
-        self.objects_by_id
-            .get(&profile_id.uid())
-            .and_then(|object| object.into())
-    }
 
     pub fn get_workflow_enum_mut(&mut self, enum_id: &SyncId) -> Option<&mut CloudWorkflowEnum> {
         self.objects_by_id

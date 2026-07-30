@@ -475,11 +475,6 @@ impl ServerApi {
         )
     }
 
-    /// Sets the ambient agent task ID to be sent with all subsequent requests.
-    pub fn set_ambient_agent_task_id(&self, task_id: Option<AmbientAgentTaskId>) {
-        self.base_client
-            .set_ambient_agent_task_id(task_id.map(|task_id| task_id.to_string()));
-    }
 
     /// Returns ambient agent headers to attach to requests.
     async fn ambient_agent_headers(&self) -> Result<Vec<(String, String)>> {
@@ -487,13 +482,6 @@ impl ServerApi {
             .await
     }
 
-    async fn ambient_agent_headers_for_task(
-        &self,
-        task_id: &AmbientAgentTaskId,
-    ) -> Result<Vec<(String, String)>> {
-        self.ambient_headers(AmbientHeaderPolicy::for_task(task_id.to_string()))
-            .await
-    }
 
     pub fn send_graphql_request<'a, QF, O: warp_graphql::client::Operation<QF> + Send + 'a>(
         &'a self,
@@ -591,39 +579,6 @@ impl ServerApi {
         Ok(self.wrap_eventsource_with_iap_detection(request.eventsource()))
     }
 
-    pub async fn stream_agent_events_for_task(
-        &self,
-        task_id: &AmbientAgentTaskId,
-        run_ids: &[String],
-        since_sequence: i64,
-    ) -> Result<http_client::EventSourceStream> {
-        debug_assert!(!run_ids.is_empty(), "run_ids must not be empty");
-        let auth_token = self
-            .get_or_refresh_access_token()
-            .await
-            .context("Failed to get access token for SSE stream")?;
-
-        let run_ids_param: String = run_ids
-            .iter()
-            .map(|id| format!("run_ids[]={}", urlencoding::encode(id)))
-            .collect::<Vec<_>>()
-            .join("&");
-        let url = format!(
-            "{}/api/v1/agent/events/stream?{run_ids_param}&since={since_sequence}",
-            ChannelState::rtc_http_url()
-        );
-
-        let mut request = self.base_client.http_client().get(&url);
-        if let Some(token) = auth_token.as_bearer_token() {
-            request = request.bearer_auth(token);
-        }
-
-        for (name, value) in self.ambient_agent_headers_for_task(task_id).await? {
-            request = request.header(name, value);
-        }
-
-        Ok(self.wrap_eventsource_with_iap_detection(request.eventsource()))
-    }
 
     /// Sends a POST request to a public API endpoint and returns the raw response on success.
     async fn post_public_api_response<B>(
@@ -967,32 +922,6 @@ impl ServerApi {
             .flush_and_persist_events(max_event_count, settings_snapshot)
     }
 
-    /// Hits the /ai/generate_input_suggestions endpoint to get the predicted next action, based on past context.
-    pub async fn generate_ai_input_suggestions(
-        &self,
-        request: &GenerateAIInputSuggestionsRequest,
-    ) -> Result<generate_ai_input_suggestions::GenerateAIInputSuggestionsResponseV2, AIApiError>
-    {
-        let auth_token = self.get_or_refresh_access_token().await?;
-
-        let request_builder = self.base_client.http_client().post(format!(
-            "{}/ai/generate_input_suggestions",
-            ChannelState::server_root_url()
-        ));
-        let response = if let Some(token) = auth_token.as_bearer_token() {
-            request_builder.bearer_auth(token)
-        } else {
-            request_builder
-        }
-        .json(request)
-        .send()
-        .await?
-        .error_for_status_with_body()
-        .await?
-        .json()
-        .await?;
-        Ok(response)
-    }
 
     pub async fn get_relevant_files(
         &self,
@@ -1357,9 +1286,6 @@ impl ServerApiProvider {
         self.server_api.clone()
     }
 
-    pub fn get_ai_client(&self) -> Arc<dyn AIClient> {
-        self.server_api.clone()
-    }
 
     pub fn get_cloud_objects_client(&self) -> Arc<dyn ObjectClient> {
         self.server_api.clone()

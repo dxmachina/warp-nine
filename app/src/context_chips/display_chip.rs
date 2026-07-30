@@ -1172,13 +1172,6 @@ impl DisplayChip {
         }
     }
 
-    /// Returns `true` when a CLI agent session is active for this chip's terminal,
-    /// meaning interactive behaviors (menus, hover, click) should be suppressed.
-    fn is_cli_agent_session_active(&self, app: &AppContext) -> bool {
-        CLIAgentSessionsModel::as_ref(app)
-            .session(self.terminal_view_id)
-            .is_some()
-    }
 
     fn close_node_version_popup(&mut self, ctx: &mut ViewContext<'_, DisplayChip>) {
         if let DisplayChipKind::NodeVersion { popup_open, .. } = &mut self.display_chip_kind {

@@ -429,31 +429,8 @@ pub trait SlashCommandDataSource {
         }
     }
 
-    /// Whether there is an active conversation, given whether the agent view is active.
-    /// There is always an active conversation in the agent view.
-    fn has_active_conversation(&self, is_agent_view_active: bool, ctx: &AppContext) -> bool {
-        is_agent_view_active
-            || crate::ai::blocklist::BlocklistAIHistoryModel::as_ref(ctx)
-                .active_conversation(self.terminal_view_id())
-                .is_some()
-    }
 
-    /// Returns `true` if the CLI agent rich input is currently open for this terminal.
-    fn is_cli_agent_input_open(&self, ctx: &AppContext) -> bool {
-        CLIAgentSessionsModel::as_ref(ctx).is_input_open(self.terminal_view_id())
-    }
 
-    /// Returns the supported skill providers for the active CLI agent, or `None` if
-    /// CLI agent input is not open (meaning no filtering should be applied).
-    fn active_cli_agent_providers(
-        &self,
-        ctx: &AppContext,
-    ) -> Option<&'static [ai::skills::SkillProvider]> {
-        CLIAgentSessionsModel::as_ref(ctx)
-            .session(self.terminal_view_id())
-            .filter(|s| matches!(s.input_state, CLIAgentInputState::Open { .. }))
-            .map(|s| s.agent.supported_skill_providers())
-    }
 
     /// Fuzzy-match the active commands against `query_text`. Returns scored [`InlineItem`]s with
     /// compact layout left unset; the caller applies any surface-specific presentation.

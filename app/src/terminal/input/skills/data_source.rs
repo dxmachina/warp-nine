@@ -94,21 +94,6 @@ impl SkillSelectorDataSource {
         }
     }
 
-    /// Attaches an ambient agent view model after construction. Used on the shared-session viewer
-    /// path where the model is created lazily at `SessionJoined`. Idempotent: a no-op when a
-    /// model is already set.
-    pub fn set_ambient_agent_view_model(
-        &mut self,
-        view_model: ModelHandle<AmbientAgentViewModel>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        if self.ambient_agent_view_model.is_some() {
-            return;
-        }
-        self.ambient_agent_view_model = Some(view_model);
-        // Re-run the query in case the menu is open so the routing state is re-evaluated.
-        ctx.emit(UpdatedAvailableSkills);
-    }
 
     /// True when the pane is a cloud agent pane (viewer, disconnected follow-up, or read-only
     /// tombstone). Skills invoke locally and must be hidden for any cloud pane since running a

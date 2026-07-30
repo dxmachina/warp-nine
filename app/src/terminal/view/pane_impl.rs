@@ -144,46 +144,6 @@ impl TerminalView {
         self.update_agent_view_pane_header(ctx);
     }
 
-    /// Returns the shareable object for the active agent view conversation, if any.
-    fn agent_view_shareable_object(&self, ctx: &ViewContext<Self>) -> Option<ShareableObject> {
-        // Only set shareable object if CloudConversations feature is enabled
-        if !FeatureFlag::CloudConversations.is_enabled() {
-            return None;
-        }
-
-        // If we're in a shared session, prioritize this to share.
-        if let Some(shared_session) = &self.shared_session {
-            return Some(ShareableObject::Session {
-                handle: ctx.handle(),
-                session_id: *shared_session.session_id(),
-                started_at: *shared_session.started_at(),
-            });
-        }
-
-        // Check if agent view is active
-        let conversation_id = self
-            .agent_view_controller
-            .as_ref(ctx)
-            .agent_view_state()
-            .active_conversation_id()?;
-
-        // Don't show share button for empty conversations
-        let conversation = BlocklistAIHistoryModel::as_ref(ctx).conversation(&conversation_id)?;
-        if conversation.is_empty() {
-            return None;
-        }
-        let exchange_count = conversation.exchange_count();
-        // If there's only one exchange, make sure it's completed (not still streaming)
-        if exchange_count == 1
-            && let Some(latest_exchange) = conversation.latest_exchange()
-            && latest_exchange.output_status.is_streaming()
-        {
-            return None;
-        }
-
-        // Return the ShareableObject with the conversation ID
-        Some(ShareableObject::AIConversation(conversation_id))
-    }
 
     /// Updates the pane header's shareable object based on agent view state.
     /// This should be called when entering/exiting agent view or when the conversation changes.
@@ -454,26 +414,6 @@ impl TerminalView {
         (right_row.finish(), min_width)
     }
 
-    fn render_parent_conversation_header_card(&self, app: &AppContext) -> Option<Box<dyn Element>> {
-        if !(FeatureFlag::AgentView.is_enabled()
-            && self.agent_view_controller.as_ref(app).is_fullscreen())
-        {
-            return None;
-        }
-
-        let active_conversation_id = self
-            .agent_view_controller
-            .as_ref(app)
-            .agent_view_state()
-            .active_conversation_id()?;
-        let active_conversation =
-            BlocklistAIHistoryModel::as_ref(app).conversation(&active_conversation_id)?;
-        parent_conversation_navigation_card(
-            active_conversation,
-            self.mouse_states.parent_conversation_header_link.clone(),
-            app,
-        )
-    }
 
     fn maybe_add_parent_navigation_card(
         &self,
@@ -917,115 +857,15 @@ impl TerminalView {
         self.is_ambient_agent_session(ctx) || self.model.lock().is_cloud_agent_conversation()
     }
 
-    fn selected_conversation_for_user_facing_chrome<'a>(
-        &'a self,
-        ctx: &'a AppContext,
-    ) -> Option<&'a AIConversation> {
-        self.ai_context_model
-            .as_ref(ctx)
-            .selected_conversation(ctx)
-            .filter(|conversation| {
-                !conversation.is_entirely_passive()
-                    && (conversation.title().is_some_and(|title| !title.is_empty())
-                        || FeatureFlag::AgentView.is_enabled())
-            })
-    }
 
-    fn selected_conversation_display_title_for_chrome(
-        &self,
-        conversation: &AIConversation,
-        is_ambient_agent: bool,
-    ) -> String {
-        if FeatureFlag::AgentView.is_enabled() {
-            conversation
-                .title()
-                .filter(|title| !title.is_empty())
-                .unwrap_or_else(|| default_agent_conversation_title(is_ambient_agent))
-        } else {
-            conversation
-                .title()
-                .expect("checked above that title exists")
-        }
-    }
 
-    /// Returns `true` while a cloud-mode ambient agent run is still spinning up. This covers
-    /// both the `WaitingForSession` phase (env being provisioned, "Connecting to Host") and
-    /// the post-session pre-first-exchange phase (session ready, harness not started, no
-    /// exchange yet). In either case the run is committed and we want the UI to read as busy.
-    fn is_in_cloud_agent_setup_phase(&self, ctx: &AppContext) -> bool {
-        if self
-            .ambient_agent_view_model
-            .as_ref()
-            .is_some_and(|model| model.as_ref(ctx).is_waiting_for_session())
-        {
-            return true;
-        }
 
-        let model = self.model.lock();
-        is_cloud_agent_pre_first_exchange(
-            self.ambient_agent_view_model.as_ref(),
-            &self.agent_view_controller,
-            &model,
-            ctx,
-        )
-    }
-
-    /// Selected conversation status for chrome, or [`ConversationStatus::InProgress`] while the
-    /// active block is long-running (terminal-derived; not mirrored in history events) or while
-    /// a cloud-mode ambient agent is still in its environment-setup phase. For orchestrator
-    /// conversations, returns the aggregated child status so tab/header badges keep reflecting
-    /// active descendants after its turn finishes.
-    pub fn selected_conversation_status(&self, ctx: &AppContext) -> Option<ConversationStatus> {
-        let long_running = self.is_long_running();
-        let cloud_setup = self.is_in_cloud_agent_setup_phase(ctx);
-
-        let Some(conversation) = self.selected_conversation_for_user_facing_chrome(ctx) else {
-            // Ambient agent tabs can show Oz chrome without a filtered "chrome" conversation;
-            // still surface busy while a long-running shell command is active or the cloud
-            // environment is spinning up.
-            if (long_running || cloud_setup) && self.is_ambient_agent_session(ctx) {
-                return Some(ConversationStatus::InProgress);
-            }
-            return None;
-        };
-
-        if long_running || cloud_setup {
-            return Some(ConversationStatus::InProgress);
-        }
-
-        if self.selected_conversation_is_empty(ctx) {
-            return None;
-        }
-
-        Some(orchestration_aware_conversation_status(
-            BlocklistAIHistoryModel::as_ref(ctx),
-            conversation,
-        ))
-    }
 
     pub fn selected_conversation_is_empty(&self, ctx: &AppContext) -> bool {
         self.selected_conversation_for_user_facing_chrome(ctx)
             .is_some_and(|conversation| conversation.is_empty())
     }
 
-    /// Returns the conversation status for display purposes, suppressing the status when the
-    /// conversation is empty (no exchanges yet) AND nothing else makes the run "busy". This
-    /// avoids showing a misleading "In progress" indicator on a brand-new conversation; real
-    /// InProgress states (long-running shell commands, cloud-environment setup) come through
-    /// because [`Self::selected_conversation_status`] surfaces them as `InProgress`.
-    pub fn selected_conversation_status_for_display(
-        &self,
-        ctx: &AppContext,
-    ) -> Option<ConversationStatus> {
-        let status = self.selected_conversation_status(ctx)?;
-        if matches!(status, ConversationStatus::InProgress)
-            || !self.selected_conversation_is_empty(ctx)
-        {
-            Some(status)
-        } else {
-            None
-        }
-    }
 
     pub fn selected_conversation_display_title(&self, ctx: &AppContext) -> Option<String> {
         let is_ambient_agent = self.is_ambient_agent_session(ctx);
@@ -1046,37 +886,8 @@ impl TerminalView {
             })
     }
 
-    /// Server metadata for the selected conversation, if any.
-    pub fn selected_conversation_server_metadata<'a>(
-        &'a self,
-        ctx: &'a AppContext,
-    ) -> Option<&'a ServerAIConversationMetadata> {
-        self.selected_conversation_for_user_facing_chrome(ctx)
-            .and_then(AIConversation::server_metadata)
-    }
 
-    pub fn selected_conversation_latest_user_prompt_for_tab_name(
-        &self,
-        ctx: &AppContext,
-    ) -> Option<String> {
-        self.selected_conversation_for_user_facing_chrome(ctx)
-            .and_then(AIConversation::latest_user_query)
-    }
 
-    fn selected_cli_agent_title_for_chrome(&self, ctx: &AppContext) -> Option<String> {
-        let session = CLIAgentSessionsModel::as_ref(ctx)
-            .session(self.view_id)
-            .filter(|session| session.listener.is_some())?;
-
-        if *TabSettings::as_ref(ctx).use_latest_user_prompt_as_conversation_title_in_tab_names {
-            session
-                .session_context
-                .latest_user_prompt()
-                .or_else(|| session.session_context.title_like_text())
-        } else {
-            session.session_context.title_like_text()
-        }
-    }
 }
 
 fn default_agent_conversation_title(is_ambient_agent: bool) -> String {

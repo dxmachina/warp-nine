@@ -1400,17 +1400,6 @@ impl TerminalModel {
         )
     }
 
-    pub fn ambient_agent_task_id(&self) -> Option<AmbientAgentTaskId> {
-        if let Some(ConversationTranscriptViewerStatus::ViewingAmbientConversation(task_id)) =
-            &self.conversation_transcript_viewer_status
-        {
-            return Some(*task_id);
-        }
-        self.shared_session_source
-            .as_ref()
-            .and_then(|s| s.orchestrator_task_id())
-            .and_then(|s| s.parse().ok())
-    }
 
     /// Model-only portion of the "is this a cloud agent conversation?" check used for display
     /// purposes (e.g. the cloud agent icon). Callers holding a [`TerminalView`] should use

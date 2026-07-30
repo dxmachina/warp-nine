@@ -1100,34 +1100,6 @@ impl<'a> TabComponent<'a> {
         self
     }
 
-    /// Returns the agent indicator for the focused session's active conversation,
-    /// or `None` if there is no non-empty, non-passive conversation to display.
-    /// When a shell command is long-running the status is overridden to
-    /// `InProgress`, matching vertical-tab behavior.
-    fn agent_indicator(tab: &TabData, app: &AppContext) -> Option<Indicator> {
-        let terminal_view = tab.pane_group.as_ref(app).focused_session_view(app)?;
-        let terminal_view_ref = terminal_view.as_ref(app);
-        let is_long_running = terminal_view_ref.is_long_running();
-        let conversation =
-            BlocklistAIHistoryModel::as_ref(app).active_conversation(terminal_view_ref.id())?;
-
-        // Show in-progress indicator when a shell command is running in the AgentView.
-        // This matches vertical-tab behavior.
-        if is_long_running {
-            return Some(Indicator::Agent {
-                conversation_status: Some(ConversationStatus::InProgress),
-            });
-        }
-
-        if conversation.is_empty() || conversation.is_entirely_passive() {
-            return None;
-        }
-
-        let conversation_status = Some(conversation.status().clone());
-        Some(Indicator::Agent {
-            conversation_status,
-        })
-    }
 
     /// Determine if this tab is the active tab.
     fn is_active_tab(&self) -> bool {
@@ -1180,30 +1152,6 @@ impl<'a> TabComponent<'a> {
         None
     }
 
-    /// Get the task description for the tooltip if this is an agent task
-    /// and the tooltip content would be different from what's displayed in the tab
-    fn get_agent_task_tooltip_message(tab: &TabData, ctx: &AppContext) -> Option<String> {
-        let terminal_view_id = tab
-            .pane_group
-            .as_ref(ctx)
-            .focused_session_view(ctx)
-            .map(|view| view.id())?;
-        let ai_history_model = BlocklistAIHistoryModel::as_ref(ctx);
-        let conversation = ai_history_model.active_conversation(terminal_view_id)?;
-
-        // Don't show tooltip for passive conversations
-        if conversation.is_entirely_passive() {
-            return None;
-        }
-
-        let conversation_title = conversation.title()?;
-        let trimmed_title = conversation_title.trim().to_owned();
-
-        // Truncate tooltip to prevent rendering issues
-        let truncated_name = truncate_from_end(&trimmed_title, MAX_TOOLTIP_LENGTH);
-
-        Some(truncated_name)
-    }
 
     /// Check if the given indicator is an agent task indicator
     fn is_agent_task_indicator(indicator: &Indicator) -> bool {

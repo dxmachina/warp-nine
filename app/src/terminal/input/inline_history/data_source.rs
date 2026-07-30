@@ -140,52 +140,6 @@ impl InlineHistoryMenuDataSource {
         results
     }
 
-    fn build_conversation_entries(&self, trimmed_query: &str, app: &AppContext) -> Vec<MenuEntry> {
-        let mut conversation_entries: Vec<MenuEntry> = Vec::new();
-        let history_model = BlocklistAIHistoryModel::handle(app).as_ref(app);
-        for conversation in
-            history_model.all_live_conversations_for_terminal_surface(self.terminal_view_id)
-        {
-            if conversation.is_entirely_passive() || conversation.exchange_count() == 0 {
-                continue;
-            }
-
-            let Some(timestamp) = conversation.last_modified_at() else {
-                continue;
-            };
-            let title = conversation
-                .title()
-                .unwrap_or_else(|| "Untitled conversation".to_string());
-            let match_result = if trimmed_query.is_empty() {
-                None
-            } else {
-                let result = fuzzy_match::match_indices_case_insensitive(&title, trimmed_query);
-                if result.is_none() || result.as_ref().is_some_and(|r| r.score < 50) {
-                    continue;
-                }
-                result
-            };
-
-            conversation_entries.push(MenuEntry {
-                order: HistoryOrder::CurrentSession,
-                sort_timestamp: timestamp,
-                item: MenuItem::Conversation {
-                    conversation_id: conversation.id(),
-                    title,
-                    status: conversation.status().clone(),
-                    match_result,
-                    display_timestamp: timestamp,
-                },
-            });
-        }
-
-        conversation_entries.sort_by(|a, b| {
-            a.order
-                .cmp(&b.order)
-                .then(a.sort_timestamp.cmp(&b.sort_timestamp))
-        });
-        conversation_entries
-    }
 }
 
 #[derive(Clone)]

@@ -50,60 +50,6 @@ pub enum ConversationEndedTombstoneEvent {
 }
 
 impl TombstoneDisplayData {
-    fn from_conversation(
-        conversation_id: AIConversationId,
-        terminal_view_id: EntityId,
-        has_task_id: bool,
-        ctx: &ViewContext<ConversationEndedTombstoneView>,
-    ) -> Self {
-        let history_model = BlocklistAIHistoryModel::handle(ctx);
-        let conversation_is_transcript = !has_task_id
-            && history_model
-                .as_ref(ctx)
-                .is_terminal_surface_conversation_transcript_viewer(terminal_view_id);
-        let conversation = history_model
-            .as_ref(ctx)
-            .all_live_conversations_for_terminal_surface(terminal_view_id)
-            .find(|c| c.id() == conversation_id);
-
-        let Some(conversation) = conversation else {
-            return Self::default();
-        };
-
-        let conversation_status = conversation_output_status_from_conversation(conversation);
-        let is_error = matches!(
-            conversation_status,
-            Some(AmbientConversationStatus::Error { .. })
-        );
-        let error_message = conversation_status
-            .as_ref()
-            .and_then(|status| match status {
-                AmbientConversationStatus::Error { error } => Some(error.to_string()),
-                _ => None,
-            });
-
-        // Calculate run time from exchanges
-        let run_time = (|| {
-            let first_exchange = conversation.first_exchange()?;
-            let last_exchange = conversation.latest_exchange()?;
-            let finish_time = last_exchange.finish_time?;
-            let duration = finish_time.signed_duration_since(first_exchange.start_time);
-            Some(human_readable_precise_duration(duration))
-        })();
-
-        Self {
-            title: conversation.title(),
-            is_error,
-            error_message,
-            conversation_is_transcript,
-            source: None,
-            skill_name: None,
-            run_time,
-            credits: Some(format_credits(conversation.credits_spent())),
-            working_directory: conversation.initial_working_directory(),
-            artifacts: conversation.artifacts().to_vec(),
-        }
-    }
 
     fn enrich_from_task(&mut self, task: AmbientAgentTask) {
         // Use task title if we don't have a conversation title.

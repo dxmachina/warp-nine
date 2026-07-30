@@ -728,62 +728,8 @@ impl TryFrom<&BillingMetadata> for StripeSubscriptionPlan {
     }
 }
 
-fn convert_gql_ai_autonomy_value_to_action_permission(
-    gql_ai_autonomy_value: GqlAiAutonomyValue,
-) -> Option<ActionPermission> {
-    match gql_ai_autonomy_value {
-        GqlAiAutonomyValue::AgentDecides => Some(ActionPermission::AgentDecides),
-        GqlAiAutonomyValue::AlwaysAllow => Some(ActionPermission::AlwaysAllow),
-        GqlAiAutonomyValue::AlwaysAsk => Some(ActionPermission::AlwaysAsk),
-        GqlAiAutonomyValue::RespectUserSetting => None,
-        GqlAiAutonomyValue::Other(value) => {
-            report_error!(
-                "Invalid AiAutonomyValue. Make sure to update client GraphQL types!",
-                extra: { "value" => %value },
-                warp_errors::ReportErrorLogMode::OncePerRun
-            );
-            None
-        }
-    }
-}
 
-fn convert_gql_write_to_pty_autonomy_value_to_write_to_pty_permission(
-    gql_write_to_pty_autonomy_value: GqlWriteToPtyAutonomyValue,
-) -> Option<WriteToPtyPermission> {
-    match gql_write_to_pty_autonomy_value {
-        GqlWriteToPtyAutonomyValue::AlwaysAllow => Some(WriteToPtyPermission::AlwaysAllow),
-        GqlWriteToPtyAutonomyValue::AlwaysAsk => Some(WriteToPtyPermission::AlwaysAsk),
-        GqlWriteToPtyAutonomyValue::AskOnFirstWrite => Some(WriteToPtyPermission::AskOnFirstWrite),
-        GqlWriteToPtyAutonomyValue::RespectUserSetting => None,
-        GqlWriteToPtyAutonomyValue::Other(value) => {
-            report_error!(
-                "Invalid WriteToPtyAutonomyValue. Make sure to update client GraphQL types!",
-                extra: { "value" => %value },
-                warp_errors::ReportErrorLogMode::OncePerRun
-            );
-            None
-        }
-    }
-}
 
-fn convert_gql_computer_use_autonomy_value_to_computer_use_permission(
-    gql_computer_use_autonomy_value: GqlComputerUseAutonomyValue,
-) -> Option<ComputerUsePermission> {
-    match gql_computer_use_autonomy_value {
-        GqlComputerUseAutonomyValue::Never => Some(ComputerUsePermission::Never),
-        GqlComputerUseAutonomyValue::AlwaysAsk => Some(ComputerUsePermission::AlwaysAsk),
-        GqlComputerUseAutonomyValue::AlwaysAllow => Some(ComputerUsePermission::AlwaysAllow),
-        GqlComputerUseAutonomyValue::RespectUserSetting => None,
-        GqlComputerUseAutonomyValue::Other(value) => {
-            report_error!(
-                "Invalid ComputerUseAutonomyValue. Make sure to update client GraphQL types!",
-                extra: { "value" => %value },
-                warp_errors::ReportErrorLogMode::OncePerRun
-            );
-            None
-        }
-    }
-}
 
 trait ToAgentModeCommandExecutionPredicates {
     fn to_predicates(self) -> Vec<AgentModeCommandExecutionPredicate>;

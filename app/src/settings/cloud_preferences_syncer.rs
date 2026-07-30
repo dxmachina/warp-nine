@@ -16,7 +16,6 @@ use warpui::{Entity, ModelContext, ModelHandle, SingletonEntity};
 use warpui_extras::user_preferences::toml_backed::TomlBackedUserPreferences;
 
 use super::PrivacySettings;
-use super::ai::ExecutionProfiles;
 use super::cloud_preferences::{CloudPreferencesSettings, CloudPreferencesSettingsChangedEvent};
 use super::manager::SettingsEvent;
 use crate::auth::auth_state::AuthState;

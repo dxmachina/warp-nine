@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -41,7 +42,6 @@ use crate::pane_group::{
 #[cfg(feature = "local_fs")]
 use crate::server::telemetry::CodePanelsFileOpenEntrypoint;
 use crate::server::telemetry::{FileTreeSource, WarpDriveSource};
-use crate::settings::AISettings;
 use crate::settings_view::keybindings::{KeybindingChangedEvent, KeybindingChangedNotifier};
 use crate::terminal::resizable_data::{ModalType, ResizableData};
 use crate::ui_components::buttons::{icon_button, icon_button_with_color};

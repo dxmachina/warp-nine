@@ -32,7 +32,6 @@ use warpui::{
 
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code_review::telemetry_event::CodeReviewPaneEntrypoint;
-use crate::terminal::CLIAgent;
 use crate::terminal::view::TerminalView;
 use crate::util::bindings::CustomAction;
 

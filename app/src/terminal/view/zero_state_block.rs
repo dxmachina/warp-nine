@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, AISettingsChangedEvent, InputModeSettings};
 use settings::Setting;
 use warp_core::ui::Icon;
 use warp_errors::report_if_error;
@@ -17,7 +18,6 @@ use warpui::{
 
 use crate::WorkspaceAction;
 use crate::appearance::Appearance;
-use crate::settings::{AISettings, AISettingsChangedEvent, InputModeSettings};
 use crate::terminal::event::BlockType;
 use crate::terminal::input::message_bar::common::render_standard_message;
 use crate::terminal::input::message_bar::{Message, MessageItem};

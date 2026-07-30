@@ -1,3 +1,6 @@
+use crate::settings::{
+    AISettings, AISettingsChangedEvent, CodeSettings, CodeSettingsChangedEvent, PrivacySettings,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -31,7 +34,6 @@ use crate::server::server_api::workspace::WorkspaceClient;
 #[cfg(test)]
 use crate::server::server_api::{team::MockTeamClient, workspace::MockWorkspaceClient};
 use crate::settings::{
-    AISettings, AISettingsChangedEvent, CodeSettings, CodeSettingsChangedEvent, PrivacySettings,
 };
 #[cfg(test)]
 use crate::workspaces::workspace::{AIAutonomyPolicy, WorkspaceMember, WorkspaceSettings};

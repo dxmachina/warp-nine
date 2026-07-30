@@ -1,5 +1,6 @@
 pub mod telemetry;
 
+use crate::terminal::{CLIAgent, TerminalView};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -54,9 +55,7 @@ use crate::safe_triangle::SafeTriangle;
 use crate::tab::{SelectedTabColor, TabData, tab_position_id};
 use crate::terminal::session_settings::SessionSettings;
 use crate::terminal::view::TerminalViewState;
-use crate::terminal::{CLIAgent, TerminalView};
 use crate::themes::theme::Fill as ThemeFill;
-use crate::ui_components::agent_icon::terminal_view_agent_icon_variant;
 use crate::ui_components::buttons::combo_inner_button;
 use crate::ui_components::icon_with_status::{IconWithStatusVariant, render_icon_with_status};
 use crate::ui_components::icons::Icon as UiIcon;

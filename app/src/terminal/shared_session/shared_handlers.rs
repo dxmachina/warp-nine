@@ -1,3 +1,4 @@
+use crate::terminal::{CLIAgent, TerminalView};
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -9,7 +10,6 @@ use session_sharing_protocol::common::{
 use warp_core::features::FeatureFlag;
 use warpui::{AppContext, ModelHandle, SingletonEntity, WeakViewHandle};
 
-use crate::terminal::{CLIAgent, TerminalView};
 
 /// Handles updating the local LLM preferences when a selected agent model update is received.
 /// This function is shared between the viewer and sharer to ensure consistent behavior.

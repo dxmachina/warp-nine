@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -18,7 +19,6 @@ use crate::search::data_source::QueryResult;
 use crate::search::files::model::FileSearchModel;
 use crate::search::mixer::AddAsyncSourceOptions;
 use crate::session_management::SessionSource;
-use crate::settings::AISettings;
 
 /// Store of all of the [`crate::search::DataSource`]s for the command palette.
 pub struct DataSourceStore {

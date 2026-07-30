@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, AISettingsChangedEvent};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -40,8 +41,6 @@ use crate::pane_group::pane::view::header::components::HEADER_EDGE_PADDING;
 use crate::pane_group::{
     Event as PaneGroupEvent, PaneGroup, WorkingDirectoriesEvent, WorkingDirectoriesModel,
 };
-use crate::settings::{AISettings, AISettingsChangedEvent};
-use crate::terminal::CLIAgent;
 use crate::terminal::input::MenuPositioning;
 use crate::terminal::resizable_data::{ModalType, ResizableData};
 use crate::terminal::view::TerminalView;

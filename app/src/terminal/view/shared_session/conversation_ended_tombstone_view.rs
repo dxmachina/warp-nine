@@ -1,3 +1,4 @@
+use crate::settings::ai::{AISettings, AISettingsChangedEvent};
 use std::path::Path;
 
 use warp_core::paths::home_relative_path;
@@ -14,11 +15,9 @@ use warpui::{
     ViewHandle,
 };
 
-use super::cloud_conversation_continuation::TombstoneCta;
 use crate::appearance::Appearance;
 use crate::server::ids::SyncId;
 use crate::server::server_api::ServerApiProvider;
-use crate::settings::ai::{AISettings, AISettingsChangedEvent};
 use crate::ui_components::blended_colors;
 use crate::util::time_format::human_readable_precise_duration;
 use crate::view_components::action_button::{ActionButton, PrimaryTheme};

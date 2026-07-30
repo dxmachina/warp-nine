@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, CodeSettings};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -55,7 +56,6 @@ use crate::code::lsp_telemetry::{LspControlActionType, LspEnablementSource, LspT
 use crate::remote_server::codebase_index_model::{
     RemoteCodebaseIndexModel, RemoteCodebaseIndexModelEvent, RemoteCodebaseIndexSettingsEntry,
 };
-use crate::settings::{AISettings, CodeSettings};
 use crate::terminal::general_settings::GeneralSettings;
 use crate::ui_components::avatar::{Avatar, AvatarContent, StatusElementTypes};
 use crate::ui_components::buttons::icon_button;

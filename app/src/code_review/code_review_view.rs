@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, CodeSettings};
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::ops::Range;
@@ -116,7 +117,6 @@ use crate::quit_warning::UnsavedStateSummary;
 use crate::send_telemetry_from_ctx;
 #[cfg(feature = "local_fs")]
 use crate::server::telemetry::CodePanelsFileOpenEntrypoint;
-use crate::settings::{AISettings, CodeSettings};
 use crate::settings_view::SettingsSection;
 use crate::terminal::input::MenuPositioning;
 use crate::terminal::view::{CliAgentRouting, InitProjectModel, TerminalAction, TerminalView};

@@ -1,4 +1,5 @@
 mod items;
+use crate::settings::AISettings;
 use std::collections::HashMap;
 
 pub use items::Items;
@@ -14,7 +15,6 @@ use crate::appearance::Appearance;
 use crate::drive::settings::WarpDriveSettings;
 use crate::search::QueryFilter;
 use crate::search::command_palette::FilterChipRenderer;
-use crate::settings::AISettings;
 use crate::workspace::Workspace;
 
 /// A zero-state view for the command palette.

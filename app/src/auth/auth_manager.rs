@@ -45,10 +45,10 @@ use crate::terminal::shared_session::manager::Manager as SharedSessionManager;
 use crate::uri::browser_url_handler::{parse_current_url, update_browser_url};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::{
-use crate::persisted_workspace::PersistedWorkspace;
     GlobalResourceHandlesProvider, TelemetryEvent, persistence, send_telemetry_from_ctx,
     send_telemetry_sync_from_ctx,
 };
+use crate::persisted_workspace::PersistedWorkspace;
 
 #[derive(Debug)]
 pub enum AuthManagerEvent {

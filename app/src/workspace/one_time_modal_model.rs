@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, CodeSettings};
 use std::future::Future;
 
 use ai::api_keys::ApiKeyManager;
@@ -19,7 +20,6 @@ use crate::root_view::has_completed_local_onboarding;
 use crate::settings::cloud_preferences_syncer::{
     CloudPreferencesSyncer, CloudPreferencesSyncerEvent,
 };
-use crate::settings::{AISettings, CodeSettings};
 use crate::terminal::general_settings::GeneralSettings;
 use crate::terminal::session_settings::{AgentToolbarChipSelection, SessionSettings};
 use crate::workspaces::user_workspaces::UserWorkspaces;

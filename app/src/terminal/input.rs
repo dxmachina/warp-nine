@@ -2,14 +2,12 @@ pub mod buffer_model;
 mod classic;
 mod cloud_mode_v2_history_menu;
 mod common;
-pub mod conversations;
 pub mod decorations;
 pub(crate) mod handoff_compose;
 pub mod inline_history;
 pub mod inline_menu;
 pub mod message_bar;
 pub mod models;
-pub mod plans;
 pub mod profiles;
 pub mod prompts;
 pub mod repos;
@@ -22,8 +20,12 @@ pub mod suggestions_mode_model;
 mod terminal;
 mod terminal_message_bar;
 mod universal;
-pub mod user_query;
 
+use crate::settings::{
+    AISettings, AISettingsChangedEvent, AliasExpansionSettings, AppEditorSettings,
+    AppEditorSettingsChangedEvent, InputModeSettings, InputSettings, InputSettingsChangedEvent,
+    MAX_TIMES_TO_SHOW_AUTOSUGGESTION_HINT, PrivacySettings,
+};
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -130,10 +132,8 @@ use super::universal_developer_input::{
     UniversalDeveloperInputButtonBar, UniversalDeveloperInputButtonBarEvent,
 };
 use super::view::inline_banner::{
-    PromptSuggestionBannerState, ZeroStatePromptSuggestionTriggeredFrom,
     ZeroStatePromptSuggestionType,
 };
-use super::view::queued_prompts_panel::{QueuedPromptsPanelEvent, QueuedPromptsPanelView};
 use super::view::{
     ExecuteCommandEvent, PADDING_LEFT as TERMINAL_VIEW_PADDING_LEFT, SyncInputType, TerminalAction,
 };
@@ -199,7 +199,6 @@ use crate::server::telemetry::{
 };
 use crate::session_management::SessionNavigationPromptElements;
 use crate::settings::{
-    AISettings, AISettingsChangedEvent, AliasExpansionSettings, AppEditorSettings,
     AppEditorSettingsChangedEvent, InputModeSettings, InputSettings, InputSettingsChangedEvent,
     MAX_TIMES_TO_SHOW_AUTOSUGGESTION_HINT, PrivacySettings,
 };
@@ -207,20 +206,15 @@ use crate::settings_view::{SettingsSection, flags};
 use crate::suggestions::ignored_suggestions_model::{
     IgnoredSuggestionsModel, IgnoredSuggestionsModelEvent, SuggestionType,
 };
-use crate::terminal::CLIAgent;
 use crate::terminal::buy_credits_banner::{BuyCreditsBanner, BuyCreditsBannerEvent};
 #[cfg(not(target_family = "wasm"))]
 use crate::terminal::input::buffer_model::InputBufferModel;
 use crate::terminal::input::cloud_mode_v2_history_menu::CloudModeV2HistoryMenuView;
-use crate::terminal::input::conversations::{
-    InlineConversationMenuEvent, InlineConversationMenuView,
-};
 use crate::terminal::input::inline_history::InlineHistoryMenuView;
 use crate::terminal::input::inline_menu::InlineMenuPositioner;
 use crate::terminal::input::models::{
     InlineModelSelectorEvent, InlineModelSelectorTab, InlineModelSelectorView,
 };
-use crate::terminal::input::plans::{InlinePlanMenuEvent, InlinePlanMenuView};
 use crate::terminal::input::profiles::{InlineProfileSelectorEvent, InlineProfileSelectorView};
 use crate::terminal::input::prompts::{InlinePromptsMenuEvent, InlinePromptsMenuView};
 use crate::terminal::input::repos::{InlineReposMenuEvent, InlineReposMenuView};
@@ -238,13 +232,11 @@ use crate::terminal::input::suggestions_mode_model::{
     InputSuggestionsModeEvent, InputSuggestionsModeModel,
 };
 use crate::terminal::input::terminal_message_bar::TerminalInputMessageBar;
-use crate::terminal::input::user_query::{UserQueryMenuEvent, UserQueryMenuView};
 use crate::terminal::model::session::active_session::ActiveSession;
 use crate::terminal::model::session::shell_quote_arg;
 use crate::terminal::package_installers::command_at_cursor_has_common_package_installer_prefix;
 use crate::terminal::prompt_render_helper::should_render_ps1_prompt;
 use crate::terminal::universal_developer_input::AtContextMenuDisabledReason;
-use crate::terminal::view::inline_banner::{PromptSuggestionsEvent, PromptSuggestionsView};
 use crate::terminal::view::{AIQueryRouting, CodeDiffAction, resolve_ai_query_routing};
 use crate::ui_components::blended_colors;
 use crate::ui_components::icons::Icon;

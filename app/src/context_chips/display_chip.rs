@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, AISettingsChangedEvent};
 use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -41,7 +42,6 @@ use crate::context_chips::git_branch_on_click::{
 };
 use crate::context_chips::node_version_popup::{NodeVersionPopupEvent, NodeVersionPopupView};
 use crate::context_chips::spacing;
-use crate::settings::{AISettings, AISettingsChangedEvent};
 use crate::settings_view::keybindings::{KeybindingChangedEvent, KeybindingChangedNotifier};
 use crate::terminal::input::{MenuPositioning, MenuPositioningProvider};
 use crate::terminal::model::session::SessionType;

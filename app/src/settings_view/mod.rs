@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, BlockVisibilitySettings, SettingsFileError};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -60,7 +61,6 @@ use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, Direction, PaneConfiguration, PaneEvent, SplitPaneState};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::telemetry::MCPServerCollectionPaneEntrypoint;
-use crate::settings::{AISettings, BlockVisibilitySettings, SettingsFileError};
 use crate::terminal::SizeInfo;
 use crate::terminal::model::blockgrid::BlockGrid;
 use crate::ui_components::icons;

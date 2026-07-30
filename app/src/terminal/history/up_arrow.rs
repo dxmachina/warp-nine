@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use std::collections::HashSet;
 
 use warp_core::features::FeatureFlag;
@@ -5,7 +6,6 @@ use warpui::{AppContext, EntityId, SingletonEntity};
 
 use super::History;
 use crate::input_suggestions::HistoryInputSuggestion;
-use crate::settings::AISettings;
 use crate::suggestions::ignored_suggestions_model::{IgnoredSuggestionsModel, SuggestionType};
 use crate::terminal::model::session::SessionId;
 

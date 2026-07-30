@@ -1,3 +1,7 @@
+use crate::settings::{
+    AISettings, AISettingsChangedEvent, InputSettings, InputSettingsChangedEvent,
+    WarpPromptSeparator,
+};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use settings::Setting as _;
@@ -7,7 +11,6 @@ use warpui::{
 
 pub use super::ContextChipKind;
 use crate::settings::{
-    AISettings, AISettingsChangedEvent, InputSettings, InputSettingsChangedEvent,
     WarpPromptSeparator,
 };
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};

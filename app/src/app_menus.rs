@@ -1,3 +1,6 @@
+use crate::settings::{
+    AISettings, BlockVisibilitySettings, DebugSettings, DefaultSessionMode, SelectionSettings,
+};
 use std::borrow::Cow;
 use std::fs::File;
 use std::path::PathBuf;
@@ -25,7 +28,6 @@ use crate::features::{FeatureFlag, runtime_flags_menu_items};
 use crate::root_view::OpenLaunchConfigArg;
 use crate::server::telemetry::LaunchConfigUiLocation;
 use crate::settings::{
-    AISettings, BlockVisibilitySettings, DebugSettings, DefaultSessionMode, SelectionSettings,
 };
 use crate::terminal::alt_screen_reporting::AltScreenReporting;
 use crate::terminal::session_settings::SessionSettings;

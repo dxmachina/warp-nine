@@ -1,3 +1,6 @@
+use crate::settings::{
+    AISettings, DebugSettings, EnforceMinimumContrast, PrivacySettings, TerminalSpacing,
+};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::mem;
@@ -65,7 +68,6 @@ use crate::drive::settings::WarpDriveSettings;
 use crate::features::FeatureFlag;
 use crate::pane_group::SplitPaneState;
 use crate::settings::{
-    AISettings, DebugSettings, EnforceMinimumContrast, PrivacySettings, TerminalSpacing,
 };
 use crate::terminal::alt_screen::{should_intercept_mouse, should_intercept_scroll};
 use crate::terminal::block_list_viewport::AutoscrollBehavior;

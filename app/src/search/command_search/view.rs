@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
@@ -47,7 +48,6 @@ use crate::search::search_bar::{SearchBar, SearchBarEvent, SearchBarState, Searc
 use crate::send_telemetry_from_ctx;
 use crate::server::ids::ServerId;
 use crate::server::telemetry::TelemetryEvent;
-use crate::settings::AISettings;
 use crate::terminal::input::MenuPositioning;
 use crate::terminal::model::session::SessionId;
 use crate::terminal::resizable_data::{DEFAULT_UNIVERSAL_SEARCH_WIDTH, ModalType, ResizableData};

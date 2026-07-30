@@ -1,3 +1,19 @@
+use crate::settings::ai::AISettings;
+use crate::settings::{
+    AISettingsChangedEvent, AliasExpansionEnabled, AliasExpansionSettings, AppEditorSettings,
+    AtContextMenuInTerminalMode, AutocompleteSymbols, AutosuggestionKeybindingHint,
+    ChangelogSettings, CloudPreferencesSettings, CodeEditorLineNumberMode,
+    CodeEditorLineNumberModeSetting, CodeSettings, CommandCorrections, CompletionsOpenWhileTyping,
+    CopyOnSelect, CtrlTabBehavior, DEFAULT_QUAKE_MODE_SIZE_PERCENTAGES, DefaultSessionMode,
+    EnableSlashCommandsInTerminal, ErrorUnderliningEnabled, ExtraMetaKeys, GPUSettings,
+    GlobalHotkeyMode, InputSettings, InputSettingsChangedEvent, LinuxSelectionClipboard,
+    MiddleClickPasteEnabled, MouseScrollMultiplier, OutlineCodebaseSymbolsForAtContextMenu,
+    PreferLowPowerGPU, PreferredGraphicsBackend, QUAKE_WINDOW_AUTOHIDE_SUPPORTED,
+    QuakeModeSettings, ScrollSettings, ScrollSettingsChangedEvent, SelectionSettings,
+    ShowAutosuggestionIgnoreButton, ShowChangelogAfterUpdate, ShowTerminalInputMessageBar,
+    SshSettings, SyntaxHighlighting, TabBehavior, UserNativeRedirectPreference, VimModeEnabled,
+    VimStatusBar, VimUnnamedSystemClipboard,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -60,10 +76,8 @@ use crate::search::command_search::settings::{
     CommandSearchSettings, ShowGlobalWorkflowsInUniversalSearch,
 };
 use crate::server::telemetry::TelemetryEvent;
-use crate::settings::ai::AISettings;
 use crate::settings::native_preference::{NativePreferenceSettings, UserNativePreference};
 use crate::settings::{
-    AISettingsChangedEvent, AliasExpansionEnabled, AliasExpansionSettings, AppEditorSettings,
     AtContextMenuInTerminalMode, AutocompleteSymbols, AutosuggestionKeybindingHint,
     ChangelogSettings, CloudPreferencesSettings, CodeEditorLineNumberMode,
     CodeEditorLineNumberModeSetting, CodeSettings, CommandCorrections, CompletionsOpenWhileTyping,

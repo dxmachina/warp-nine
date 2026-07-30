@@ -1,3 +1,10 @@
+use crate::terminal::view::{
+    BlockNotification, ConversationRestorationInNewPaneType, ExecuteCommandEvent,
+    LeftPanelTargetView, SyncEvent, TerminalViewState,
+};
+pub use pane::ai_document_pane::AIDocumentPane;
+pub use pane::ai_fact_pane::AIFactPane;
+use crate::settings::{AISettings, DefaultSessionMode, PaneSettings};
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -92,7 +99,6 @@ use crate::server::telemetry::{
     AnonymousUserSignupEntrypoint, PaletteSource, SharingDialogSource, TelemetryEvent,
 };
 use crate::session_management::SessionNavigationData;
-use crate::settings::{AISettings, DefaultSessionMode, PaneSettings};
 use crate::settings_view::SettingsSection;
 use crate::shell_indicator::ShellIndicatorType;
 use crate::terminal::available_shells::{AvailableShell, AvailableShells};
@@ -119,11 +125,9 @@ use crate::terminal::shared_session::{
     self, IsSharedSessionCreator, SharedSessionActionSource, SharedSessionSource,
 };
 use crate::terminal::view::inline_banner::{
-    ZeroStatePromptSuggestionTriggeredFrom, ZeroStatePromptSuggestionType,
 };
 use crate::terminal::view::ssh_file_upload::FileUploadId;
 use crate::terminal::view::{
-    BlockNotification, ConversationRestorationInNewPaneType, ExecuteCommandEvent,
     LeftPanelTargetView, SyncEvent, TerminalViewState,
 };
 use crate::terminal::{
@@ -145,26 +149,20 @@ use crate::workspace::{
 };
 use crate::{cmd_or_ctrl_shift, send_telemetry_from_ctx};
 
-mod ambient_pane_restoration;
 pub mod focus_state;
 pub mod pane;
 pub mod tree;
 pub mod working_directories;
-use ambient_pane_restoration::AmbientRestoreKind;
 use focus_state::PaneGroupFocusState;
 
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod tests;
 
-pub use pane::ai_document_pane::AIDocumentPane;
-pub use pane::ai_fact_pane::AIFactPane;
-pub use pane::code_diff_pane::CodeDiffPane;
 pub use pane::code_pane::CodePane;
 pub use pane::custom_router_editor_pane::CustomRouterEditorPane;
 pub use pane::env_var_collection_pane::EnvVarCollectionPane;
 pub use pane::environment_management_pane::EnvironmentManagementPane;
-pub use pane::execution_profile_editor_pane::ExecutionProfileEditorPane;
 pub use pane::file_pane::FilePane;
 pub use pane::network_log_pane::NetworkLogPane;
 pub use pane::notebook_pane::NotebookPane;

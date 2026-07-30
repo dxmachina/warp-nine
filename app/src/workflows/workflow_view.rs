@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -79,7 +80,6 @@ use crate::server::server_api::ServerApiProvider;
 use crate::server::telemetry::{
     CloudObjectTelemetryMetadata, SharingDialogSource, TelemetryCloudObjectType, TelemetryEvent,
 };
-use crate::settings::AISettings;
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
 };

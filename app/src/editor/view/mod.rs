@@ -6,6 +6,11 @@ mod snapshot;
 #[cfg(feature = "voice_input")]
 mod voice;
 
+use crate::settings::AISettingsChangedEvent;
+use crate::settings::{
+    AISettings, AppEditorSettings, AppEditorSettingsChangedEvent, CursorBlink, CursorDisplayType,
+    InputSettings, SelectionSettings,
+};
 use core::f32;
 use std::borrow::Cow;
 use std::cmp::{self, Ordering};
@@ -92,7 +97,6 @@ pub use {
 use self::model::{LocalSelections, Selection, UpdateBufferOption};
 use super::Point;
 use super::soft_wrap::{ClampDirection, DisplayPointAndClampDirection};
-use crate::BlocklistAIHistoryModel;
 use crate::appearance::Appearance;
 use crate::channel::{Channel, ChannelState};
 use crate::editor::RangeExt;
@@ -101,9 +105,7 @@ use crate::editor::autosuggestion_ignore_view::{AutosuggestionIgnore, Autosugges
 use crate::features::FeatureFlag;
 use crate::server::telemetry::TelemetryEvent;
 #[cfg(feature = "voice_input")]
-use crate::settings::AISettingsChangedEvent;
 use crate::settings::{
-    AISettings, AppEditorSettings, AppEditorSettingsChangedEvent, CursorBlink, CursorDisplayType,
     InputSettings, SelectionSettings,
 };
 use crate::settings_view::flags;

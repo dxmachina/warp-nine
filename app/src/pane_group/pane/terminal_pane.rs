@@ -21,7 +21,6 @@ use super::{
 };
 // Imports below are only consumed by the non-wasm `launch_local_*_child`
 // dispatch helpers; gating them keeps the wasm build warning-clean.
-use crate::AIExecutionProfilesModel;
 #[cfg(feature = "local_fs")]
 #[cfg(not(target_family = "wasm"))]
 use crate::app_state::{AmbientAgentPaneSnapshot, LeafContents, TerminalPaneSnapshot};

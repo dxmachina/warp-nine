@@ -8,7 +8,6 @@ use warpui::elements::{
     ParentElement, ParentOffsetBounds, Radius, Stack,
 };
 
-use crate::terminal::CLIAgent;
 use crate::themes::theme::Fill as ThemeFill;
 
 /// Background color used for the Oz agent's circle when it is running in an ambient (cloud)

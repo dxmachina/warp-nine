@@ -20,10 +20,10 @@ use crate::ui_components::icons;
 use crate::view_components::action_button::{ActionButton, SecondaryTheme};
 use crate::view_components::{DropdownItem, FilterableDropdown};
 use crate::workspace::tab_settings::{
-use crate::persisted_workspace::{PersistedWorkspace, PersistedWorkspaceEvent};
     DirectoryTabColor, DirectoryTabColors, TabSettings, TabSettingsChangedEvent,
     canonical_directory_key,
 };
+use crate::persisted_workspace::{PersistedWorkspace, PersistedWorkspaceEvent};
 
 const ADD_DIRECTORY_LABEL: &str = "+ Add directory…";
 const BUTTON_LABEL: &str = "Add directory color";

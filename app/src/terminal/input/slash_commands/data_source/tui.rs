@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, AISettingsChangedEvent};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,7 +19,6 @@ use crate::search::mixer::DataSourceRunErrorWrapper;
 use crate::search::slash_command_menu::static_commands::Availability;
 use crate::search::slash_command_menu::static_commands::commands::{COMMAND_REGISTRY, VOICE};
 #[cfg(feature = "voice_input")]
-use crate::settings::{AISettings, AISettingsChangedEvent};
 use crate::terminal::TerminalModel;
 use crate::terminal::input::slash_commands::AcceptSlashCommandOrSavedPrompt;
 use crate::terminal::model::session::active_session::ActiveSession;

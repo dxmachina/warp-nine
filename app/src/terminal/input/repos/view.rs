@@ -22,9 +22,9 @@ use crate::terminal::input::repos::AcceptRepo;
 use crate::terminal::input::repos::data_source::GitSummaryCache;
 use crate::terminal::input::repos::data_source::RepoMenuDataSource;
 use crate::terminal::input::suggestions_mode_model::{
-use crate::persisted_workspace::PersistedWorkspace;
     InputSuggestionsModeEvent, InputSuggestionsModeModel,
 };
+use crate::persisted_workspace::PersistedWorkspace;
 
 /// Events emitted by InlineReposMenuView.
 #[derive(Debug, Clone)]

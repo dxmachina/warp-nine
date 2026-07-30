@@ -5,6 +5,7 @@ mod search_item;
 pub(super) mod view;
 
 #[cfg(feature = "local_fs")]
+use crate::settings::AISettings;
 use std::path::PathBuf;
 
 use ai::skills::SkillReference;
@@ -38,7 +39,6 @@ use crate::search::slash_command_menu::static_commands::{Availability, SlashComm
 use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::server::ids::SyncId;
 use crate::server::telemetry::{AgentModeAutoDetectionSettingOrigin, SlashCommandAcceptedDetails};
-use crate::settings::AISettings;
 use crate::tab::SelectedTabColor;
 use crate::terminal::input::decorations::InputBackgroundJobOptions;
 use crate::terminal::input::inline_menu::{InlineMenuAction, InlineMenuType};

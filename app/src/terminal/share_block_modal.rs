@@ -1,3 +1,6 @@
+use crate::settings::{
+    AISettings, EnforceMinimumContrast, FontSettings, FontSettingsChangedEvent, PrivacySettings,
+};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
@@ -44,7 +47,6 @@ use crate::server::block::{Block as ServerBlock, DisplaySetting};
 use crate::server::server_api::block::BlockClient;
 use crate::server::telemetry::TelemetryEvent;
 use crate::settings::{
-    AISettings, EnforceMinimumContrast, FontSettings, FontSettingsChangedEvent, PrivacySettings,
 };
 use crate::settings_view::SettingsSection;
 use crate::terminal::TerminalModel;

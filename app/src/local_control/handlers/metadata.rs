@@ -2,6 +2,7 @@
 #[cfg(test)]
 #[path = "metadata_tests.rs"]
 mod tests;
+use crate::settings::{AISettings, CodeSettings};
 use ::local_control::protocol::{
     ActionNameParams, ActiveTargetChain, PaneTarget, SessionTarget, SurfaceListResult,
     SurfaceSummary, TabTarget, TargetSelector, WindowTarget,
@@ -20,7 +21,6 @@ use crate::features::FeatureFlag;
 use crate::local_control::LocalControlBridge;
 use crate::local_control::resolver::{reject_target_families, require_active_window_id_for_action};
 use crate::pane_group::{PaneGroup, PaneId};
-use crate::settings::{AISettings, CodeSettings};
 use crate::workspace::Workspace;
 use crate::workspace::tab_settings::TabSettings;
 

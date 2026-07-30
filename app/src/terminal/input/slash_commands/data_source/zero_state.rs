@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use itertools::Itertools;
 use warp_core::features::FeatureFlag;
 use warpui::{Entity, ModelHandle, SingletonEntity};
@@ -6,7 +7,6 @@ use crate::cloud_object::model::persistence::CloudModel;
 use crate::search::SyncDataSource;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::DataSourceRunErrorWrapper;
-use crate::settings::AISettings;
 use crate::terminal::input::slash_commands::{
     AcceptSlashCommandOrSavedPrompt, GuiSlashCommandDataSource, InlineItem, SlashCommandDataSource,
     TuiSlashCommandDataSource,

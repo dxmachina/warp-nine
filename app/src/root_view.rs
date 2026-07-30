@@ -1,3 +1,8 @@
+use crate::settings::{
+    AISettings, QuakeModeSettings, ThemeSettings, apply_account_first_onboarding_settings,
+    apply_onboarding_settings,
+};
+        use crate::settings::AISettings;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -75,7 +80,6 @@ use crate::settings::cloud_preferences_syncer::{
     CloudPreferencesSyncer, CloudPreferencesSyncerEvent,
 };
 use crate::settings::{
-    AISettings, QuakeModeSettings, ThemeSettings, apply_account_first_onboarding_settings,
     apply_onboarding_settings,
 };
 use crate::settings_view::{OpenTeamsSettingsModalArgs, SettingsSection, flags};
@@ -3633,7 +3637,6 @@ impl RootView {
         use voice_input::{VoiceInput, VoiceInputState, VoiceInputToggledFrom};
         use warpui::event::KeyState;
 
-        use crate::settings::AISettings;
 
         // Check that the released key matches the configured voice input toggle key.
         let ai_settings = AISettings::as_ref(ctx);

@@ -10,6 +10,10 @@ pub mod login_slide;
 pub mod needs_sso_link_view;
 pub mod paste_auth_token_modal;
 mod user_properties;
+use crate::settings::{
+    AISettings, CRASH_REPORTING_ENABLED_DEFAULTS_KEY, CloudPreferencesSettings, PrivacySettings,
+    TELEMETRY_ENABLED_DEFAULTS_KEY,
+};
 pub use warp_server_auth::{auth_state, credentials, user, user_uid};
 #[cfg(target_family = "wasm")]
 pub mod web_handoff;
@@ -38,7 +42,6 @@ use crate::server::sync_queue::SyncQueue;
 use crate::server::telemetry::{PaletteSource, TelemetryEvent};
 use crate::session_management::{RunningSessionSummary, SessionNavigationData};
 use crate::settings::{
-    AISettings, CRASH_REPORTING_ENABLED_DEFAULTS_KEY, CloudPreferencesSettings, PrivacySettings,
     TELEMETRY_ENABLED_DEFAULTS_KEY,
 };
 use crate::terminal::general_settings::GeneralSettings;

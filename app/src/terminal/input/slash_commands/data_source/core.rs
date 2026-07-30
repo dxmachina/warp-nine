@@ -1,3 +1,6 @@
+use crate::settings::{
+    AISettings, AISettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
+};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -18,7 +21,6 @@ use crate::search::slash_command_menu::fuzzy_match::SlashCommandFuzzyMatchResult
 use crate::search::slash_command_menu::static_commands::{Availability, commands};
 use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::settings::{
-    AISettings, AISettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
 };
 use crate::terminal::input::slash_command_model::{
     DetectedCommand, DetectedSkillCommand, ParsedSlashCommandInput,

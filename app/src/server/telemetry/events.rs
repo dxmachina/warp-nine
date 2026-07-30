@@ -1,3 +1,4 @@
+use crate::settings::AgentModeCodingPermissionsType;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,6 @@ use crate::search::QueryFilter;
 use crate::search::command_search::searcher::CommandSearchItemAction;
 use crate::server::block::DisplaySetting;
 use crate::server::ids::{ObjectUid, ServerId};
-use crate::settings::AgentModeCodingPermissionsType;
 use crate::settings::import::config::ParsedTerminalSetting;
 use crate::settings::import::model::TerminalType;
 use crate::settings_view::TeamsInviteOption;
@@ -48,7 +48,6 @@ use crate::terminal::settings::AltScreenPaddingMode;
 use crate::terminal::shared_session::SharedSessionActionSource;
 use crate::terminal::shell::ShellType;
 use crate::terminal::view::inline_banner::{
-    ZeroStatePromptSuggestionTriggeredFrom, ZeroStatePromptSuggestionType,
 };
 use crate::terminal::view::{
     BlockEntity, BlockSelectionDetails, NotificationsDiscoveryBannerAction,

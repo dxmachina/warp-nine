@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -8,7 +9,6 @@ use warp_errors::report_error;
 use warpui::{SingletonEntity as _, ViewContext};
 
 use crate::pane_group::{NewTerminalOptions, PanesLayout};
-use crate::settings::AISettings;
 use crate::terminal::view::{
     AgentOnboardingVersion, OnboardingIntention, OnboardingVersion, TerminalAction,
 };

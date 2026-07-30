@@ -1,3 +1,4 @@
+use crate::settings::ai::AISettings;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -47,7 +48,6 @@ use crate::modal::{Modal, ModalEvent, ModalViewState};
 use crate::pricing::{PricingInfoModel, PricingInfoModelEvent};
 use crate::server::ids::ServerId;
 use crate::server::telemetry::TelemetryEvent;
-use crate::settings::ai::AISettings;
 use crate::settings_view::settings_page::TOGGLE_BUTTON_RIGHT_PADDING;
 use crate::ui_components::blended_colors;
 use crate::ui_components::buttons::icon_button;

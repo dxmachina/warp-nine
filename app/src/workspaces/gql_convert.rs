@@ -1,3 +1,4 @@
+use crate::settings::AgentModeCommandExecutionPredicate;
 use std::path::PathBuf;
 
 use anyhow::{Result, anyhow, bail};
@@ -67,7 +68,6 @@ use crate::server::cloud_objects::listener::ObjectUpdateMessage;
 use crate::server::experiments::ServerExperiment;
 use crate::server::graphql::schema::object_action_history_from_gql;
 use crate::server::ids::ServerId;
-use crate::settings::AgentModeCommandExecutionPredicate;
 use crate::workspaces::workspace::{
     AiOverages, BonusGrantsPurchased, ByoApiKeyPolicy, ByoEndpointPolicy, CodebaseContextPolicy,
     EnterpriseCreditsAutoReloadPolicy, EnterprisePayAsYouGoPolicy, ManagedByokByoePolicy,

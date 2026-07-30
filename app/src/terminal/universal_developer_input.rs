@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, AISettingsChangedEvent};
 use std::borrow::Cow;
 use std::boxed::Box;
 use std::cell::RefCell;
@@ -29,13 +30,11 @@ use warpui::{
     View, ViewAsRef, ViewContext, ViewHandle,
 };
 
-use crate::BlocklistAIHistoryModel;
 use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::network::NetworkStatus;
 #[cfg(not(target_family = "wasm"))]
 #[cfg(not(target_family = "wasm"))]
 use crate::settings::InputSettings;
-use crate::settings::{AISettings, AISettingsChangedEvent};
 use crate::settings_view::SettingsSection;
 use crate::terminal::input::MenuPositioningProvider;
 use crate::terminal::keys::TerminalKeybindings;
@@ -43,10 +42,6 @@ use crate::terminal::model::block::BlockMetadata;
 #[cfg(not(target_family = "wasm"))]
 use crate::terminal::model::session::SessionType;
 use crate::terminal::model::session::Sessions;
-use crate::terminal::profile_model_selector::{
-    ProfileModelSelector, ProfileModelSelectorEvent, calculate_max_profile_name_width,
-    calculate_scaled_font_size,
-};
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::ui_components::icons::Icon;

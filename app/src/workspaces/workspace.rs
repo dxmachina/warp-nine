@@ -1,3 +1,4 @@
+use crate::settings::AgentModeCommandExecutionPredicate;
 use std::cmp::Ordering;
 use std::path::PathBuf;
 
@@ -13,7 +14,6 @@ pub use warp_graphql::billing::{
 use super::team::{MembershipRole, Team};
 use crate::auth::UserUid;
 use crate::server::ids::ServerId;
-use crate::settings::AgentModeCommandExecutionPredicate;
 
 #[derive(Clone, Copy, Hash, Debug, PartialEq, Eq)]
 pub struct WorkspaceUid(ServerId);

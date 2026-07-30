@@ -1,3 +1,4 @@
+use crate::settings::{AISettings, VoiceInputToggleKey};
 use settings::Setting as _;
 use voice_input::{
     StartListeningError, VoiceInput, VoiceInputLifecycle, VoiceInputLifecycleState,
@@ -19,7 +20,6 @@ use crate::appearance::Appearance;
 use crate::editor::EditorElement;
 use crate::server::server_api::TranscribeError;
 use crate::server::telemetry::TelemetryEvent;
-use crate::settings::{AISettings, VoiceInputToggleKey};
 use crate::themes::theme::Fill;
 use crate::ui_components::buttons::{icon_button, icon_button_with_color};
 use crate::ui_components::icons;

@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use std::sync::Arc;
 
 use futures_lite::future::yield_now;
@@ -8,7 +9,6 @@ use crate::search::async_snapshot_data_source::AsyncSnapshotDataSource;
 use crate::search::command_search::searcher::CommandSearchItemAction;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::{BoxFuture, DataSourceRunErrorWrapper};
-use crate::settings::AISettings;
 use crate::terminal;
 use crate::terminal::HistoryEntry;
 use crate::terminal::model::session::SessionId;

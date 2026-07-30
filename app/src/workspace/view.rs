@@ -22,6 +22,23 @@ mod vertical_tabs;
 #[cfg(target_family = "wasm")]
 mod wasm_view;
 
+use crate::terminal::view::{
+    AgentOnboardingVersion, ConversationRestorationInNewPaneType, LeftPanelTargetView,
+    NOTIFICATIONS_TROUBLESHOOT_URL, OnboardingIntention, OnboardingVersion, SyncEvent,
+    SyncInputType, TerminalAction,
+};
+use crate::{
+    AgentNotificationsModel, BlocklistAIHistoryModel, GlobalResourceHandles, TelemetryEvent,
+    autoupdate, send_telemetry_from_ctx, settings,
+};
+use crate::settings::{
+    AISettings, AISettingsChangedEvent, AccessibilitySettings, AliasExpansionSettings,
+    AppEditorSettings, BlockVisibilitySettings, ChangelogSettings, CodeSettings,
+    CodeSettingsChangedEvent, CtrlTabBehavior, CursorBlink, DebugSettings, DefaultSessionMode,
+    FontSettings, GPUSettings, InputModeSettings, InputSettings, MonospaceFontSize, PaneSettings,
+    PrivacySettings, SelectionSettings, Settings, SshSettings, ThemeSettings, active_theme_kind,
+    respect_system_theme,
+};
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -52,6 +69,7 @@ use command::blocking::Command;
 use futures::Future;
 use itertools::Itertools;
 use lazy_static::lazy_static;
+use crate::persisted_workspace::PersistedWorkspace;
 pub(crate) use onboarding::OnboardingTutorial;
 use parking_lot::FairMutex;
 use pathfinder_color::ColorU;
@@ -128,7 +146,6 @@ use super::action::{
     VerticalTabsPaneContextMenuTarget, WorkspaceAction,
 };
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
-use super::auto_handoff::AutoCloudHandoffController;
 pub(crate) use super::close_session_confirmation_dialog::OpenDialogSource;
 use super::close_session_confirmation_dialog::{
     CloseSessionConfirmationDialog, CloseSessionConfirmationEvent,
@@ -286,7 +303,6 @@ use crate::server::telemetry::{
 use crate::session_management::{SessionNavigationData, SessionSource, TabNavigationData};
 use crate::settings::cloud_preferences::CloudPreferencesSettings;
 use crate::settings::{
-    AISettings, AISettingsChangedEvent, AccessibilitySettings, AliasExpansionSettings,
     AppEditorSettings, BlockVisibilitySettings, ChangelogSettings, CodeSettings,
     CodeSettingsChangedEvent, CtrlTabBehavior, CursorBlink, DebugSettings, DefaultSessionMode,
     FontSettings, GPUSettings, InputModeSettings, InputSettings, MonospaceFontSize, PaneSettings,
@@ -357,10 +373,8 @@ use crate::terminal::shell::ShellType;
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 #[cfg(feature = "local_tty")]
 use crate::terminal::view::docker_sandbox::DEFAULT_DOCKER_SANDBOX_BASE_IMAGE;
-use crate::terminal::view::inline_banner::ZeroStatePromptSuggestionType;
 use crate::terminal::view::ssh_file_upload::FileUploadId;
 use crate::terminal::view::{
-    AgentOnboardingVersion, ConversationRestorationInNewPaneType, LeftPanelTargetView,
     NOTIFICATIONS_TROUBLESHOOT_URL, OnboardingIntention, OnboardingVersion, SyncEvent,
     SyncInputType, TerminalAction,
 };
@@ -421,7 +435,6 @@ use crate::workflows::{
     WorkflowViewMode,
 };
 use crate::workspace::action::CommandSearchOptions;
-use crate::workspace::bonus_grant_notification_model::BonusGrantNotificationEvent;
 #[cfg(target_os = "macos")]
 use crate::workspace::cli_install;
 use crate::workspace::cross_window_tab_drag::{
@@ -470,8 +483,6 @@ use crate::workspace::{ForkFromExchange, ForkedConversationDestination};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::AdminEnablementSetting;
 use crate::{
-use crate::persisted_workspace::PersistedWorkspace;
-    AgentNotificationsModel, BlocklistAIHistoryModel, GlobalResourceHandles, TelemetryEvent,
     autoupdate, send_telemetry_from_ctx, settings,
 };
 
@@ -18760,7 +18771,6 @@ impl Workspace {
     }
 
     fn handle_codex_modal_event(&mut self, event: &CodexModalEvent, ctx: &mut ViewContext<Self>) {
-        use crate::AIExecutionProfilesModel;
 
         match event {
             CodexModalEvent::Close => {
@@ -18831,9 +18841,6 @@ impl Workspace {
         ctx: &mut ViewContext<Self>,
     ) {
         use crate::terminal::model::rich_content::RichContentType;
-        use crate::terminal::view::plugin_instructions_block::{
-            PluginInstructionsBlock, PluginInstructionsBlockEvent,
-        };
         use crate::terminal::view::rich_content::{
             RichContentInsertionPosition, RichContentMetadata,
         };

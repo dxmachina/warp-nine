@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use std::sync::Arc;
 
 use futures_lite::future::yield_now;
@@ -13,7 +14,6 @@ use crate::search::async_snapshot_data_source::AsyncSnapshotDataSource;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::{BoxFuture, DataSourceRunErrorWrapper};
 use crate::server::ids::SyncId;
-use crate::settings::AISettings;
 use crate::terminal::input::slash_commands::{AcceptSlashCommandOrSavedPrompt, InlineItem};
 use crate::workflows::CloudWorkflowModel;
 

@@ -1,16 +1,38 @@
 mod action;
 mod block_banner;
 pub mod block_onboarding;
-pub(crate) mod blocklist_filter;
 mod bookmarks;
 mod context_menu;
 pub mod init;
 pub mod inline_banner;
-pub(crate) mod queued_prompts_panel;
 #[cfg(test)]
 #[path = "view/queued_prompts_tests.rs"]
 mod queued_prompts_tests;
+use super::{CLIAgent, GridType, cli_agent};
+use crate::terminal::cli_agent_sessions::event::{
+    CLI_AGENT_NOTIFICATION_SENTINEL, CLIAgentEvent, CLIAgentEventPayload, CLIAgentEventSource,
+    CLIAgentEventType, parse_event,
+};
+use crate::terminal::view::inline_banner::{
+    AgentModeSetupSpeedbumpBannerAction, AgentModeSetupSpeedbumpBannerState,
+    AliasExpansionBannerState, NotificationsDiscoveryBannerState, NotificationsErrorBannerState,
+    PromptSuggestionBannerState, VimModeBannerState, render_agent_mode_setup_banner,
+};
+use crate::{
+    AIAgentActionResultType, AIRequestUsageModel, ActiveSession as WindowActiveSession, safe_error,
+    safe_warn, send_telemetry_from_ctx, send_telemetry_sync_from_ctx,
+};
+use crate::settings::ai::FocusedTerminalInfo;
+use crate::settings::{
+    AISettings, AISettingsChangedEvent, AliasExpansionSettings, AppEditorSettings,
+    BlockVisibilitySettings, BlockVisibilitySettingsChangedEvent, CodeSettings, DebugSettings,
+    DebugSettingsChangedEvent, EmacsBindingsSettings, FontSettings, FontSettingsChangedEvent,
+    InputModeSettings, InputModeSettingsChangedEvent, InputSettings, PaneSettings,
+    PaneSettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
+    PrivacySettingsSnapshot, SelectionSettings, VimBannerSettings,
+};
 use ai::agent::action::InsertReviewComment;
+use crate::persisted_workspace::{LspTask, PersistedWorkspace};
 // TODO(advait): if we align on prompt suggestions banner in Input, move code out of inline_banner mod.
 pub(crate) mod init_environment;
 mod init_project;
@@ -31,7 +53,6 @@ mod pane_impl;
 mod passive_suggestions;
 mod pending_user_query;
 #[cfg(not(target_family = "wasm"))]
-pub(crate) mod plugin_instructions_block;
 pub mod rich_content;
 mod shared_session;
 mod shell_terminated_banner;
@@ -114,10 +135,6 @@ use session_sharing_protocol::sharer::{
     RoleUpdateReason, SessionEndedReason, SessionRetentionReason,
 };
 use settings::{Setting, ToggleableSetting};
-use shared_session::cloud_conversation_continuation::CloudConversationContinuationUiState;
-pub(crate) use shared_session::cloud_conversation_continuation::{
-    AIQueryRouting, resolve_ai_query_routing,
-};
 use shared_session::{SharedSessionAdapter, Viewer};
 use ssh_file_upload::{FileUpload, FileUploadEvent};
 use sum_tree::SeekBias;
@@ -267,12 +284,10 @@ use crate::server::telemetry::{
     TelemetryEvent, ToggleBlockFilterSource, WorkflowTelemetryMetadata,
 };
 use crate::session_management::{CommandContext, SessionNavigationPromptElements};
-use crate::settings::ai::FocusedTerminalInfo;
 #[cfg(feature = "local_fs")]
 use crate::settings::import::model::ImportedConfigModel;
 use crate::settings::import::view::{SettingsImportEvent, SettingsImportView};
 use crate::settings::{
-    AISettings, AISettingsChangedEvent, AliasExpansionSettings, AppEditorSettings,
     BlockVisibilitySettings, BlockVisibilitySettingsChangedEvent, CodeSettings, DebugSettings,
     DebugSettingsChangedEvent, EmacsBindingsSettings, FontSettings, FontSettingsChangedEvent,
     InputModeSettings, InputModeSettingsChangedEvent, InputSettings, PaneSettings,
@@ -374,7 +389,6 @@ use crate::terminal::view::init_environment::{InitEnvironmentBlock, InitEnvironm
 use crate::terminal::view::inline_banner::{
     AgentModeSetupSpeedbumpBannerAction, AgentModeSetupSpeedbumpBannerState,
     AliasExpansionBannerState, NotificationsDiscoveryBannerState, NotificationsErrorBannerState,
-    PromptSuggestionBannerState, VimModeBannerState, render_agent_mode_setup_banner,
 };
 use crate::terminal::view::passive_suggestions::PromptSuggestionResolution;
 pub use crate::terminal::view::rich_content::{
@@ -444,8 +458,6 @@ use crate::workspace::{
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 use crate::workspaces::workspace::CustomerType;
 use crate::{
-use crate::persisted_workspace::{LspTask, PersistedWorkspace};
-    AIAgentActionResultType, AIRequestUsageModel, ActiveSession as WindowActiveSession, safe_error,
     safe_warn, send_telemetry_from_ctx, send_telemetry_sync_from_ctx,
 };
 

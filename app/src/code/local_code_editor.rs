@@ -2,6 +2,7 @@
 /// and displaying them in a code editor.
 /// It also handles applying an optional diff to the file content that will be applied
 /// when the file is loaded.
+use crate::settings::{AISettings, CodeSettings};
 use std::{
     ops::Range,
     path::{Path, PathBuf},
@@ -67,7 +68,6 @@ use crate::code::global_buffer_model::{BufferState, GlobalBufferModel, GlobalBuf
 use crate::code::{SaveOutcome, ShowFindReferencesCardProvider};
 use crate::code_review::comments::CommentId;
 use crate::menu::{Event, Menu, MenuItem, MenuItemFields};
-use crate::settings::{AISettings, CodeSettings};
 use crate::terminal::TerminalView;
 use crate::workspace::WorkspaceAction;
 

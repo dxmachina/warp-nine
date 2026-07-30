@@ -1,3 +1,4 @@
+use crate::settings::AISettings;
 use std::collections::HashMap;
 
 use warp_errors::report_error;
@@ -21,7 +22,6 @@ use crate::search::mixer::DataSourceRunErrorWrapper;
 use crate::search::notebooks::fuzzy_match::FuzzyMatchNotebookResult;
 use crate::search::workflows::fuzzy_match::FuzzyMatchWorkflowResult;
 use crate::server::ids::{ObjectUid, SyncId};
-use crate::settings::AISettings;
 use crate::workflows::CloudWorkflow;
 
 /// Datasource that searches against all Warp Drive objects

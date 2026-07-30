@@ -1,12 +1,12 @@
 #[cfg(not(target_family = "wasm"))]
 pub mod persistence;
 
-use ai::document::AIDocumentId;
 use cloud_objects::cloud_object::{
     GenericCloudObject, GenericServerObject, ObjectType, ServerObjectModel,
 };
 use cloud_objects::ids::{ServerId, SyncId};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Serialized representation of a notebook for sync queue
 /// The AIDocumentID and ConversationID are stored here to avoid polluting the
@@ -22,7 +22,10 @@ pub struct SerializedNotebook {
 pub struct CloudNotebookModel {
     pub title: String,
     pub data: String,
-    pub ai_document_id: Option<AIDocumentId>,
+    /// LOCAL FORK: this was `ai::document::AIDocumentId`, a newtype over `Uuid` whose only
+    /// behavior was rejecting non-UUID strings on parse and printing the inner `Uuid`. The
+    /// stored/serialized form is unchanged.
+    pub ai_document_id: Option<Uuid>,
     /// This is the server-generated conversation token, not the client-side AIConversationId.
     pub conversation_id: Option<String>,
 }

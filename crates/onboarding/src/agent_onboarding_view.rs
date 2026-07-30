@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use ai::LLMId;
 use instant::Instant;
 use warp_core::features::FeatureFlag;
 use warp_core::send_telemetry_from_ctx;
@@ -142,7 +141,7 @@ impl AgentOnboardingView {
         theme_picker_themes: [WarpTheme; 4],
         skippable: bool,
         models: Vec<OnboardingModelInfo>,
-        default_model_id: LLMId,
+        default_model_id: String,
         workspace_enforces_autonomy: bool,
         agent_modality_enabled: bool,
         auth_state: OnboardingAuthState,
@@ -329,7 +328,7 @@ impl AgentOnboardingView {
     pub fn set_onboarding_models(
         &mut self,
         models: Vec<OnboardingModelInfo>,
-        default_model_id: LLMId,
+        default_model_id: String,
         ctx: &mut ViewContext<Self>,
     ) {
         self.onboarding_state.update(ctx, |state, ctx| {

@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 
-use ai::LLMId;
 use anyhow::Result;
 use onboarding::slides::OnboardingModelInfo;
 use onboarding::{
@@ -83,22 +82,22 @@ struct OnboardingMainView {
 impl OnboardingMainView {
     fn new(ctx: &mut ViewContext<Self>) -> Self {
         let themes = [phenomenon(), dark_theme(), light_theme(), adeberry()];
-        let default_model_id = LLMId::from("auto");
+        let default_model_id = "auto".to_string();
         let models = vec![
             OnboardingModelInfo {
-                id: LLMId::from("auto"),
+                id: "auto".to_string(),
                 title: "Auto".to_string(),
                 icon: Icon::Agent,
                 is_default: true,
             },
             OnboardingModelInfo {
-                id: LLMId::from("claude-sonnet"),
+                id: "claude-sonnet".to_string(),
                 title: "Claude Sonnet".to_string(),
                 icon: Icon::ClaudeLogo,
                 is_default: false,
             },
             OnboardingModelInfo {
-                id: LLMId::from("gpt-4o"),
+                id: "gpt-4o".to_string(),
                 title: "GPT-4o".to_string(),
                 icon: Icon::OpenAILogo,
                 is_default: false,

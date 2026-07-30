@@ -301,31 +301,20 @@ pub enum MCPServerTelemetryError {
     TransportError(String),
 }
 
-#[cfg(not(target_family = "wasm"))]
-impl From<rmcp::RmcpError> for MCPServerTelemetryError {
-    fn from(err: rmcp::RmcpError) -> Self {
-        match err {
-            rmcp::RmcpError::ClientInitialize(err) => Self::Initialization(err.to_string()),
-            rmcp::RmcpError::ServerInitialize(err) => Self::Initialization(err.to_string()),
-            rmcp::RmcpError::TransportCreation { error, .. } => {
-                Self::TransportError(error.to_string())
-            }
-            rmcp::RmcpError::Runtime(err) => Self::InternalError(err.to_string()),
-            rmcp::RmcpError::Service(err) => match err {
-                rmcp::ServiceError::McpError(_) => Self::ResponseError(err.to_string()),
-                rmcp::ServiceError::TransportSend(_) => Self::TransportError(err.to_string()),
-                rmcp::ServiceError::TransportClosed => Self::TransportError(err.to_string()),
-                rmcp::ServiceError::UnexpectedResponse => Self::ResponseError(err.to_string()),
-                rmcp::ServiceError::Cancelled { .. } => Self::InternalError(err.to_string()),
-                rmcp::ServiceError::Timeout { .. } => Self::TransportError(err.to_string()),
-                // The enum is marked as non-exhaustive, so we need a catch-all.
-                _ => Self::InternalError(err.to_string()),
-            },
-            // The enum is marked as non-exhaustive, so we need a catch-all.
-            _ => Self::InternalError(err.to_string()),
-        }
-    }
-}
+// LOCAL FORK: `impl From<rmcp::RmcpError> for MCPServerTelemetryError` was the app's
+// only use of `rmcp`, and it converted MCP client errors into the `MCPServerSpawned`
+// and `MCPToolCallAccepted` telemetry events. Both were emitted only from
+// `ai/blocklist/action_model/execute/call_mcp_tool.rs` and
+// `ai/mcp/templatable_manager/native.rs`, which went with the agent.
+//
+// Worth recording why this surfaced only now: the app declares plain
+// `rmcp = { version = "1.6" }` with no features. `RmcpError::ClientInitialize` lives
+// behind `rmcp/client`, which `crates/mcp` enabled — so cargo's feature unification
+// was what made this impl compile at all. Deleting that crate took the feature with
+// it. The fix is to drop the dead impl, not to re-add the feature.
+//
+// The six `MCP*` telemetry variants below are likewise unreachable now; they are
+// left for the dead-code sweep so this change stays scoped to the crate deletion.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenedSharingDialogEvent {
@@ -1783,16 +1772,6 @@ pub enum TelemetryEvent {
         origin: AgentModeAutoDetectionSettingOrigin,
     },
 
-    /// Emitted when the input type is changed from one type to new_input_type.
-    AgentModeChangedInputType {
-        input: Option<String>,
-        buffer_length: usize,
-        is_manually_changed: bool,
-        active_block_id: BlockId,
-        /// Whether or not Universal Developer Input mode is enabled
-        is_udi_enabled: bool,
-    },
-
     /// Emitted when the user manually toggles the terminal input from AI mode to shell mode when
     /// the current input text has been auto-detected as AI input -- this is likely a natural
     /// language auto-detection false-positive.
@@ -2298,12 +2277,6 @@ pub enum TelemetryEvent {
     },
     AgentModeSetupCreateEnvironmentAction {
         action: AgentModeSetupCreateEnvironmentActionType,
-    },
-    InputBufferSubmitted {
-        input_type: input_classifier::InputType,
-        is_locked: bool,
-        was_lock_set_with_empty_buffer: bool,
-        block_id: BlockId,
     },
     /// User submitted a prompt from the create project view - metadata (non-UGC)
     CreateProjectPromptSubmitted {
@@ -3280,15 +3253,6 @@ impl TelemetryEvent {
             TelemetryEvent::AgentModePotentialAutoDetectionFalsePositive(
                 AgentModeAutoDetectionFalsePositivePayload::InternalDogfoodUsers { input_text },
             ) => Some(json!({"input_text": input_text})),
-            TelemetryEvent::AgentModeChangedInputType {
-                input,
-                buffer_length,
-                is_manually_changed,
-                active_block_id,
-                is_udi_enabled,
-            } => Some(
-                json!({"input": input, "buffer_length": buffer_length, "is_manually_changed": is_manually_changed, "active_block_id": active_block_id, "is_udi_enabled": is_udi_enabled}),
-            ),
             TelemetryEvent::AgentModePrediction {
                 was_suggestion_accepted,
                 request_duration_ms,
@@ -4057,19 +4021,6 @@ impl TelemetryEvent {
             TelemetryEvent::AutoupdateMinidumpCleanupFailed { exit_code } => Some(json!({
                 "exit_code": exit_code,
             })),
-            // LOCAL FORK: `input_type_decision_source` recorded how the agent's
-            // input classifier decided, and went with the agent.
-            TelemetryEvent::InputBufferSubmitted {
-                input_type,
-                is_locked,
-                was_lock_set_with_empty_buffer,
-                block_id,
-            } => Some(json!({
-                "input_type": input_type,
-                "is_locked": is_locked,
-                "was_lock_set_with_empty_buffer": was_lock_set_with_empty_buffer,
-                "block_id": block_id,
-            })),
             TelemetryEvent::CreateProjectPromptSubmitted {
                 is_custom_prompt,
                 suggested_prompt,
@@ -4328,7 +4279,6 @@ impl TelemetryEvent {
             TelemetryEvent::AgentExitedShellProcess { .. } => true,
             TelemetryEvent::CreateProjectPromptSubmitted { .. } => false,
             TelemetryEvent::CreateProjectPromptSubmittedContent { .. } => true,
-            TelemetryEvent::InputBufferSubmitted { .. } => false,
             TelemetryEvent::AgentModePrediction {
                 actual_next_command_run,
                 ..
@@ -4338,7 +4288,6 @@ impl TelemetryEvent {
                 // AI input suggestion request/response) went with the agent.
                 actual_next_command_run.is_some()
             }
-            TelemetryEvent::AgentModeChangedInputType { input, .. } => input.is_some(),
             TelemetryEvent::UnitTestSuggestionAccepted { query, .. } => query.is_some(),
             TelemetryEvent::AgentModePotentialAutoDetectionFalsePositive(payload) => {
                 // For internal dogfood users, the payload contains UGC.
@@ -4879,7 +4828,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             | Self::AnonymousUserAttemptLoginGatedFeature
             | Self::AnonymousUserHitCloudObjectLimit => EnablementState::Always,
 
-            Self::AgentModeChangedInputType => EnablementState::Always,
             Self::StartedSharingCurrentSession
             | Self::StoppedSharingCurrentSession
             | Self::SharedSessionModalUpgradePressed => {
@@ -5232,9 +5180,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::AgentModeSetupProjectScopedRulesAction { .. } => EnablementState::Always,
             Self::AgentModeSetupCodebaseContextAction { .. } => EnablementState::Always,
             Self::AgentModeSetupCreateEnvironmentAction { .. } => EnablementState::Always,
-            Self::InputBufferSubmitted => EnablementState::ChannelSpecific {
-                channels: vec![Channel::Local, Channel::Dev],
-            },
             Self::AgentModeContinueConversationButtonClicked { .. } => EnablementState::Always,
             Self::AgentModeRewindDialogOpened { .. } => {
                 EnablementState::Flag(FeatureFlag::RevertToCheckpoints)
@@ -5619,7 +5564,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::AgentModePotentialAutoDetectionFalsePositive => {
                 "AgentMode.PotentialAutoDetectionFalsePositive"
             }
-            Self::AgentModeChangedInputType => "AgentMode.ChangedInputType",
             Self::AgentModePrediction => "Agent Predict",
             // Agent Mode Query Suggestions is the legacy name for Prompt Suggestions - we avoid renaming
             // the event to avoid breaking historical telemetry data.
@@ -5789,7 +5733,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::AgentModeSetupCreateEnvironmentAction { .. } => {
                 "AgentMode.SetupCreateEnvironmentAction"
             }
-            Self::InputBufferSubmitted => "AgentMode.NaturalLanguageDetection.InputBufferSubmitted",
             Self::RecentMenuItemSelected { .. } => "Recent Menu Item Selected",
             Self::OpenRepoFolderSubmitted { .. } => "Open Repo Folder Submitted",
             Self::OutOfCreditsBannerClosed => "revenue.OutOfCreditsBannerClosed",
@@ -6332,9 +6275,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::AgentModePotentialAutoDetectionFalsePositive => {
                 "Manually toggled input to shell mode after input was auto-detected as natural language."
             }
-            Self::AgentModeChangedInputType => {
-                "The input type was changed from shell -> AI or AI -> shell"
-            }
             Self::AgentModePrediction => "Completed an Agent Predict prediction",
             Self::ToggleIntelligentAutosuggestionsSetting => {
                 "Toggled on/off the intelligent autosuggestions setting"
@@ -6561,7 +6501,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::AgentModeSetupCreateEnvironmentAction { .. } => {
                 "User clicked a button in the Agent Mode setup create environment step"
             }
-            Self::InputBufferSubmitted => "Input buffer submitted",
             Self::RecentMenuItemSelected { .. } => {
                 "User selected an item from the recents list on the new tab zero state"
             }

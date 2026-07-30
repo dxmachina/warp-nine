@@ -87,7 +87,6 @@ cloud_objects.workspace = true
 command = { workspace = true }
 command-corrections.workspace = true
 command-signatures-v2 = { workspace = true, optional = true }
-computer_use.workspace = true
 crc.workspace = true
 content_inspector = "0.2.4"
 concat-idents.workspace = true
@@ -131,7 +130,6 @@ jaq-all.workspace = true
 jemalloc_pprof = { version = "0.8.1", optional = true }
 lsp-types = "0.97.0"
 indexmap = { version = "2.0.2", features = ["serde"] }
-input_classifier.workspace = true
 instant.workspace = true
 ipc.workspace = true
 iso8601-duration.workspace = true
@@ -149,7 +147,6 @@ warp_logging.workspace = true
 sentry = { workspace = true, optional = true }
 lz4_flex = "0.11"
 markdown_parser.workspace = true
-mcp.workspace = true
 memchr.workspace = true
 memo-map.workspace = true
 mermaid_to_svg.workspace = true
@@ -267,7 +264,6 @@ warp_multi_agent_api.workspace = true
 remote_server.workspace = true
 repo_metadata.workspace = true
 vim.workspace = true
-rmcp.workspace = true
 warp_isolation_platform.workspace = true
 warp_ripgrep.workspace = true
 warp_managed_secrets.workspace = true
@@ -423,7 +419,6 @@ winreg.workspace = true
 
 [dev-dependencies]
 async-process.workspace = true
-computer_use = { workspace = true, features = ["test-util"] }
 firebase.workspace = true
 jsonschema = { workspace = true, default-features = false }
 async-executor = "1.5.1"
@@ -736,11 +731,11 @@ grep_tool = []
 # For the most part, including GUI code in headless builds is fine; the main use case is
 # for things that pull in external dependencies.
 gui = ["voice_input"]
-nld_classifier_v1 = ["input_classifier/nld_classifier_v1"]
-nld_classifier_v2 = ["input_classifier/nld_classifier_v2"]
-nld_classifier_v3 = ["input_classifier/nld_classifier_v3"]
-nld_heuristic_v1 = ["input_classifier/nld_heuristic_v1"]
-nld_heuristic_v2 = ["input_classifier/nld_heuristic_v2"]
+# LOCAL FORK: the `nld_*` features forwarded into `crates/input_classifier`, the
+# natural-language-detection model that decided whether typed input was a shell
+# command or a prompt for the agent. The crate is deleted, so these forwards
+# cannot resolve. `nld_prompt_history_match` below is unrelated to that crate
+# and stays.
 nld_prompt_history_match = []
 msys2_shells = []
 file_backed_execution_profiles = []

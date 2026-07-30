@@ -1,4 +1,3 @@
-use ai::LLMId;
 use warpui_core::{App, View as _};
 
 use super::{OfferSlide, OfferVariant};
@@ -10,7 +9,7 @@ fn offer_slide_can_render_before_classification() {
         let onboarding_state = app.add_model(|_| {
             OnboardingStateModel::new(
                 Vec::new(),
-                LLMId::from("auto"),
+                "auto".to_string(),
                 false,
                 true,
                 OnboardingAuthState::FreeUser,

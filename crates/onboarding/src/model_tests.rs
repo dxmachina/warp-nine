@@ -1,4 +1,3 @@
-use ai::LLMId;
 use warp_core::features::FeatureFlag;
 use warp_core::telemetry::testing::MockTelemetryContextProvider;
 use warpui_core::{App, ModelHandle};
@@ -19,7 +18,7 @@ fn add_model(app: &mut App) -> ModelHandle<OnboardingStateModel> {
     app.add_model(|_| {
         OnboardingStateModel::new(
             Vec::new(),
-            LLMId::from("auto"),
+            "auto".to_string(),
             false,
             true,
             OnboardingAuthState::FreeUser,

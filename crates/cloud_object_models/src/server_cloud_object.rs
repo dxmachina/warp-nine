@@ -186,7 +186,8 @@ impl TryFromGql for ServerNotebook {
         let uid = ServerId::from_string_lossy(value.metadata.uid.inner());
         let ai_document_id = value
             .ai_document_id
-            .map(|id| ai::document::AIDocumentId::try_from(&id[..]))
+            // LOCAL FORK: was `ai::document::AIDocumentId::try_from`, which was exactly this parse.
+            .map(|id| uuid::Uuid::try_parse(&id[..]))
             .transpose()?;
         Ok(Self::new(
             SyncId::ServerId(uid),

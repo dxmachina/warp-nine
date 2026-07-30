@@ -113,7 +113,7 @@ fn add_api_key_command_is_tui_only_and_requires_a_provider() {
     assert!(!argument.should_execute_on_selection);
     assert_eq!(
         argument.hint_text,
-        Some(LLMProvider::API_KEY_PROVIDER_VALUE_NAME)
+        Some(API_KEY_PROVIDER_VALUE_NAME)
     );
     assert!(
         argument
@@ -144,7 +144,7 @@ fn clear_api_key_command_is_tui_only_and_requires_a_provider() {
     assert!(!argument.should_execute_on_selection);
     assert_eq!(
         argument.hint_text,
-        Some(LLMProvider::API_KEY_PROVIDER_VALUE_NAME)
+        Some(API_KEY_PROVIDER_VALUE_NAME)
     );
     assert!(
         argument

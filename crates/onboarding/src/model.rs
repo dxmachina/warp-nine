@@ -1,4 +1,3 @@
-use ai::LLMId;
 use warp_core::send_telemetry_from_ctx;
 use warpui_core::{Entity, ModelContext};
 
@@ -211,7 +210,7 @@ impl OnboardingStateModel {
     /// Creates a new OnboardingStateModel.
     pub(crate) fn new(
         models: Vec<OnboardingModelInfo>,
-        default_model_id: LLMId,
+        default_model_id: String,
         workspace_enforces_autonomy: bool,
         agent_modality_enabled: bool,
         auth_state: OnboardingAuthState,
@@ -659,7 +658,7 @@ impl OnboardingStateModel {
         ctx.emit(OnboardingStateEvent::UpgradeRequested);
     }
 
-    pub(crate) fn on_user_selected_model(&mut self, model_id: LLMId, ctx: &mut ModelContext<Self>) {
+    pub(crate) fn on_user_selected_model(&mut self, model_id: String, ctx: &mut ModelContext<Self>) {
         if self.agent_settings.selected_model_id == model_id {
             return;
         }
@@ -680,7 +679,7 @@ impl OnboardingStateModel {
     pub(crate) fn set_models(
         &mut self,
         models: Vec<OnboardingModelInfo>,
-        default_model_id: LLMId,
+        default_model_id: String,
         ctx: &mut ModelContext<Self>,
     ) {
         use warp_core::features::FeatureFlag;

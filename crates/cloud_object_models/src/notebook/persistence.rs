@@ -1,4 +1,3 @@
-use ai::document::AIDocumentId;
 use cloud_object_persistence::{
     CloudObjectReadContext, id_from_metadata, to_cloud_object_metadata, upsert_cloud_object,
 };
@@ -81,7 +80,8 @@ pub fn read_notebooks(
             let ai_document_id = notebook
                 .ai_document_id
                 .as_ref()
-                .and_then(|doc_id_str| AIDocumentId::try_from(doc_id_str.as_str()).ok());
+                // LOCAL FORK: was `AIDocumentId::try_from`, which was exactly this parse.
+                .and_then(|doc_id_str| uuid::Uuid::try_parse(doc_id_str.as_str()).ok());
             Some(CloudNotebook::new(
                 notebook_id,
                 CloudNotebookModel {

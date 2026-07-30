@@ -115,8 +115,13 @@ if ("$CHANNEL" -eq 'local') {
     $FEATURES = 'release_bundle,gui'
 }
 
-# All channels ship the v3 classifier and v2 heuristic.
-$FEATURES = "$FEATURES,nld_classifier_v3,nld_heuristic_v2"
+# LOCAL FORK: upstream appends `nld_classifier_v3,nld_heuristic_v2` here, which
+# is what makes `input_classifier` embed `bert_tiny_v3.onnx` (a measured 17.45MB
+# of the shipped binary, model plus tokenizer). The classifier only existed to
+# route typed input between the shell and the agent; with no agent,
+# `crates/input_classifier` is deleted and these two features no longer exist on
+# the `warp` package, so passing them would fail the build outright.
+# See the identical note in `script/macos/bundle`.
 
 $BINARY_PATH = "$CARGO_TARGET_OUTPUT_DIR\$BINARY_NAME"
 $BUNDLE_ID = "dev.warp.$APP_NAME"

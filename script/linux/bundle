@@ -234,8 +234,16 @@ if [[ "$ARTIFACT" == "cli" || "$ARTIFACT" == "warpctrl" ]]; then
     FEATURES="$FEATURES,warp_control_cli"
   fi
 elif [[ "$ARTIFACT" == "app" ]]; then
-  # All channels ship the v3 classifier and v2 heuristic.
-  FEATURES="$FEATURES,gui,nld_classifier_v3,nld_heuristic_v2"
+  # LOCAL FORK: upstream appends `nld_classifier_v3,nld_heuristic_v2` here, which
+  # is what makes `input_classifier` embed `bert_tiny_v3.onnx`. That single model
+  # plus its tokenizer is a measured 17.45MB of the shipped binary.
+  #
+  # The classifier exists to guess whether what you typed is a shell command or
+  # natural language meant for the agent. With no agent there is nothing to route
+  # to, so `crates/input_classifier` is deleted and these two features no longer
+  # exist on the `warp` package. Passing them would fail the build outright.
+  # See the identical note in `script/macos/bundle`.
+  FEATURES="$FEATURES,gui"
 fi
 if [[ -n "$EXTRA_FEATURES" ]]; then
   FEATURES="$FEATURES,$EXTRA_FEATURES"

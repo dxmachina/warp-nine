@@ -1,4 +1,3 @@
-use ai::LLMId;
 use pathfinder_color::ColorU;
 use ui_components::{Component as _, Options as _, button};
 use warp_core::features::FeatureFlag;
@@ -32,7 +31,7 @@ use crate::visuals::agent_visual;
 /// Information about a model displayed on the onboarding slide.
 #[derive(Clone, Debug)]
 pub struct OnboardingModelInfo {
-    pub id: LLMId,
+    pub id: String,
     pub title: String,
     pub icon: Icon,
     pub is_default: bool,
@@ -59,7 +58,7 @@ impl std::fmt::Display for AgentAutonomy {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AgentDevelopmentSettings {
     /// The selected model's ID.
-    pub selected_model_id: LLMId,
+    pub selected_model_id: String,
     pub autonomy: Option<AgentAutonomy>,
     /// Whether the CLI agent toolbar is enabled (maps to `should_render_cli_agent_footer`).
     pub cli_agent_toolbar_enabled: bool,
@@ -72,7 +71,7 @@ pub struct AgentDevelopmentSettings {
 }
 
 impl AgentDevelopmentSettings {
-    pub fn new(default_model_id: LLMId) -> Self {
+    pub fn new(default_model_id: String) -> Self {
         Self {
             selected_model_id: default_model_id,
             autonomy: Some(AgentAutonomy::default()),
@@ -87,12 +86,12 @@ impl AgentDevelopmentSettings {
 #[derive(Debug, Clone)]
 pub enum AgentSlideAction {
     /// Select model by its ID. When the picker is expanded this also collapses it.
-    SelectModel(LLMId),
+    SelectModel(String),
     /// Toggle the expanded state of the collapsed picker chip.
     ToggleModelListExpanded,
     /// Update the keyboard/hover highlight cursor to the given model id.
     /// Dispatched from hover handlers on enabled rows.
-    HighlightModel(LLMId),
+    HighlightModel(String),
     SelectAutonomy(AgentAutonomy),
     ToggleDisableOz,
     BackClicked,
@@ -117,7 +116,7 @@ pub struct AgentSlide {
     scroll_state: ClippedScrollStateHandle,
     dropdown_scroll_state: ClippedScrollStateHandle,
     is_model_list_expanded: bool,
-    highlighted_model_id: Option<LLMId>,
+    highlighted_model_id: Option<String>,
 }
 
 /// Produces the `SavePosition` id for the model row at `index` in the
@@ -890,7 +889,7 @@ impl View for AgentSlide {
 }
 
 impl AgentSlide {
-    fn select_model(&mut self, model_id: LLMId, ctx: &mut ViewContext<Self>) {
+    fn select_model(&mut self, model_id: String, ctx: &mut ViewContext<Self>) {
         self.onboarding_state.update(ctx, |state, ctx| {
             state.on_user_selected_model(model_id, ctx);
         });
@@ -926,7 +925,7 @@ impl AgentSlide {
     fn advance_highlighted_model(&mut self, forward: bool, ctx: &mut ViewContext<Self>) {
         let (model_ids, selected_id) = {
             let state = self.onboarding_state.as_ref(ctx);
-            let ids: Vec<LLMId> = state.models().iter().map(|m| m.id.clone()).collect();
+            let ids: Vec<String> = state.models().iter().map(|m| m.id.clone()).collect();
             (ids, state.agent_settings().selected_model_id.clone())
         };
         let count = model_ids.len();

@@ -108,6 +108,71 @@ item models and their argument UI into `workflows/` and `env_vars/` first, then
 delete the cloud sync and sharing layers around them. Do it after the agent, as
 its own pass, and do not bundle the two.
 
+## Measuring progress during the excision (2026-07-30)
+
+**The error count is meaningless while any parse-level error remains.** An
+unclosed delimiter, a broken `macro_rules!` invocation, or an `E0583` file-not-
+found halts rustc before name resolution, so cargo reports a handful of errors
+while thousands go unseen. During this session the count read 2448, then 189,
+then 1923, then 189, then 11, then 1923 again, entirely from blockers appearing
+and clearing. None of those swings were work.
+
+Always measure both numbers together:
+
+```bash
+cargo check --bin warp-nine --features release_bundle,extern_plist,gui \
+  --message-format short 2>&1 | grep -E "error(\[|:)" > /tmp/e.txt
+wc -l < /tmp/e.txt
+grep -cE 'unclosed delimiter|mismatched closing|unexpected closing|no rules expected|end of macro|E0583' /tmp/e.txt
+```
+
+Only a total taken with a blocker count of zero means anything.
+
+To find *every* broken file at once rather than one per compile, use rustfmt: it
+parses each file independently instead of stopping at the first failure.
+
+```bash
+git diff --name-only main -- 'app/src/*.rs' | while read f; do
+  [ -f "$f" ] && ! rustfmt --edition 2024 --emit stdout "$f" >/dev/null 2>&1 && echo "$f"
+done
+```
+
+### What the automated passes could and could not do
+
+Line-level tooling took this from ~4,000 errors to 1,171 with zero blockers.
+Three transforms worked, in this order:
+
+1. Delete functions that are agent surfaces. Require BOTH an agent-specific name
+   and a live error in the body. Errors cluster hard: `handle_ai_history_model_event`
+   was 533 lines, `handle_ai_block_event` 329. This removed 389 functions.
+2. Delete struct fields and enum variants whose type is gone. 671 and 99.
+3. Remove `use` statements that resolve to nothing.
+
+Then they stopped helping, and kept going would have made things worse:
+
+- Running (1)+(2)+(3) in a loop oscillated 1171 → 2235 → 1189 → 1680. Each pass
+  broke files, a guard reverted them, and the reverted errors came back.
+- Transform (3) alone took 1171 → **2338**. By this point the surviving `use`
+  statements mix deleted names with valid ones, so removing whole statements
+  creates more errors than it clears.
+
+The remaining 1,171 need hand edits. There is no further mechanical lever.
+
+### Two traps in the tooling itself
+
+**Do not count `<` and `>` as delimiters** when finding the end of a
+declaration. Every `->` in a signature decrements the depth, the scan overruns,
+and it eats closing lines. This corrupted 15 files before it was caught.
+
+**Do not identify a function by name plus indentation.** It is not unique. An
+attempt to restore individual damaged functions from `main` spliced a 3-line
+`new()` over a 143-line one in `left_panel.rs`.
+
+When a file is damaged beyond a localised fix, restore the whole file from
+`main` and let its agent references come back as ordinary name errors. That is
+strictly better than leaving syntax damage, and it is what finally produced a
+trustworthy measurement.
+
 ## On `script/fork_separability`
 
 The tool's foreign-`impl` signal is sound and caught real traps. Its

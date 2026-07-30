@@ -11,7 +11,6 @@ use local_control::selection::select_instance;
 use serde::Serialize;
 use warp_core::channel::ChannelState;
 
-use crate::agent::OutputFormat;
 use crate::local_control::output::{write_json, write_json_line};
 use crate::local_control::selectors::{instance_selector, target_selector};
 use crate::local_control::{
@@ -21,6 +20,7 @@ use crate::local_control::{
     SurfaceSettingsCommand, SurfaceToggleCommand, TabActivateArgs, TabCloseArgs, TabColorCommand,
     TabCommand, TargetArgs, ThemeCommand, WindowCommand,
 };
+use crate::output_format::OutputFormat;
 
 pub(super) fn run_surface_command(
     command: SurfaceCommand,

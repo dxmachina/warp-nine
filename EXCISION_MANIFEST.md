@@ -108,6 +108,93 @@ item models and their argument UI into `workflows/` and `env_vars/` first, then
 delete the cloud sync and sharing layers around them. Do it after the agent, as
 its own pass, and do not bundle the two.
 
+## The excision compiles (2026-07-30)
+
+`app/src/ai` and its usage sites are gone: 835 files, 292,401 deletions against
+`main`. The library and the shipped `warp-nine` binary build clean for
+aarch64-apple-darwin with `release_bundle,extern_plist,gui`.
+
+The error count went up before it went down, twice, and both rises were real
+progress:
+
+| stage | errors | files |
+|---|---|---|
+| first trustworthy number | 1,171 | 174 |
+| after the name-resolution wave | 1,782 | 17 |
+| after the type-checking wave | 414 | 87 |
+| after cleanup | 2 | 1 |
+| now | 0 | |
+
+While an import is unresolved rustc never type-checks the bodies that use it, so
+clearing 1,170 names exposed the usage sites underneath. The signal that the end
+was close was not the count but the *mix*: 1,121 `E0433 cannot find` collapsed to
+13, replaced by `E0599`/`E0609` and struct-field mismatches. That is rustc
+leaving name resolution and entering type checking, which is the last phase.
+
+### Ten rescues
+
+Every one lived under `app/src/ai/` or carried an agent name while having zero
+agent dependencies. Path-based and name-based heuristics delete all ten silently.
+
+| rescued | now at |
+|---|---|
+| `keyboard_navigable_buttons`, `numbered_button` | `ui_components/` |
+| `inline_action_header`, `inline_action_icons`, status icons | `ui_components/inline_action/` |
+| `toggleable_items` | `ui_components/` |
+| LSP / workspace / repo model | `persisted_workspace.rs` |
+| `shimmering_warp_loading_text` | `terminal/view/shimmering_loading_text.rs` |
+| history autosuggestion lookup | inlined in `terminal/input.rs` |
+| `unfreeze_agent_input` | restored in `terminal/input.rs` |
+| `ACCEPT_PROMPT_SUGGESTION_KEYBINDING` | `terminal/view/init.rs` |
+| `CloudObject`, `UiComponent`, `CompletionContext`, `VoltronFeatureViewMeta` | re-added to over-pruned `use` groups |
+
+`unfreeze_agent_input` is the instructive one. The name says agent; the body only
+reads `shared_session_status()` and drives editor state, and three callers in the
+shared-session viewer need it. Only reading the body distinguishes it.
+
+The four trait imports are the sneakiest class: a dropped trait is invisible to
+grep, because the call site reads `x.method()` and never names the trait.
+
+### Deleting an item without its attribute rebinds the attribute
+
+Two latent bugs, same cause. An attribute whose item is deleted silently attaches
+to whatever follows.
+
+- A stray `#[cfg(any(test, feature = "integration_tests"))]` had reattached to
+  `handle_task_status_reset`, compiling a live method out of release builds.
+- A stray `#[serde(alias = "action_id")]` had reattached to
+  `has_agent_written_to_block: bool`. Any legacy row carrying `action_id` (a
+  string) fails to deserialize into a bool and silently drops that block's
+  metadata. **No compile error** — it surfaces only as a bad database load.
+
+Both were found by hand, so afterwards the tree was swept for each shape. Every
+serde `alias`/`rename` across all 255 changed files is byte-identical to `main`,
+and no trait import was dropped while its call sites remain.
+
+Note the first sweep had a parser bug: `re.sub(r"\n\s+", " ", src)` collapses
+blank lines too, which destroys the `^` anchor for the next `use` statement and
+over-reports. Join only `\n[ \t]+`.
+
+### Persistence held
+
+No persisted variant was removed anywhere. Agent-era rows are skipped with a log
+line and their siblings restore normally, so a database written by the
+pre-excision build still loads. Cloud-object and sync-queue variants are listed
+explicitly rather than behind a `_` wildcard, so a new object type is still a
+compile error rather than a silent skip.
+
+### Three regions the error lists could not see
+
+Every error list came from `cargo check` on the bundle target, which is blind to:
+
+1. `#[cfg(test)]` sidecars. Nine `*_tests.rs` files are orphaned outright, their
+   `#[path] mod` declaration having gone out with a deleted file.
+2. The `integration_tests` cargo feature. `app/src/integration_testing` is gated
+   on it; five files there still name `crate::ai`.
+3. `#[cfg(target_family = "wasm")]`. A wasm build will not compile.
+
+A green `cargo check` on one target is not evidence about the others.
+
 ## Measuring progress during the excision (2026-07-30)
 
 **The error count is meaningless while any parse-level error remains.** An

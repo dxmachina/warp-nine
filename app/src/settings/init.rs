@@ -453,7 +453,7 @@ fn migrate_native_settings_to_settings_file(ctx: &mut AppContext) {
     );
 }
 
-#[cfg(any(test, all(feature = "tui", feature = "test-util")))]
+#[cfg(test)]
 pub fn init_and_register_user_preferences(ctx: &mut AppContext) {
     let public_prefs = Box::<user_preferences::in_memory::InMemoryPreferences>::default();
     let private_prefs = settings::PrivatePreferences::new(Box::<

@@ -17,7 +17,7 @@ use commands::{
 use completions::generate_completions_to_stdout;
 use output::write_control_error;
 
-use crate::agent::OutputFormat;
+use crate::output_format::OutputFormat;
 
 /// Hidden flag used by the channel-specific Warp app binary to enter `warpctrl` mode.
 pub const CONTROL_MODE_FLAG: &str = "--warpctrl";

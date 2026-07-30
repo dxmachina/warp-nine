@@ -3,11 +3,6 @@ use std::str::FromStr;
 use settings::macros::define_settings_group;
 use settings::{Setting as _, SupportedPlatforms, SyncToCloud};
 use warp_core::ui::theme::{ColorScheme, WarpTheme};
-#[cfg(feature = "tui")]
-use warpui_core::runtime::BackgroundLuminance;
-
-#[cfg(feature = "tui")]
-use crate::themes::default_themes::{dark_theme, light_theme};
 
 /// The color theme selection used by Warp Agent CLI.
 #[derive(
@@ -42,17 +37,8 @@ impl TuiTheme {
         }
     }
 
-    #[cfg(feature = "tui")]
-    pub fn resolve_for_background(self, background_luminance: BackgroundLuminance) -> WarpTheme {
-        match self {
-            Self::Auto => match background_luminance {
-                BackgroundLuminance::Light => light_theme(),
-                BackgroundLuminance::Dark | BackgroundLuminance::Unknown => dark_theme(),
-            },
-            Self::Light => light_theme(),
-            Self::Dark => dark_theme(),
-        }
-    }
+    // LOCAL FORK: `resolve_for_background` was TUI-only (it mapped the host
+    // terminal's background luminance onto a theme) and went with the CLI.
 }
 
 impl FromStr for TuiTheme {

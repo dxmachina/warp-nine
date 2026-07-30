@@ -126,7 +126,7 @@ pub struct CreateTeamResponse {
 }
 
 impl UserWorkspaces {
-    #[cfg(any(test, all(feature = "tui", feature = "test-util")))]
+    #[cfg(test)]
     pub fn mock(
         team_client: Arc<dyn TeamClient>,
         workspace_client: Arc<dyn WorkspaceClient>,

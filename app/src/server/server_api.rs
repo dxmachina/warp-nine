@@ -445,7 +445,7 @@ impl ServerApi {
         }
     }
 
-    #[cfg(any(test, all(feature = "tui", feature = "test-util")))]
+    #[cfg(test)]
     fn new_for_test() -> Self {
         let (tx, _) = async_channel::unbounded();
         let auth_state = Arc::new(AuthState::new_for_test());
@@ -1104,7 +1104,7 @@ impl ServerApiProvider {
     }
 
     /// Constructs a new SeverApiProvider for tests.
-    #[cfg(any(test, all(feature = "tui", feature = "test-util")))]
+    #[cfg(test)]
     pub fn new_for_test() -> Self {
         let server_api = Arc::new(ServerApi::new_for_test());
         let auth_client = Arc::new(AuthClientImpl::new(server_api.base_client.clone()));

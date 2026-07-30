@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use ai::diff_validation::DiffType;
 use warp_core::ui::appearance::Appearance;
 use warp_editor::content::buffer::InitialBufferState;
 use warp_editor::render::model::LineCount;
@@ -19,6 +18,7 @@ use super::editor::view::CodeEditorView;
 use crate::code::buffer_location::LocalOrRemotePath as BufferFileLocation;
 use crate::code::editor::EditorReviewComment;
 use crate::code_review::comments::CommentId;
+use crate::diff_validation::DiffType;
 use crate::terminal::TerminalView;
 
 #[derive(Debug)]

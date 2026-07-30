@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use ai::diff_validation::DiffDelta;
 use warp_util::path::LineAndColumnArg;
 use warpui::elements::{DraggableState, Empty, MouseStateHandle};
 use warpui::{
@@ -10,6 +9,7 @@ use warpui::{
 use super::buffer_location::LocalOrRemotePath;
 use super::editor_management::CodeSource;
 use super::local_code_editor::LocalCodeEditorView;
+use crate::diff_validation::DiffDelta;
 use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::pane_group::pane::view::{HeaderContent, HeaderRenderContext};
 use crate::pane_group::{BackingView, CodePane, PaneConfiguration, PaneEvent};

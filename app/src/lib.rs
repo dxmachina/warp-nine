@@ -98,6 +98,8 @@ mod warp_managed_paths_watcher;
 mod wasm_nux_dialog;
 mod window_settings;
 mod word_block_editor;
+mod diff_validation;
+mod skills;
 mod workspace_metadata;
 mod workspaces;
 
@@ -131,15 +133,7 @@ pub mod settings_view;
 pub mod tab_configs;
 pub mod terminal;
 pub mod themes;
-use ::ai::index::DEFAULT_SYNC_REQUESTS_PER_MIN;
 #[cfg(feature = "local_fs")]
-use ::ai::index::full_source_code_embedding::SnapshotStorage;
-use ::ai::index::full_source_code_embedding::SyncTask;
-use ::ai::index::full_source_code_embedding::manager::{
-    CodebaseIndexManager, CodebaseIndexManagerConfig,
-};
-use ::ai::index::full_source_code_embedding::store_client::MockStoreClient;
-use ::ai::project_context::model::ProjectContextModel;
 use auth::auth_manager::AuthManager;
 use auth::auth_state::{AuthState, AuthStateProvider};
 use code::editor_management::CodeManager;
@@ -299,21 +293,9 @@ const TUI_SECURE_STORAGE_SERVICE_SUFFIX: &str = ".tui";
 
 // LOCAL FORK: fn determine_agent_source removed with the agent.
 
-#[cfg(feature = "local_fs")]
-fn daemon_codebase_index_snapshot_storage(launch_mode: &LaunchMode) -> Option<SnapshotStorage> {
-    match launch_mode {
-        LaunchMode::RemoteServerDaemon { identity_key } => {
-            let data_dir = remote_server::setup::remote_server_daemon_data_dir(identity_key);
-            let snapshot_dir = PathBuf::from(tilde(&data_dir).into_owned())
-                .join("cache")
-                .join("codebase_index_snapshots");
-            SnapshotStorage::from_dir(snapshot_dir)
-        }
-        LaunchMode::App { .. }
-        | LaunchMode::RemoteServerProxy
-        | LaunchMode::Test { .. } => None,
-    }
-}
+// LOCAL FORK: fn daemon_codebase_index_snapshot_storage removed. It built the
+// on-disk location for codebase index snapshots, and its only caller was the
+// removed CodebaseIndexManager registration.
 
 /// Launch mode for how to start up Warp.
 #[allow(clippy::large_enum_variant)]
@@ -1308,7 +1290,6 @@ pub(crate) fn initialize_app(
         workspace_language_servers,
         multi_agent_conversations,
         persisted_projects,
-        persisted_project_rules,
         persisted_ignored_suggestions,
         mcp_servers_to_restore,
         // LOCAL FORK: `ai_queries` and `mcp_server_installations` were dropped from
@@ -1330,14 +1311,12 @@ pub(crate) fn initialize_app(
                 sqlite_data.workspace_language_servers,
                 sqlite_data.multi_agent_conversations,
                 sqlite_data.projects,
-                sqlite_data.project_rules,
                 sqlite_data.ignored_suggestions,
                 sqlite_data.mcp_servers_to_restore,
             )
         })
         .unwrap_or_else(|| {
             (
-                Default::default(),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -1381,32 +1360,10 @@ pub(crate) fn initialize_app(
         )
     });
 
-    // Initialize ApiKeyManager after UserWorkspaces so it can subscribe to workspace/settings changes
-    ctx.add_singleton_model(|ctx| {
-        #[cfg_attr(target_family = "wasm", allow(unused_mut))]
-        let mut manager = ::ai::api_keys::ApiKeyManager::new(ctx);
-        // LOCAL FORK: the TUI api-key watcher, the AWS credential refresher and the
-        // Gemini Enterprise credential refresher were extension traits on
-        // `ApiKeyManager` defined under `app/src/ai/` and removed with the agent.
-        // The Grok subscription refresher (`ai::grok_subscription`) has no
-        // visibility into workspace policy, so wire the BYO API key policy in
-        // here. The initial value resumes proactive refresh of any tokens
-        // restored from secure storage; TeamsChanged keeps the policy aligned
-        // as team data loads or the workspace changes.
-        #[cfg(not(target_family = "wasm"))]
-        if FeatureFlag::SuperGrok.is_enabled() {
-            use crate::workspaces::user_workspaces::UserWorkspacesEvent;
-            ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), |manager, _, event, ctx| {
-                if matches!(event, UserWorkspacesEvent::TeamsChanged) {
-                    let allowed = UserWorkspaces::as_ref(ctx).is_byo_api_key_enabled(ctx);
-                    manager.set_grok_refresh_allowed(allowed, ctx);
-                }
-            });
-            let allowed = UserWorkspaces::as_ref(ctx).is_byo_api_key_enabled(ctx);
-            manager.set_grok_refresh_allowed(allowed, ctx);
-        }
-        manager
-    });
+    // LOCAL FORK: the `ApiKeyManager` singleton went with the agent. It held BYO LLM
+    // credentials (Grok subscription tokens, AWS Bedrock, Gemini Enterprise) for an
+    // agent that no longer exists, and its last two readers -- the inline model
+    // selector and the one-time-modal model -- were removed with it.
 
     ctx.add_singleton_model(AntivirusInfo::new);
 
@@ -1581,7 +1538,7 @@ pub(crate) fn initialize_app(
         // watching so it gates descent on the very first registration.
         DirectoryWatcher::handle(ctx).update(ctx, |watcher, _| {
             watcher.register_force_included_paths(
-                ::ai::skills::SKILL_PROVIDER_DEFINITIONS
+                crate::skills::SKILL_PROVIDER_DEFINITIONS
                     .iter()
                     .map(|provider| provider.skills_path.clone()),
             );
@@ -1612,13 +1569,13 @@ pub(crate) fn initialize_app(
                 RepoMetadataModel::new(ctx)
             };
             model.register_force_included_paths(
-                ::ai::skills::SKILL_PROVIDER_DEFINITIONS
+                crate::skills::SKILL_PROVIDER_DEFINITIONS
                     .iter()
                     .map(|provider| provider.skills_path.clone()),
                 ctx,
             );
             model.set_project_skill_provider_paths(
-                ::ai::skills::SKILL_PROVIDER_DEFINITIONS
+                crate::skills::SKILL_PROVIDER_DEFINITIONS
                     .iter()
                     .map(|provider| provider.skills_path.clone()),
                 ctx,
@@ -1795,12 +1752,7 @@ pub(crate) fn initialize_app(
     // LOCAL FORK: the conversation history, orchestration and outline singletons
     // were registered here; they belong to the removed agent subsystem.
 
-    ctx.add_singleton_model(|ctx| {
-        warp_core::sync_queue::SyncQueue::<SyncTask>::new_with_rate_limit(
-            &ctx.background_executor(),
-            Some(DEFAULT_SYNC_REQUESTS_PER_MIN),
-        )
-    });
+    // LOCAL FORK: the SyncQueue<SyncTask> singleton drove codebase index syncing.
 
     ctx.add_singleton_model(|_| UserProfiles::new(restored_user_profiles));
 
@@ -1967,48 +1919,13 @@ pub(crate) fn initialize_app(
 
     ctx.add_singleton_model(DefaultTerminal::new);
 
-    ctx.add_singleton_model(|ctx| {
-        // LOCAL FORK: nothing to restore. The embedding store was
-        // `impl StoreClient for ServerApi` in `server/server_api/ai.rs` and went
-        // with the agent, so the manager runs against a no-op client and no index
-        // is ever written or read. Restoring persisted index metadata would only
-        // hand it rows it cannot use, so this is empty rather than a conversion
-        // between two structurally identical `WorkspaceMetadata` types.
-        let indices_to_restore = vec![];
-
-        // LOCAL FORK: the per-tier limits came from the removed request usage
-        // model. Fall back to the free-tier values the server used to hand out.
-        // The remote embedding store was `impl StoreClient for ServerApi` in
-        // `server/server_api/ai.rs`, which went with the agent; the manager is
-        // still registered for its consumers but backed by a no-op store client,
-        // so nothing is embedded or retrieved.
-        let mut codebase_index_config = CodebaseIndexManagerConfig::new(
-            indices_to_restore,
-            Some(3),
-            5000,
-            100,
-            Arc::new(MockStoreClient),
-            launch_mode.supports_indexing(),
-        );
-        if matches!(launch_mode, LaunchMode::RemoteServerDaemon { .. }) {
-            codebase_index_config = codebase_index_config.defer_persisted_index_restore();
-        }
-        #[cfg(feature = "local_fs")]
-        if let Some(snapshot_storage) = daemon_codebase_index_snapshot_storage(launch_mode) {
-            return CodebaseIndexManager::new_with_snapshot_storage(
-                codebase_index_config,
-                Some(snapshot_storage),
-                ctx,
-            );
-        }
-
-        CodebaseIndexManager::new_with_config(codebase_index_config, ctx)
-    });
-
-    // LOCAL FORK: project rules were only read for agent prompts, and the reader
-    // that resolved their contents went with the agent. The model stays
-    // registered so its consumers can still read an empty rule set.
-    ctx.add_singleton_model(|_| ProjectContextModel::default());
+    // LOCAL FORK: `CodebaseIndexManager` and `ProjectContextModel` were registered
+    // here. Both are embedding-based codebase indexing for the agent, and both were
+    // already inert: the remote store was `impl StoreClient for ServerApi` in the
+    // deleted `server/server_api/ai.rs`, so the manager ran against a no-op client
+    // and never embedded or retrieved anything, and the reader that resolved project
+    // rule contents went with the agent so the context model never fired an event.
+    // Removing them is what lets the `ai` crate be dropped.
 
     ctx.add_singleton_model(|ctx| {
         PersistedWorkspace::new(

@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
 
-use ai::index::full_source_code_embedding::NodeHash;
 use remote_server::codebase_index_proto::{RemoteCodebaseIndexState, RemoteCodebaseIndexStatus};
 use warp_core::features::FeatureFlag;
 use warp_core::{HostId, SessionId};
@@ -35,7 +33,10 @@ fn should_auto_index_codebase(ctx: &AppContext) -> bool {
 #[derive(Clone, Debug)]
 pub struct RemoteCodebaseSearchContext {
     pub remote_path: RemotePath,
-    pub root_hash: NodeHash,
+    // LOCAL FORK: this was the agent's `ai::index::full_source_code_embedding::NodeHash`.
+    // The daemon reports the root hash as a string on the wire and nothing on this side
+    // ever did anything with it but carry it, so it stays a string.
+    pub root_hash: String,
     pub is_stale: bool,
 }
 
@@ -881,8 +882,8 @@ fn search_availability_for_status(
         RemoteCodebaseIndexState::Ready | RemoteCodebaseIndexState::Stale => {
             let Some(root_hash) = status
                 .root_hash
-                .as_deref()
-                .and_then(|hash| NodeHash::from_str(hash).ok())
+                .clone()
+                .filter(|root_hash| !root_hash.is_empty())
             else {
                 return RemoteCodebaseSearchAvailability::Unavailable {
                     remote_path,

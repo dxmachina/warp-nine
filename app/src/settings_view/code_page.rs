@@ -3,12 +3,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use ai::index::full_source_code_embedding::SyncProgress;
-use ai::index::full_source_code_embedding::manager::{
-    CodebaseIndexFinishedStatus, CodebaseIndexManager, CodebaseIndexManagerEvent,
-    CodebaseIndexStatus, CodebaseIndexingError,
-};
-use ai::project_context::model::{ProjectContextModel, ProjectContextModelEvent};
 use crate::workspace_metadata::WorkspaceMetadata;
 use lsp::supported_servers::LSPServerType;
 use lsp::{LspManagerModel, LspManagerModelEvent, LspServerModel, LspState};
@@ -29,9 +23,9 @@ use warpui::elements::{
 };
 use warpui::fonts::Weight;
 use warpui::keymap::ContextPredicate;
-use warpui::platform::{Cursor, FilePickerConfiguration};
+use warpui::platform::Cursor;
 use warpui::ui_components::button::ButtonVariant;
-use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
+use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::ui_components::switch::{SwitchStateHandle, TooltipConfig};
 use warpui::{
     Action, AppContext, Entity, ModelHandle, SingletonEntity, TypedActionView, View, ViewContext,
@@ -60,12 +54,9 @@ use crate::terminal::general_settings::GeneralSettings;
 use crate::ui_components::avatar::{Avatar, AvatarContent, StatusElementTypes};
 use crate::ui_components::buttons::icon_button;
 use crate::ui_components::icons::Icon;
-use crate::view_components::DismissibleToast;
-use crate::view_components::action_button::{ActionButton, SecondaryTheme};
 use crate::persisted_workspace::{
     EnablementState, LspRepoStatus, PersistedWorkspace, PersistedWorkspaceEvent,
 };
-use crate::workspace::ToastStack;
 use crate::workspace::tab_settings::TabSettings;
 use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::UserWorkspaces;
@@ -88,7 +79,6 @@ const INDEXING_DISABLED_ADMIN_TEXT: &str = "Team admins have disabled codebase i
 const INDEXING_WORKSPACE_ENABLED_ADMIN_TEXT: &str = "Team admins have enabled codebase indexing.";
 const INDEXING_DISABLED_GLOBAL_AI_TEXT: &str =
     "AI Features must be enabled to use codebase indexing.";
-const CODEBASE_INDEX_LIMIT_REACHED: &str = "You have reached the maximum number of codebase indices for your plan. Delete existing indices to auto-index new codebases.";
 #[cfg(not(target_family = "wasm"))]
 const REMOTE_CODEBASE_INDEX_LIMIT_REACHED_FAILURE: &str =
     "maximum number of codebase indexes has been reached";
@@ -140,16 +130,15 @@ struct LspServerRowMouseStates {
     install: MouseStateHandle,
 }
 
+// LOCAL FORK: the local-codebase resync/delete and "open project rules" mouse states went with
+// the agent's embedding index and project-context model. Remote index rows are unaffected.
 #[derive(Clone)]
 struct InitializedFoldersMouseStates {
-    codebase_manual_resync: Vec<MouseStateHandle>,
-    codebase_delete: Vec<MouseStateHandle>,
     #[cfg(not(target_family = "wasm"))]
     remote_codebase_manual_resync: Vec<MouseStateHandle>,
     #[cfg(not(target_family = "wasm"))]
     remote_codebase_delete: Vec<MouseStateHandle>,
     lsp_rows: Vec<LspServerRowMouseStates>,
-    open_project_rules: Vec<MouseStateHandle>,
 }
 
 #[derive(Clone)]
@@ -173,8 +162,6 @@ enum IndexingRefreshAction {
 pub struct CodeSettingsPageView {
     page: PageType<Self>,
     active_subpage: Option<CodeSubpage>,
-    codebase_manual_resync_mouse_states: Vec<MouseStateHandle>,
-    codebase_delete_mouse_states: Vec<MouseStateHandle>,
     #[cfg(not(target_family = "wasm"))]
     remote_codebase_manual_resync_mouse_states: Vec<MouseStateHandle>,
     #[cfg(not(target_family = "wasm"))]
@@ -185,7 +172,6 @@ pub struct CodeSettingsPageView {
     /// The states are flattened into a single Vec, indexed by iterating through workspaces
     /// and their enabled servers in order.
     lsp_row_mouse_states: Vec<LspServerRowMouseStates>,
-    open_project_rules_mouse_states: Vec<MouseStateHandle>,
     /// Tracks installation status for suggested LSP servers so the UI can decide
     /// whether to show "Available for download" vs "Installed" and whether the
     /// "+" button should trigger install or just enable.
@@ -196,34 +182,7 @@ pub struct CodeSettingsPageView {
 
 impl CodeSettingsPageView {
     pub fn new(ctx: &mut ViewContext<CodeSettingsPageView>) -> Self {
-        let index_manager = CodebaseIndexManager::handle(ctx);
-        let codebase_count = index_manager
-            .as_ref(ctx)
-            .get_codebase_index_statuses(ctx)
-            .count();
-
-        ctx.subscribe_to_model(&index_manager, |me, index, event, ctx| {
-            if matches!(
-                event,
-                CodebaseIndexManagerEvent::SyncStateUpdated { .. }
-                    | CodebaseIndexManagerEvent::NewIndexCreated { .. }
-            ) {
-                let codebase_count = index.as_ref(ctx).get_codebase_index_statuses(ctx).count();
-
-                // Only update mouse states if the number of codebases changed
-                if me.codebase_manual_resync_mouse_states.len() != codebase_count {
-                    // Resize the vector to match the new codebase count, but preserve the existing mouse states
-                    me.codebase_manual_resync_mouse_states
-                        .resize_with(codebase_count, Default::default);
-                    me.codebase_delete_mouse_states
-                        .resize_with(codebase_count, Default::default);
-                }
-
-                me.resize_workspace_mouse_states(ctx);
-
-                ctx.notify();
-            }
-        });
+        // LOCAL FORK: the local `CodebaseIndexManager` subscription went with the agent.
 
         #[cfg(not(target_family = "wasm"))]
         let remote_codebase_count = {
@@ -262,8 +221,6 @@ impl CodeSettingsPageView {
                             .resize_with(new_count, Default::default);
                     }
 
-                    me.resize_workspace_mouse_states(ctx);
-
                     ctx.notify();
                 }
             },
@@ -298,7 +255,6 @@ impl CodeSettingsPageView {
                     me.lsp_row_mouse_states
                         .resize_with(new_count, Default::default);
                 }
-                me.resize_workspace_mouse_states(ctx);
                 ctx.notify();
             }
             PersistedWorkspaceEvent::InstallStatusUpdate {
@@ -320,29 +276,14 @@ impl CodeSettingsPageView {
             }
         });
 
-        // Re-render when project rules are added or removed so the
-        // "Open project rules" button visibility stays up to date.
-        ctx.subscribe_to_model(&ProjectContextModel::handle(ctx), |_me, _, event, ctx| {
-            if matches!(event, ProjectContextModelEvent::KnownRulesChanged(_)) {
-                ctx.notify();
-            }
-        });
-
-        let manual_add_directory_button = ctx.add_typed_action_view(|_| {
-            ActionButton::new("Index new folder", SecondaryTheme)
-                .with_icon(Icon::FindAll)
-                .on_click(|ctx| {
-                    ctx.dispatch_typed_action(CodeSettingsPageAction::ManualAddDirectory);
-                })
-        });
+        // LOCAL FORK: the `ProjectContextModel` subscription that drove the per-workspace
+        // "Open project rules" button, and the "Index new folder" button that built a local
+        // codebase index, both went with the agent.
 
         let code_page_widget = CodePageWidget {
             switch_state: Default::default(),
             auto_index_switch_state: Default::default(),
-            manual_add_directory_button,
         };
-
-        let workspace_count = PersistedWorkspace::as_ref(ctx).workspaces().count();
 
         #[cfg(feature = "local_fs")]
         let external_editor_view;
@@ -393,10 +334,6 @@ impl CodeSettingsPageView {
         Self {
             page,
             active_subpage: None,
-            codebase_manual_resync_mouse_states: (0..codebase_count)
-                .map(|_| Default::default())
-                .collect(),
-            codebase_delete_mouse_states: (0..codebase_count).map(|_| Default::default()).collect(),
             #[cfg(not(target_family = "wasm"))]
             remote_codebase_manual_resync_mouse_states: (0..remote_codebase_count)
                 .map(|_| Default::default())
@@ -406,9 +343,6 @@ impl CodeSettingsPageView {
                 .map(|_| Default::default())
                 .collect(),
             lsp_row_mouse_states: (0..lsp_server_count).map(|_| Default::default()).collect(),
-            open_project_rules_mouse_states: (0..workspace_count)
-                .map(|_| Default::default())
-                .collect(),
             suggested_server_statuses: HashMap::new(),
             #[cfg(feature = "local_fs")]
             external_editor_view,
@@ -426,13 +360,6 @@ impl CodeSettingsPageView {
             // Rebuild the page with the relevant widgets for the selected subpage,
             // or the full categorized page when subpage is None.
             if let Some(subpage) = subpage {
-                let manual_add_directory_button = ctx.add_typed_action_view(|_| {
-                    ActionButton::new("Index new folder", SecondaryTheme)
-                        .with_icon(Icon::FindAll)
-                        .on_click(|ctx| {
-                            ctx.dispatch_typed_action(CodeSettingsPageAction::ManualAddDirectory);
-                        })
-                });
                 let mut widgets: Vec<Box<dyn SettingsWidget<View = Self>>> =
                     vec![Box::new(CodeSubpageHeaderWidget {
                         title: subpage.title(),
@@ -443,7 +370,6 @@ impl CodeSettingsPageView {
                             inner: CodePageWidget {
                                 switch_state: Default::default(),
                                 auto_index_switch_state: Default::default(),
-                                manual_add_directory_button,
                             },
                         }));
                     }
@@ -476,19 +402,11 @@ impl CodeSettingsPageView {
 
     /// Builds the full categorized page with all Code widgets.
     /// Used for the default/legacy view and when resetting to all-widgets mode for search.
-    fn build_full_page(ctx: &mut ViewContext<Self>) -> PageType<Self> {
+    fn build_full_page(_ctx: &mut ViewContext<Self>) -> PageType<Self> {
         if FeatureFlag::OpenWarpNewSettingsModes.is_enabled() {
-            let manual_add_directory_button = ctx.add_typed_action_view(|_| {
-                ActionButton::new("Index new folder", SecondaryTheme)
-                    .with_icon(Icon::FindAll)
-                    .on_click(|ctx| {
-                        ctx.dispatch_typed_action(CodeSettingsPageAction::ManualAddDirectory);
-                    })
-            });
             let code_page_widget = CodePageWidget {
                 switch_state: Default::default(),
                 auto_index_switch_state: Default::default(),
-                manual_add_directory_button,
             };
             let codebase_indexing_widgets: Vec<Box<dyn SettingsWidget<View = Self>>> =
                 vec![Box::new(CodebaseIndexingCategorizedWidget {
@@ -519,60 +437,18 @@ impl CodeSettingsPageView {
             ];
             PageType::new_categorized(categories, None)
         } else {
-            let manual_add_directory_button = ctx.add_typed_action_view(|_| {
-                ActionButton::new("Index new folder", SecondaryTheme)
-                    .with_icon(Icon::FindAll)
-                    .on_click(|ctx| {
-                        ctx.dispatch_typed_action(CodeSettingsPageAction::ManualAddDirectory);
-                    })
-            });
             let widgets: Vec<Box<dyn SettingsWidget<View = Self>>> =
                 vec![Box::new(CodePageWidget {
                     switch_state: Default::default(),
                     auto_index_switch_state: Default::default(),
-                    manual_add_directory_button,
                 })];
             PageType::new_uncategorized(widgets, None)
         }
     }
 
-    /// Resize `open_project_rules_mouse_states` to match the current workspace count.
-    fn resize_workspace_mouse_states(&mut self, ctx: &AppContext) {
-        let workspace_count = PersistedWorkspace::as_ref(ctx).workspaces().count();
-        if self.open_project_rules_mouse_states.len() != workspace_count {
-            self.open_project_rules_mouse_states
-                .resize_with(workspace_count, Default::default);
-        }
-    }
-
-    fn open_directory_picker(&mut self, ctx: &mut ViewContext<Self>) {
-        let file_picker_config = FilePickerConfiguration::new().folders_only();
-        let window_id = ctx.window_id();
-
-        ctx.open_file_picker(
-            move |result, ctx| match result {
-                Ok(paths) => {
-                    if let Some(directory_path) = paths.first() {
-                        let path = PathBuf::from(directory_path);
-
-                        CodebaseIndexManager::handle(ctx).update(ctx, |manager, ctx| {
-                            manager.index_directory(path, ctx);
-                        });
-                    }
-                }
-                Err(err) => {
-                    ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                        toast_stack.add_ephemeral_toast(
-                            DismissibleToast::error(format!("{err}")),
-                            window_id,
-                            ctx,
-                        );
-                    });
-                }
-            },
-            file_picker_config,
-        );
-    }
+    // LOCAL FORK: `resize_workspace_mouse_states` only sized the "Open project rules" mouse
+    // states, and `open_directory_picker` only existed to build a local codebase index; both
+    // went with the agent.
 }
 
 impl Entity for CodeSettingsPageView {
@@ -601,15 +477,14 @@ pub enum CodeSettingsPageEvent {
 pub enum CodeSettingsPageAction {
     ToggleCodebaseContext,
     ToggleAutoIndexing,
-    ManualResync(PathBuf),
-    DeleteIndex(PathBuf),
+    // LOCAL FORK: `ManualResync`, `DeleteIndex` and `ManualAddDirectory` drove the local
+    // embedding index and went with the agent. The remote variants below are unaffected.
     #[cfg(not(target_family = "wasm"))]
     RequestRemoteIndex(RemotePath),
     #[cfg(not(target_family = "wasm"))]
     ManualResyncRemote(RemotePath),
     #[cfg(not(target_family = "wasm"))]
     DeleteRemoteIndex(RemotePath),
-    ManualAddDirectory,
     SignupAnonymousUser,
     /// Toggle an LSP server on/off for a workspace.
     ToggleLspServer {
@@ -700,16 +575,6 @@ impl TypedActionView for CodeSettingsPageView {
 
                 ctx.notify();
             }
-            CodeSettingsPageAction::ManualResync(repo_path) => {
-                CodebaseIndexManager::handle(ctx).update(ctx, |manager, ctx| {
-                    manager.try_manual_resync_codebase(repo_path, ctx);
-                });
-            }
-            CodeSettingsPageAction::DeleteIndex(repo_path) => {
-                CodebaseIndexManager::handle(ctx).update(ctx, |manager, ctx| {
-                    manager.drop_index(repo_path.clone(), ctx);
-                });
-            }
             #[cfg(not(target_family = "wasm"))]
             CodeSettingsPageAction::RequestRemoteIndex(remote_path) => {
                 RemoteCodebaseIndexModel::handle(ctx).update(ctx, |model, ctx| {
@@ -727,9 +592,6 @@ impl TypedActionView for CodeSettingsPageView {
                 RemoteCodebaseIndexModel::handle(ctx).update(ctx, |model, ctx| {
                     model.drop_index(remote_path.clone(), ctx);
                 });
-            }
-            CodeSettingsPageAction::ManualAddDirectory => {
-                self.open_directory_picker(ctx);
             }
             CodeSettingsPageAction::SignupAnonymousUser => {
                 ctx.emit(CodeSettingsPageEvent::SignupAnonymousUser);
@@ -1027,7 +889,6 @@ pub fn init_actions_from_parent_view<T: Action + Clone>(
 struct CodePageWidget {
     switch_state: SwitchStateHandle,
     auto_index_switch_state: SwitchStateHandle,
-    manual_add_directory_button: ViewHandle<ActionButton>,
 }
 
 impl SettingsWidget for CodePageWidget {
@@ -1077,14 +938,11 @@ impl SettingsWidget for CodePageWidget {
         // Initialized / indexed folders section
         content.add_child(render_separator(appearance));
         let mouse_states = InitializedFoldersMouseStates {
-            codebase_manual_resync: view.codebase_manual_resync_mouse_states.clone(),
-            codebase_delete: view.codebase_delete_mouse_states.clone(),
             #[cfg(not(target_family = "wasm"))]
             remote_codebase_manual_resync: view.remote_codebase_manual_resync_mouse_states.clone(),
             #[cfg(not(target_family = "wasm"))]
             remote_codebase_delete: view.remote_codebase_delete_mouse_states.clone(),
             lsp_rows: view.lsp_row_mouse_states.clone(),
-            open_project_rules: view.open_project_rules_mouse_states.clone(),
         };
 
         content.add_child(self.render_initialized_folders(
@@ -1126,14 +984,7 @@ impl CodePageWidget {
             ),
         ];
 
-        if codebase_indexing_enabled && !CodebaseIndexManager::as_ref(app).can_create_new_indices()
-        {
-            rows.push(self.render_settings_subtext(
-                false,
-                CODEBASE_INDEX_LIMIT_REACHED,
-                appearance,
-            ));
-        }
+        // LOCAL FORK: the local index-count limit notice went with the agent's index manager.
 
         rows.push(
             Container::new(Empty::new().finish())
@@ -1337,19 +1188,16 @@ impl CodePageWidget {
         let theme = appearance.theme();
 
         let InitializedFoldersMouseStates {
-            codebase_manual_resync: codebase_manual_resync_mouse_states,
-            codebase_delete: codebase_delete_mouse_states,
             #[cfg(not(target_family = "wasm"))]
                 remote_codebase_manual_resync: remote_codebase_manual_resync_mouse_states,
             #[cfg(not(target_family = "wasm"))]
                 remote_codebase_delete: remote_codebase_delete_mouse_states,
             lsp_rows: lsp_row_mouse_states,
-            open_project_rules: open_project_rules_mouse_states,
         } = mouse_states;
 
         let mut content = Flex::column();
 
-        // Section header with "Index folder" button
+        // Section header. LOCAL FORK: the "Index new folder" button went with the agent.
         content.add_child(
             Container::new(
                 Flex::row()
@@ -1368,7 +1216,6 @@ impl CodePageWidget {
                             .build()
                             .finish(),
                     )
-                    .with_child(ChildView::new(&self.manual_add_directory_button).finish())
                     .finish(),
             )
             .with_margin_top(8.)
@@ -1386,19 +1233,16 @@ impl CodePageWidget {
             Vec::new()
         };
 
-        let codebase_manager = CodebaseIndexManager::as_ref(app);
+        // LOCAL FORK: local codebase index status went with the agent, so a workspace row is
+        // now driven entirely by its LSP servers.
         let lsp_manager = LspManagerModel::as_ref(app);
         let persisted_workspace = PersistedWorkspace::as_ref(app);
 
         let mut lsp_mouse_index = 0;
         let mut rendered_folder = false;
 
-        for (workspace_idx, workspace) in workspaces.iter().enumerate() {
+        for workspace in workspaces.iter() {
             let workspace_path = &workspace.path;
-
-            // Get codebase index status if it exists
-            let index_status =
-                codebase_manager.get_codebase_index_status_for_path(workspace_path, app);
 
             // Get all LSP servers (enabled + disabled + suggested) for this workspace
             let all_servers: Vec<(LSPServerType, EnablementState)> = persisted_workspace
@@ -1406,18 +1250,8 @@ impl CodePageWidget {
                 .map(|iter| iter.collect())
                 .unwrap_or_default();
 
-            // Get mouse states for this workspace
-            let resync_mouse = codebase_manual_resync_mouse_states
-                .get(workspace_idx)
-                .cloned()
-                .unwrap_or_default();
-            let delete_mouse = codebase_delete_mouse_states
-                .get(workspace_idx)
-                .cloned()
-                .unwrap_or_default();
-
-            // Skip workspaces that have neither an index nor any LSP servers
-            if index_status.is_none() && all_servers.is_empty() {
+            // Skip workspaces that have no LSP servers
+            if all_servers.is_empty() {
                 continue;
             }
 
@@ -1438,20 +1272,11 @@ impl CodePageWidget {
                 })
                 .collect();
 
-            let open_rules_mouse = open_project_rules_mouse_states
-                .get(workspace_idx)
-                .cloned()
-                .unwrap_or_default();
-
             content.add_child(self.render_workspace_row(
                 workspace_path,
-                index_status.as_ref(),
                 &all_servers,
                 lsp_manager,
-                resync_mouse,
-                delete_mouse,
                 lsp_mouse_states,
-                open_rules_mouse,
                 suggested_server_statuses,
                 appearance,
                 app,
@@ -1494,28 +1319,24 @@ impl CodePageWidget {
         content.finish()
     }
 
-    /// Renders a single workspace row with its indexing status and LSP servers.
+    /// Renders a single workspace row with its LSP servers.
+    ///
+    /// LOCAL FORK: the row used to lead with a local INDEXING subsection and an
+    /// "Open project rules" button sourced from `ProjectContextModel`; both went with the
+    /// agent, so the row is now the workspace path plus its LSP servers.
     #[allow(clippy::too_many_arguments)]
     fn render_workspace_row(
         &self,
         workspace_path: &Path,
-        index_status: Option<&CodebaseIndexStatus>,
         all_servers: &[(LSPServerType, EnablementState)],
         lsp_manager: &LspManagerModel,
-        resync_mouse: MouseStateHandle,
-        delete_mouse: MouseStateHandle,
         lsp_mouse_states: Vec<LspServerRowMouseStates>,
-        open_rules_mouse: MouseStateHandle,
         suggested_server_statuses: &HashMap<(PathBuf, LSPServerType), LspRepoStatus>,
         appearance: &Appearance,
         app: &AppContext,
     ) -> Box<dyn Element> {
-        let ui_builder = appearance.ui_builder();
-        let theme = appearance.theme();
-
         let mut workspace_content = Flex::column().with_spacing(MAIN_SECTION_MARGIN);
 
-        // Workspace path header with "Open project rules" button
         let home_dir =
             dirs::home_dir().and_then(|home_dir| home_dir.to_str().map(|s| s.to_owned()));
         let user_friendly = user_friendly_path(
@@ -1524,69 +1345,7 @@ impl CodePageWidget {
         )
         .to_string();
 
-        // Query ProjectContextModel for rules under this workspace
-        let workspace_rule_paths =
-            ProjectContextModel::as_ref(app).rules_for_workspace(workspace_path);
-
-        // Only show "Open project rules" button if rules exist for this workspace
-        let open_rules_button: Option<Box<dyn Element>> = if !workspace_rule_paths.is_empty() {
-            let open_rules_button = ui_builder
-                .button(ButtonVariant::Secondary, open_rules_mouse)
-                .with_style(UiComponentStyles {
-                    font_size: Some(12.),
-                    padding: Some(Coords {
-                        top: 4.,
-                        bottom: 4.,
-                        left: 8.,
-                        right: 8.,
-                    }),
-                    ..Default::default()
-                })
-                .with_hovered_styles(UiComponentStyles {
-                    background: Some(theme.surface_3().into()),
-                    ..Default::default()
-                })
-                .with_text_and_icon_label(
-                    warpui::ui_components::button::TextAndIcon::new(
-                        warpui::ui_components::button::TextAndIconAlignment::IconFirst,
-                        "Open project rules",
-                        warpui::elements::Icon::new(
-                            "bundled/svg/file-code-02.svg",
-                            theme.foreground(),
-                        ),
-                        warpui::elements::MainAxisSize::Min,
-                        warpui::elements::MainAxisAlignment::Center,
-                        pathfinder_geometry::vector::vec2f(14., 14.),
-                    )
-                    .with_inner_padding(4.),
-                )
-                .build()
-                .with_cursor(Cursor::PointingHand)
-                .on_click(move |ctx, _, _| {
-                    ctx.dispatch_typed_action(CodeSettingsPageAction::OpenProjectRules {
-                        rule_paths: workspace_rule_paths.clone(),
-                    });
-                })
-                .finish();
-            Some(open_rules_button)
-        } else {
-            None
-        };
-
-        workspace_content.add_child(self.render_workspace_header(
-            user_friendly,
-            open_rules_button,
-            appearance,
-        ));
-
-        // Indexing section (always rendered per design)
-        workspace_content.add_child(self.render_indexing_subsection(
-            workspace_path,
-            index_status,
-            resync_mouse,
-            delete_mouse,
-            appearance,
-        ));
+        workspace_content.add_child(self.render_workspace_header(user_friendly, None, appearance));
 
         // LSP Servers section (if any servers known)
         if !all_servers.is_empty() {
@@ -1681,24 +1440,9 @@ impl CodePageWidget {
             .finish()
     }
 
-    /// Renders the indexing subsection within a workspace row.
-    fn render_indexing_subsection(
-        &self,
-        workspace_path: &Path,
-        index_status: Option<&CodebaseIndexStatus>,
-        resync_mouse: MouseStateHandle,
-        delete_mouse: MouseStateHandle,
-        appearance: &Appearance,
-    ) -> Box<dyn Element> {
-        self.render_indexing_subsection_for_target(
-            self.local_indexing_status_presentation(index_status, appearance),
-            Some(LocalOrRemotePath::Local(workspace_path.to_path_buf())),
-            resync_mouse,
-            delete_mouse,
-            appearance,
-        )
-    }
-
+    // LOCAL FORK: `render_indexing_subsection` rendered the per-workspace INDEXING row from
+    // the agent's local embedding index; it went with the agent. The remote index rows still
+    // use `render_indexing_subsection_for_target` below.
     fn render_indexing_subsection_for_target(
         &self,
         presentation: IndexingStatusPresentation,
@@ -1744,84 +1488,8 @@ impl CodePageWidget {
         column.finish()
     }
 
-    fn local_indexing_status_presentation(
-        &self,
-        index_state: Option<&CodebaseIndexStatus>,
-        appearance: &Appearance,
-    ) -> IndexingStatusPresentation {
-        let theme = appearance.theme();
-        let Some(index_state) = index_state else {
-            return IndexingStatusPresentation {
-                text: Cow::from("No index created"),
-                color: theme.disabled_ui_text_color().into_solid(),
-                icon: Some(Icon::SlashCircle),
-                refresh_action: None,
-                show_delete: false,
-            };
-        };
-
-        if index_state.has_pending() {
-            let text = match index_state.sync_progress() {
-                Some(SyncProgress::Discovering { total_nodes }) => {
-                    Cow::from(format!("Discovered {total_nodes} chunks"))
-                }
-                Some(SyncProgress::Syncing {
-                    completed_nodes,
-                    total_nodes,
-                }) => Cow::from(format!("Syncing - {completed_nodes} / {total_nodes}")),
-                None => Cow::from("Syncing..."),
-            };
-
-            return IndexingStatusPresentation {
-                text,
-                color: theme.disabled_ui_text_color().into_solid(),
-                icon: None,
-                refresh_action: None,
-                show_delete: true,
-            };
-        }
-
-        if let Some(completed_successfully) = index_state.last_sync_successful() {
-            let (text, color, icon) = if completed_successfully {
-                ("Synced", theme.ansi_fg_green(), Icon::Check)
-            } else if let Some(CodebaseIndexFinishedStatus::Failed(
-                CodebaseIndexingError::ExceededMaxFileLimit
-                | CodebaseIndexingError::MaxDepthExceeded,
-            )) = index_state.last_sync_result()
-            {
-                (
-                    "Codebase too large",
-                    theme.ui_warning_color(),
-                    Icon::AlertTriangle,
-                )
-            } else if index_state.has_synced_version() {
-                (
-                    "Stale",
-                    theme.nonactive_ui_detail().into_solid(),
-                    Icon::ClockRefresh,
-                )
-            } else {
-                ("Failed", theme.ui_error_color(), Icon::AlertTriangle)
-            };
-
-            return IndexingStatusPresentation {
-                text: Cow::from(text),
-                color,
-                icon: Some(icon),
-                refresh_action: Some(IndexingRefreshAction::Resync),
-                show_delete: true,
-            };
-        }
-
-        log::warn!("No index state for codebase");
-        IndexingStatusPresentation {
-            text: Cow::from("No index built"),
-            color: theme.nonactive_ui_text_color().into_solid(),
-            icon: None,
-            refresh_action: None,
-            show_delete: true,
-        }
-    }
+    // LOCAL FORK: `local_indexing_status_presentation` turned the agent's local embedding
+    // index state into an INDEXING row; it went with the agent.
 
     #[cfg(not(target_family = "wasm"))]
     fn remote_indexing_status_presentation(
@@ -1976,15 +1644,9 @@ impl CodePageWidget {
                     })
                     .build()
                     .on_click(move |ctx, _, _| match (&action_target, &refresh_action) {
-                        (
-                            LocalOrRemotePath::Local(codebase_path),
-                            IndexingRefreshAction::Resync,
-                        ) => {
-                            ctx.dispatch_typed_action(CodeSettingsPageAction::ManualResync(
-                                codebase_path.clone(),
-                            ));
-                        }
-                        (LocalOrRemotePath::Local(_), IndexingRefreshAction::RequestRemote) => {}
+                        // LOCAL FORK: only remote index rows reach this now; local codebase
+                        // indexing went with the agent.
+                        (LocalOrRemotePath::Local(_), _) => {}
                         #[cfg(not(target_family = "wasm"))]
                         (LocalOrRemotePath::Remote(remote_path), IndexingRefreshAction::Resync) => {
                             ctx.dispatch_typed_action(CodeSettingsPageAction::ManualResyncRemote(
@@ -2018,11 +1680,9 @@ impl CodePageWidget {
                     })
                     .build()
                     .on_click(move |ctx, _, _| match &action_target {
-                        LocalOrRemotePath::Local(codebase_path) => {
-                            ctx.dispatch_typed_action(CodeSettingsPageAction::DeleteIndex(
-                                codebase_path.clone(),
-                            ));
-                        }
+                        // LOCAL FORK: only remote index rows reach this now; local codebase
+                        // indexing went with the agent.
+                        LocalOrRemotePath::Local(_) => {}
                         #[cfg(not(target_family = "wasm"))]
                         LocalOrRemotePath::Remote(remote_path) => {
                             ctx.dispatch_typed_action(CodeSettingsPageAction::DeleteRemoteIndex(
@@ -2577,31 +2237,17 @@ impl SettingsWidget for CodebaseIndexingCategorizedWidget {
                 Some(AUTO_INDEX_DESCRIPTION.into()),
             ));
 
-            if !CodebaseIndexManager::as_ref(app).can_create_new_indices() {
-                content.add_child(
-                    ui_builder
-                        .paragraph(CODEBASE_INDEX_LIMIT_REACHED)
-                        .with_style(UiComponentStyles {
-                            font_color: Some(appearance.theme().disabled_ui_text_color().into()),
-                            ..Default::default()
-                        })
-                        .build()
-                        .with_margin_bottom(8.0)
-                        .finish(),
-                );
-            }
+            // LOCAL FORK: the local index-count limit notice went with the agent's index
+            // manager.
         }
 
         // Initialized / indexed folders section
         let mouse_states = InitializedFoldersMouseStates {
-            codebase_manual_resync: view.codebase_manual_resync_mouse_states.clone(),
-            codebase_delete: view.codebase_delete_mouse_states.clone(),
             #[cfg(not(target_family = "wasm"))]
             remote_codebase_manual_resync: view.remote_codebase_manual_resync_mouse_states.clone(),
             #[cfg(not(target_family = "wasm"))]
             remote_codebase_delete: view.remote_codebase_delete_mouse_states.clone(),
             lsp_rows: view.lsp_row_mouse_states.clone(),
-            open_project_rules: view.open_project_rules_mouse_states.clone(),
         };
         content.add_child(self.inner.render_initialized_folders(
             mouse_states,

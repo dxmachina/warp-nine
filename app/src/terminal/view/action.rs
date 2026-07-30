@@ -2,7 +2,6 @@ use std::fmt;
 use std::ops::Range;
 use std::path::PathBuf;
 
-use ai::skills::SkillReference;
 use command_corrections::Correction;
 pub use onboarding::OnboardingIntention;
 use pathfinder_geometry::vector::Vector2F;
@@ -26,6 +25,7 @@ use super::{
 use crate::code_review::telemetry_event::CodeReviewPaneEntrypoint;
 use crate::server::ids::SyncId;
 use crate::server::telemetry::{AgentModeRewindEntrypoint, PaletteSource, ToggleBlockFilterSource};
+use crate::skills::SkillReference;
 use crate::terminal::available_shells::AvailableShell;
 use crate::terminal::block_list_element::{
     BlockHoverAction, BlockListMenuSource, BlockSelectAction, BlockTextSelectAction,

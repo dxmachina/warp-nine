@@ -7,7 +7,6 @@ pub(super) mod view;
 #[cfg(feature = "local_fs")]
 use std::path::PathBuf;
 
-use ai::skills::SkillReference;
 pub use cloud_mode_v2_view::{CloudModeV2SlashCommandView, Section as CloudModeV2Section};
 pub use data_source::*;
 pub use mixer::{SlashCommandMixer, build_slash_command_mixer, slash_command_query};
@@ -28,6 +27,7 @@ use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::server::ids::SyncId;
 use crate::server::telemetry::{AgentModeAutoDetectionSettingOrigin, SlashCommandAcceptedDetails};
 use crate::settings::AISettings;
+use crate::skills::SkillReference;
 use crate::tab::SelectedTabColor;
 use crate::terminal::input::decorations::InputBackgroundJobOptions;
 use crate::terminal::input::inline_menu::{InlineMenuAction, InlineMenuType};

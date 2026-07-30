@@ -1,7 +1,6 @@
 use crate::settings::{AISettings, CodeSettings};
 use std::future::Future;
 
-use ai::api_keys::ApiKeyManager;
 use settings::Setting as _;
 use warp_core::features::FeatureFlag;
 use warp_core::send_telemetry_from_ctx;

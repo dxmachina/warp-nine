@@ -1,8 +1,5 @@
 use std::collections::HashMap;
 
-use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
-use ai::index::full_source_code_embedding::store_client::MockStoreClient;
-use ai::project_context::model::ProjectContextModel;
 use pathfinder_geometry::rect::RectF;
 #[cfg(feature = "local_fs")]
 use repo_metadata::RepoMetadataModel;
@@ -133,14 +130,8 @@ fn initialize_app(app: &mut App) {
     crate::terminal::available_shells::register(app);
     app.update(experiments::init);
     AltScreenReporting::register(app);
-    // LOCAL FORK: the embedding store client (`impl StoreClient for ServerApi`)
-    // went with the agent, so the manager is registered against the same no-op
-    // store client `lib.rs` uses in the shipped build. `PersistedWorkspace::new`
-    // still reads this singleton under `FullSourceCodeEmbedding`.
-    app.add_singleton_model(|ctx| {
-        CodebaseIndexManager::new_for_test(Arc::new(MockStoreClient), ctx)
-    });
-    app.add_singleton_model(|_| ProjectContextModel::default());
+    // LOCAL FORK: the `CodebaseIndexManager` and `ProjectContextModel` singletons
+    // registered here were removed with the codebase indexing surface.
     app.add_singleton_model(|ctx| PersistedWorkspace::new(vec![], HashMap::new(), None, ctx));
     app.add_singleton_model(OneTimeModalModel::new);
     app.add_singleton_model(|_| WorkspaceRegistry::new());

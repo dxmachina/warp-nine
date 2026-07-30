@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::path::{Path, PathBuf};
 
-use ai::skills::SkillReference;
+use crate::skills::SkillReference;
 use serde::{Deserialize, Serialize};
 use warp_util::path::LineAndColumnArg;
 use warpui::{AppContext, Entity, EntityId, ModelContext, SingletonEntity, ViewHandle, WindowId};

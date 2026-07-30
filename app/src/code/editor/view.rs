@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::ops::Range;
 use std::path::Path;
 
-use ai::diff_validation::DiffDelta;
 use lazy_static::lazy_static;
 use num_traits::SaturatingSub;
 use pathfinder_geometry::vector::vec2f;
@@ -74,6 +73,7 @@ use crate::code::{
     ShowFindReferencesCardProvider,
 };
 use crate::code_review::comments::{CommentId, CommentOrigin};
+use crate::diff_validation::DiffDelta;
 use crate::editor::InteractionState;
 use crate::features::FeatureFlag;
 use crate::notebooks::editor::rich_text_styles;

@@ -5,7 +5,6 @@ mod bookmarks;
 mod context_menu;
 pub mod init;
 pub mod inline_banner;
-use ai::agent::action::InsertReviewComment;
 // TODO(advait): if we align on prompt suggestions banner in Input, move code out of inline_banner mod.
 pub(crate) mod init_environment;
 mod init_project;
@@ -58,8 +57,6 @@ use std::time::Duration;
 
 use action::RememberForWarpification;
 pub use action::{AgentOnboardingVersion, OnboardingIntention, OnboardingVersion, TerminalAction};
-use ai::api_keys::{ApiKeyManager, AwsCredentialsState};
-use ai::index::full_source_code_embedding::manager::{BuildSource, CodebaseIndexManager};
 use async_channel::{Receiver, Sender};
 use base64::Engine as _;
 pub use block_banner::{BLOCK_BANNER_HEIGHT, WithinBlockBanner};
@@ -201,9 +198,7 @@ use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{CloudObject, GenericStringObjectFormat, JsonObjectType};
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;
-use crate::code_review::comments::{
-    AttachedReviewComment, PendingImportedReviewComment, convert_insert_review_comments,
-};
+use crate::code_review::comments::AttachedReviewComment;
 use crate::code_review::diff_state::{DiffMode, GitDeltaPreference};
 use crate::code_review::git_repo_model::{GitRepoModels, GitRepoStatusModel, GitStatusMetadata};
 use crate::code_review::github_repo_model::GitHubRepoModel;
@@ -1510,12 +1505,8 @@ pub enum Event {
     },
     OpenCodeReviewPane(CodeReviewPanelArg),
     ToggleCodeReviewPane(CodeReviewPanelArg),
-    InsertCodeReviewComments {
-        repo_path: LocalOrRemotePath,
-        comments: Vec<PendingImportedReviewComment>,
-        diff_mode: DiffMode,
-        open_code_review: Option<CodeReviewPanelArg>,
-    },
+    // LOCAL FORK: Event::InsertCodeReviewComments was emitted only by the agent's
+    // insert_code_review_comments tool call.
     OpenCodeReviewPaneAndScrollToComment {
         open_code_review: CodeReviewPanelArg,
         comment: AttachedReviewComment,
@@ -4197,72 +4188,9 @@ impl TerminalView {
 
 
 
-    fn handle_insert_code_review_comments_event(
-        &mut self,
-        repo_path: &Path,
-        comments: &[InsertReviewComment],
-        base_branch: Option<&str>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let pending_comments = convert_insert_review_comments(comments);
-
-        if pending_comments.is_empty() {
-            log::warn!("No valid comments to insert");
-            return;
-        }
-
-        // Determine DiffMode from the base branch.
-        if self.current_repo_path.is_none() {
-            log::warn!("Cannot insert PR comments: not in a git repository");
-            return;
-        }
-
-        let diff_mode = self.diff_mode_for_branch(base_branch, ctx);
-
-        let open_code_review = if FeatureFlag::PRCommentsV2.is_enabled() {
-            None
-        } else {
-            Some(CodeReviewPanelArg {
-                repo_path: Some(LocalOrRemotePath::Local(repo_path.to_path_buf())),
-                terminal_view: self.view_handle.clone(),
-                entrypoint: CodeReviewPaneEntrypoint::InvokedByAgent,
-                focus_new_pane: false,
-            })
-        };
-
-        ctx.emit(Event::InsertCodeReviewComments {
-            repo_path: LocalOrRemotePath::Local(repo_path.to_path_buf()),
-            comments: pending_comments,
-            diff_mode,
-            open_code_review,
-        });
-    }
-
-    /// Gets the DiffMode for the given branch name by fetching the main branch name
-    /// for this session and comparing it to the given branch name.
-    #[cfg_attr(not(feature = "local_fs"), allow(unused_variables))]
-    fn diff_mode_for_branch(
-        &self,
-        base_branch: Option<&str>,
-        ctx: &mut ViewContext<Self>,
-    ) -> DiffMode {
-        match base_branch {
-            Some(branch) => {
-                #[cfg(feature = "local_fs")]
-                let main_branch = self
-                    .git_status_metadata(ctx)
-                    .map(|m| m.main_branch_name.clone())
-                    .and_then(|mb| mb.strip_prefix("origin/").map(String::from));
-                #[cfg(not(feature = "local_fs"))]
-                let main_branch: Option<String> = None;
-                DiffMode::from_branch(branch, main_branch.as_deref())
-            }
-            None => DiffMode::MainBranch,
-        }
-    }
-
-
-
+    // LOCAL FORK: `handle_insert_code_review_comments_event` and its `diff_mode_for_branch`
+    // helper were the agent's `InsertReviewComment` action landing in the code review pane;
+    // they went with the agent.
 
     fn handle_windowing_state_update(
         &mut self,
@@ -6128,11 +6056,8 @@ impl TerminalView {
     }
 
 
-    #[cfg(feature = "local_fs")]
-    fn remove_codebase_index_speedbump_banner(&mut self, ctx: &mut ViewContext<Self>) {
-        // LOCAL FORK: the codebase index speedbump banner went with the agent.
-        let _ = ctx;
-    }
+    // LOCAL FORK: `remove_codebase_index_speedbump_banner` was already a stub (the banner went
+    // with the agent) and lost its last caller when `IndexProjectSpeedbump` was gutted.
 
     #[cfg(feature = "local_fs")]
     fn remove_agent_setup_speedbump_banner(&mut self, ctx: &mut ViewContext<Self>) {
@@ -8443,11 +8368,7 @@ impl TerminalView {
         self.any_session_contains_remote_blocks |= self.active_block_is_considered_remote(ctx);
         self.update_focused_terminal_info(ctx);
 
-        if let Some(working_directory) = self.active_session_path_if_local(ctx) {
-            CodebaseIndexManager::handle(ctx).update(ctx, |manager, _ctx| {
-                manager.handle_session_bootstrapped(&working_directory);
-            });
-        }
+        // LOCAL FORK: bootstrap no longer kicks off codebase indexing; it went with the agent.
 
         // At the end of bootstrapping, set the title to the title of
         // the selected conversation. If there is no selected conversation,
@@ -16993,33 +16914,8 @@ impl TerminalView {
             .set_show_bootstrap_block(true);
     }
 
-    fn generate_codebase_index(&mut self, ctx: &mut ViewContext<Self>) {
-        let Some(active_session_path) = self.active_session_path_if_local(ctx) else {
-            return;
-        };
-
-        CodebaseIndexManager::handle(ctx).update(ctx, |manager, ctx| {
-            manager.build_and_sync_codebase_index(
-                BuildSource::FromPath(active_session_path.as_path()),
-                ctx,
-            );
-        });
-    }
-
-    fn write_codebase_index(&self, _ctx: &mut ViewContext<Self>) {
-        #[cfg(feature = "local_fs")]
-        {
-            let Some(working_directory_str) = self.pwd() else {
-                log::warn!("No working directory found for terminal session");
-                return;
-            };
-
-            let working_directory = PathBuf::from(working_directory_str);
-            CodebaseIndexManager::handle(_ctx).update(_ctx, |index_manager, ctx| {
-                index_manager.write_snapshot(working_directory.as_path(), ctx);
-            });
-        }
-    }
+    // LOCAL FORK: `generate_codebase_index` and `write_codebase_index` drove the embedding
+    // index manager; they went with the agent.
 
     /// Starts all enabled LSP servers for the current working directory.
     #[cfg(feature = "local_fs")]
@@ -17954,7 +17850,7 @@ impl TypedActionView for TerminalView {
             HideTelemetryBannerPermanently => self.hide_telemetry_banner_permanently(ctx),
             ShowInitializationBlock => self.show_initialization_block(),
             GenerateCodebaseIndex => {
-                self.generate_codebase_index(ctx);
+                // LOCAL FORK: codebase indexing went with the agent.
             }
             LoadAgentModeConversation => {}
             ShowWarpifySettings => ctx.emit(Event::OpenSettings(SettingsSection::Warpify)),
@@ -17962,7 +17858,7 @@ impl TypedActionView for TerminalView {
                 // LOCAL FORK: pending query attachments went with the agent.
             }
             WriteCodebaseIndex => {
-                self.write_codebase_index(ctx);
+                // LOCAL FORK: codebase indexing went with the agent.
             }
             ToggleAutoexecuteMode | ToggleQueueNextPrompt => {
                 // LOCAL FORK: agent query modes went with the agent.
@@ -18005,24 +17901,8 @@ impl TypedActionView for TerminalView {
                 self.open_environment_management_pane(ctx);
             }
             IndexProjectSpeedbump => {
-                let codebase_context_enabled =
-                    UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx);
-
-                if FeatureFlag::FullSourceCodeEmbedding.is_enabled() && codebase_context_enabled {
-                    #[cfg(feature = "local_fs")]
-                    if let Some(current_dir) = self.pwd() {
-                        let directory = PathBuf::from(&current_dir);
-
-                        if let Ok(repo_path) = directory.canonicalize() {
-                            // Start indexing the codebase
-                            CodebaseIndexManager::handle(ctx).update(ctx, |manager, ctx| {
-                                manager.index_directory(repo_path.clone(), ctx);
-                            });
-
-                            self.remove_codebase_index_speedbump_banner(ctx);
-                        }
-                    }
-                }
+                // LOCAL FORK: codebase indexing went with the agent, and the speedbump banner
+                // that raised this action is already inert.
             }
             AddProjectAtCurrentDirectory => {
                 // Get the current working directory and add it as a project
@@ -18065,7 +17945,7 @@ impl TypedActionView for TerminalView {
             OpenEditSkillPane { skill_reference } => {
                 #[cfg(feature = "local_fs")]
                 {
-                    use ai::skills::SkillReference;
+                    use crate::skills::SkillReference;
 
                     match skill_reference {
                         SkillReference::Path(path) => {

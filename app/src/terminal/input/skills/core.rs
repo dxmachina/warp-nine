@@ -1,9 +1,10 @@
-use ai::skills::{SkillProvider, SkillReference, SkillScope};
 use fuzzy_match::FuzzyMatchResult;
 use ordered_float::OrderedFloat;
 use warp_core::ui::icons::Icon;
 use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::{AppContext, EntityId};
+
+use crate::skills::{SkillProvider, SkillReference, SkillScope};
 
 pub const LOCAL_SKILLS_REMOTE_EXECUTION_ERROR_MESSAGE: &str = "Local skills cannot run on a remote machine. Try forking the conversation locally and running the skill.";
 

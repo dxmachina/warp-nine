@@ -55,7 +55,6 @@ test = false
 
 [dependencies]
 addr = "0.15.6"
-ai.workspace = true
 alphanumeric-sort = "1.5.7"
 anyhow.workspace = true
 arrayvec.workspace = true
@@ -187,6 +186,7 @@ serde-bytes-repr.workspace = true
 serde_json.workspace = true
 serde_regex = "1.1.0"
 serde_urlencoded.workspace = true
+strsim.workspace = true
 serde_with.workspace = true
 serde_yaml.workspace = true
 session-sharing-protocol.workspace = true
@@ -422,7 +422,6 @@ windows-result = { workspace = true }
 winreg.workspace = true
 
 [dev-dependencies]
-ai = { workspace = true, features = ["test-util"] }
 async-process.workspace = true
 computer_use = { workspace = true, features = ["test-util"] }
 firebase.workspace = true
@@ -505,7 +504,6 @@ crash_reporting = [
     "dep:crash-handler",
     "warp_logging/crash_reporting",
     "warp_errors/crash_reporting",
-    "ai/crash_reporting",
 ]
 creating_shared_sessions = []
 cross_repo_context = []
@@ -776,7 +774,7 @@ inline_slash_commands = ["agent_view"]
 heap_usage_tracking = ["jemalloc_pprof", "crash_reporting"]
 image_as_context = []
 in_band_generators_ssh = []
-jemalloc = ["dep:tikv-jemallocator", "ai/jemalloc"]
+jemalloc = ["dep:tikv-jemallocator"]
 jemalloc_with_profiling = ["jemalloc", "tikv-jemallocator/profiling"]
 jemalloc_auto_heap_profiling = ["jemalloc_with_profiling"]
 jemalloc_pprof = ["jemalloc_with_profiling", "dep:jemalloc_pprof"]
@@ -799,7 +797,6 @@ local_claude_codex_child_harnesses = []
 # conditionally include dependencies that should only exist in such
 # environments.
 local_fs = [
-    "ai/local_fs",
     "lsp/local_fs",
     "persistence/local_fs",
     "repo_metadata/local_fs",
@@ -863,7 +860,6 @@ test-util = [
     "warp_server_auth/test-util",
     "http_client/test-util",
     "warp_core/test-util",
-    "ai/test-util",
     "warp_server_client/test-util",
 ]
 team_workflows = ["team_features_override"]

@@ -1,16 +1,13 @@
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-use ai::LLMId;
-use ai::api_keys::{ApiKeyManager, ApiKeyManagerEvent};
 use pathfinder_color::ColorU;
 use warp_core::ui::appearance::Appearance;
 use warp_core::ui::theme::Fill;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::ChildView;
 use warpui::{
-    AppContext, Element, Entity, EntityId, ModelHandle, SingletonEntity as _, View, ViewContext,
-    ViewHandle,
+    AppContext, Element, Entity, EntityId, ModelHandle, View, ViewContext, ViewHandle,
 };
 
 use crate::features::FeatureFlag;
@@ -59,11 +56,8 @@ pub enum InlineModelSelectorTab {
 
 #[derive(Debug, Clone)]
 pub enum InlineModelSelectorEvent {
-    SelectedModel {
-        id: LLMId,
-        selected_tab: InlineModelSelectorTab,
-        set_as_default: bool,
-    },
+    // LOCAL FORK: `SelectedModel` carried the agent's `LLMId` and was already
+    // unreachable — menu items no longer carry a model id to accept.
     Dismissed,
 }
 
@@ -236,22 +230,9 @@ impl InlineModelSelectorView {
             me.rerun_query(ctx);
         });
 
-        ctx.subscribe_to_model(&ApiKeyManager::handle(ctx), |me, _, event, ctx| {
-            if !matches!(event, ApiKeyManagerEvent::KeysUpdated) {
-                return;
-            }
-            if me
-                .suggestions_mode_model
-                .as_ref(ctx)
-                .is_inline_model_selector()
-            {
-                me.mixer.update(ctx, |mixer, ctx| {
-                    if let Some(query) = mixer.current_query().cloned() {
-                        mixer.run_query(query, ctx);
-                    }
-                });
-            }
-        });
+        // LOCAL FORK: an `ApiKeyManager` subscription re-ran the query whenever the
+        // user's BYO-LLM keys changed, so newly unlocked models appeared in the menu.
+        // The key manager went with the agent.
 
         ctx.subscribe_to_model(&mixer, |me, _, event, ctx| {
             let SearchMixerEvent::ResultsChanged = event;

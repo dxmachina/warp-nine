@@ -1,9 +1,9 @@
-use ai::skills::SkillReference;
 use warpui::elements::ChildView;
 use warpui::{Element, Entity, EntityId, ModelHandle, View, ViewContext, ViewHandle};
 
 use crate::search::data_source::Query;
 use crate::search::mixer::{SearchMixer, SearchMixerEvent};
+use crate::skills::SkillReference;
 use crate::terminal::input::buffer_model::{InputBufferModel, InputBufferUpdateEvent};
 use crate::terminal::input::inline_menu::{InlineMenuEvent, InlineMenuPositioner, InlineMenuView};
 use crate::terminal::input::skills::data_source::{

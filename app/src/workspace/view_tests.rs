@@ -1,8 +1,5 @@
 use std::collections::HashMap;
 
-use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
-use ai::index::full_source_code_embedding::store_client::MockStoreClient;
-use ai::project_context::model::ProjectContextModel;
 use pane_group::{NotebookPane, PaneState, SplitPaneState, TerminalPaneId};
 #[cfg(feature = "local_fs")]
 use repo_metadata::CanonicalizedPath;
@@ -170,13 +167,8 @@ pub(crate) fn initialize_app(app: &mut App) {
 
     app.update(experiments::init);
 
-    // PersistedWorkspace::new subscribes to both of these singletons, so they
-    // must be registered first. The codebase index manager is backed by a
-    // no-op store client (the remote embedding store went with the agent).
-    app.add_singleton_model(|ctx| {
-        CodebaseIndexManager::new_for_test(Arc::new(MockStoreClient), ctx)
-    });
-    app.add_singleton_model(|_| ProjectContextModel::default());
+    // LOCAL FORK: the `CodebaseIndexManager` and `ProjectContextModel` singletons
+    // registered here were removed with the codebase indexing surface.
     app.add_singleton_model(|ctx| PersistedWorkspace::new(vec![], HashMap::new(), None, ctx));
     app.add_singleton_model(|_| PricingInfoModel::new());
     app.add_singleton_model(|_| History::new(vec![]));

@@ -1,4 +1,3 @@
-use ai::LLMId;
 use onboarding::slides::{AgentDevelopmentSettings, ProjectOnboardingSettings};
 use onboarding::{SelectedSettings, UICustomizationSettings};
 use warp_core::features::FeatureFlag;
@@ -41,7 +40,9 @@ fn account_first_settings_enable_agent_for_authenticated_users_and_apply_ui_choi
 
         let selected_settings = SelectedSettings::AgentDrivenDevelopment {
             agent_settings: AgentDevelopmentSettings {
-                selected_model_id: LLMId::from("auto"),
+                // LOCAL FORK: built with `into()` so the test does not have to name
+                // `ai::LLMId`; `onboarding` still owns the field's type.
+                selected_model_id: "auto".into(),
                 autonomy: None,
                 cli_agent_toolbar_enabled: true,
                 session_default: onboarding::SessionDefault::Agent,
@@ -99,7 +100,9 @@ fn apply_onboarding_settings_gates_third_party_ai_on_account() {
 
         let onboarding_settings = SelectedSettings::AgentDrivenDevelopment {
             agent_settings: AgentDevelopmentSettings {
-                selected_model_id: LLMId::from("auto"),
+                // LOCAL FORK: built with `into()` so the test does not have to name
+                // `ai::LLMId`; `onboarding` still owns the field's type.
+                selected_model_id: "auto".into(),
                 autonomy: None,
                 cli_agent_toolbar_enabled: true,
                 session_default: onboarding::SessionDefault::Agent,

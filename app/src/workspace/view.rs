@@ -41,7 +41,6 @@ use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ::settings::{Setting, ToggleableSetting};
-use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
 #[cfg(not(target_family = "wasm"))]
 use anyhow::Context as _;
 #[cfg(target_os = "macos")]
@@ -13678,27 +13677,7 @@ impl Workspace {
                     });
                 }
             }
-            pane_group::Event::InsertCodeReviewComments {
-                repo_path,
-                comments,
-                diff_mode,
-                open_code_review,
-            } => {
-                if let Some(open_code_review) = open_code_review {
-                    self.open_code_review_panel_from_arg(open_code_review, pane_group.clone(), ctx);
-                }
-
-                self.working_directories_model
-                    .update(ctx, |working_directories, ctx| {
-                        working_directories.insert_code_review_comments(
-                            pane_group.id(),
-                            repo_path,
-                            comments,
-                            diff_mode,
-                            ctx,
-                        )
-                    });
-            }
+            // LOCAL FORK: InsertCodeReviewComments went with the agent.
             pane_group::Event::OpenCodeReviewPaneAndScrollToComment {
                 open_code_review,
                 comment,
@@ -13960,36 +13939,26 @@ impl Workspace {
         match pane_group_handle.as_ref(ctx).active_session_view(ctx) {
             Some(terminal_handle) => {
                 #[cfg_attr(not(feature = "local_fs"), allow(unused_variables))]
-                let (
-                    session,
-                    pwd_location,
-                    path_if_local,
-                    is_local,
-                    is_wsl_session,
-                    session_id,
-                    has_pending_ssh,
-                ) = terminal_handle.read(ctx, |terminal, ctx| {
-                    let active_session_id = terminal.active_block_session_id();
-                    let session = active_session_id
-                        .and_then(|id| terminal.sessions_model().as_ref(ctx).get(id));
-                    let pwd_location = terminal.pwd_as_local_or_remote(ctx);
-                    let path_if_local = terminal.active_session_path_if_local(ctx);
-                    let is_local = terminal.active_session_is_local(ctx);
-                    let is_wsl_session = session.as_ref().map(|s| s.is_wsl()).unwrap_or(false);
-                    let has_pending_ssh = terminal.has_pending_ssh_command();
-                    (
-                        session,
-                        pwd_location,
-                        path_if_local,
-                        is_local,
-                        is_wsl_session,
-                        active_session_id,
-                        has_pending_ssh,
-                    )
-                });
+                let (session, pwd_location, is_local, is_wsl_session, session_id, has_pending_ssh) =
+                    terminal_handle.read(ctx, |terminal, ctx| {
+                        let active_session_id = terminal.active_block_session_id();
+                        let session = active_session_id
+                            .and_then(|id| terminal.sessions_model().as_ref(ctx).get(id));
+                        let pwd_location = terminal.pwd_as_local_or_remote(ctx);
+                        let is_local = terminal.active_session_is_local(ctx);
+                        let is_wsl_session = session.as_ref().map(|s| s.is_wsl()).unwrap_or(false);
+                        let has_pending_ssh = terminal.has_pending_ssh_command();
+                        (
+                            session,
+                            pwd_location,
+                            is_local,
+                            is_wsl_session,
+                            active_session_id,
+                            has_pending_ssh,
+                        )
+                    });
 
                 let window_id = ctx.window_id();
-                let working_directory_clone = path_if_local.clone();
                 ActiveSession::handle(ctx).update(ctx, |active_session, ctx| {
                     active_session.set_session_state(
                         window_id,
@@ -14000,11 +13969,8 @@ impl Workspace {
                     );
                 });
 
-                CodebaseIndexManager::handle(ctx).update(ctx, |manager, _ctx| {
-                    if let Some(working_directory) = working_directory_clone {
-                        manager.handle_active_session_changed(working_directory.as_path());
-                    }
-                });
+                // LOCAL FORK: the active-session hook that told the codebase index manager
+                // which directory to track went with the agent.
 
                 let is_remote = matches!(is_local, Some(false));
                 let is_unsupported_session = is_wsl_session;

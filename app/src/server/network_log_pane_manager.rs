@@ -1,7 +1,8 @@
 //! Tracks open [`NetworkLogPane`]s across windows so that we show at most one
 //! per window and can focus the existing one when reopened.
 //!
-//! Mirrors the pattern used by [`crate::ai::execution_profiles::editor::manager::ExecutionProfileEditorManager`].
+//! LOCAL FORK: this used to point at the agent's `ExecutionProfileEditorManager`
+//! as the reference implementation of the pattern; that manager went with the agent.
 use std::collections::HashMap;
 
 use warpui::{Entity, SingletonEntity, WindowId};

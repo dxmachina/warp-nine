@@ -1,7 +1,3 @@
-use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
-use ai::index::full_source_code_embedding::store_client::MockStoreClient;
-#[cfg(feature = "local_fs")]
-use ai::skills::SKILL_PROVIDER_DEFINITIONS;
 #[cfg(feature = "local_fs")]
 use repo_metadata::RepoMetadataModel;
 use repo_metadata::repositories::DetectedRepositories;
@@ -30,6 +26,8 @@ use crate::server::sync_queue::SyncQueue;
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
 use crate::settings::PrivacySettings;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
+#[cfg(feature = "local_fs")]
+use crate::skills::SKILL_PROVIDER_DEFINITIONS;
 use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
 use crate::system::{SystemInfo, SystemStats};
 use crate::terminal::alt_screen_reporting::AltScreenReporting;
@@ -112,11 +110,8 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     app.add_singleton_model(|_| GitRepoModels::new());
     app.add_singleton_model(HomeDirectoryWatcher::new_for_test);
     app.add_singleton_model(WarpManagedPathsWatcher::new_for_testing);
-    // The remote embedding store went with the agent; the manager stays
-    // registered for its surviving consumers, backed by a no-op store client.
-    app.add_singleton_model(|ctx| {
-        CodebaseIndexManager::new_for_test(std::sync::Arc::new(MockStoreClient), ctx)
-    });
+    // LOCAL FORK: the `CodebaseIndexManager` singleton registered here was removed
+    // with the codebase indexing surface.
     #[cfg(feature = "voice_input")]
     app.add_singleton_model(voice_input::VoiceInput::new);
 

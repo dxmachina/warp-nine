@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use ai::document::AIDocumentId;
 use anyhow::{Context, Result, anyhow};
 use async_channel::Sender;
 use async_trait::async_trait;
@@ -402,9 +401,12 @@ impl ObjectClient for ServerApi {
         let notebook: SerializedNotebook = serde_json::from_str(serialized.model_as_str())
             .context("Failed to deserialize notebook model")?;
 
+        // LOCAL FORK: `ai::document::AIDocumentId` went with the agent. It was a newtype
+        // over `Uuid` whose only job here was to drop ids that are not valid UUIDs, so
+        // the same check is done inline.
         let ai_document_id = notebook
             .ai_document_id
-            .and_then(|id| AIDocumentId::try_from(id).ok());
+            .and_then(|id| uuid::Uuid::try_parse(&id).ok());
 
         let variables = CreateNotebookVariables {
             input: CreateNotebookInput {

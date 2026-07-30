@@ -1,7 +1,6 @@
 #[cfg(not(target_family = "wasm"))]
 use std::sync::Arc;
 
-use ai::diff_validation::DiffType;
 #[cfg(not(target_family = "wasm"))]
 use futures::FutureExt;
 #[cfg(not(target_family = "wasm"))]
@@ -19,6 +18,7 @@ use super::diff_viewer::{DiffViewer, DisplayMode};
 use super::editor::NavBarBehavior;
 use super::editor::scroll::{ScrollPosition, ScrollTrigger};
 use super::editor::view::{CodeEditorEvent, CodeEditorView};
+use crate::diff_validation::DiffType;
 #[cfg(not(target_family = "wasm"))]
 use crate::editor::InteractionState;
 

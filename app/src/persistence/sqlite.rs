@@ -7,7 +7,6 @@ use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Once};
 use std::{fs, thread};
 
-use ai::project_context::model::ProjectRulePath;
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::Utc;
 use cloud_object_models::folder::persistence as folder_persistence;
@@ -87,7 +86,7 @@ use crate::drive::OpenWarpDriveObjectSettings;
 use crate::notebooks::NotebookId;
 use crate::persistence::model::{
     CODE_REVIEW_PANE_KIND, GET_STARTED_PANE_KIND, NewPersistedObjectAction, NewTeamSettings,
-    ProjectRules, UserProfile,
+    UserProfile,
 };
 use crate::server::experiments::ServerExperiment;
 use crate::server::ids::{ClientId, HashableId, ServerId, SyncId};
@@ -780,13 +779,8 @@ fn handle_model_event(event: ModelEvent, connection: &mut SqliteConnection) -> a
             environment_variables,
         )
         .context("error upserting mcp server mcp_environment variables"),
-        ModelEvent::UpsertProjectRules { project_rule_paths } => {
-            upsert_project_rules(connection, project_rule_paths)
-                .context("error upserting project rules")
-        }
-        ModelEvent::DeleteProjectRules { path } => {
-            delete_project_rules(connection, path).context("error deleting project rules")
-        }
+        // LOCAL FORK: the `UpsertProjectRules` and `DeleteProjectRules` arms went with
+        // the agent; `ProjectContextModel` was their only emitter.
         ModelEvent::AddIgnoredSuggestion {
             suggestion,
             suggestion_type,
@@ -1639,60 +1633,10 @@ fn delete_project(conn: &mut SqliteConnection, project_path: &str) -> Result<()>
     Ok(())
 }
 
-fn get_all_project_rules(
-    conn: &mut SqliteConnection,
-) -> Result<Vec<ProjectRulePath>, diesel::result::Error> {
-    use schema::project_rules::dsl::*;
-
-    Ok(project_rules
-        .load_iter::<ProjectRules, DefaultLoadingMode>(conn)?
-        .filter_map(|item| match item {
-            Ok(rule) => Some(ProjectRulePath {
-                path: PathBuf::from(rule.path),
-                project_root: PathBuf::from(rule.project_root),
-            }),
-            Err(_) => None,
-        })
-        .collect_vec())
-}
-
-fn upsert_project_rules(
-    conn: &mut SqliteConnection,
-    new_project_rules: Vec<ProjectRulePath>,
-) -> Result<()> {
-    use schema::project_rules::dsl::*;
-
-    // SQLite doesn't support batch upserts, so we need to iterate
-    for rule in new_project_rules {
-        let new_rule = model::NewProjectRules {
-            path: rule.path.to_string_lossy().to_string(),
-            project_root: rule.project_root.to_string_lossy().to_string(),
-        };
-
-        diesel::insert_into(project_rules)
-            .values(&new_rule)
-            .on_conflict(path)
-            .do_update()
-            .set(&new_rule)
-            .execute(conn)?;
-    }
-
-    Ok(())
-}
-
-fn delete_project_rules(conn: &mut SqliteConnection, rules_paths: Vec<PathBuf>) -> Result<()> {
-    use schema::project_rules::dsl::*;
-
-    // Convert PathBuf to String for comparison
-    let path_strings: Vec<String> = rules_paths
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
-
-    diesel::delete(project_rules.filter(path.eq_any(path_strings))).execute(conn)?;
-
-    Ok(())
-}
+// LOCAL FORK: `get_all_project_rules`, `upsert_project_rules` and `delete_project_rules`
+// read and wrote the `project_rules` table on behalf of the agent's `ProjectContextModel`,
+// whose rule reader went with the agent. The table and its migration stay; nothing
+// touches them now.
 
 fn get_all_ignored_suggestions(
     conn: &mut SqliteConnection,
@@ -2390,7 +2334,6 @@ fn read_sqlite_data(
             workspace_language_servers: Default::default(),
             multi_agent_conversations: Default::default(),
             projects: Default::default(),
-            project_rules: Default::default(),
             ignored_suggestions: Default::default(),
             mcp_servers_to_restore: Default::default(),
             conversation_summary_backfills: Default::default(),
@@ -2768,7 +2711,6 @@ fn read_sqlite_data(
     let (multi_agent_conversations, conversation_summary_backfills) =
         read_agent_conversation_metadata(conn)?;
     let projects = get_all_projects(conn)?;
-    let project_rules = get_all_project_rules(conn)?;
     let ignored_suggestions = get_all_ignored_suggestions(conn)?;
     let mcp_servers_to_restore = get_mcp_servers_to_restore(conn)?;
 
@@ -2787,7 +2729,6 @@ fn read_sqlite_data(
         workspace_language_servers,
         multi_agent_conversations,
         projects,
-        project_rules,
         ignored_suggestions,
         mcp_servers_to_restore,
         conversation_summary_backfills,

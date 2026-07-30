@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use ai::LLMProvider;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use warp_core::features::FeatureFlag;
@@ -109,6 +108,12 @@ pub const NATURAL_LANGUAGE_DETECTION: StaticCommand = StaticCommand {
     auto_enter_ai_mode: false,
     argument: None,
 };
+/// LOCAL FORK: inlined from `ai::LLMProvider::API_KEY_PROVIDER_VALUE_NAME`, which went
+/// out with the agent. `/add-api-key` and `/clear-provider-api-key` are `TuiOnly` and the
+/// TUI is gone, so both commands below are dead — removing them outright would also mean
+/// editing `static_commands/mod.rs` and `commands_tests.rs`.
+const API_KEY_PROVIDER_VALUE_NAME: &str = "openai|anthropic|google|grok";
+
 pub const ADD_API_KEY: StaticCommand = StaticCommand {
     name: "/add-api-key",
     description: "Securely store a model-provider API key",
@@ -117,7 +122,7 @@ pub const ADD_API_KEY: StaticCommand = StaticCommand {
     availability: Availability::AI_ENABLED,
     auto_enter_ai_mode: false,
     argument: Some(Argument {
-        hint_text: Some(LLMProvider::API_KEY_PROVIDER_VALUE_NAME),
+        hint_text: Some(API_KEY_PROVIDER_VALUE_NAME),
         is_optional: false,
         should_execute_on_selection: false,
     }),
@@ -130,7 +135,7 @@ pub const CLEAR_API_KEY: StaticCommand = StaticCommand {
     availability: Availability::AI_ENABLED,
     auto_enter_ai_mode: false,
     argument: Some(Argument {
-        hint_text: Some(LLMProvider::API_KEY_PROVIDER_VALUE_NAME),
+        hint_text: Some(API_KEY_PROVIDER_VALUE_NAME),
         is_optional: false,
         should_execute_on_selection: false,
     }),

@@ -1,21 +1,18 @@
 use std::path::{Path, PathBuf};
 
-use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
-use ai::project_context::model::ProjectContextModel;
 use enum_iterator::Sequence;
 use lsp::supported_servers::LSPServerType;
 #[cfg(not(target_family = "wasm"))]
 use repo_metadata::repositories::DetectedRepositories;
+#[cfg(not(target_family = "wasm"))]
 use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::{Entity, ModelContext, SingletonEntity as _};
 
-use crate::settings::CodeSettings;
 use crate::terminal::view::init_project::lsp_server_selector::LSPServerInfo;
 use crate::terminal::view::init_project::{
     CodebaseIndexingResult, CreateEnvironmentResult, FILES_TO_CHECK, InitActionResult,
     LINKABLE_FILES, LanguageServersResult, ProjectScopedRulesResult,
 };
-use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::persisted_workspace::PersistedWorkspace;
 
 const INIT_STEP_COUNT: usize = enum_iterator::cardinality::<InitStepKind>();
@@ -175,21 +172,12 @@ impl InitProjectModel {
     }
 
     /// Check if there are any steps that need user action
-    pub fn should_have_available_steps(path: &Path, ctx: &warpui::AppContext) -> bool {
-        // Note that we consider auto-indexing setting to true to satisfy the codebase context step.
-        // This avoids the potential race condition with the banner showing just when we start auto-indexing.
-        let has_pending_codebase_context = UserWorkspaces::as_ref(ctx)
-            .is_codebase_context_enabled(ctx)
-            && CodebaseIndexManager::as_ref(ctx)
-                .get_codebase_index_status_for_path(path, ctx)
-                .is_none()
-            && !*CodeSettings::as_ref(ctx).auto_indexing_enabled;
-
-        let has_pending_project_scoped_rules = ProjectContextModel::as_ref(ctx)
-            .find_applicable_project_rules(&LocalOrRemotePath::Local(path.to_path_buf()))
-            .is_none();
-
-        has_pending_codebase_context || has_pending_project_scoped_rules
+    ///
+    /// LOCAL FORK: both probes went with the agent — one asked `CodebaseIndexManager` whether
+    /// the directory had an embedding index, the other asked `ProjectContextModel` whether any
+    /// project rules applied. Neither model exists, so no step is ever pending.
+    pub fn should_have_available_steps(_path: &Path, _ctx: &warpui::AppContext) -> bool {
+        false
     }
 
     pub fn get_step(&self, kind: InitStepKind) -> Option<&InitStep> {
@@ -362,40 +350,9 @@ impl InitProjectModel {
         }
     }
 
-    fn compute_codebase_context_step(&mut self, pwd_path: &Path, ctx: &mut ModelContext<Self>) {
-        if !UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx) {
-            // Feature disabled, leave as None
-            return;
-        }
-
-        let codebase_index_manager = CodebaseIndexManager::handle(ctx);
-        let is_indexed = codebase_index_manager
-            .as_ref(ctx)
-            .get_codebase_index_status_for_path(pwd_path, ctx)
-            .is_some();
-
-        if is_indexed {
-            // Already indexed, mark as completed
-            self.set_step(
-                InitStepKind::CodebaseContext,
-                Some(InitStep::new_completed(
-                    InitStepKind::CodebaseContext,
-                    InitActionResult::CodebaseContext(CodebaseIndexingResult::Accepted),
-                )),
-            );
-        } else {
-            // Ready for user interaction
-            self.set_step(
-                InitStepKind::CodebaseContext,
-                Some(InitStep::new_ready(
-                    InitStepKind::CodebaseContext,
-                    InitStepData::CodebaseContext {
-                        pwd_path: pwd_path.to_path_buf(),
-                    },
-                )),
-            );
-        }
-    }
+    /// LOCAL FORK: the codebase context step offered to build an embedding index for the
+    /// directory, which went with the agent. The step is now always skipped (left as `None`).
+    fn compute_codebase_context_step(&mut self, _pwd_path: &Path, _ctx: &mut ModelContext<Self>) {}
 
     fn compute_language_servers_step(&mut self, pwd_path: &Path, ctx: &mut ModelContext<Self>) {
         // Start as Pending

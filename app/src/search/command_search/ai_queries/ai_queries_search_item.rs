@@ -23,13 +23,13 @@ use crate::util::time_format::format_approx_duration_from_now;
 /// Stores data needed to display an AI query search result item in Command Search.
 #[derive(Clone, Debug)]
 pub struct AIQuerySearchResultItem {
-    /// The query text of the [`crate::ai::blocklist::AIQueryHistory`].
+    /// The query text of the recorded AI query.
     pub query_text: String,
     /// When the query was originally submitted by the user.
     pub start_time: DateTime<Local>,
     /// The directory the AI query was submitted in.
     pub(crate) working_directory: Option<String>,
-    // Match result on the [`crate::ai::blocklist::AIQueryHistory`]'s query text including its
+    // Match result on the recorded AI query's query text including its
     // score and matching string indices.
     pub fuzzy_match_results: FuzzyMatchAIQueryResults,
 }

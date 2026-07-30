@@ -33,7 +33,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use ai::skills::SkillReference;
 use async_channel::Sender;
 use base64::Engine as _;
 #[cfg(feature = "local_fs")]
@@ -192,6 +191,7 @@ use crate::settings::{
     MAX_TIMES_TO_SHOW_AUTOSUGGESTION_HINT,
 };
 use crate::settings_view::{SettingsSection, flags};
+use crate::skills::SkillReference;
 use crate::suggestions::ignored_suggestions_model::{
     IgnoredSuggestionsModel, IgnoredSuggestionsModelEvent, SuggestionType,
 };

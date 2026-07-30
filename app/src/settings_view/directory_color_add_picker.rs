@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use ai::index::full_source_code_embedding::manager::{
-    CodebaseIndexManager, CodebaseIndexManagerEvent,
-};
 use settings::Setting;
 use warp_util::path::user_friendly_path;
 use warpui::elements::{
@@ -32,10 +29,12 @@ const MENU_WIDTH: f32 = 340.;
 /// A dropdown used by the Directory tab colors settings widget, with a button fallback
 /// when there are no known repos left to show in the dropdown.
 ///
-/// Lists known repos (from `CodebaseIndexManager` and `PersistedWorkspace`) that
-/// are not yet present in the user's `directory_tab_colors` with a non-`Suppressed`
-/// color, and exposes a pinned `+ Add directory…` footer that falls back to the
-/// native folder picker.
+/// Lists known repos (from `PersistedWorkspace`) that are not yet present in the
+/// user's `directory_tab_colors` with a non-`Suppressed` color, and exposes a pinned
+/// `+ Add directory…` footer that falls back to the native folder picker.
+///
+/// LOCAL FORK: indexed codebase paths used to be a second source here, but
+/// `CodebaseIndexManager` went out with the agent.
 ///
 /// Emits:
 /// - [`DirectoryColorAddPickerEvent::Selected`] when the user picks a row.
@@ -48,8 +47,8 @@ pub(super) struct DirectoryColorAddPicker {
     has_dropdown_items: bool,
     /// Inputs used for the last `refresh_items` computation.
     /// Used to short-circuit `refresh_items` when nothing relevant has changed,
-    /// so noisy events like `SyncStateUpdated` / `IndexMetadataUpdated` don't pay
-    /// for per-path `exists()` + `canonicalize()` on every fire.
+    /// so repeated events don't pay for per-path `exists()` + `canonicalize()`
+    /// on every fire.
     cached_inputs: Option<RefreshCacheKey>,
 }
 
@@ -58,7 +57,6 @@ pub(super) struct DirectoryColorAddPicker {
 /// inputs have changed since the last refresh.
 #[derive(PartialEq, Eq)]
 struct RefreshCacheKey {
-    indexed_paths: HashSet<PathBuf>,
     persisted_paths: HashSet<PathBuf>,
     existing: DirectoryTabColors,
 }
@@ -76,26 +74,8 @@ pub(super) enum DirectoryColorAddPickerEvent {
 
 impl DirectoryColorAddPicker {
     pub(super) fn new(ctx: &mut ViewContext<Self>) -> Self {
-        ctx.subscribe_to_model(&CodebaseIndexManager::handle(ctx), |me, _, event, ctx| {
-            // Refresh for any event that may change the set of indexed codebase paths or
-            // persisted workspaces: new index created, sync state updated (which covers
-            // `index_directory`), indices removed, or index metadata updated (which covers
-            // workspaces persisted via `PersistedWorkspace::handle_index_metadata_event`
-            // without a `WorkspaceAdded` event). Refresh is idempotent thanks to the
-            // cache in `refresh_items`, so the noisier events (`Modified`/`Queried`) are
-            // cheap when nothing relevant has changed.
-            match event {
-                CodebaseIndexManagerEvent::NewIndexCreated { .. }
-                | CodebaseIndexManagerEvent::SyncStateUpdated { .. }
-                | CodebaseIndexManagerEvent::RemoveExpiredIndexMetadata { .. }
-                | CodebaseIndexManagerEvent::IndexMetadataUpdated { .. } => {
-                    me.refresh_items(ctx);
-                }
-                CodebaseIndexManagerEvent::RetrievalRequestCompleted { .. }
-                | CodebaseIndexManagerEvent::RetrievalRequestFailed { .. } => {}
-            }
-        });
-
+        // LOCAL FORK: the `CodebaseIndexManager` subscription that also drove refreshes
+        // here went out with the agent, so `WorkspaceAdded` is now the only repo source.
         ctx.subscribe_to_model(&PersistedWorkspace::handle(ctx), |me, _, event, ctx| {
             if let PersistedWorkspaceEvent::WorkspaceAdded { .. } = event {
                 me.refresh_items(ctx);
@@ -190,10 +170,6 @@ impl DirectoryColorAddPicker {
     }
 
     fn refresh_items(&mut self, ctx: &mut ViewContext<Self>) {
-        let indexed_paths: HashSet<PathBuf> = CodebaseIndexManager::as_ref(ctx)
-            .get_codebase_paths()
-            .cloned()
-            .collect();
         let persisted_paths: HashSet<PathBuf> = PersistedWorkspace::as_ref(ctx)
             .workspaces()
             .map(|ws| ws.path)
@@ -204,7 +180,6 @@ impl DirectoryColorAddPicker {
             .clone();
 
         let cache_key = RefreshCacheKey {
-            indexed_paths,
             persisted_paths,
             existing,
         };
@@ -213,7 +188,7 @@ impl DirectoryColorAddPicker {
         }
 
         let candidates = compute_candidate_paths(
-            cache_key.indexed_paths.iter().cloned(),
+            std::iter::empty(),
             cache_key.persisted_paths.iter().cloned(),
             &cache_key.existing,
             |p| p.exists(),

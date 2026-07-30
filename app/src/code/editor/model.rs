@@ -8,7 +8,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::{cmp, mem};
 
-use ai::diff_validation::DiffDelta;
 use itertools::Itertools;
 use languages::{Language, language_by_filename, language_by_local_filename, language_by_name};
 use line_ending::LineEnding;
@@ -72,6 +71,7 @@ use super::line::EditorLineLocation;
 use crate::appearance::Appearance;
 use crate::code::editor::line_iterator::LineIterator;
 use crate::code_review::comments::{CommentId, CommentOrigin, LineDiffContent};
+use crate::diff_validation::DiffDelta;
 use crate::editor::InteractionState;
 use crate::notebooks::editor::model::word_unit;
 use crate::themes::theme::AnsiColorIdentifier;

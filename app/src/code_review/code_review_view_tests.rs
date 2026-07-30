@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ai::agent::action::InsertReviewComment;
-use chrono::Local;
+use chrono::{DateTime, Local};
 use lsp::LspManagerModel;
 use repo_metadata::repositories::DetectedRepositories;
 use warp_core::ui::appearance::Appearance;
@@ -252,21 +251,25 @@ fn make_pending_comment(
     timestamp: &str,
     target: PendingImportedReviewCommentTarget,
 ) -> PendingImportedReviewComment {
-    let mut pending = PendingImportedReviewComment::try_from(InsertReviewComment {
-        comment_id: id.to_string(),
-        author: author.to_string(),
-        comment_body: body.to_string(),
-        parent_comment_id: parent_id.map(|s| s.to_string()),
-        last_modified_timestamp: timestamp.to_string(),
-        comment_location: None,
-        html_url: None,
-    })
-    .expect("valid pending import conversion");
+    // LOCAL FORK: this fixture used to go through
+    // `PendingImportedReviewComment::try_from(InsertReviewComment { .. })`, the agent
+    // action conversion that went with the agent. It is built directly now. The
+    // timestamp is still parsed as RFC 3339, since these tests rely on reply ordering.
+    let last_update_time = DateTime::parse_from_rfc3339(timestamp)
+        .expect("valid RFC 3339 timestamp")
+        .with_timezone(&Local);
 
-    // Override the location target since we intentionally use `comment_location: None` above.
-    pending.target = target;
-
-    pending
+    PendingImportedReviewComment {
+        github_details: ImportedCommentDetails {
+            author: author.to_string(),
+            github_comment_id: id.to_string(),
+            github_parent_id: parent_id.map(|parent_id| parent_id.to_string()),
+            html_url: None,
+        },
+        body: body.to_string(),
+        last_update_time,
+        target,
+    }
 }
 
 use crate::view_components::action_button::{ActionButton, NakedTheme};

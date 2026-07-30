@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use ai::project_context::model::ProjectContextModel;
 use indexmap::IndexMap;
 use itertools::Itertools;
 #[cfg(feature = "local_fs")]
@@ -57,7 +56,7 @@ use warpui::{
 
 use super::code_review_header::CodeReviewHeader;
 use super::comment_list_view::{CommentListDebugState, CommentListEvent, CommentListView};
-use super::comments::{AttachedReviewComment, CommentOrigin, attach_pending_imported_comments};
+use super::comments::{AttachedReviewComment, CommentOrigin};
 use super::diff_size_limits::DiffSize;
 use super::git_dialog::{GitDialog, GitDialogEvent, GitDialogKind};
 use super::{GlobalCodeReviewEvent, GlobalCodeReviewModel};
@@ -2918,7 +2917,7 @@ impl CodeReviewView {
     }
 
     /// Converts GitDiffData hunks to DiffDelta format for CodeEditorView.apply_diffs
-    fn convert_hunks_to_diff_deltas(hunks: &[DiffHunk]) -> Vec<ai::diff_validation::DiffDelta> {
+    fn convert_hunks_to_diff_deltas(hunks: &[DiffHunk]) -> Vec<crate::diff_validation::DiffDelta> {
         let mut diff_deltas = Vec::new();
 
         for hunk in hunks {
@@ -2948,7 +2947,7 @@ impl CodeReviewView {
                         if let Some(start) = current_replacement_start.take() {
                             let end = if has_removals { old_line } else { start };
 
-                            diff_deltas.push(ai::diff_validation::DiffDelta {
+                            diff_deltas.push(crate::diff_validation::DiffDelta {
                                 replacement_line_range: start..end,
                                 insertion: current_insertion.clone(),
                             });
@@ -2965,7 +2964,7 @@ impl CodeReviewView {
 
             if let Some(start) = current_replacement_start.take() {
                 let end = if has_removals { old_line } else { start };
-                diff_deltas.push(ai::diff_validation::DiffDelta {
+                diff_deltas.push(crate::diff_validation::DiffDelta {
                     replacement_line_range: start..end,
                     insertion: current_insertion,
                 });
@@ -3574,14 +3573,11 @@ impl CodeReviewView {
             return;
         };
 
-        let mut comments = model.update(ctx, |batch, _| batch.take_comments());
-        let pending_imported = model.update(ctx, |batch, _| {
-            batch.take_pending_imported_comments_for_branch(diff_mode)
-        });
-
-        let newly_imported = attach_pending_imported_comments(pending_imported, &repo_path);
-        let newly_imported_ids: HashSet<CommentId> = newly_imported.iter().map(|c| c.id).collect();
-        comments.extend(newly_imported);
+        // LOCAL FORK: pending imported comments came from the agent's
+        // `insert_code_review_comments` tool call. Nothing emits
+        // `Event::InsertCodeReviewComments` any more, so the batch is always empty
+        // and there is nothing to attach.
+        let comments = model.update(ctx, |batch, _| batch.take_comments());
 
         if comments.is_empty() {
             return;
@@ -3602,26 +3598,8 @@ impl CodeReviewView {
             );
         }
 
-        if !newly_imported_ids.is_empty() {
-            let (active_count, outdated_count) = relocated_comments
-                .iter()
-                .filter(|c| newly_imported_ids.contains(&c.id))
-                .fold((0usize, 0usize), |(active, outdated), c| {
-                    if c.outdated {
-                        (active, outdated + 1)
-                    } else {
-                        (active + 1, outdated)
-                    }
-                });
-            send_telemetry_from_ctx!(
-                CodeReviewTelemetryEvent::CommentsAttached {
-                    is_local: self.repo_is_local(),
-                    active_count,
-                    outdated_count,
-                },
-                ctx
-            );
-        }
+        // LOCAL FORK: the CommentsAttached telemetry fired only for agent-imported
+        // comments, of which there are none.
 
         model.update(ctx, |batch, ctx| {
             batch.upsert_comments(relocated_comments, ctx);
@@ -4094,28 +4072,9 @@ impl CodeReviewView {
                     .with_margin_top(16.)
                     .finish(),
             );
-        } else if let Some(repo_path) = self.repo_path() {
-            // Check for initialized project-scoped rules.
-            if let Some(rules) =
-                ProjectContextModel::as_ref(app).find_applicable_project_rules(repo_path)
-                && let Some(first_rule) = rules.active_rules.first()
-                && let Some(file_name) = first_rule.path.file_name()
-            {
-                zero_state_column.add_child(
-                    Container::new(
-                        Text::new(
-                            format!("Repo is initialized with a {file_name} file."),
-                            appearance.ui_font_family(),
-                            12.,
-                        )
-                        .with_color(theme.sub_text_color(theme.surface_2()).into())
-                        .finish(),
-                    )
-                    .with_margin_top(8.)
-                    .finish(),
-                );
-            }
         }
+        // LOCAL FORK: the "Repo is initialized with a <rules file>" line that used to
+        // render here read `ProjectContextModel`, which went with the agent.
 
         let zero_state_content = Container::new(zero_state_column.finish()).finish();
 

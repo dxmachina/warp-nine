@@ -1,10 +1,10 @@
-use ai::skills::SkillReference;
 use settings::Setting as _;
 use warp_search_core::inline_menu::InputDrivenInlineMenuLifecycle;
 use warpui::{AppContext, Entity, ModelContext, ModelHandle, SingletonEntity};
 
 use crate::search::slash_command_menu::StaticCommand;
 use crate::settings::InputSettings;
+use crate::skills::SkillReference;
 use crate::terminal::input::buffer_model::{InputBufferModel, InputBufferUpdateEvent};
 use crate::terminal::input::slash_commands::{
     GuiSlashCommandDataSource, SlashCommandDataSource as _,

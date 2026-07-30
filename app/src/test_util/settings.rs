@@ -120,8 +120,6 @@ pub fn initialize_settings_for_tests_with_mode(
     CodeSettings::register(app);
     SemanticSelection::register(app);
 
-    app.update(|ctx| {
-        // Add settings models that are backed by secure storage, not user preferences.
-        ctx.add_singleton_model(ai::api_keys::ApiKeyManager::new);
-    });
+    // LOCAL FORK: the only settings model backed by secure storage rather than user
+    // preferences was `ApiKeyManager`, which went with the agent.
 }

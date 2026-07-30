@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use ai::diff_validation::DiffType;
+use crate::diff_validation::DiffType;
 use futures::stream::AbortHandle;
 use lsp::types::FileLocation;
 use lsp::{

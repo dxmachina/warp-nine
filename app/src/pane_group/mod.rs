@@ -61,7 +61,7 @@ use crate::code::buffer_location::LocalOrRemotePath;
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;
 use crate::code::view::{CodeView, CodeViewAction};
-use crate::code_review::comments::{AttachedReviewComment, PendingImportedReviewComment};
+use crate::code_review::comments::AttachedReviewComment;
 use crate::code_review::diff_state::DiffMode;
 use crate::drive::items::WarpDriveItemId;
 use crate::drive::{CloudObjectTypeAndId, OpenWarpDriveObjectArgs};
@@ -654,12 +654,7 @@ pub enum Event {
     OpenDirectoryInNewTab {
         path: PathBuf,
     },
-    InsertCodeReviewComments {
-        repo_path: LocalOrRemotePath,
-        comments: Vec<PendingImportedReviewComment>,
-        diff_mode: DiffMode,
-        open_code_review: Option<CodeReviewPanelArg>,
-    },
+    // LOCAL FORK: InsertCodeReviewComments removed with the agent.
     OpenCodeReviewPaneAndScrollToComment {
         open_code_review: CodeReviewPanelArg,
         comment: AttachedReviewComment,

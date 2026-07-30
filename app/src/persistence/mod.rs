@@ -22,7 +22,6 @@ use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, OnceLock};
 use std::thread::JoinHandle;
 
-use ai::project_context::model::ProjectRulePath;
 use crate::workspace_metadata::WorkspaceMetadata as CodeWorkspaceMetadata;
 use chrono::{DateTime, Local, Utc};
 use instant::Instant;
@@ -293,7 +292,8 @@ pub struct PersistedData {
     pub workspace_language_servers: HashMap<PathBuf, HashMap<LSPServerType, EnablementState>>,
     pub multi_agent_conversations: Vec<AgentConversation>,
     pub projects: Vec<Project>,
-    pub project_rules: Vec<ProjectRulePath>,
+    // LOCAL FORK: `project_rules` was dropped from `PersistedData` with the agent.
+    // Its only producer was `ProjectContextModel`'s rule reader and nothing read it back.
     pub ignored_suggestions: Vec<(String, SuggestionType)>,
     pub mcp_servers_to_restore: Vec<Uuid>,
     /// Conversation summaries derived at read time for pre-`summary`-column
@@ -449,12 +449,8 @@ pub enum ModelEvent {
         mcp_server_uuid: Vec<u8>,
         environment_variables: String,
     },
-    UpsertProjectRules {
-        project_rule_paths: Vec<ProjectRulePath>,
-    },
-    DeleteProjectRules {
-        path: Vec<PathBuf>,
-    },
+    // LOCAL FORK: `UpsertProjectRules` and `DeleteProjectRules` were removed with the
+    // agent — `ProjectContextModel` was their only emitter.
     AddIgnoredSuggestion {
         suggestion: String,
         suggestion_type: SuggestionType,

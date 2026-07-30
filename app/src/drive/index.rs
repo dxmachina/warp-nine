@@ -4603,22 +4603,8 @@ impl DriveIndex {
                 let env_var_collection: Option<&CloudEnvVarCollection> = object.into();
 
                 if self.edit_object_enabled(cloud_object_type_and_id, app) {
-                    if let Some(notebook) =
-                        <GenericCloudObject<_, CloudNotebookModel> as CloudObject>::as_model_type::<
-                            _,
-                            CloudNotebookModel,
-                        >(object)
-                        && let Some(ai_document_id) = notebook.model().ai_document_id
-                    {
-                        menu_items.push(
-                            MenuItemFields::new("Attach to active session")
-                                .with_on_select_action(DriveIndexAction::AttachPlanAsContext(
-                                    ai_document_id,
-                                ))
-                                .with_icon(Icon::Paperclip)
-                                .into_item(),
-                        );
-                    }
+                    // LOCAL FORK: the "Attach to active session" notebook menu item
+                    // attached a plan to the agent conversation; removed with the agent.
                     if let Some(_workflow) = workflow {
                         menu_items.push(
                             Self::pane_menu_item(
@@ -5718,9 +5704,6 @@ impl TypedActionView for DriveIndex {
                 TeamUpdateManager::handle(ctx).update(ctx, |manager, ctx| {
                     manager.set_current_workspace_uid(*workspace_uid, ctx)
                 });
-            }
-            DriveIndexAction::AttachPlanAsContext(id) => {
-                ctx.emit(DriveIndexEvent::AttachPlanAsContext(*id))
             }
         }
     }

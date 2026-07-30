@@ -1147,7 +1147,6 @@ impl TerminalModel {
         obfuscate_secrets: ObfuscateSecrets,
     ) -> Self {
         Self::new_internal(
-            None,
             sizes,
             colors,
             event_proxy,
@@ -1183,7 +1182,6 @@ impl TerminalModel {
         obfuscate_secrets: ObfuscateSecrets,
     ) -> Self {
         Self::new_internal(
-            None,
             sizes,
             colors,
             event_proxy,
@@ -1242,14 +1240,13 @@ impl TerminalModel {
         self.ordered_terminal_events_for_shared_session_tx = None;
     }
 
-    fn ai_metadata_to_protocol(metadata: &AgentInteractionMetadata) -> AICommandMetadata {
+    fn ai_metadata_to_protocol(_metadata: &AgentInteractionMetadata) -> AICommandMetadata {
+        // LOCAL FORK: the requested-command action id and the long-running control state
+        // that populated these both went with the agent. The field is still sent on the
+        // shared-session wire, so keep emitting it with empty/false values.
         AICommandMetadata {
-            tool_call_id: metadata
-                .requested_command_action_id()
-                .map(|id| id.to_string())
-                .unwrap_or_default(),
-            // Any command with a long-running control state is considered agent-monitored.
-            is_agent_monitored: metadata.long_running_control_state().is_some(),
+            tool_call_id: String::new(),
+            is_agent_monitored: false,
         }
     }
 
@@ -1404,11 +1401,9 @@ impl TerminalModel {
     /// `source_task_id` sidecar but is not a cloud agent conversation, so it must fall through
     /// here (see QUALITY-726).
     pub fn is_cloud_agent_conversation(&self) -> bool {
+        // LOCAL FORK: the `ViewingAmbientConversation` transcript-viewer status went with
+        // the agent, so only a shared ambient session can still qualify.
         self.is_shared_ambient_agent_session()
-            || matches!(
-                self.conversation_transcript_viewer_status.as_ref(),
-                Some(ConversationTranscriptViewerStatus::ViewingAmbientConversation(_))
-            )
     }
 
     /// Loads the provided scrollback into the model.

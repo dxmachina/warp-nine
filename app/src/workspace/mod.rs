@@ -1294,9 +1294,9 @@ pub fn init(app: &mut AppContext) {
         EditableBinding::new(
             "workspace:toggle_ai_assistant",
             "New Agent Pane",
+            // LOCAL FORK: the zero-state prompt suggestion type went with the agent.
             WorkspaceAction::NewPaneInAgentMode {
                 entrypoint: AgentModeEntrypoint::NewPaneBinding,
-                zero_state_prompt_suggestion_type: None,
             },
         )
         .with_enabled(|| FeatureFlag::AgentMode.is_enabled())

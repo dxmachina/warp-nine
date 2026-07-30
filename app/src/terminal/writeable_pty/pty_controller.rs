@@ -607,6 +607,25 @@ impl<T: EventLoopSender> PtyController<T> {
     }
 
 
+    /// Writes agent input to the PTY.
+    ///
+    /// LOCAL FORK: this took an `AIAgentPtyWriteMode` that decorated the bytes (line
+    /// submission, bracketed paste). That type went with the agent, so the bytes are
+    /// written through as-is. Kept because `PtyIntent::WriteAgentInput` still exists
+    /// and `terminal_manager_util` dispatches it.
+    pub fn write_agent_bytes<B: Into<Cow<'static, [u8]>>>(
+        &mut self,
+        bytes: B,
+        ctx: &mut ModelContext<Self>,
+    ) {
+        self.send_write_to_event_loop(
+            PtyWrite::AgentInput {
+                bytes: bytes.into(),
+            },
+            ctx,
+        );
+    }
+
     /// Writes user input to the PTY.
     ///
     /// This should only be called for non-command input (e.g. input that should be passed through
@@ -649,11 +668,10 @@ impl<T: EventLoopSender> PtyController<T> {
                 true,
                 on_write_fn,
             ),
-            PtyWrite::AgentInput { bytes, mode } => {
-                let decorated_bytes =
-                    mode.decorate_bytes(bytes.into_owned(), self.is_bracketed_paste_enabled);
-                (decorated_bytes.into(), false, None)
-            }
+            // LOCAL FORK: the write `mode` was an `AIAgentPtyWriteMode` and went with
+            // the agent, along with its `decorate_bytes`. The bytes are now always
+            // written through undecorated, which is what the mode's `Raw` default did.
+            PtyWrite::AgentInput { bytes } => (bytes, false, None),
             PtyWrite::Bytes { bytes } => (bytes, false, None),
             PtyWrite::RunNativeShellCompletions(state) => {
                 self.in_flight_native_completions_state = Some(state);

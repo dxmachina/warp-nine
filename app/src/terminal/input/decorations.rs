@@ -101,23 +101,10 @@ impl Input {
         *InputSettings::as_ref(ctx).error_underlining.value()
     }
 
-    fn run_input_mode_detection(
-        &self,
-        completion_context: SessionContext,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if let Some(parsed_token) = self.last_parsed_tokens.clone() {
-            let session_id = completion_context.session.id();
-            self.ai_input_model.update(ctx, |ai_input_model, ctx| {
-                ai_input_model.detect_and_set_input_type(
-                    parsed_token,
-                    completion_context,
-                    Some(session_id),
-                    ctx,
-                )
-            })
-        }
-    }
+    // LOCAL FORK: `run_input_mode_detection` classified the buffer as prompt vs.
+    // command for the agent input model, which went with the agent. The
+    // `ai_input_detection` job option is kept so callers still compile; it now
+    // only drives the token parse whose result feeds command decoration.
 
     /// Applies background highlighting to slash command and skill command prefixes that should be
     /// syntax highlighted.
@@ -163,15 +150,16 @@ impl Input {
 
         let mut mode = mode;
 
-        // We don't show input command decorations in AI mode, but we keep slash command prefix highlighting.
+        // We don't show input command decorations for slash commands and skills,
+        // but we keep slash command prefix highlighting.
+        // LOCAL FORK: the AI-input-mode half of this condition went with the agent.
         let buffer_text = self.editor.as_ref(ctx).buffer_text(ctx);
-        if self.ai_input_model.as_ref(ctx).is_ai_input_enabled()
-            || (FeatureFlag::AgentView.is_enabled()
-                && self
-                    .slash_command_model
-                    .as_ref(ctx)
-                    .state()
-                    .is_detected_command_or_skill())
+        if FeatureFlag::AgentView.is_enabled()
+            && self
+                .slash_command_model
+                .as_ref(ctx)
+                .state()
+                .is_detected_command_or_skill()
         {
             self.clear_decorations(ctx);
             self.apply_slash_command_prefix_highlighting(&buffer_text, ctx);
@@ -190,10 +178,6 @@ impl Input {
 
                 if matches!(&self.last_parsed_tokens, Some(last_parsed_tokens) if buffer_text == last_parsed_tokens.buffer_text)
                 {
-                    if mode.ai_input_detection {
-                        self.run_input_mode_detection(completion_context, ctx);
-                    }
-
                     if mode.command_decoration {
                         self.apply_decorations(ctx);
                     }
@@ -209,18 +193,10 @@ impl Input {
 
                 self.decorations_future_handle = Some(ctx.spawn_abortable(
                     async move {
-                        (
-                            parse_current_commands_and_tokens(buffer_text, &completion_context)
-                                .await,
-                            completion_context,
-                        )
+                        parse_current_commands_and_tokens(buffer_text, &completion_context).await
                     },
-                    move |input, (parsed_tokens, completion_context), ctx| {
+                    move |input, parsed_tokens, ctx| {
                         input.last_parsed_tokens = Some(parsed_tokens);
-
-                        if mode.ai_input_detection {
-                            input.run_input_mode_detection(completion_context, ctx);
-                        }
 
                         if mode.command_decoration {
                             input.apply_decorations(ctx);
@@ -231,29 +207,9 @@ impl Input {
                     },
                 ));
             }
-            CompletionSessionContext::Empty(detection_ctx) => {
-                if mode.ai_input_detection {
-                    // No session context available (e.g., shared session viewer).
-                    // Use a dedicated detection context that does not expose top-level commands.
-                    let buffer_text = self.editor.as_ref(ctx).buffer_text(ctx);
-                    let ai_input_model = self.ai_input_model.clone();
-                    ctx.spawn(
-                        async move {
-                            parse_current_commands_and_tokens(buffer_text, &detection_ctx).await
-                        },
-                        move |_input, parsed_tokens, ctx| {
-                            ai_input_model.update(ctx, |model, ctx| {
-                                model.detect_and_set_input_type(
-                                    parsed_tokens,
-                                    EmptyCompletionContext::new(),
-                                    None,
-                                    ctx,
-                                );
-                            });
-                        },
-                    );
-                }
-            }
+            // LOCAL FORK: with no session context the only background job was AI
+            // input-type detection, which went with the agent.
+            CompletionSessionContext::Empty(_) => {}
         }
     }
 

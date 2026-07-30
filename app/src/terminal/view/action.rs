@@ -703,9 +703,8 @@ impl fmt::Debug for TerminalAction {
             ToggleHideCliResponses => write!(f, "ToggleHideCliResponses"),
             ExitAgentView => write!(f, "ExitAgentView"),
             EnterCloudAgentView => write!(f, "EnterCloudAgentView"),
-            StartNewAgentConversation { origin } => {
-                write!(f, "StartNewAgentConversation {{ origin: {origin:?} }}")
-            }
+            // LOCAL FORK: the origin this action carried went with the agent.
+            StartNewAgentConversation {} => write!(f, "StartNewAgentConversation"),
             ToggleConversationDetailsPanel => write!(f, "ToggleConversationDetailsPanel"),
             CancelAmbientAgentTask => write!(f, "CancelAmbientAgentTask"),
             OpenInlineHistoryMenu => write!(f, "OpenInlineHistoryMenu"),

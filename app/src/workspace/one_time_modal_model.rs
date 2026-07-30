@@ -215,9 +215,7 @@ impl OneTimeModalModel {
     }
 
     fn resume_modal_checks_after_feature_intro(&mut self, ctx: &mut ModelContext<Self>) {
-        if self.check_and_trigger_free_ai_removal_modal(ctx) {
-            return;
-        }
+        // LOCAL FORK: the free-AI-removal notice check went with the agent.
         if self.check_and_trigger_hoa_onboarding(ctx) {
             return;
         }
@@ -442,9 +440,7 @@ impl OneTimeModalModel {
             return;
         }
 
-        if self.check_and_trigger_free_ai_removal_modal(ctx) {
-            return;
-        }
+        // LOCAL FORK: the free-AI-removal notice check went with the agent.
 
         if self.check_and_trigger_feature_intro_modal(ctx) {
             return;
@@ -486,15 +482,11 @@ impl OneTimeModalModel {
 
     /// Re-evaluates the free-AI-removal notice outside the initial startup check, e.g.
     /// when workspace billing data arrives after startup.
-    fn maybe_recheck_free_ai_removal_modal(&mut self, ctx: &mut ModelContext<Self>) {
-        if !self.has_completed_initial_modal_checks
-            || self.is_any_modal_open()
-            || self.active_feature_intro.is_some()
-        {
-            return;
-        }
-        self.check_and_trigger_free_ai_removal_modal(ctx);
-    }
+    ///
+    /// LOCAL FORK: `check_and_trigger_free_ai_removal_modal` went with the agent — it read
+    /// the AI request usage model and the API key manager — so there is nothing left to
+    /// re-evaluate. The modal can still be opened explicitly in debug builds.
+    fn maybe_recheck_free_ai_removal_modal(&mut self, _ctx: &mut ModelContext<Self>) {}
 
 
     fn set_hoa_onboarding_open(&mut self, is_open: bool, ctx: &mut ModelContext<Self>) -> bool {

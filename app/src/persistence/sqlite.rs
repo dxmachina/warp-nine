@@ -1226,17 +1226,6 @@ fn save_pane_state(
 
     match &snapshot.contents {
         LeafContents::Terminal(terminal_snapshot) => {
-            let conversation_ids = if terminal_snapshot.conversation_ids_to_restore.is_empty() {
-                None
-            } else {
-                let ids: Vec<String> = terminal_snapshot
-                    .conversation_ids_to_restore
-                    .iter()
-                    .map(|id| id.to_string())
-                    .collect();
-                serde_json::to_string(&ids).ok()
-            };
-
             let terminal = model::NewTerminalPane {
                 id,
                 uuid: terminal_snapshot.uuid.clone(),
@@ -1246,19 +1235,18 @@ fn save_pane_state(
                     .shell_launch_data
                     .as_ref()
                     .and_then(|shell| serde_json::to_string(shell).ok()),
-                input_config: terminal_snapshot
-                    .input_config
-                    .as_ref()
-                    .and_then(|config| serde_json::to_string(config).ok()),
                 llm_model_override: terminal_snapshot.llm_model_override.clone(),
                 active_profile_id: terminal_snapshot
                     .active_profile_id
                     .as_ref()
                     .and_then(|sync_id| serde_json::to_string(sync_id).ok()),
-                conversation_ids,
-                active_conversation_id: terminal_snapshot
-                    .active_conversation_id
-                    .map(|id| id.to_string()),
+                // LOCAL FORK: the `input_config`, `conversation_ids` and
+                // `active_conversation_id` columns are kept so existing databases
+                // still load, but the snapshot no longer carries agent state, so
+                // nothing is written to them any more.
+                input_config: None,
+                conversation_ids: None,
+                active_conversation_id: None,
             };
 
             diesel::insert_into(schema::terminal_panes::dsl::terminal_panes)
@@ -1420,7 +1408,9 @@ fn save_pane_state(
             let ambient_agent_pane = model::NewAmbientAgentPane {
                 id,
                 uuid: snapshot.uuid.clone(),
-                task_id: snapshot.task_id.map(|t| t.to_string()),
+                // LOCAL FORK: the column is kept so existing databases still load,
+                // but the snapshot no longer carries an agent task id.
+                task_id: None,
             };
 
             diesel::insert_into(schema::ambient_agent_panes::dsl::ambient_agent_panes)
@@ -2330,19 +2320,43 @@ fn read_node(conn: &mut SqliteConnection, node: model::PaneNode) -> Result<PaneN
     }
 }
 
+/// Returns `None` for object kinds that can no longer be restored; the caller
+/// skips those rows and leaves them in the database untouched.
 fn box_persisted_generic_string_object(
     object: PersistedGenericStringObject,
-) -> Box<dyn CloudObject> {
+) -> Option<Box<dyn CloudObject>> {
     match object {
-        PersistedGenericStringObject::Preference(object) => Box::new(object),
-        PersistedGenericStringObject::EnvVarCollection(object) => Box::new(object),
-        PersistedGenericStringObject::WorkflowEnum(object) => Box::new(object),
-        PersistedGenericStringObject::AIFact(object) => Box::new(object),
-        PersistedGenericStringObject::MCPServer(object) => Box::new(object),
-        PersistedGenericStringObject::TemplatableMCPServer(object) => Box::new(object),
-        PersistedGenericStringObject::AIExecutionProfile(object) => Box::new(object),
-        PersistedGenericStringObject::CloudEnvironment(object) => Box::new(object),
-        PersistedGenericStringObject::ScheduledAmbientAgent(object) => Box::new(object),
+        PersistedGenericStringObject::Preference(object) => Some(Box::new(object)),
+        PersistedGenericStringObject::EnvVarCollection(object) => Some(Box::new(object)),
+        PersistedGenericStringObject::WorkflowEnum(object) => Some(Box::new(object)),
+        // LOCAL FORK: these object kinds still exist in databases written by the
+        // pre-excision build, but their models (and their `StringModel` impls)
+        // went with the agent, so there is nothing to restore them into. The rows
+        // are kept on disk and skipped on read.
+        PersistedGenericStringObject::AIFact(_) => {
+            log::debug!("Skipping persisted AI fact: no longer supported");
+            None
+        }
+        PersistedGenericStringObject::MCPServer(_) => {
+            log::debug!("Skipping persisted MCP server: no longer supported");
+            None
+        }
+        PersistedGenericStringObject::TemplatableMCPServer(_) => {
+            log::debug!("Skipping persisted templatable MCP server: no longer supported");
+            None
+        }
+        PersistedGenericStringObject::AIExecutionProfile(_) => {
+            log::debug!("Skipping persisted AI execution profile: no longer supported");
+            None
+        }
+        PersistedGenericStringObject::CloudEnvironment(_) => {
+            log::debug!("Skipping persisted ambient agent environment: no longer supported");
+            None
+        }
+        PersistedGenericStringObject::ScheduledAmbientAgent(_) => {
+            log::debug!("Skipping persisted scheduled ambient agent: no longer supported");
+            None
+        }
     }
 }
 
@@ -2371,7 +2385,6 @@ fn read_sqlite_data(
             time_of_next_force_object_refresh: None,
             object_actions: Default::default(),
             experiments: Default::default(),
-            ai_queries: Default::default(),
             nld_prompts: Default::default(),
             codebase_indices: get_all_codebase_index_metadata(conn)?,
             workspace_language_servers: Default::default(),
@@ -2379,7 +2392,6 @@ fn read_sqlite_data(
             projects: Default::default(),
             project_rules: Default::default(),
             ignored_suggestions: Default::default(),
-            mcp_server_installations: Default::default(),
             mcp_servers_to_restore: Default::default(),
             conversation_summary_backfills: Default::default(),
         });
@@ -2611,7 +2623,7 @@ fn read_sqlite_data(
     cloud_objects.extend(
         generic_string_persistence::read_generic_string_objects(conn, &read_context)?
             .into_iter()
-            .map(box_persisted_generic_string_object),
+            .filter_map(box_persisted_generic_string_object),
     );
 
     let db_teams: Vec<model::Team> = schema::teams::dsl::teams.load(conn)?;

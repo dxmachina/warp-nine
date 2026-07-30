@@ -751,7 +751,6 @@ fn open_from_restored(arg: &OpenFromRestoredArg, ctx: &mut AppContext) {
                                 global_resource_handles.clone(),
                                 NewWorkspaceSource::Restored {
                                     window_snapshot: window.clone(),
-                                    block_lists: app_state.block_lists.clone(),
                                 },
                                 ctx,
                             );
@@ -791,7 +790,6 @@ fn open_from_restored(arg: &OpenFromRestoredArg, ctx: &mut AppContext) {
                                     global_resource_handles.clone(),
                                     NewWorkspaceSource::Restored {
                                         window_snapshot: window.clone(),
-                                        block_lists: app_state.block_lists.clone(),
                                     },
                                     ctx,
                                 );
@@ -843,7 +841,6 @@ fn open_from_restored(arg: &OpenFromRestoredArg, ctx: &mut AppContext) {
                             global_resource_handles,
                             NewWorkspaceSource::Restored {
                                 window_snapshot: window.clone(),
-                                block_lists: app_state.block_lists.clone(),
                             },
                             ctx,
                         );
@@ -3391,28 +3388,12 @@ impl AuthOnboardingState {
         ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
     }
 
-    fn try_open_onboarding_slides(&mut self, ctx: &mut ViewContext<RootView>) {
-        let target = match self {
-            AuthOnboardingState::Auth(args) | AuthOnboardingState::ConfirmIncomingAuth(args) => {
-                AuthOnboardingTarget::Workspace(args.clone())
-            }
-            AuthOnboardingState::Terminal(workspace) => {
-                AuthOnboardingTarget::Terminal(workspace.clone())
-            }
-            _ => {
-                // Onboarding slides can only be opened from Auth or Terminal states
-                return;
-            }
-        };
-
-        let onboarding_view = RootView::create_agent_onboarding_view(ctx);
-        onboarding_view.update(ctx, |view, ctx| {
-            view.start_onboarding(ctx);
-        });
-        *self = AuthOnboardingState::Onboarding {
-            onboarding_view,
-            target,
-        };
+    fn try_open_onboarding_slides(&mut self, _ctx: &mut ViewContext<RootView>) {
+        // LOCAL FORK: `RootView::create_agent_onboarding_view` went with the agent — an
+        // `AgentOnboardingView` cannot be built without the agent's model list and LLM
+        // preferences — so this never transitions into `AuthOnboardingState::Onboarding`.
+        // Every caller already handles "we did not transition" by falling through to the
+        // Terminal state.
     }
 
     fn complete_sso_link(&mut self, ctx: &mut ViewContext<RootView>) {

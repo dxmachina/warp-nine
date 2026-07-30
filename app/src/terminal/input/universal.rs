@@ -189,15 +189,10 @@ impl Input {
             })
             .finish();
 
+        // LOCAL FORK: the agent status bar that sat above (or below) the input went with
+        // the agent, so the input is the only child of this column now.
         let mut column = Flex::column();
-
-        if input_mode.is_pinned_to_top() {
-            column.add_child(input);
-            column.add_child(ChildView::new(&self.agent_status_view).finish());
-        } else {
-            column.add_child(ChildView::new(&self.agent_status_view).finish());
-            column.add_child(input);
-        }
+        column.add_child(input);
 
         SavePosition::new(column.finish(), &self.save_position_id()).finish()
     }

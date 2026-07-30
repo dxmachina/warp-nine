@@ -785,9 +785,6 @@ impl ServerModel {
                     Some(host_scoped_request::Message::ResyncCodebase(m)) => {
                         self.handle_resync_codebase(m, &request_id, conn_id, ctx)
                     }
-                    Some(host_scoped_request::Message::UploadHandoffSnapshot(m)) => {
-                        self.handle_upload_handoff_snapshot(m, &request_id, conn_id, ctx)
-                    }
                     Some(host_scoped_request::Message::GitCommitChain(m)) => {
                         self.handle_git_commit_chain(m, &request_id, conn_id, ctx)
                     }
@@ -801,6 +798,7 @@ impl ServerModel {
                     // variants stay for wire compatibility, so the arms must
                     // remain, but the daemon no longer serves them.
                     Some(host_scoped_request::Message::ReadFileContext(_))
+                    | Some(host_scoped_request::Message::UploadHandoffSnapshot(_))
                     | Some(host_scoped_request::Message::GitGenerateCommitMessage(_)) => {
                         HandlerOutcome::Sync(server_message::Message::Error(ErrorResponse {
                             code: ErrorCode::InvalidRequest.into(),

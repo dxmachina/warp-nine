@@ -72,8 +72,6 @@ fn attach_pending_imported_thread(
         content: format_review_comment_thread(&thread),
         target,
         last_update_time,
-        base: None,
-        head: None,
         outdated: false,
         origin,
     }

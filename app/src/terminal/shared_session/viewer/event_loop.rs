@@ -8,11 +8,9 @@ use session_sharing_protocol::common::{
 };
 use warpui::{Entity, ModelContext, SingletonEntity, WeakViewHandle};
 
-use crate::features::FeatureFlag;
 use crate::terminal::event_listener::ChannelEventListener;
 use crate::terminal::model::ansi::{self};
 use crate::terminal::model::block::AgentInteractionMetadata;
-use crate::terminal::shared_session::ai_agent::decode_agent_response_event;
 use crate::terminal::shared_session::shared_handlers::RemoteUpdateGuard;
 use crate::terminal::shared_session::{SharedSessionStatus, decode_scrollback};
 use crate::terminal::{TerminalModel, TerminalView};
@@ -65,8 +63,8 @@ pub struct EventLoop {
 
     /// A buffer to maintain events we receive from the server that are unordered.
     buffer: HashMap<usize, OrderedTerminalEventType>,
-
-    should_suppress_existing_agent_conversation_replay: bool,
+    // LOCAL FORK: field should_suppress_existing_agent_conversation_replay removed with
+    // the agent — only the AI controller ever read it.
 }
 
 impl EventLoop {
@@ -130,10 +128,6 @@ impl EventLoop {
             next_event_no: 0,
             buffer: HashMap::new(),
             catching_up_to_event_no,
-            should_suppress_existing_agent_conversation_replay: matches!(
-                load_mode,
-                SharedSessionInitialLoadMode::AppendFollowupScrollback
-            ),
         };
 
         // Respect the sharer's window size.
@@ -212,15 +206,10 @@ impl EventLoop {
                         // follow-up.
                         if should_clear_input && let Some(view) = self.terminal_view.upgrade(ctx) {
                             view.update(ctx, |view, ctx| {
-                                // Skip during cloud setup: clearing on every setup command would
-                                // wipe a follow-up the viewer is composing. Mirrors the
-                                // `InputUpdated` guard.
-                                // LOCAL FORK: cloud-agent setup detection went
-                                // with the agent, so there is no setup phase to
-                                // skip the clear for.
-                                if view.has_queued_command_in_flight(ctx) {
-                                    return;
-                                }
+                                // LOCAL FORK: this used to skip the clear during cloud-agent
+                                // setup so a follow-up the viewer was composing survived. Both
+                                // the setup phase and the queued-command check went with the
+                                // agent.
                                 view.input().update(ctx, |input, ctx| {
                                     // Restore frozen visual state. Then also reinitialize the
                                     // buffer here: for shell commands the block transition will
@@ -246,93 +235,23 @@ impl EventLoop {
                     // Queue advancement waits for block completion so input cleanup can observe
                     // the in-flight queued command and preserve any local draft.
                 }
-                OrderedTerminalEventType::AgentResponseEvent {
-                    response_initiator,
-                    response_event,
-                    forked_from_conversation_token,
-                } => {
-                    if FeatureFlag::AgentSharedSessions.is_enabled() {
-                        match decode_agent_response_event(&response_event) {
-                            Ok(resp) => {
-                                if let Some(view) = self.terminal_view.upgrade(ctx) {
-                                    let event_clone = resp.clone();
-                                    let forked_from_token = forked_from_conversation_token.clone();
-                                    view.update(ctx, move |view, ctx| {
-                                        view.ai_controller().update(ctx, |c, ctx| {
-                                            // Set the participant who initiated this response
-                                            if let Some(response_initiator) = response_initiator {
-                                                c.set_current_response_initiator(
-                                                    response_initiator,
-                                                );
-                                            }
-
-                                            // For forked conversations, update the viewer's conversation
-                                            // to use the new server token (only sent once per fork).
-                                            if let Some(forked_from) = forked_from_token {
-                                                c.link_forked_conversation_token(
-                                                    &forked_from,
-                                                    &event_clone,
-                                                    ctx,
-                                                );
-                                            }
-
-                                            c.handle_shared_session_response_event(
-                                                event_clone.clone(),
-                                                ctx,
-                                            );
-                                        });
-                                    });
-                                }
-                            }
-                            Err(err) => {
-                                log::warn!("Failed to decode agent response event: {err}");
-                            }
-                        }
-                    }
-                }
+                // LOCAL FORK: the sharer's agent responses were replayed into the viewer's
+                // AI controller, which went with the agent. The protocol still delivers
+                // these events, so the arms stay and drop them.
+                OrderedTerminalEventType::AgentResponseEvent { .. } => {}
                 OrderedTerminalEventType::AgentConversationReplayStarted => {
                     self.terminal_model
                         .lock()
                         .set_is_receiving_agent_conversation_replay(true);
-                    if let Some(view) = self.terminal_view.upgrade(ctx) {
-                        let should_suppress_existing_replay =
-                            self.should_suppress_existing_agent_conversation_replay;
-                        view.update(ctx, |view, ctx| {
-                            view.ai_controller().update(ctx, |controller, _| {
-                                controller.set_should_suppress_existing_agent_conversation_replay(
-                                    should_suppress_existing_replay,
-                                );
-                            });
-                        });
-                    }
                 }
                 OrderedTerminalEventType::AgentConversationReplayEnded => {
                     self.terminal_model
                         .lock()
                         .set_is_receiving_agent_conversation_replay(false);
-                    if let Some(view) = self.terminal_view.upgrade(ctx) {
-                        view.update(ctx, |view, ctx| {
-                            view.ai_controller().update(ctx, |controller, _| {
-                                controller
-                                    .set_should_suppress_existing_agent_conversation_replay(false);
-                            });
-                        });
-                    }
                 }
-                OrderedTerminalEventType::CloudModeSetupPhaseEnded => {
-                    // Canonical setup-complete signal from the sharer. Legacy
-                    // AppendedExchange-driven teardowns remain idempotently as
-                    // a fallback for pre-feature sharers.
-                    if let Some(view) = self.terminal_view.upgrade(ctx) {
-                        view.update(ctx, |view, ctx| {
-                            view.tear_down_cloud_mode_setup_phase(ctx);
-                            // A promptless handoff run never fires a first turn,
-                            // so this is the only point a prompt queued during
-                            // setup can be auto-sent.
-                            view.maybe_drain_queue_after_promptless_setup(ctx);
-                        });
-                    }
-                }
+                // LOCAL FORK: the cloud-mode setup phase and its queued-prompt drain went
+                // with the agent.
+                OrderedTerminalEventType::CloudModeSetupPhaseEnded => {}
             }
 
             if Some(self.next_event_no) == self.catching_up_to_event_no

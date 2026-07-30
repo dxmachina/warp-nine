@@ -103,7 +103,7 @@ impl ReviewTerminalUnavailableReason {
 struct ReviewTerminalStatus {
     active_session_path: Option<PathBuf>,
     current_repo_path: Option<LocalOrRemotePath>,
-    active_cli_agent: Option<String>,
+    // LOCAL FORK: field active_cli_agent removed with the agent.
     is_executing: bool,
     is_input_box_visible: bool,
     unavailable_reasons: Vec<ReviewTerminalUnavailableReason>,
@@ -1324,7 +1324,6 @@ impl RightPanelView {
         tv.read(ctx, |t, ctx| {
             let active_session_path = t.active_session_path_if_local(ctx);
             let current_repo_path = t.current_repo_path().cloned();
-            let active_cli_agent = t.active_cli_agent(ctx).map(|agent| format!("{agent:?}"));
             let model = t.model.lock();
             let is_executing = model.block_list().active_block().is_executing();
             let is_input_box_visible = t.is_input_box_visible(&model, ctx);
@@ -1355,22 +1354,21 @@ impl RightPanelView {
                 None => unavailable_reasons.push(ReviewTerminalUnavailableReason::NoSelectedRepo),
             }
 
-            if active_cli_agent.is_none() {
-                if !ai_enabled {
-                    unavailable_reasons.push(ReviewTerminalUnavailableReason::AIDisabled);
-                }
-                if is_executing {
-                    unavailable_reasons.push(ReviewTerminalUnavailableReason::TerminalExecuting);
-                }
-                if !is_input_box_visible {
-                    unavailable_reasons.push(ReviewTerminalUnavailableReason::InputBoxNotVisible);
-                }
+            // LOCAL FORK: an active CLI agent used to waive all three of these checks;
+            // CLI agent sessions went with the agent.
+            if !ai_enabled {
+                unavailable_reasons.push(ReviewTerminalUnavailableReason::AIDisabled);
+            }
+            if is_executing {
+                unavailable_reasons.push(ReviewTerminalUnavailableReason::TerminalExecuting);
+            }
+            if !is_input_box_visible {
+                unavailable_reasons.push(ReviewTerminalUnavailableReason::InputBoxNotVisible);
             }
 
             ReviewTerminalStatus {
                 active_session_path,
                 current_repo_path,
-                active_cli_agent,
                 is_executing,
                 is_input_box_visible,
                 unavailable_reasons,
@@ -1483,17 +1481,13 @@ impl RightPanelView {
             };
 
             log::info!(
-                "Pane #{index}: pane_id={pane_id}, pane_type={}, terminal_view_id={terminal_id}, focused={is_focused}, preferred={}, chosen={}, available={}, active_session_path={}, current_repo_path={}, active_cli_agent={}, is_executing={}, is_input_box_visible={}, unavailable_reasons={}",
+                "Pane #{index}: pane_id={pane_id}, pane_type={}, terminal_view_id={terminal_id}, focused={is_focused}, preferred={}, chosen={}, available={}, active_session_path={}, current_repo_path={}, is_executing={}, is_input_box_visible={}, unavailable_reasons={}",
                 pane_id.pane_type(),
                 preferred_terminal_id == Some(terminal_id),
                 chosen_terminal_id == Some(terminal_id),
                 terminal_status.is_available(),
                 Self::format_optional_path(terminal_status.active_session_path.as_deref()),
                 Self::format_optional_location(terminal_status.current_repo_path.as_ref()),
-                terminal_status
-                    .active_cli_agent
-                    .as_deref()
-                    .unwrap_or("<none>"),
                 terminal_status.is_executing,
                 terminal_status.is_input_box_visible,
                 unavailable_reasons,
@@ -1503,11 +1497,10 @@ impl RightPanelView {
 
     /// Returns whether a terminal is in the given repo and available to receive
     /// review comments. A terminal is available if it is not executing a command
-    /// and has its input box visible, OR if it has an active CLI agent
-    /// (CLI agents are long-running commands that accept review input).
+    /// and has its input box visible.
     ///
-    /// When `ai_enabled` is `false`, only terminals with an active CLI agent are
-    /// considered available (non-CLI Warp terminals require AI to be on).
+    /// LOCAL FORK: an active CLI agent used to make a terminal available regardless,
+    /// including when `ai_enabled` is false. CLI agent sessions went with the agent.
     fn is_terminal_available_for_review(
         tv: &ViewHandle<TerminalView>,
         repo_path: &LocalOrRemotePath,
@@ -1603,15 +1596,11 @@ impl RightPanelView {
         };
 
         let ai_enabled = AISettings::as_ref(ctx).is_any_ai_enabled(ctx);
+        // LOCAL FORK: a terminal running a CLI agent used to resolve to
+        // `ReviewDestination::Cli`; CLI agent sessions went with the agent.
         let destination = self
             .find_review_terminal(pane_group, &repo_path, ai_enabled, ctx)
-            .map(|tv| {
-                tv.read(ctx, |t, ctx| {
-                    t.active_cli_agent(ctx)
-                        .map(ReviewDestination::Cli)
-                        .unwrap_or(ReviewDestination::Warp)
-                })
-            })
+            .map(|_| ReviewDestination::Warp)
             .unwrap_or(ReviewDestination::None);
 
         code_review_view.update(ctx, |view, ctx| {

@@ -40,14 +40,13 @@ use crate::search::search_bar::{
     SearchBar, SearchBarEvent, SearchBarState, SearchResultOrdering, SelectionUpdate,
 };
 use crate::server::ids::SyncId;
+use crate::send_telemetry_from_ctx;
 use crate::server::telemetry::{LaunchConfigUiLocation, TelemetryEvent};
 use crate::session_management::SessionSource;
 use crate::settings::CtrlTabBehavior;
 use crate::terminal::keys_settings::KeysSettings;
 use crate::themes::theme::WarpTheme;
-use crate::view_components::DismissibleToast;
 use crate::workspace::{ForkedConversationDestination, WorkspaceAction, active_terminal_in_window};
-use crate::{ToastStack, send_telemetry_from_ctx};
 
 lazy_static! {
     /// Set of hardcoded action names that we want to show in the command palette zero state.
@@ -815,55 +814,24 @@ impl View {
             CommandPaletteItemAction::NavigateToConversation {
                 pane_view_locator,
                 window_id,
-                conversation_id,
                 terminal_view_id,
             } => {
-                let should_block = {
-                    window_id
-                        .and_then(|window_id| {
-                            active_terminal_in_window(window_id, ctx, |terminal_view, ctx| {
-                                !terminal_view
-                                    .ai_context_model()
-                                    .as_ref(ctx)
-                                    .can_start_new_conversation()
-                            })
-                        })
-                        .unwrap_or(false)
-                };
-
-                if should_block {
-                    if let Some(window_id) = window_id {
-                        ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                            toast_stack.add_ephemeral_toast(
-                                DismissibleToast::error(
-                                    "Cannot switch conversations while agent is monitoring a command."
-                                        .to_string(),
-                                ),
-                                window_id,
-                                ctx,
-                            );
-                        });
-                    }
-                    return;
-                }
-
+                // LOCAL FORK: switching conversations used to be blocked while the agent
+                // was monitoring a command. The AI context model went with the agent.
                 ctx.dispatch_typed_action(&WorkspaceAction::RestoreOrNavigateToConversation {
                     pane_view_locator,
                     window_id,
-                    conversation_id,
                     terminal_view_id,
                     restore_layout: None,
                 });
                 send_telemetry_from_app_ctx!(TelemetryEvent::SelectNavigationPaletteItem, ctx);
             }
-            CommandPaletteItemAction::ForkConversation { conversation_id } => {
+            CommandPaletteItemAction::ForkConversation {} => {
                 ctx.dispatch_typed_action(&WorkspaceAction::ForkAIConversation {
-                    conversation_id,
                     fork_from_exchange: None,
                     summarize_after_fork: false,
                     summarization_prompt: None,
                     initial_prompt: None,
-                    initial_attachments: vec![],
                     destination: ForkedConversationDestination::SplitPane,
                 });
             }
@@ -956,36 +924,10 @@ impl View {
                     BindingSource::None => return,
                 };
 
-                let (terminal_view_id, can_start_new_conversation) = {
-                    let terminal_view_id =
-                        active_terminal_in_window(window_id, ctx, |terminal_view, _| {
-                            terminal_view.id()
-                        });
-
-                    let should_block =
-                        active_terminal_in_window(window_id, ctx, |terminal_view, ctx| {
-                            !terminal_view
-                                .ai_context_model()
-                                .as_ref(ctx)
-                                .can_start_new_conversation()
-                        })
-                        .unwrap_or(false);
-
-                    (terminal_view_id, should_block)
-                };
-
-                if can_start_new_conversation {
-                    ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                        toast_stack.add_ephemeral_toast(
-                            DismissibleToast::error(
-                                "Cannot start a new conversation while agent is monitoring a command.".to_string(),
-                            ),
-                            window_id,
-                            ctx,
-                        );
-                    });
-                    return;
-                }
+                // LOCAL FORK: starting a new conversation used to be blocked while the
+                // agent was monitoring a command. The AI context model went with the agent.
+                let terminal_view_id =
+                    active_terminal_in_window(window_id, ctx, |terminal_view, _| terminal_view.id());
 
                 if let Some(terminal_view_id) = terminal_view_id {
                     ctx.dispatch_typed_action(&WorkspaceAction::StartNewConversation {

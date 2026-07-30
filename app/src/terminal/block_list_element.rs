@@ -2707,17 +2707,10 @@ impl BlockListElement {
                     ctx,
                     terminal_view_id,
                     cursor_hint_text,
-                    if block.is_agent_blocked() {
-                        AnsiColorIdentifier::Yellow
-                            .to_ansi_color(
-                                &block_grid_params
-                                    .grid_render_params
-                                    .warp_theme
-                                    .terminal_colors()
-                                    .normal,
-                            )
-                            .into()
-                    } else if block.is_agent_in_control() {
+                    // LOCAL FORK: the yellow "agent blocked on approval" cursor came from
+                    // `Block::is_agent_blocked`, which read the long-running control state
+                    // that went with the agent.
+                    if block.is_agent_in_control() {
                         // LOCAL FORK: inlined ai_brand_color, which lived in the agent module.
                         AnsiColorIdentifier::Magenta
                             .to_ansi_color(
@@ -4203,7 +4196,9 @@ impl Element for BlockListElement {
                     let mut render_params = CLISubagentRenderParams {
                         block_id: block.id().clone(),
                         view_origin: None,
-                        should_clip_view: !block.is_agent_blocked(),
+                        // LOCAL FORK: was `!block.is_agent_blocked()`; nothing can block
+                        // on agent approval any more, so the view is always clipped.
+                        should_clip_view: true,
                     };
 
                     if let Some(cli_subagent_view) = self.cli_subagent_views.get_mut(block.id()) {

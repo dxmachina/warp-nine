@@ -27,7 +27,6 @@ pub struct AIQuerySearchResultItem {
     pub query_text: String,
     /// When the query was originally submitted by the user.
     pub start_time: DateTime<Local>,
-    /// The output status of the [`crate::ai::blocklist::AIQueryHistory`].
     /// The directory the AI query was submitted in.
     pub(crate) working_directory: Option<String>,
     // Match result on the [`crate::ai::blocklist::AIQueryHistory`]'s query text including its
@@ -86,20 +85,10 @@ impl SearchItem for AIQuerySearchResultItem {
             .with_child(query_text)
             .finish();
 
+        // LOCAL FORK: the leading status icon came from `output_status`, an agent type
+        // that went with the agent. Only the elapsed-time span is left.
         let metadata_row = Flex::row()
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_child(
-                ConstrainedBox::new(
-                    Icon::new(
-                        self.output_status.icon().into(),
-                        highlight_state.main_text_fill(appearance).into_solid(),
-                    )
-                    .finish(),
-                )
-                .with_max_height(appearance.ui_font_size())
-                .with_max_width(appearance.ui_font_size())
-                .finish(),
-            )
             .with_child(
                 appearance
                     .ui_builder()
@@ -126,13 +115,10 @@ impl SearchItem for AIQuerySearchResultItem {
         let appearance = Appearance::as_ref(ctx);
         let ui_builder = appearance.ui_builder();
 
-        let mut details_column = Flex::column()
-            .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
-            .with_child(render_row_with_icon_and_paragraph(
-                self.output_status.icon().into(),
-                self.output_status.display_text(),
-                appearance,
-            ));
+        // LOCAL FORK: the leading status row was rendered from `output_status`, an agent
+        // type that went with the agent.
+        let mut details_column =
+            Flex::column().with_cross_axis_alignment(CrossAxisAlignment::Stretch);
 
         if let Some(working_directory) = &self.working_directory {
             details_column.add_child(

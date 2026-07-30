@@ -1129,7 +1129,9 @@ impl<'a> TabComponent<'a> {
         ctx: &AppContext,
     ) -> Option<String> {
         if Self::is_agent_task_indicator(indicator) {
-            return Self::get_agent_task_tooltip_message(tab, ctx);
+            // LOCAL FORK: the conversation title that fed this tooltip lived in the agent's
+            // blocklist history model, which went with the agent.
+            return None;
         }
 
         // If we're not showing the conversation title in the tooltip,

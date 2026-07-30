@@ -780,34 +780,6 @@ impl SyncQueue {
                         ctx,
                     );
                 }
-                QueueItem::UpdateAIFact {
-                    model,
-                    id,
-                    revision,
-                } => {
-                    self.update_object(
-                        model.clone(),
-                        id,
-                        revision,
-                        object_client,
-                        dequeued_item_id,
-                        ctx,
-                    );
-                }
-                QueueItem::UpdateAIExecutionProfile {
-                    id,
-                    model,
-                    revision,
-                } => {
-                    self.update_object(
-                        model.clone(),
-                        id,
-                        revision,
-                        object_client,
-                        dequeued_item_id,
-                        ctx,
-                    );
-                }
                 QueueItem::UpdateWorkflowEnum {
                     model,
                     id,
@@ -822,75 +794,19 @@ impl SyncQueue {
                         ctx,
                     );
                 }
-                QueueItem::UpdateMCPServer {
-                    model,
-                    id,
-                    revision,
-                } => {
-                    self.update_object(
-                        model.clone(),
-                        id,
-                        revision,
-                        object_client,
-                        dequeued_item_id,
-                        ctx,
-                    );
-                }
-                QueueItem::UpdateTemplatableMCPServer {
-                    model,
-                    id,
-                    revision,
-                } => {
-                    self.update_object(
-                        model.clone(),
-                        id,
-                        revision,
-                        object_client,
-                        dequeued_item_id,
-                        ctx,
-                    );
-                }
-                QueueItem::UpdateCloudEnvironment {
-                    model,
-                    id,
-                    revision,
-                } => {
-                    self.update_object(
-                        model.clone(),
-                        id,
-                        revision,
-                        object_client,
-                        dequeued_item_id,
-                        ctx,
-                    );
-                }
-                QueueItem::UpdateScheduledAmbientAgent {
-                    model,
-                    id,
-                    revision,
-                } => {
-                    self.update_object(
-                        model.clone(),
-                        id,
-                        revision,
-                        object_client,
-                        dequeued_item_id,
-                        ctx,
-                    );
-                }
-                QueueItem::UpdateCloudAgentConfig {
-                    model,
-                    id,
-                    revision,
-                } => {
-                    self.update_object(
-                        model.clone(),
-                        id,
-                        revision,
-                        object_client,
-                        dequeued_item_id,
-                        ctx,
-                    );
+                // LOCAL FORK: these object kinds lost their models with the agent, so
+                // there is nothing left to send. The variants are kept because they
+                // may still sit in a queue rehydrated from an older cache; such an
+                // item is failed and the queue moves on.
+                QueueItem::UpdateAIFact { id, .. }
+                | QueueItem::UpdateAIExecutionProfile { id, .. }
+                | QueueItem::UpdateMCPServer { id, .. }
+                | QueueItem::UpdateTemplatableMCPServer { id, .. }
+                | QueueItem::UpdateCloudEnvironment { id, .. }
+                | QueueItem::UpdateScheduledAmbientAgent { id, .. }
+                | QueueItem::UpdateCloudAgentConfig { id, .. } => {
+                    self.handle_update_failure_response(id, dequeued_item_id, ctx);
+                    self.dequeue(ctx);
                 }
                 QueueItem::CreateWorkflow {
                     object_type,

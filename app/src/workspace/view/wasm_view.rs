@@ -6,7 +6,6 @@ use warpui::{AppContext, SingletonEntity, ViewContext, ViewHandle};
 
 use super::PanelPosition;
 use crate::BlocklistAIHistoryModel;
-use crate::ai::agent_conversations_model::AgentConversationsModel;
 use crate::ai::conversation_details_panel::{
     ConversationDetailsData, ConversationDetailsPanel, ConversationDetailsPanelEvent,
 };
@@ -111,20 +110,14 @@ impl Workspace {
     /// Check if we should show the conversation details panel, given the focused terminal view.
     /// Returns true for:
     /// - Conversation transcript viewers (always)
-    /// - Restored ambient cloud tasks
     /// - Shared sessions with an active conversation
+    ///
+    /// LOCAL FORK: the restored-ambient-cloud-task case went with the agent.
     pub(super) fn should_show_conversation_details_panel(
         focused_terminal_view: &ViewHandle<TerminalView>,
         ctx: &AppContext,
     ) -> bool {
         let terminal_view_ref = focused_terminal_view.as_ref(ctx);
-
-        if terminal_view_ref
-            .ambient_agent_task_id_for_details_panel(ctx)
-            .is_some()
-        {
-            return true;
-        }
         let model = terminal_view_ref.model.lock();
 
         // Always show for conversation transcript viewers
@@ -178,39 +171,10 @@ impl Workspace {
         }
 
         let terminal_view_id = terminal_view.id();
-        let task_id = terminal_view
-            .as_ref(ctx)
-            .ambient_agent_task_id_for_details_panel(ctx);
 
         self.transcript_details_panel.update(ctx, |panel, ctx| {
-            // If we have an ambient agent task ID, try to populate from task data
-            if let Some(task_id) = task_id {
-                let conversations_model_handle = AgentConversationsModel::handle(ctx);
-                let task = conversations_model_handle.update(ctx, |conversations_model, ctx| {
-                    conversations_model.get_or_async_fetch_task_data(&task_id, ctx)
-                });
-                if let Some(task) = task {
-                    let details = ConversationDetailsData::from_task(&task, None, None, ctx);
-                    panel.set_conversation_details(details, ctx);
-                    ctx.notify();
-                    return;
-                }
-
-                // Task not yet available - check if the fetch failed and show error state
-                if let Some(error_message) = conversations_model_handle
-                    .as_ref(ctx)
-                    .task_fetch_error(&task_id)
-                    .cloned()
-                {
-                    let details =
-                        ConversationDetailsData::from_task_id(task_id, Some(error_message));
-                    panel.set_conversation_details(details, ctx);
-                    ctx.notify();
-                    return;
-                }
-            }
-
-            // Otherwise, populate from conversation
+            // LOCAL FORK: the ambient agent task branch, which populated the panel from
+            // cloud task data, went with the agent.
             let history_model = BlocklistAIHistoryModel::handle(ctx).as_ref(ctx);
             if let Some(conversation) = history_model.active_conversation(terminal_view_id) {
                 let details = ConversationDetailsData::from_conversation(conversation, ctx);

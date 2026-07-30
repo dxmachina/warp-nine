@@ -87,7 +87,6 @@ impl SettingsFooterKind {
 pub struct SettingsFooterMouseStates {
     pub open_settings_file_button: MouseStateHandle,
     pub alert_open_file_button: MouseStateHandle,
-    pub alert_fix_with_oz_button: MouseStateHandle,
     /// Scroll state for the error alert's text region (heading +
     /// description), so scroll position survives renders.
     pub alert_text_scroll_state: ClippedScrollStateHandle,
@@ -157,7 +156,6 @@ pub fn render_open_settings_file_button(
 pub fn render_settings_error_alert(
     appearance: &Appearance,
     error: &SettingsFileError,
-    ai_enabled: bool,
     mouse_states: &SettingsFooterMouseStates,
 ) -> Box<dyn Element> {
     let theme = appearance.theme();
@@ -244,19 +242,9 @@ pub fn render_settings_error_alert(
         .with_run_spacing(ALERT_BUTTON_SPACING)
         .with_child(open_file_button);
 
-    if ai_enabled {
-        let error_description = error.to_string();
-        let fix_with_oz_button = render_alert_action_button(
-            ui_font_family,
-            text_color,
-            mouse_states.alert_fix_with_oz_button.clone(),
-            "Fix with Oz",
-            Some(Icon::Agent),
-            /*bordered=*/ false,
-            WorkspaceAction::FixSettingsWithOz { error_description },
-        );
-        buttons_row.add_child(fix_with_oz_button);
-    }
+    // LOCAL FORK: the "Fix with Oz" button went out with the agent. "Open file"
+    // is the only action left, but the wrapping row stays: it is what keeps the
+    // button from widening the sidebar past its allotment.
 
     // ── Assemble ─────────────────────────────────────────────────────────
     // Left-align the buttons with the start of the text (past the icon + gap).
@@ -287,7 +275,6 @@ pub fn render_footer(
     kind: SettingsFooterKind,
     appearance: &Appearance,
     error: Option<&SettingsFileError>,
-    ai_enabled: bool,
     mouse_states: &SettingsFooterMouseStates,
 ) -> Box<dyn Element> {
     let inner: Box<dyn Element> = match kind {
@@ -297,7 +284,7 @@ pub fn render_footer(
             mouse_states.open_settings_file_button.clone(),
         ),
         SettingsFooterKind::ErrorAlert => match error {
-            Some(error) => render_settings_error_alert(appearance, error, ai_enabled, mouse_states),
+            Some(error) => render_settings_error_alert(appearance, error, mouse_states),
             // Defensive fallback: if the error disappears between `choose` and
             // `render_footer`, fall back to the plain button rather than
             // rendering an empty alert shell.

@@ -8,7 +8,7 @@ use warp_core::command::ExitCode;
 use warp_errors::report_error;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
-use super::model::block::{AgentInteractionMetadata, Block, SerializedAIMetadata, SerializedBlock};
+use super::model::block::{Block, SerializedBlock};
 use super::shell::ShellType;
 use crate::cloud_object::Space;
 use crate::cloud_object::model::persistence::CloudModel;
@@ -275,15 +275,12 @@ pub struct HistoryEntry {
     pub is_agent_executed: bool,
 }
 
-fn serialized_block_is_agent_executed(block: &SerializedBlock) -> bool {
-    let Some(ai_metadata) = block.ai_metadata.as_ref() else {
-        return false;
-    };
-
-    serde_json::from_str::<SerializedAIMetadata>(ai_metadata)
-        .ok()
-        .map(AgentInteractionMetadata::from)
-        .is_some_and(|metadata| metadata.requested_command_action_id().is_some())
+// LOCAL FORK: a block was "agent executed" when its AI metadata carried a
+// requested-command action id. That id went with the agent, so no block in this
+// build is agent-executed. The `is_agent_executed` column is still read and
+// written for existing history databases.
+fn serialized_block_is_agent_executed(_block: &SerializedBlock) -> bool {
+    false
 }
 
 impl HistoryEntry {
@@ -356,7 +353,8 @@ impl HistoryEntry {
             completed_ts: block.completed_ts().copied(),
             exit_code: Some(block.exit_code()),
             is_for_restored_block: true,
-            is_agent_executed: block.requested_command_action_id().is_some(),
+            // LOCAL FORK: see `serialized_block_is_agent_executed`.
+            is_agent_executed: false,
         }
     }
 

@@ -238,44 +238,10 @@ impl TerminalView {
         position: RichContentInsertionPosition,
         ctx: &mut ViewContext<Self>,
     ) {
-        // Agent view entry blocks, inline agent view headers, and terminal zero state blocks
-        // should not be associated with any conversation, as they always belong in the top-level
-        // terminal view and should be hidden while agent view is active.
-        let is_agent_view_scoped_terminal_content = matches!(
-            metadata,
-            Some(
-                RichContentMetadata::AgentViewEntry(_)
-                    | RichContentMetadata::InlineAgentViewHeader
-                    | RichContentMetadata::TerminalViewZeroState
-            )
-        );
-        let is_use_agent_footer = handle.id() == self.use_agent_footer.id();
-
-        let (agent_view_conversation_id, should_hide) = if is_agent_view_scoped_terminal_content {
-            (None, self.agent_view_controller.as_ref(ctx).is_active())
-        } else if is_use_agent_footer {
-            (
-                self.agent_view_controller
-                    .as_ref(ctx)
-                    .agent_view_state()
-                    .fullscreen_conversation_id(),
-                false,
-            )
-        } else {
-            (
-                self.agent_view_controller
-                    .as_ref(ctx)
-                    .agent_view_state()
-                    .active_conversation_id(),
-                false,
-            )
-        };
-        let item = RichContentItem::new(
-            content_type,
-            handle.id(),
-            agent_view_conversation_id,
-            should_hide,
-        );
+        // LOCAL FORK: rich content used to be scoped to the active agent view conversation
+        // and hidden while agent view was showing. Both went with the agent, so nothing is
+        // hidden on insertion any more.
+        let item = RichContentItem::new(content_type, handle.id(), false);
 
         match position {
             RichContentInsertionPosition::Append {
@@ -316,7 +282,7 @@ impl TerminalView {
         }
         self.rich_content_views.push(rich_content);
 
-        self.update_input_prompt_suggestions_banner_state(ctx);
+        // LOCAL FORK: the input prompt suggestions banner went with the agent.
 
         // Scroll to bottom
         self.update_scroll_position_locking(ScrollPositionUpdate::AfterRichBlockInserted, ctx);

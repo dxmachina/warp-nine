@@ -59,6 +59,7 @@ pub enum InlineHistoryMenuEvent {
 /// Identifies a history item well enough to reselect the same logical item
 /// after rerunning the current query.
 enum HistoryItemIdentity {
+    Conversation(String),
     Command(String),
     AIPrompt(String),
 }
@@ -66,9 +67,11 @@ enum HistoryItemIdentity {
 impl HistoryItemIdentity {
     fn from_item(item: &AcceptHistoryItem) -> Self {
         match item {
-            AcceptHistoryItem::Conversation {
-                conversation_id, ..
-            } => Self::Conversation(*conversation_id),
+            // LOCAL FORK: `AcceptHistoryItem::Conversation` no longer has a producer, but
+            // the variant is still declared, so this arm has to exist. It carried an
+            // `AIConversationId` before the excision; the title is the only field left to
+            // key on, and it is never reached in practice.
+            AcceptHistoryItem::Conversation { title } => Self::Conversation(title.clone()),
             AcceptHistoryItem::Command { command, .. } => Self::Command(command.clone()),
             AcceptHistoryItem::AIPrompt { query_text } => Self::AIPrompt(query_text.clone()),
         }
@@ -76,12 +79,9 @@ impl HistoryItemIdentity {
 
     fn matches(&self, item: &AcceptHistoryItem) -> bool {
         match (self, item) {
-            (
-                Self::Conversation(expected_id),
-                AcceptHistoryItem::Conversation {
-                    conversation_id, ..
-                },
-            ) => *expected_id == *conversation_id,
+            (Self::Conversation(expected_title), AcceptHistoryItem::Conversation { title }) => {
+                expected_title == title
+            }
             (Self::Command(expected_command), AcceptHistoryItem::Command { command, .. }) => {
                 expected_command == command
             }
@@ -318,12 +318,8 @@ impl InlineHistoryMenuView {
 
         ctx.subscribe_to_view(&menu_view, |me, _, event, ctx| match event {
             InlineMenuEvent::AcceptedItem { item, .. } => match item {
-                AcceptHistoryItem::Conversation {
-                    conversation_id, ..
-                } => {
-                    ctx.emit(InlineHistoryMenuEvent::NavigateToConversation {
-                        conversation_id: *conversation_id,
-                    });
+                AcceptHistoryItem::Conversation { .. } => {
+                    ctx.emit(InlineHistoryMenuEvent::NavigateToConversation {});
                 }
                 AcceptHistoryItem::Command {
                     command,

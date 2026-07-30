@@ -42,6 +42,12 @@ pub const CYCLE_NEXT_ORCHESTRATION_CHILD_AGENT_KEYBINDING: &str =
 pub const CYCLE_PREVIOUS_ORCHESTRATION_CHILD_AGENT_KEYBINDING: &str =
     "terminal:cycle_previous_orchestration_child_agent";
 
+/// LOCAL FORK: this lived in `ai::predict::prompt_suggestions`, which was deleted with
+/// the agent. Prompt suggestions themselves are a kept feature (see
+/// [`crate::terminal::view::passive_suggestions`]), so the binding name is reproduced
+/// verbatim to keep existing user keybinding customizations pointing at it.
+pub const ACCEPT_PROMPT_SUGGESTION_KEYBINDING: &str = "terminal:accept_prompt_suggestions";
+
 const SELECT_NEXT_BLOCK_ACTION_NAME: &str = "terminal:select_next_block";
 pub const SELECT_PREVIOUS_BLOCK_ACTION_NAME: &str = "terminal:select_previous_block";
 
@@ -327,6 +333,7 @@ pub fn init(app: &mut AppContext) {
             id!("Terminal") & !id!("IMEOpen") & id!("LongRunningCommand") & id!("SubshellBanner"),
         ),
         EditableBinding::new(
+            ACCEPT_PROMPT_SUGGESTION_KEYBINDING,
             "Accept Prompt Suggestion",
             TerminalAction::ResolvePromptSuggestion(PromptSuggestionResolution::Accept {
                 interaction_source: InteractionSource::Keybinding,

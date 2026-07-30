@@ -20,7 +20,6 @@ use crate::terminal::input::inline_history::search_item::InlineHistoryItem;
 use crate::terminal::input::inline_menu::{
     InlineMenuAction, InlineMenuClickBehavior, InlineMenuType,
 };
-use crate::terminal::model::session::SessionId;
 use crate::terminal::model::session::active_session::ActiveSession;
 
 #[derive(Clone, Debug)]
@@ -77,65 +76,8 @@ impl InlineHistoryMenuDataSource {
         }
     }
 
-    fn build_agent_view_results(
-        &self,
-        query: &Query,
-        prefix_match_len: usize,
-        session_id: Option<SessionId>,
-        app: &AppContext,
-    ) -> Vec<QueryResult<AcceptHistoryItem>> {
-        let trimmed_query = query.text.trim();
-        let include_commands =
-            query.filters.is_empty() || query.filters.contains(&QueryFilter::Commands);
-        let include_prompts =
-            query.filters.is_empty() || query.filters.contains(&QueryFilter::PromptHistory);
-
-        let history = History::handle(app).as_ref(app);
-        let config = UpArrowHistoryConfig {
-            include_commands,
-            include_prompts,
-        };
-        let suggestions = history.up_arrow_suggestions_for_terminal_surface(
-            self.terminal_view_id,
-            session_id,
-            config,
-            app,
-        );
-
-        let mut results: Vec<QueryResult<AcceptHistoryItem>> = Vec::new();
-        for suggestion in suggestions {
-            let normalized_text = suggestion.normalized_text();
-            if !trimmed_query.is_empty() && !normalized_text.starts_with(trimmed_query) {
-                continue;
-            }
-            let normalized_text = normalized_text.to_owned();
-
-            let (search_item, score) = match suggestion {
-                HistoryInputSuggestion::Command { entry } => {
-                    let timestamp = entry.start_ts.unwrap_or_else(Local::now);
-                    (
-                        InlineHistoryItem::command(
-                            normalized_text,
-                            entry.linked_workflow_data(),
-                            timestamp,
-                        )
-                        .with_prefix_match_len(prefix_match_len),
-                        OrderedFloat(results.len() as f64),
-                    )
-                }
-                HistoryInputSuggestion::AIQuery { entry } => (
-                    InlineHistoryItem::ai_prompt(normalized_text, entry.start_time)
-                        .with_prefix_match_len(prefix_match_len),
-                    OrderedFloat(results.len() as f64),
-                ),
-            };
-
-            results.push(QueryResult::from(search_item.with_score(score)));
-        }
-
-        results
-    }
-
+    // LOCAL FORK: `build_agent_view_results` built the result set for the fullscreen
+    // agent view and went with the agent; nothing called it any more.
 }
 
 #[derive(Clone)]
@@ -202,8 +144,6 @@ impl SyncDataSource for InlineHistoryMenuDataSource {
 
         let include_commands =
             query.filters.is_empty() || query.filters.contains(&QueryFilter::Commands);
-        let include_conversations =
-            query.filters.is_empty() || query.filters.contains(&QueryFilter::Conversations);
 
         let history = History::handle(app).as_ref(app);
         let all_live_session_ids = history.all_live_session_ids();
@@ -249,30 +189,18 @@ impl SyncDataSource for InlineHistoryMenuDataSource {
             Vec::new()
         };
 
-        let conversation_entries = if include_conversations {
-            self.build_conversation_entries(trimmed_query, app)
-        } else {
-            Vec::new()
-        };
-        let merged_entries = interleave_conversations(command_entries, conversation_entries);
+        // LOCAL FORK: the conversation half of this menu listed agent conversations and
+        // its builder went with the agent. Commands still go through the interleave so
+        // the ordering rules stay identical.
+        let merged_entries = interleave_conversations(command_entries, Vec::new());
 
         let mut results: Vec<QueryResult<AcceptHistoryItem>> = Vec::new();
         for entry in merged_entries {
             let score = OrderedFloat(results.len() as f64);
             let search_item = match entry.item {
-                MenuItem::Conversation {
-                    conversation_id,
-                    title,
-                    status,
-                    match_result,
-                    display_timestamp,
-                } => InlineHistoryItem::conversation(
-                    conversation_id,
-                    title,
-                    status,
-                    display_timestamp,
-                )
-                .with_name_match_result(match_result),
+                // LOCAL FORK: nothing constructs this variant any more, and the
+                // `InlineHistoryItem::conversation` renderer went with the agent.
+                MenuItem::Conversation { .. } => continue,
                 MenuItem::Command {
                     command,
                     linked_workflow_data,

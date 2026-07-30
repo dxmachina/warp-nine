@@ -472,10 +472,9 @@ impl CommentViewCard {
         match (file_path, line_number) {
             (Some(path), Some(line)) => format!("{path}:{line}"),
             (Some(path), None) => path,
-            _ => source
-                .head()
-                .map(|head| head.title())
-                .unwrap_or_else(|| "Review Comment".to_string()),
+            // LOCAL FORK: comments no longer carry a revision pair, so the head
+            // revision title fallback was removed with the agent.
+            _ => "Review Comment".to_string(),
         }
     }
 }

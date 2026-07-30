@@ -26,7 +26,6 @@ use super::{
     heights_approx_gte, heights_approx_lt, heights_approx_lte,
 };
 use crate::terminal::input::inline_menu::InlineMenuPositioner;
-use crate::terminal::model::blocks::RichContentItem;
 use crate::terminal::model::index::Point as IndexPoint;
 
 /// Wraps a scroll position for the purposes of centralizing update logic.
@@ -2013,27 +2012,11 @@ impl Iterator for ViewportIter<'_> {
             }
 
             match item {
-                BlockHeightItem::RichContent(RichContentItem {
-                    agent_view_conversation_id: fullscreen_agent_view_conversation_id,
-                    ..
-                }) => match self.transcript_scope {
-                    TranscriptScope::Unfiltered => return next,
-                    TranscriptScope::Conversation(conversation_id) => {
-                        // If currently in a fullscreen agent view, only return this item if its
-                        // conversation id matches that of the active agent view.
-                        if fullscreen_agent_view_conversation_id
-                            .is_some_and(|id| id == *conversation_id)
-                        {
-                            return next;
-                        }
-                    }
-                    TranscriptScope::Terminal => {
-                        // If not in a fullscreen agent view, return the item only if it 'belongs'
-                        // to the terminal mode (represented as no `ai_conversation_id`).
-                        if fullscreen_agent_view_conversation_id.is_none() {
-                            return next;
-                        }
-                    }
+                // LOCAL FORK: rich content no longer carries an agent conversation id
+                // and there is no longer a conversation-scoped transcript, so every
+                // rich content item belongs to the terminal transcript.
+                BlockHeightItem::RichContent(_) => match self.transcript_scope {
+                    TranscriptScope::Unfiltered | TranscriptScope::Terminal => return next,
                 },
                 _ => {
                     if !FeatureFlag::AgentView.is_enabled() || block_height.as_f64() > 0. {

@@ -35,12 +35,7 @@ impl Input {
 
         let model = self.model.lock();
         let should_render_prompt_using_editor_decorator_elements =
-            should_render_prompt_using_editor_decorator_elements(
-                false,
-                &self.ai_input_model,
-                &model,
-                app,
-            );
+            should_render_prompt_using_editor_decorator_elements(false, &model, app);
 
         // We should likely rework this stack to not need to use `with_constrain_absolute_children`,
         // by reworking the positioning of the children to not depend on this.
@@ -262,10 +257,8 @@ impl Input {
 
         let mut column = Flex::column();
         let is_slash_commands = self.suggestions_mode_model.as_ref(app).is_slash_commands();
-        let is_conversation_menu = self
-            .suggestions_mode_model
-            .as_ref(app)
-            .is_conversation_menu();
+        // LOCAL FORK: the inline conversation menu and the agent status view were both
+        // agent-only children of this column and went with the agent.
         let is_model_selector = self
             .suggestions_mode_model
             .as_ref(app)
@@ -290,8 +283,6 @@ impl Input {
                             Some(ChildView::new(&self.inline_slash_commands_view).finish())
                         } else if is_prompts_menu {
                             Some(ChildView::new(&self.inline_prompts_menu_view).finish())
-                        } else if is_conversation_menu {
-                            Some(ChildView::new(&self.inline_conversation_menu_view).finish())
                         } else if FeatureFlag::ListSkills.is_enabled() && is_skill_menu {
                             Some(ChildView::new(&self.inline_skill_selector_view).finish())
                         } else if is_inline_history_menu {
@@ -301,7 +292,6 @@ impl Input {
                         } else {
                             None
                         },
-                        Some(ChildView::new(&self.agent_status_view).finish()),
                         Some(input),
                     ]
                     .into_iter()
@@ -312,15 +302,12 @@ impl Input {
                 column.add_children(
                     [
                         Some(input),
-                        Some(ChildView::new(&self.agent_status_view).finish()),
                         if is_model_selector {
                             Some(ChildView::new(&self.inline_model_selector_view).finish())
                         } else if is_slash_commands {
                             Some(ChildView::new(&self.inline_slash_commands_view).finish())
                         } else if is_prompts_menu {
                             Some(ChildView::new(&self.inline_prompts_menu_view).finish())
-                        } else if is_conversation_menu {
-                            Some(ChildView::new(&self.inline_conversation_menu_view).finish())
                         } else if FeatureFlag::ListSkills.is_enabled() && is_skill_menu {
                             Some(ChildView::new(&self.inline_skill_selector_view).finish())
                         } else if is_inline_history_menu {
@@ -345,8 +332,6 @@ impl Input {
                     column.add_child(ChildView::new(&self.inline_slash_commands_view).finish());
                 } else if is_prompts_menu && !should_render_below {
                     column.add_child(ChildView::new(&self.inline_prompts_menu_view).finish());
-                } else if is_conversation_menu && !should_render_below {
-                    column.add_child(ChildView::new(&self.inline_conversation_menu_view).finish());
                 } else if FeatureFlag::ListSkills.is_enabled()
                     && is_skill_menu
                     && !should_render_below
@@ -358,7 +343,7 @@ impl Input {
                     column.add_child(ChildView::new(&self.inline_repos_menu_view).finish());
                 }
 
-                column.add_children([ChildView::new(&self.agent_status_view).finish(), input]);
+                column.add_child(input);
 
                 if is_model_selector && should_render_below {
                     column.add_child(ChildView::new(&self.inline_model_selector_view).finish());
@@ -366,8 +351,6 @@ impl Input {
                     column.add_child(ChildView::new(&self.inline_slash_commands_view).finish());
                 } else if is_prompts_menu && should_render_below {
                     column.add_child(ChildView::new(&self.inline_prompts_menu_view).finish());
-                } else if is_conversation_menu && should_render_below {
-                    column.add_child(ChildView::new(&self.inline_conversation_menu_view).finish());
                 } else if FeatureFlag::ListSkills.is_enabled()
                     && is_skill_menu
                     && should_render_below

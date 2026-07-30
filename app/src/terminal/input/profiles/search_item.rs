@@ -17,10 +17,8 @@ const MANAGE_PROFILES_LABEL: &str = "Manage profiles";
 
 #[derive(Debug, Clone)]
 enum ProfileSearchItemKind {
-    Profile {
-        profile_name: String,
-        is_selected: bool,
-    },
+    // LOCAL FORK: the per-profile entries came from AIExecutionProfilesModel and went
+    // with the agent, so "Manage profiles" is the only item this menu can produce.
     ManageProfiles,
 }
 
@@ -32,20 +30,6 @@ pub(super) struct ProfileSearchItem {
 }
 
 impl ProfileSearchItem {
-    pub fn new_profile_item(
-        profile_name: String,
-        is_selected: bool,
-    ) -> Self {
-        Self {
-            kind: ProfileSearchItemKind::Profile {
-                profile_name,
-                is_selected,
-            },
-            match_result: None,
-            score: OrderedFloat(0.0),
-        }
-    }
-
     pub fn new_manage_profiles_item() -> Self {
         Self {
             kind: ProfileSearchItemKind::ManageProfiles,
@@ -74,7 +58,6 @@ impl SearchItem for ProfileSearchItem {
         appearance: &Appearance,
     ) -> Box<dyn Element> {
         let icon = match self.kind {
-            ProfileSearchItemKind::Profile { .. } => Icon::Psychology,
             ProfileSearchItemKind::ManageProfiles => Icon::Gear,
         }
         .to_warpui_icon(inline_styles::icon_color(appearance));
@@ -99,11 +82,6 @@ impl SearchItem for ProfileSearchItem {
         let font_size = inline_styles::font_size(appearance);
 
         let (label_text, is_selected) = match &self.kind {
-            ProfileSearchItemKind::Profile {
-                profile_name,
-                is_selected,
-                ..
-            } => (profile_name.clone(), *is_selected),
             ProfileSearchItemKind::ManageProfiles => (MANAGE_PROFILES_LABEL.to_owned(), false),
         };
 
@@ -163,9 +141,6 @@ impl SearchItem for ProfileSearchItem {
 
     fn accept_result(&self) -> Self::Action {
         match &self.kind {
-            ProfileSearchItemKind::Profile { profile_id, .. } => SelectProfileMenuItem::Profile {
-                profile_id: profile_id.clone(),
-            },
             ProfileSearchItemKind::ManageProfiles => SelectProfileMenuItem::ManageProfiles,
         }
     }
@@ -176,9 +151,6 @@ impl SearchItem for ProfileSearchItem {
 
     fn accessibility_label(&self) -> String {
         match &self.kind {
-            ProfileSearchItemKind::Profile { profile_name, .. } => {
-                format!("Profile: {profile_name}")
-            }
             ProfileSearchItemKind::ManageProfiles => MANAGE_PROFILES_LABEL.to_string(),
         }
     }

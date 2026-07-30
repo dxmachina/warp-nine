@@ -7,10 +7,10 @@ use itertools::Itertools;
 use repo_metadata::RepositoryUpdate;
 use warpui::{ModelContext, ModelHandle, SingletonEntity};
 
+// LOCAL FORK: `parse_model_config_dir_entry` removed with the agent.
 use super::util::{
-    for_each_dir_entry, has_name, is_config_file, parse_model_config_dir_entry,
-    parse_multi_launch_config_dir_entry, parse_multi_workflow_dir_entry,
-    parse_single_theme_dir_entry, parse_tab_config_dir_entry,
+    for_each_dir_entry, has_name, is_config_file, parse_multi_launch_config_dir_entry,
+    parse_multi_workflow_dir_entry, parse_single_theme_dir_entry, parse_tab_config_dir_entry,
 };
 use super::{
     LAUNCH_CONFIG_COMMENT, WarpConfigUpdateEvent, custom_model_routers_dir, launch_configs_dir,

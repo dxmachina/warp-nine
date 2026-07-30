@@ -7,6 +7,9 @@ use super::server_api::{ServerApi, TranscribeError};
 use crate::voice::transcriber::Transcriber;
 
 pub struct ServerVoiceTranscriber {
+    // LOCAL FORK: kept so the constructor signature is unchanged, but there is no
+    // transcription endpoint left to call. See `transcribe` below.
+    #[allow(dead_code)]
     server_api: Arc<ServerApi>,
 }
 
@@ -24,13 +27,12 @@ impl Transcriber for ServerVoiceTranscriber {
         _wav_base64: String,
         _language: Option<String>,
     ) -> Result<String, TranscribeError> {
-        // LOCAL FORK: the request payload type lived with the agent, so the audio and
-        // language are no longer carried to the endpoint.
-        let response = self.server_api.transcribe().await;
-        match response {
-            Ok(response) => Ok(response.text),
-            Err(e) => Err(e),
-        }
+        // LOCAL FORK: both the request payload type and `ServerApi::transcribe` lived
+        // with the agent, so there is no endpoint left to send the audio to. Fail
+        // rather than silently returning empty text, so the caller can surface it.
+        Err(TranscribeError::Other(anyhow::anyhow!(
+            "voice transcription is not available in this build"
+        )))
     }
 }
 

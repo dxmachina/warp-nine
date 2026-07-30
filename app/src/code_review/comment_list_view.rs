@@ -903,13 +903,11 @@ impl CommentListView {
     }
 
     /// Whether the queued review comments can currently be sent to an agent.
-    pub fn can_send(&self, ctx: &AppContext) -> bool {
-        let has_sendable_comments = self.has_non_outdated_comments();
+    pub fn can_send(&self, _ctx: &AppContext) -> bool {
         match &self.review_destination {
             ReviewDestination::None => false,
-            // CLI agents don't consume AI credits, so bypass the ai check.
-            ReviewDestination::Cli(_) => has_sendable_comments,
-            // LOCAL FORK: the Warp agent is gone, so there is nowhere to send.
+            // LOCAL FORK: the Warp agent is gone, and so is the `Cli` destination,
+            // so there is nowhere left to send comments to.
             ReviewDestination::Warp => false,
         }
     }
@@ -941,13 +939,9 @@ impl CommentListView {
         ai_available: bool,
         ai_enabled: bool,
     ) -> Cow<'static, str> {
-        if let ReviewDestination::Cli(agent) = destination {
-            if !has_sendable_comments {
-                Cow::Borrowed("No non-outdated comments to send")
-            } else {
-                Cow::Owned(format!("Send diff comments to {}", agent.display_name()))
-            }
-        } else if !ai_enabled {
+        // LOCAL FORK: the `Cli` destination went with the CLI agent; only the `None`
+        // and `Warp` destinations are left.
+        if !ai_enabled {
             Cow::Borrowed("AI must be enabled to send comments to Agent")
         } else if !ai_available {
             Cow::Borrowed("Agent code review requires AI credits")

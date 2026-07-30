@@ -1,11 +1,7 @@
-use std::sync::Arc;
-
-use warp_errors::report_error;
 use warp_graphql::scalars::Time;
 use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::auth::AuthStateProvider;
-use crate::server::server_api::ServerApiProvider;
 
 const PAGE_SIZE: i32 = 20;
 
@@ -23,10 +19,8 @@ impl Entity for UsageHistoryModel {
 impl SingletonEntity for UsageHistoryModel {}
 
 impl UsageHistoryModel {
-    pub fn new(ctx: &mut ModelContext<Self>) -> Self {
-        let ai_client = ServerApiProvider::as_ref(ctx).get_ai_client();
+    pub fn new(_ctx: &mut ModelContext<Self>) -> Self {
         Self {
-            ai_client,
             entries: Vec::new(),
             is_loading: false,
             has_more_entries: true,
@@ -84,55 +78,18 @@ impl UsageHistoryModel {
         self.fetch_next_page(PAGE_SIZE, last_updated_end_timestamp, ctx);
     }
 
-    /// Fetches the next page of conversation usage entries, appending them to the existing list.
-    /// last_updated_end_timestamp is the timestamp of the last entry in the existing list,
-    /// and is used to paginate the results and only return entries that we don't already have.
+    /// LOCAL FORK: conversation usage history was fetched through the AI client on
+    /// `ServerApiProvider`, which went with the agent. The model is kept so the
+    /// billing pages keep working; it now always reports an empty, fully-loaded
+    /// history.
     fn fetch_next_page(
         &mut self,
-        limit: i32,
-        last_updated_end_timestamp: Option<Time>,
+        _limit: i32,
+        _last_updated_end_timestamp: Option<Time>,
         ctx: &mut ModelContext<Self>,
     ) {
-        // If no time stamp is provided for pagination, we can assume that this is the first page of results.
-        let is_initial_load = last_updated_end_timestamp.is_none();
-        let ai_client = self.ai_client.clone();
-
-        if is_initial_load {
-            self.is_loading = true;
-            ctx.notify();
-        }
-
-        ctx.spawn(
-            async move {
-                ai_client
-                    .get_conversation_usage_history(
-                        Some(30),
-                        Some(limit),
-                        last_updated_end_timestamp,
-                    )
-                    .await
-            },
-            move |me, result, ctx| {
-                me.is_loading = false;
-                match result {
-                    Ok(entries) => {
-                        let fetched_count = entries.len() as i32;
-
-                        // If we received fewer than requested, assume there are no more entries.
-                        me.has_more_entries = fetched_count == limit;
-
-                        if !is_initial_load {
-                            me.entries.extend(entries);
-                        } else {
-                            me.entries = entries;
-                        }
-                    }
-                    Err(e) => {
-                        report_error!(e.context("Failed to fetch conversation usage"));
-                    }
-                }
-                ctx.notify();
-            },
-        );
+        self.is_loading = false;
+        self.has_more_entries = false;
+        ctx.notify();
     }
 }

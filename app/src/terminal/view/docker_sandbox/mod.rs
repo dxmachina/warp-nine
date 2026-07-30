@@ -71,7 +71,7 @@ fn create_docker_sandbox_view(
                 initial_size,
                 model_event_sender,
                 ctx.window_id(),
-                None, /* initial_input_config */
+                // LOCAL FORK: the `initial_input_config` parameter went with the agent.
                 ctx,
             );
             let terminal_manager = terminal_init.manager;
@@ -91,7 +91,8 @@ fn create_docker_sandbox_view(
                 None,
                 HashMap::new(),
                 IsSharedSessionCreator::No,
-                None, /* restored_blocks */
+                // LOCAL FORK: the `restored_blocks` parameter went with
+                // `SerializedBlockListItem`; block restore is no longer supported.
                 user_default_shell_unsupported_banner_model_handle,
                 initial_size,
                 model_event_sender,
@@ -103,8 +104,8 @@ fn create_docker_sandbox_view(
                             resources,
                             model_event_sender: model_event_sender_for_surface,
                             window_id,
-                            initial_input_config: None,
-                            conversation_restoration: None,
+                            // LOCAL FORK: `initial_input_config` and
+                            // `conversation_restoration` went with the agent.
                             has_conversation_restoration: false,
                             is_historical: false,
                             should_use_live_appearance: false,

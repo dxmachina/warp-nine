@@ -232,13 +232,12 @@ fn open_repository(path: &String, ctx: &mut AppContext) {
 fn fork_ai_conversation(params: &ForkAIConversationParams, ctx: &mut AppContext) {
     dispatch_to_active_workspace(
         ctx,
+        // LOCAL FORK: the conversation id and initial attachments went with the agent.
         WorkspaceAction::ForkAIConversation {
-            conversation_id: params.conversation_id,
             fork_from_exchange: params.fork_from_exchange,
             summarize_after_fork: params.summarize_after_fork,
             summarization_prompt: params.summarization_prompt.clone(),
             initial_prompt: params.initial_prompt.clone(),
-            initial_attachments: vec![],
             destination: params.destination,
         },
     );

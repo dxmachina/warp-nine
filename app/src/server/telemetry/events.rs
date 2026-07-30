@@ -2722,18 +2722,11 @@ impl TelemetryEvent {
 
     pub fn payload(&self) -> Option<Value> {
         match self {
-            TelemetryEvent::ShowedSuggestedAgentModeWorkflowChip { logging_id } => Some(json!({
-                "logging_id": logging_id,
-            })),
-            TelemetryEvent::ShowedSuggestedAgentModeWorkflowModal { logging_id } => Some(json!({
-                "logging_id": logging_id,
-            })),
-            TelemetryEvent::AISuggestedAgentModeWorkflowAdded { logging_id } => Some(json!({
-                "logging_id": logging_id,
-            })),
-            TelemetryEvent::AgentModeContinueConversationButtonClicked { conversation_id } => {
-                Some(json!({"conversation_id": conversation_id}))
-            }
+            // LOCAL FORK: these variants lost every payload field with the agent.
+            TelemetryEvent::ShowedSuggestedAgentModeWorkflowChip {} => None,
+            TelemetryEvent::ShowedSuggestedAgentModeWorkflowModal {} => None,
+            TelemetryEvent::AISuggestedAgentModeWorkflowAdded {} => None,
+            TelemetryEvent::AgentModeContinueConversationButtonClicked {} => None,
             TelemetryEvent::AgentModeRewindDialogOpened { entrypoint } => {
                 Some(json!({"entrypoint": entrypoint}))
             }
@@ -3003,13 +2996,8 @@ impl TelemetryEvent {
                 "transport_type": metadata.transport_type,
                 "mcp_server": metadata.mcp_server,
             })),
-            TelemetryEvent::MCPTemplateCreated {
-                source,
-                variables,
-                name,
-            } => Some(json!({
+            TelemetryEvent::MCPTemplateCreated { source, name } => Some(json!({
                 "source": source,
-                "variables": variables,
                 "name": name,
             })),
             TelemetryEvent::MCPTemplateInstalled { source } => Some(json!({
@@ -3023,12 +3011,7 @@ impl TelemetryEvent {
             } => Some(
                 json!({"transport_type": transport_type, "server_model": server_model, "error": error}),
             ),
-            TelemetryEvent::MCPToolCallAccepted {
-                server_output_id,
-                tool_call,
-                error,
-            } => Some(json!({
-                "server_output_id": server_output_id,
+            TelemetryEvent::MCPToolCallAccepted { tool_call, error } => Some(json!({
                 "tool_call": tool_call,
                 "error": error,
             })),
@@ -3068,12 +3051,11 @@ impl TelemetryEvent {
             TelemetryEvent::CodeSelectionAddedAsContext { destination } => Some(json!({
                 "destination": destination,
             })),
-            TelemetryEvent::AISuggestedRuleAdded { rule_id } => Some(json!({ "rule_id": rule_id })),
-            TelemetryEvent::AISuggestedRuleEdited { rule_id } => {
-                Some(json!({ "rule_id": rule_id }))
-            }
-            TelemetryEvent::AISuggestedRuleContentChanged { rule_id, is_saved } => {
-                Some(json!({ "rule_id": rule_id, "is_saved": is_saved }))
+            // LOCAL FORK: the agent rule id went with the agent.
+            TelemetryEvent::AISuggestedRuleAdded {} => None,
+            TelemetryEvent::AISuggestedRuleEdited {} => None,
+            TelemetryEvent::AISuggestedRuleContentChanged { is_saved } => {
+                Some(json!({ "is_saved": is_saved }))
             }
             TelemetryEvent::UsedWarpAIPreparedPrompt { prompt } => {
                 Some(json!({ "prompt": prompt }))
@@ -3232,23 +3214,19 @@ impl TelemetryEvent {
             } => Some(json!({"num_teammates": num_teammates, "team_uid": team_uid})),
             TelemetryEvent::AgentModeCreatedAIBlock {
                 client_exchange_id,
-                server_output_id,
                 was_autodetected_ai_query,
                 time_to_first_token_ms,
                 time_to_last_token_ms,
                 was_user_facing_error,
                 cancelled,
-                conversation_id,
                 is_udi_enabled,
             } => Some(json!({
                 "client_exchange_id": client_exchange_id,
-                "server_output_id": server_output_id,
                 "was_autodetected_ai_query": was_autodetected_ai_query,
                 "time_to_first_token_ms": time_to_first_token_ms,
                 "time_to_last_token_ms": time_to_last_token_ms,
                 "was_user_facing_error": was_user_facing_error,
                 "cancelled": cancelled,
-                "conversation_id": conversation_id,
                 "is_udi_enabled": is_udi_enabled,
             })),
             TelemetryEvent::TierLimitHit(event) => Some(json!(event)),
@@ -3306,11 +3284,10 @@ impl TelemetryEvent {
                 input,
                 buffer_length,
                 is_manually_changed,
-                new_input_type,
                 active_block_id,
                 is_udi_enabled,
             } => Some(
-                json!({"input": input, "buffer_length": buffer_length, "is_manually_changed": is_manually_changed, "new_input_type": new_input_type, "active_block_id": active_block_id, "is_udi_enabled": is_udi_enabled}),
+                json!({"input": input, "buffer_length": buffer_length, "is_manually_changed": is_manually_changed, "active_block_id": active_block_id, "is_udi_enabled": is_udi_enabled}),
             ),
             TelemetryEvent::AgentModePrediction {
                 was_suggestion_accepted,
@@ -3321,20 +3298,9 @@ impl TelemetryEvent {
                 history_prediction_likelihood,
                 total_history_count,
                 actual_next_command_run,
-                history_based_autosuggestion_state,
-                generate_ai_input_suggestions_request,
-                generate_ai_input_suggestions_response,
             } => {
-                let (history_command_prediction, history_command_prediction_likelihood) =
-                    if let Some(state) = history_based_autosuggestion_state {
-                        (
-                            Some(state.history_command_prediction.clone()),
-                            Some(state.history_command_prediction_likelihood),
-                        )
-                    } else {
-                        (None, None)
-                    };
-
+                // LOCAL FORK: the history-based autosuggestion state and the
+                // AI input suggestion request/response went with the agent.
                 Some(json!({
                     "was_suggestion_accepted": was_suggestion_accepted,
                     "request_duration_ms": request_duration_ms,
@@ -3344,10 +3310,6 @@ impl TelemetryEvent {
                     "history_prediction_likelihood": history_prediction_likelihood,
                     "total_history_count": total_history_count,
                     "actual_next_command_run": actual_next_command_run,
-                    "generate_ai_input_suggestions_request": generate_ai_input_suggestions_request,
-                    "generate_ai_input_suggestions_response": generate_ai_input_suggestions_response,
-                    "history_command_prediction": history_command_prediction,
-                    "history_command_prediction_likelihood": history_command_prediction_likelihood,
                 }))
             }
             TelemetryEvent::PromptSuggestionShown {
@@ -3365,13 +3327,11 @@ impl TelemetryEvent {
             })),
             TelemetryEvent::SuggestedCodeDiffBannerShown {
                 prompt_suggestion_id,
-                code_exchange_id,
                 block_id,
                 request_duration_ms,
                 server_request_token,
             } => Some(json!({
                 "prompt_suggestion_id": prompt_suggestion_id,
-                "code_exchange_id": code_exchange_id,
                 "block_id": block_id,
                 "request_duration_ms": request_duration_ms,
                 "server_request_token": server_request_token,
@@ -3418,44 +3378,25 @@ impl TelemetryEvent {
                 "view": view,
                 "interaction_source": interaction_source,
             })),
-            TelemetryEvent::ZeroStatePromptSuggestionUsed {
-                suggestion_type,
-                triggered_from,
-            } => Some(json!({"type": suggestion_type, "triggered_from": triggered_from})),
-            TelemetryEvent::UnitTestSuggestionShown { identifiers } => Some(json!({
-                "server_output_id": identifiers.server_output_id,
-                "exchange_id": identifiers.client_exchange_id,
-                "conversation_id": identifiers.server_conversation_id,
-            })),
+            // LOCAL FORK: the agent exchange/output/conversation identifiers these
+            // events joined on went with the agent.
+            TelemetryEvent::ZeroStatePromptSuggestionUsed {} => None,
+            TelemetryEvent::UnitTestSuggestionShown {} => None,
             TelemetryEvent::UnitTestSuggestionAccepted {
-                identifiers,
                 query,
                 interaction_source,
             } => Some(json!({
-                "server_output_id": identifiers.server_output_id,
-                "exchange_id": identifiers.client_exchange_id,
-                "conversation_id": identifiers.server_conversation_id,
                 "query": query,
                 "interaction_source": interaction_source,
             })),
-            TelemetryEvent::UnitTestSuggestionCancelled {
-                identifiers,
-                interaction_source,
-            } => Some(json!({
-                "server_output_id": identifiers.server_output_id,
-                "exchange_id": identifiers.client_exchange_id,
-                "conversation_id": identifiers.server_conversation_id,
+            TelemetryEvent::UnitTestSuggestionCancelled { interaction_source } => Some(json!({
                 "interaction_source": interaction_source,
             })),
-            TelemetryEvent::AgentModeCodeSuggestionEditedByUser { output_id } => {
-                Some(json!({"output_id": output_id}))
+            TelemetryEvent::AgentModeCodeSuggestionEditedByUser {} => None,
+            TelemetryEvent::AgentModeCodeFilesNavigated { source } => {
+                Some(json!({ "source": source }))
             }
-            TelemetryEvent::AgentModeCodeFilesNavigated { output_id, source } => {
-                Some(json!({"output_id": output_id, "source": source}))
-            }
-            TelemetryEvent::AgentModeCodeDiffHunksNavigated { output_id } => {
-                Some(json!({"output_id": output_id}))
-            }
+            TelemetryEvent::AgentModeCodeDiffHunksNavigated {} => None,
             TelemetryEvent::ResourceUsageStats { cpu, mem } => Some(json!({
                 "cpu": cpu,
                 "mem": {
@@ -3521,19 +3462,10 @@ impl TelemetryEvent {
             TelemetryEvent::AgentModeSurfacedCitations {
                 citations,
                 block_id,
-                conversation_id,
-                server_output_id,
-            } => Some(
-                json!({ "citations": citations, "block_id": block_id, "conversation_id": conversation_id, "server_output_id": server_output_id }),
-            ),
-            TelemetryEvent::AgentModeOpenedCitation {
-                citation,
-                block_id,
-                conversation_id,
-                server_output_id,
-            } => Some(
-                json!({ "citation": citation, "block_id": block_id, "conversation_id": conversation_id, "server_output_id": server_output_id }),
-            ),
+            } => Some(json!({ "citations": citations, "block_id": block_id })),
+            TelemetryEvent::AgentModeOpenedCitation { citation, block_id } => {
+                Some(json!({ "citation": citation, "block_id": block_id }))
+            }
             TelemetryEvent::OpenedSharingDialog(event) => Some(json!(event)),
             TelemetryEvent::ToggleGlobalAI { is_ai_enabled } => {
                 Some(json!({"is_ai_enabled": is_ai_enabled}))
@@ -3603,25 +3535,19 @@ impl TelemetryEvent {
                 "source": src,
                 "new": new,
             })),
-            TelemetryEvent::ChangedAgentModeAskUserQuestionPermission { src, new } => Some(json!({
+            TelemetryEvent::ChangedAgentModeAskUserQuestionPermission { src } => Some(json!({
                 "source": src,
-                "new": new,
             })),
             TelemetryEvent::FullEmbedCodebaseContextSearchSuccess {
-                action_id,
                 total_search_duration,
                 out_of_sync_delay,
             } => Some(json!({
-                "action_id": action_id,
                 "total_search_duration": total_search_duration,
                 "out_of_sync_delay": out_of_sync_delay
             })),
-            TelemetryEvent::FullEmbedCodebaseContextSearchFailed { action_id, error } => {
-                Some(json!({
-                    "action_id": action_id,
-                    "error": error
-                }))
-            }
+            TelemetryEvent::FullEmbedCodebaseContextSearchFailed { error } => Some(json!({
+                "error": error
+            })),
             TelemetryEvent::RepoOutlineConstructionSuccess {
                 total_parse_seconds,
                 file_count,
@@ -3632,9 +3558,8 @@ impl TelemetryEvent {
             TelemetryEvent::RepoOutlineConstructionFailed { error } => Some(json!({
                 "error": error,
             })),
-            TelemetryEvent::AutoexecutedAgentModeRequestedCommand { reason } => Some(json!({
-                "reason": reason,
-            })),
+            // LOCAL FORK: the autoexecution reason went with the agent.
+            TelemetryEvent::AutoexecutedAgentModeRequestedCommand {} => None,
             TelemetryEvent::AttachedImagesToAgentModeQuery {
                 num_images,
                 is_udi_enabled,
@@ -3642,15 +3567,8 @@ impl TelemetryEvent {
                 "num_images": num_images,
                 "is_udi_enabled": is_udi_enabled,
             })),
-            TelemetryEvent::AgentModeRatedResponse {
-                server_output_id,
-                conversation_id,
-                rating,
-            } => Some(json!({
-                "server_output_id": server_output_id,
-                "conversation_id": conversation_id,
-                "rating": rating,
-            })),
+            // LOCAL FORK: AgentModeRatedResponse was removed with the agent; there
+            // is no response to rate.
             TelemetryEvent::ExecutedWarpDrivePrompt {
                 id,
                 selection_source,
@@ -3658,32 +3576,22 @@ impl TelemetryEvent {
                 "id": id,
                 "selection_source": selection_source,
             })),
-            TelemetryEvent::FileExceededContextLimit { identifiers } => Some(json!({
-                "server_output_id": identifiers.server_output_id,
-                "exchange_id": identifiers.client_exchange_id,
-                "conversation_id": identifiers.server_conversation_id,
-            })),
+            // LOCAL FORK: the agent exchange/output/conversation identifiers went
+            // with the agent.
+            TelemetryEvent::FileExceededContextLimit {} => None,
             TelemetryEvent::AgentModeError {
-                identifiers,
                 error,
                 is_user_visible,
                 will_attempt_to_resume,
             } => Some(json!({
-                "server_output_id": identifiers.server_output_id,
-                "exchange_id": identifiers.client_exchange_id,
-                "conversation_id": identifiers.server_conversation_id,
                 "error": error,
                 "is_user_visible": is_user_visible,
                 "will_attempt_to_resume": will_attempt_to_resume,
             })),
             TelemetryEvent::AgentModeRequestRetrySucceeded {
-                identifiers,
                 retry_count,
                 original_error,
             } => Some(json!({
-                "server_output_id": identifiers.server_output_id,
-                "exchange_id": identifiers.client_exchange_id,
-                "conversation_id": identifiers.server_conversation_id,
                 "retry_count": retry_count,
                 "original_error": original_error,
             })),
@@ -3696,7 +3604,6 @@ impl TelemetryEvent {
                 command,
                 output,
                 error,
-                server_output_id,
             } => Some(json!({
                 "queries": queries,
                 "path": path,
@@ -3706,11 +3613,8 @@ impl TelemetryEvent {
                 "command": command,
                 "output": output,
                 "error": error,
-                "server_output_id": server_output_id,
             })),
-            TelemetryEvent::FileGlobToolFailed { server_output_id } => Some(json!({
-                "server_output_id": server_output_id,
-            })),
+            TelemetryEvent::FileGlobToolFailed {} => None,
             TelemetryEvent::ShellTerminatedPrematurely {
                 shell_type,
                 shell_path,
@@ -3728,17 +3632,10 @@ impl TelemetryEvent {
                 "long_os_version": long_os_version,
                 "exit_reason": exit_reason,
             })),
-            TelemetryEvent::SearchCodebaseRequested {
-                action_id,
-                server_output_id,
-                is_cross_repo,
-            } => Some(json!({
-                "action_id": action_id,
-                "server_output_id": server_output_id,
+            TelemetryEvent::SearchCodebaseRequested { is_cross_repo } => Some(json!({
                 "is_cross_repo": is_cross_repo,
             })),
-            TelemetryEvent::SearchCodebaseRepoUnavailable { action_id, error } => Some(json!({
-                "action_id": action_id,
+            TelemetryEvent::SearchCodebaseRepoUnavailable { error } => Some(json!({
                 "error": error,
             })),
             TelemetryEvent::InputUXModeChanged {
@@ -3748,38 +3645,32 @@ impl TelemetryEvent {
                 "is_udi_enabled": is_udi_enabled,
                 "origin": origin,
             })),
+            // LOCAL FORK: `current_input_mode` distinguished prompt from command
+            // input and went with the agent.
             TelemetryEvent::VoiceInputUsed {
                 action,
                 session_duration_ms,
                 is_udi_enabled,
-                current_input_mode,
             } => Some(json!({
                 "action": action,
                 "session_duration_ms": session_duration_ms,
                 "is_udi_enabled": is_udi_enabled,
-                "current_input_mode": current_input_mode,
             })),
             TelemetryEvent::AtMenuInteracted {
                 action,
                 query_length,
                 item_count,
                 is_udi_enabled,
-                current_input_mode,
             } => Some(json!({
                 "action": action,
                 "query_length": query_length,
                 "item_count": item_count,
                 "is_udi_enabled": is_udi_enabled,
-                "current_input_mode": current_input_mode,
             })),
             TelemetryEvent::TabCloseButtonPositionUpdated { position } => Some(json!({
                 "position": position,
             })),
-            TelemetryEvent::ExpandedCodeSuggestions { identifiers } => Some(json!({
-                "server_output_id": identifiers.server_output_id,
-                "exchange_id": identifiers.client_exchange_id,
-                "conversation_id": identifiers.server_conversation_id,
-            })),
+            TelemetryEvent::ExpandedCodeSuggestions {} => None,
             TelemetryEvent::BackgroundBlockStarted
             | TelemetryEvent::SessionCreation
             | TelemetryEvent::Login
@@ -4122,16 +4013,9 @@ impl TelemetryEvent {
                     "model_id": model_id,
                 }))
             }
-            TelemetryEvent::AIInputNotSent {
-                entrypoint,
-                inputs,
-                active_server_conversation_id,
-                active_client_conversation_id,
-            } => Some(json!({
-                "entrypoint": entrypoint,
+            // LOCAL FORK: the entrypoint and active conversation ids went with the agent.
+            TelemetryEvent::AIInputNotSent { inputs } => Some(json!({
                 "inputs": inputs,
-                "active_server_conversation_id": active_server_conversation_id,
-                "active_client_conversation_id": active_client_conversation_id,
             })),
             TelemetryEvent::OpenSlashMenu {
                 source,
@@ -4173,16 +4057,16 @@ impl TelemetryEvent {
             TelemetryEvent::AutoupdateMinidumpCleanupFailed { exit_code } => Some(json!({
                 "exit_code": exit_code,
             })),
+            // LOCAL FORK: `input_type_decision_source` recorded how the agent's
+            // input classifier decided, and went with the agent.
             TelemetryEvent::InputBufferSubmitted {
                 input_type,
                 is_locked,
-                input_type_decision_source,
                 was_lock_set_with_empty_buffer,
                 block_id,
             } => Some(json!({
                 "input_type": input_type,
                 "is_locked": is_locked,
-                "input_type_decision_source": input_type_decision_source,
                 "was_lock_set_with_empty_buffer": was_lock_set_with_empty_buffer,
                 "block_id": block_id,
             })),
@@ -4257,46 +4141,36 @@ impl TelemetryEvent {
             TelemetryEvent::ToggleShowAgentTips { is_enabled } => Some(json!({
                 "is_enabled": is_enabled,
             })),
+            // LOCAL FORK: the owning conversation id went with the agent; the CLI
+            // subagent events still identify their block.
             TelemetryEvent::CLISubagentControlStateChanged {
-                conversation_id,
                 block_id,
                 control_state,
             } => Some(json!({
-                "conversation_id": conversation_id,
                 "block_id": block_id,
                 "control_state": control_state,
             })),
             TelemetryEvent::CLISubagentResponsesToggled {
-                conversation_id,
                 block_id,
                 is_hidden,
             } => Some(json!({
-                "conversation_id": conversation_id,
                 "block_id": block_id,
                 "is_hidden": is_hidden,
             })),
-            TelemetryEvent::CLISubagentInputDismissed {
-                conversation_id,
-                block_id,
-            } => Some(json!({
-                "conversation_id": conversation_id,
+            TelemetryEvent::CLISubagentInputDismissed { block_id } => Some(json!({
                 "block_id": block_id,
             })),
             TelemetryEvent::CLISubagentActionExecuted {
-                conversation_id,
                 block_id,
                 is_autoexecuted,
             } => Some(json!({
-                "conversation_id": conversation_id,
                 "block_id": block_id,
                 "is_autoexecuted": is_autoexecuted,
             })),
             TelemetryEvent::CLISubagentActionRejected {
-                conversation_id,
                 block_id,
                 user_took_over,
             } => Some(json!({
-                "conversation_id": conversation_id,
                 "block_id": block_id,
                 "user_took_over": user_took_over,
             })),
@@ -4308,12 +4182,8 @@ impl TelemetryEvent {
             TelemetryEvent::DetectedIsolationPlatform { platform } => Some(json!({
                 "platform": platform,
             })),
-            TelemetryEvent::AgentExitedShellProcess {
-                command,
-                server_output_id,
-            } => Some(json!({
+            TelemetryEvent::AgentExitedShellProcess { command } => Some(json!({
                 "command": command,
-                "server_output_id": server_output_id,
             })),
             TelemetryEvent::CLIAgentToolbarVoiceInputUsed { cli_agent } => Some(json!({
                 "agent_name": cli_agent,
@@ -4324,16 +4194,12 @@ impl TelemetryEvent {
             TelemetryEvent::CLIAgentToolbarShown { cli_agent } => Some(json!({
                 "agent_name": cli_agent,
             })),
-            TelemetryEvent::CLIAgentRichInputOpened {
-                cli_agent,
-                entrypoint,
-            } => Some(json!({
+            // LOCAL FORK: the rich-input entrypoint and close reason went with the agent.
+            TelemetryEvent::CLIAgentRichInputOpened { cli_agent } => Some(json!({
                 "agent_name": cli_agent,
-                "entrypoint": entrypoint,
             })),
-            TelemetryEvent::CLIAgentRichInputClosed { cli_agent, reason } => Some(json!({
+            TelemetryEvent::CLIAgentRichInputClosed { cli_agent } => Some(json!({
                 "agent_name": cli_agent,
-                "reason": reason,
             })),
             TelemetryEvent::CLIAgentRichInputSubmitted {
                 cli_agent,
@@ -4407,25 +4273,19 @@ impl TelemetryEvent {
             TelemetryEvent::CloudAgentCapacityModalOpened => None,
             TelemetryEvent::CloudAgentCapacityModalDismissed => None,
             TelemetryEvent::CloudAgentCapacityModalUpgradeClicked => None,
+            // LOCAL FORK: the client conversation id and ambient agent task id went
+            // with the agent.
             TelemetryEvent::ComputerUseApproved {
-                client_conversation_id,
                 server_conversation_id,
                 is_autoexecuted,
-                ambient_agent_task_id,
             } => Some(json!({
-                "client_conversation_id": client_conversation_id,
                 "server_conversation_id": server_conversation_id,
                 "is_autoexecuted": is_autoexecuted,
-                "ambient_agent_task_id": ambient_agent_task_id.map(|id| id.to_string()),
             })),
             TelemetryEvent::ComputerUseCancelled {
-                client_conversation_id,
                 server_conversation_id,
-                ambient_agent_task_id,
             } => Some(json!({
-                "client_conversation_id": client_conversation_id,
                 "server_conversation_id": server_conversation_id,
-                "ambient_agent_task_id": ambient_agent_task_id.map(|id| id.to_string()),
             })),
             TelemetryEvent::LoginButtonClicked { source }
             | TelemetryEvent::LoginLaterButtonClicked { source }
@@ -4471,16 +4331,12 @@ impl TelemetryEvent {
             TelemetryEvent::InputBufferSubmitted { .. } => false,
             TelemetryEvent::AgentModePrediction {
                 actual_next_command_run,
-                history_based_autosuggestion_state,
-                generate_ai_input_suggestions_request,
-                generate_ai_input_suggestions_response,
                 ..
             } => {
-                // These fields can contain UGC, so if any are set, assume this event contains UGC.
+                // This field can contain UGC, so if it is set, assume this event contains UGC.
+                // LOCAL FORK: the other UGC-bearing fields (autosuggestion state and
+                // AI input suggestion request/response) went with the agent.
                 actual_next_command_run.is_some()
-                    || history_based_autosuggestion_state.is_some()
-                    || generate_ai_input_suggestions_request.is_some()
-                    || generate_ai_input_suggestions_response.is_some()
             }
             TelemetryEvent::AgentModeChangedInputType { input, .. } => input.is_some(),
             TelemetryEvent::UnitTestSuggestionAccepted { query, .. } => query.is_some(),
@@ -4791,7 +4647,6 @@ impl TelemetryEvent {
             | TelemetryEvent::SshRemoteServerChoiceDoNotAskAgainToggled { .. }
             | TelemetryEvent::SettingsImportInitiated
             | TelemetryEvent::AgentModeCreatedAIBlock { .. }
-            | TelemetryEvent::AgentModeRatedResponse { .. }
             | TelemetryEvent::StaticPromptSuggestionsBannerShown { .. }
             | TelemetryEvent::StaticPromptSuggestionAccepted { .. }
             | TelemetryEvent::AISuggestedRuleAdded { .. }
@@ -5343,9 +5198,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             | Self::AutoupdateMinidumpCleanupFailed { .. } => EnablementState::Always,
             Self::ToggleCodebaseContext => EnablementState::Always,
             Self::ToggleAutoIndexing => EnablementState::Always,
-            Self::AgentModeRatedResponse => {
-                EnablementState::Flag(FeatureFlag::GlobalAIAnalyticsBanner)
-            }
             Self::ExecutedWarpDrivePrompt => EnablementState::Flag(FeatureFlag::AgentModeWorkflows),
             Self::FileExceededContextLimit => EnablementState::Always,
             Self::AgentModeError => EnablementState::Always,
@@ -5870,7 +5722,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::ToggleCodebaseContext => "Toggle Agent Mode Codebase Context",
             Self::ToggleAutoIndexing => "Toggle Codebase Context Autoindexing",
             Self::AttachedImagesToAgentModeQuery => "AgentMode.AttachedImages",
-            Self::AgentModeRatedResponse => "AgentMode.RatedResponse",
             Self::ExecutedWarpDrivePrompt => "AgentMode.ExecutedWarpDrivePrompt",
             Self::FileExceededContextLimit => "AgentMode.Code.FileExceededContextLimit",
             Self::AgentModeError => "AgentMode.Error",
@@ -6356,7 +6207,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::SshRemoteServerChoiceDoNotAskAgainToggled => {
                 "Toggled the 'Don't ask me this again' checkbox on the SSH remote-server choice block"
             }
-            Self::AgentModeRatedResponse => "User rated an Agent Mode response",
             Self::WarpifyFooterShown => {
                 "Displayed the warpify footer for a detected subshell or SSH session"
             }

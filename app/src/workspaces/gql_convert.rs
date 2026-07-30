@@ -121,8 +121,8 @@ impl From<GqlTeamByoSettings> for TeamByoSettings {
 
 impl From<GqlByoFirstPartyKey> for ByoFirstPartyKey {
     fn from(gql_key: GqlByoFirstPartyKey) -> ByoFirstPartyKey {
+        // LOCAL FORK: the model provider field went with the agent.
         Self {
-            provider: gql_key.provider.into(),
             credential_uid: gql_key.credential_uid.into_inner(),
         }
     }

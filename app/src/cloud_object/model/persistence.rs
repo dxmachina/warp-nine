@@ -513,26 +513,18 @@ impl CloudModel {
             ServerCloudObject::WorkflowEnum(workflow_enum) => {
                 self.upsert_from_server_object(workflow_enum, ctx);
             }
-            ServerCloudObject::AIFact(aifact) => {
-                self.upsert_from_server_object(aifact, ctx);
-            }
-            ServerCloudObject::MCPServer(mcp_server) => {
-                self.upsert_from_server_object(mcp_server, ctx);
-            }
-            ServerCloudObject::AIExecutionProfile(ai_execution_profile) => {
-                self.upsert_from_server_object(ai_execution_profile, ctx);
-            }
-            ServerCloudObject::TemplatableMCPServer(templatable_mcp_server) => {
-                self.upsert_from_server_object(templatable_mcp_server, ctx);
-            }
-            ServerCloudObject::AmbientAgentEnvironment(ambient_agent_environment) => {
-                self.upsert_from_server_object(ambient_agent_environment, ctx);
-            }
-            ServerCloudObject::ScheduledAmbientAgent(scheduled_ambient_agent) => {
-                self.upsert_from_server_object(scheduled_ambient_agent, ctx);
-            }
-            ServerCloudObject::CloudAgentConfig(cloud_agent_config) => {
-                self.upsert_from_server_object(cloud_agent_config, ctx);
+            // LOCAL FORK: these are all agent objects. Their models (and therefore
+            // their `StringModel` impls) went with the agent, so there is nothing to
+            // upsert them into. The variants are listed explicitly rather than behind
+            // a wildcard so that a new object type is still a compile error here.
+            ServerCloudObject::AIFact(_)
+            | ServerCloudObject::MCPServer(_)
+            | ServerCloudObject::AIExecutionProfile(_)
+            | ServerCloudObject::TemplatableMCPServer(_)
+            | ServerCloudObject::AmbientAgentEnvironment(_)
+            | ServerCloudObject::ScheduledAmbientAgent(_)
+            | ServerCloudObject::CloudAgentConfig(_) => {
+                log::debug!("Ignoring agent cloud object from server: unsupported in this build.");
             }
         }
     }

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use byte_unit::Byte;
 use parking_lot::FairMutex;
-use warp_core::features::FeatureFlag;
 use warpui::elements::{
     Container, Flex, MainAxisSize, MouseStateHandle, ParentElement, Shrinkable, Text,
 };
@@ -18,7 +17,6 @@ use warpui::{AppContext, Element, Entity, SingletonEntity, TypedActionView, View
 use super::style::{self, BUTTON_GAP, MODAL_MARGIN};
 use crate::appearance::Appearance;
 use crate::terminal::TerminalModel;
-use crate::terminal::shared_session::ai_agent::encode_agent_response_event;
 use crate::terminal::shared_session::role_change_modal::TEXT_FONT_SIZE;
 use crate::terminal::shared_session::{
     SharedSessionActionSource, SharedSessionScrollbackType, max_session_size,
@@ -78,7 +76,7 @@ impl Body {
         &mut self,
         open_source: SharedSessionActionSource,
         model: Arc<FairMutex<TerminalModel>>,
-        terminal_view_id: warpui::EntityId,
+        _terminal_view_id: warpui::EntityId,
         ctx: &mut ViewContext<Self>,
     ) {
         let model = model.lock();
@@ -99,14 +97,9 @@ impl Body {
         // LOCAL FORK: there is no agent conversation history to share.
         self.has_agent_conversations = false;
 
-        // Calculate the size of agent conversation response events that will be sent during initialization.
-        // Only include this if the feature flag is enabled, since the events won't be sent otherwise.
-        let agent_conversations_size =
-            if FeatureFlag::AgentSharedSessions.is_enabled() && self.has_agent_conversations {
-                Self::calculate_agent_conversations_size(terminal_view_id, ctx)
-            } else {
-                Byte::from_u64(0)
-            };
+        // LOCAL FORK: agent conversation response events are no longer sent during
+        // initialization, so they never contribute to the shared session size.
+        let agent_conversations_size = Byte::from_u64(0);
 
         let scrollback_from_active_block = SharedSessionScrollbackType::None.to_scrollback(&model);
         let mut is_scrollback_from_active_block_disabled = scrollback_from_active_block

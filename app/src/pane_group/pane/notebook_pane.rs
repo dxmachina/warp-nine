@@ -190,7 +190,6 @@ pub(super) fn subscribe_to_link_model(
                 Some(pane_id),
                 None, /* chosen_shell */
                 Some(path.clone()),
-                None,
                 DefaultSessionModeBehavior::Apply,
                 ctx,
             );
@@ -241,11 +240,8 @@ fn handle_notebook_event(
             cloud_object_type_and_id: *cloud_object_type_and_id,
             invitee_email: invitee_email.clone(),
         }),
-        NotebookEvent::AttachPlanAsContext(ai_document_id) => {
-            ctx.emit(crate::pane_group::Event::AttachPlanAsContext {
-                ai_document_id: *ai_document_id,
-            })
-        }
+        // LOCAL FORK: `NotebookEvent::AttachPlanAsContext` attached a plan to an agent
+        // conversation; removed with the agent.
     }
 }
 

@@ -850,31 +850,35 @@ pub struct AiAutonomySettings {
 }
 
 impl AiAutonomySettings {
+    /// LOCAL FORK: the five per-capability toggles (`apply_code_diffs_setting`,
+    /// `read_files_setting`, `execute_commands_setting`, `write_to_pty_setting` and
+    /// `computer_use_setting`) went with the agent. Only the three allow/deny lists are
+    /// still carried on the workspace, so an override can only come from one of those.
+    /// A workspace that only ever set the removed toggles now reads as "no overrides" and
+    /// falls back to its billing-tier policy.
     pub fn has_any_overrides(&self) -> bool {
-        self.apply_code_diffs_setting.is_some()
-            || self.read_files_setting.is_some()
-            || self.read_files_allowlist.is_some()
-            || self.execute_commands_setting.is_some()
+        self.read_files_allowlist.is_some()
             || self.execute_commands_allowlist.is_some()
             || self.execute_commands_denylist.is_some()
-            || self.write_to_pty_setting.is_some()
-            || self.computer_use_setting.is_some()
     }
 
+    /// LOCAL FORK: `apply_code_diffs_setting` went with the agent.
     pub fn has_override_for_code_diffs(&self) -> bool {
-        self.apply_code_diffs_setting.is_some()
+        false
     }
 
+    /// LOCAL FORK: `read_files_setting` went with the agent.
     pub fn has_override_for_read_files(&self) -> bool {
-        self.read_files_setting.is_some()
+        false
     }
 
     pub fn has_override_for_read_files_allowlist(&self) -> bool {
         self.read_files_allowlist.is_some()
     }
 
+    /// LOCAL FORK: `execute_commands_setting` went with the agent.
     pub fn has_override_for_execute_commands(&self) -> bool {
-        self.execute_commands_setting.is_some()
+        false
     }
 
     pub fn has_override_for_execute_commands_allowlist(&self) -> bool {
@@ -885,12 +889,14 @@ impl AiAutonomySettings {
         self.execute_commands_denylist.is_some()
     }
 
+    /// LOCAL FORK: `write_to_pty_setting` went with the agent.
     pub fn has_override_for_write_to_pty(&self) -> bool {
-        self.write_to_pty_setting.is_some()
+        false
     }
 
+    /// LOCAL FORK: `computer_use_setting` went with the agent.
     pub fn has_override_for_computer_use(&self) -> bool {
-        self.computer_use_setting.is_some()
+        false
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

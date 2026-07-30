@@ -26,7 +26,6 @@ use super::adapter::{Adapter, Kind, Participant};
 use super::sharer::Sharer;
 use super::sharer::inactivity_modal::InactivityModalEvent;
 use super::viewer::Viewer;
-use super::{ConversationEndedTombstoneEvent, ConversationEndedTombstoneView};
 use crate::auth::UserUid;
 use crate::context_chips::ContextChipKind;
 use crate::drive::sharing::ShareableObject;
@@ -112,26 +111,14 @@ impl TerminalView {
 
     // LOCAL FORK: fn cloud_conversation_continuation_ui_state removed with the agent.
 
+    /// LOCAL FORK: both signals this consulted — the ambient agent view model and the
+    /// cloud task backing the details panel — went with the agent, so cloud followups are
+    /// never blocked.
     pub(in crate::terminal::view) fn blocks_cloud_followups_for_ambient_agent_session_from_model(
         &self,
-        model: &TerminalModel,
-        ctx: &AppContext,
+        _model: &TerminalModel,
+        _ctx: &AppContext,
     ) -> bool {
-        if self
-            .ambient_agent_view_model
-            .as_ref()
-            .is_some_and(|model| model.as_ref(ctx).blocks_cloud_followups())
-        {
-            return true;
-        }
-
-        let Some(task_id) = self.ambient_agent_task_id_for_details_panel_from_model(model, ctx)
-        else {
-            return false;
-        };
-
-        // LOCAL FORK: cloud task data went away with the agent.
-        let _ = task_id;
         false
     }
 
@@ -627,8 +614,8 @@ impl TerminalView {
             input.on_session_share_joined(input_replica_id, presence_manager, ctx);
         });
 
-        // Mark this terminal as a viewer for chips and AI context menu once on join
-        let is_ambient = self.is_ambient_agent_session(ctx);
+        // Mark this terminal as a viewer for chips once on join.
+        // LOCAL FORK: the editor's AI context menu went with the agent.
         self.input().update(ctx, |input, ctx| {
             input
                 .prompt_render_helper
@@ -636,15 +623,6 @@ impl TerminalView {
                 .update(ctx, |prompt_display, ctx| {
                     prompt_display.update_shared_session_viewer_status(true, ctx);
                 });
-
-            input.editor().update(ctx, |editor, ctx| {
-                if let Some(ai_context_menu) = editor.ai_context_menu() {
-                    ai_context_menu.update(ctx, |menu, ctx| {
-                        menu.set_is_shared_session_viewer(true, ctx);
-                        menu.set_is_in_ambient_agent(is_ambient, ctx);
-                    });
-                }
-            });
         });
 
         // If viewer joined as an executor, make sure the view state is updated.
@@ -681,18 +659,8 @@ impl TerminalView {
         self.update_pane_configuration(ctx);
 
         self.update_shared_session_pane_header(ctx);
-        // Shared ambient agent sessions should auto-open the details panel once, except for
-        // local-to-cloud handoff panes where the user stays in the moved conversation by default.
-        let is_local_to_cloud_handoff = self
-            .ambient_agent_view_model
-            .as_ref()
-            .is_some_and(|model| model.as_ref(ctx).is_local_to_cloud_handoff());
-        if FeatureFlag::CloudMode.is_enabled()
-            && matches!(source_type, SessionSourceType::AmbientAgent { .. })
-            && !is_local_to_cloud_handoff
-        {
-            self.maybe_auto_open_conversation_details_panel(ctx);
-        }
+        // LOCAL FORK: shared ambient agent sessions used to auto-open the conversation
+        // details panel here; the panel went with the agent.
 
         send_telemetry_from_ctx!(
             TelemetryEvent::JoinedSharedSession {
@@ -710,17 +678,9 @@ impl TerminalView {
     /// Clear the presence manager and handle any UI necessary on shared session end.
     /// Applies to both sharer and viewer when the session sharing ends.
     pub fn on_session_share_ended(&mut self, ctx: &mut ViewContext<Self>) {
-        // LOCAL FORK: the cloud handoff continuation state went away with the agent.
-        let should_insert_legacy_tombstone = {
-            let model = self.model.lock();
-            !FeatureFlag::CloudModeSetupV2.is_enabled()
-                && model.is_shared_ambient_agent_session()
-                && self.conversation_ended_tombstone_view_id.is_none()
-                && !model.is_receiving_agent_conversation_replay()
-        };
-        if should_insert_legacy_tombstone {
-            self.insert_conversation_ended_tombstone_with_cta(None, ctx);
-        }
+        // LOCAL FORK: the "conversation ended" tombstone went away with the agent. It
+        // was only ever inserted for an ambient agent session, so a shared session of a
+        // plain terminal reaches this point with nothing to do.
         // Ensure inactivity timer is aborted for sharer
         if let Some(sharer) = self.shared_session_sharer_mut()
             && let Some(old_abort_handle) = sharer.inactivity_timer_abort_handle.take()
@@ -756,9 +716,9 @@ impl TerminalView {
             });
         });
 
-        if self.pending_cloud_followup_task_id.is_none()
-            && self.model.lock().shared_session_status().is_viewer()
-        {
+        // LOCAL FORK: a pending cloud followup task used to keep the input editable here;
+        // cloud followups went with the agent.
+        if self.model.lock().shared_session_status().is_viewer() {
             // When the session is ended, the input should be uneditable iff this is a viewer.
             self.input().update(ctx, |input, ctx| {
                 input.editor().update(ctx, |editor, ctx| {
@@ -775,9 +735,10 @@ impl TerminalView {
         });
     }
 
-    pub fn on_ambient_agent_execution_ended(&mut self, ctx: &mut ViewContext<Self>) {
-        self.handle_non_running_ambient_agent_task(ctx);
-    }
+    /// LOCAL FORK: everything this drove — the conversation-ended tombstone, cloud
+    /// followup input, the details panel — went with the agent. Kept as a no-op because
+    /// the shared-session viewer terminal manager still signals it.
+    pub fn on_ambient_agent_execution_ended(&mut self, _ctx: &mut ViewContext<Self>) {}
 
 
     // LOCAL FORK: fn start_cloud_followup_from_tombstone removed with the agent.
@@ -1336,13 +1297,9 @@ impl TerminalView {
                 let role = &role;
                 editor.set_interaction_state(role.into(), ctx);
             });
-            // Role gates whether prompts can be sent, so the queued prompts panel's
-            // send-now buttons and enter hint must re-sync.
-            if let Some(panel) = input.queued_prompts_panel().cloned() {
-                panel.update(ctx, |panel, ctx| {
-                    panel.set_can_send_prompt(role.can_execute(), ctx);
-                });
-            }
+            // LOCAL FORK: the queued prompts panel was agent surface and went with
+            // the agent, so there is no send-now state left to re-sync on a role
+            // change. Editor interaction state above still tracks the role.
         });
     }
 
@@ -1593,20 +1550,8 @@ impl TerminalView {
 
 
 
-    pub(in crate::terminal::view) fn remove_conversation_ended_tombstone(
-        &mut self,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let Some(view_id) = self.conversation_ended_tombstone_view_id.take() else {
-            return;
-        };
-        self.model
-            .lock()
-            .block_list_mut()
-            .remove_rich_content(view_id);
-        self.rich_content_views.retain(|rc| rc.view_id() != view_id);
-        ctx.notify();
-    }
+    // LOCAL FORK: fn remove_conversation_ended_tombstone removed with the agent. Its
+    // only callers inserted the tombstone in the first place.
 
     /// Updates shared session reconnection banner, participant avatars and
     /// input interaction state depending on the reconnection state.

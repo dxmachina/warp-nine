@@ -108,6 +108,7 @@ impl PromptDisplay {
             session_context,
             current_repo_path,
             model_events,
+            pane_is_focused: true,
             is_shared_session_viewer,
         }
     }
@@ -218,14 +219,10 @@ impl PromptDisplay {
                     ctx.emit(PromptDisplayEvent::TryExecuteCommand(cmd.clone()));
                     ctx.notify();
                 }
-                PromptDisplayChipEvent::OpenAIDocument {
-                    document_id,
-                    document_version,
-                } => {
-                    ctx.emit(PromptDisplayEvent::OpenAIDocument {
-                        document_id: *document_id,
-                        document_version: *document_version,
-                    });
+                // LOCAL FORK: the document id and version named agent types and went
+                // with the agent; the event is forwarded without them.
+                PromptDisplayChipEvent::OpenAIDocument {} => {
+                    ctx.emit(PromptDisplayEvent::OpenAIDocument {});
                     ctx.notify();
                 }
             });

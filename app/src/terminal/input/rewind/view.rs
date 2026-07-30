@@ -14,9 +14,8 @@ use crate::terminal::input::suggestions_mode_model::InputSuggestionsModeModel;
 #[derive(Debug, Clone)]
 pub enum RewindMenuEvent {
     /// User accepted a rewind point (hit enter).
-    /// If exchange_id is None, user selected "Current" (dismiss without rewinding).
-    AcceptedRewindPoint {
-    },
+    /// LOCAL FORK: the accepted exchange id went with the agent.
+    AcceptedRewindPoint {},
     /// User dismissed the menu (escape or click).
     Dismissed,
 }
@@ -54,10 +53,10 @@ impl RewindMenuView {
         });
 
         ctx.subscribe_to_view(&menu_view, |_, _, event, ctx| match event {
-            InlineMenuEvent::AcceptedItem { item, .. } => {
-                ctx.emit(RewindMenuEvent::AcceptedRewindPoint {
-                    exchange_id: item.exchange_id,
-                });
+            // LOCAL FORK: rewind points were agent exchanges, so `SelectRewindPoint`
+            // no longer carries an exchange id to forward.
+            InlineMenuEvent::AcceptedItem { .. } => {
+                ctx.emit(RewindMenuEvent::AcceptedRewindPoint {});
             }
             InlineMenuEvent::SelectedItem { .. } => {
                 // Could emit a preview event if needed

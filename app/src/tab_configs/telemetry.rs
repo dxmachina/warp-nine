@@ -31,7 +31,7 @@ pub enum WorktreeBranchNamingMode {
 pub enum GuidedModalSessionType {
     Terminal,
     Oz,
-    CliAgent,
+    // LOCAL FORK: `CliAgent` removed with the agent.
 }
 
 impl From<&SessionType> for GuidedModalSessionType {
@@ -39,7 +39,6 @@ impl From<&SessionType> for GuidedModalSessionType {
         match value {
             SessionType::Terminal => Self::Terminal,
             SessionType::Oz => Self::Oz,
-            SessionType::CliAgent(_) => Self::CliAgent,
         }
     }
 }

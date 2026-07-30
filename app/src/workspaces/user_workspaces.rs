@@ -742,10 +742,10 @@ impl UserWorkspaces {
     pub fn is_ai_autonomy_allowed(&self) -> bool {
         self.current_workspace().is_none_or(|workspace| {
             let settings = &workspace.settings.ai_autonomy_settings;
-            let all_settings_none = settings.apply_code_diffs_setting.is_none()
-                && settings.read_files_setting.is_none()
-                && settings.read_files_allowlist.is_none()
-                && settings.execute_commands_setting.is_none()
+            // LOCAL FORK: the per-capability autonomy settings (apply code diffs,
+            // read files, execute commands) went with the agent; only the
+            // allow/deny lists remain on `AiAutonomySettings`.
+            let all_settings_none = settings.read_files_allowlist.is_none()
                 && settings.execute_commands_allowlist.is_none()
                 && settings.execute_commands_denylist.is_none();
 

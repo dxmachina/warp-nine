@@ -14,10 +14,9 @@ impl TerminalView {
     }
 
     /// Removes the pending user query block, if one exists. No-op if none is present.
-    /// Also cancels the queued prompt callback so the prompt is not sent.
-    /// (Safe to call from within the callback itself — the caller `.take()`s it first.)
+    ///
+    /// LOCAL FORK: the queued prompt callback this used to cancel went with the agent.
     pub(super) fn remove_pending_user_query_block(&mut self, ctx: &mut ViewContext<Self>) {
-        self.queued_prompt_callback = None;
         self.pending_user_query_kind = None;
         if let Some(view_id) = self.pending_user_query_view_id.take() {
             self.model

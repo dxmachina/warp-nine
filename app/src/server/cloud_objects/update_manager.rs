@@ -13,7 +13,6 @@ use futures::stream::AbortHandle;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
-use warp_core::features::FeatureFlag;
 use warp_errors::report_error;
 use warp_graphql::mcp_gallery_template::MCPGalleryTemplate;
 use warp_graphql::object_permissions::AccessLevel;
@@ -42,10 +41,8 @@ use crate::cloud_object::{
     CloudObjectSyncStatus, CreateCloudObjectResult, CreateObjectRequest, GenericCloudObject,
     GenericServerObject, GenericStringObjectFormat, JsonObjectType, NumInFlightRequests,
     ObjectDeleteResult, ObjectIdType, ObjectMetadataUpdateResult, ObjectPermissionsUpdateData,
-    ObjectType, Owner, Revision, RevisionAndLastEditor, ServerAIExecutionProfile, ServerAIFact,
-    ServerAmbientAgentEnvironment, ServerCloudAgentConfig, ServerCloudObject,
-    ServerEnvVarCollection, ServerMCPServer, ServerMetadata, ServerPermissions, ServerPreference,
-    ServerScheduledAmbientAgent, ServerTemplatableMCPServer, ServerWorkflowEnum, Space,
+    ObjectType, Owner, Revision, RevisionAndLastEditor, ServerCloudObject, ServerEnvVarCollection,
+    ServerMetadata, ServerPermissions, ServerPreference, ServerWorkflowEnum, Space,
     UpdateCloudObjectResult,
 };
 use crate::drive::CloudObjectTypeAndId;
@@ -893,110 +890,25 @@ impl UpdateManager {
                         ctx,
                     ));
                 }
-                GenericStringObjectFormat::Json(JsonObjectType::AIFact) => {
-                    let typed_objects = objects
-                        .iter()
-                        .filter_map(|obj| {
-                            let server_obj: Option<&ServerAIFact> = obj.into();
-                            server_obj.cloned()
-                        })
-                        .collect::<Vec<_>>();
-                    sqlite_events.push(Self::handle_object_updates(
-                        typed_objects,
-                        force_refresh,
-                        !is_first_load,
-                        ctx,
-                    ));
-                }
-                GenericStringObjectFormat::Json(JsonObjectType::MCPServer) => {
-                    let typed_objects = objects
-                        .iter()
-                        .filter_map(|obj| {
-                            let server_obj: Option<&ServerMCPServer> = obj.into();
-                            server_obj.cloned()
-                        })
-                        .collect::<Vec<_>>();
-                    sqlite_events.push(Self::handle_object_updates(
-                        typed_objects,
-                        force_refresh,
-                        !is_first_load,
-                        ctx,
-                    ));
-                }
-                GenericStringObjectFormat::Json(JsonObjectType::AIExecutionProfile) => {
-                    let typed_objects = objects
-                        .iter()
-                        .filter_map(|obj| {
-                            let server_obj: Option<&ServerAIExecutionProfile> = obj.into();
-                            server_obj.cloned()
-                        })
-                        .collect::<Vec<_>>();
-                    sqlite_events.push(Self::handle_object_updates(
-                        typed_objects,
-                        force_refresh,
-                        !is_first_load,
-                        ctx,
-                    ));
-                }
-                GenericStringObjectFormat::Json(JsonObjectType::TemplatableMCPServer) => {
-                    let typed_objects = objects
-                        .iter()
-                        .filter_map(|obj| {
-                            let server_obj: Option<&ServerTemplatableMCPServer> = obj.into();
-                            server_obj.cloned()
-                        })
-                        .collect::<Vec<_>>();
-                    sqlite_events.push(Self::handle_object_updates(
-                        typed_objects,
-                        force_refresh,
-                        !is_first_load,
-                        ctx,
-                    ));
-                }
-                GenericStringObjectFormat::Json(JsonObjectType::CloudEnvironment) => {
-                    let typed_objects = objects
-                        .iter()
-                        .filter_map(|obj| {
-                            let server_obj: Option<&ServerAmbientAgentEnvironment> = obj.into();
-                            server_obj.cloned()
-                        })
-                        .collect::<Vec<_>>();
-                    sqlite_events.push(Self::handle_object_updates(
-                        typed_objects,
-                        force_refresh,
-                        !is_first_load,
-                        ctx,
-                    ));
-                }
-                GenericStringObjectFormat::Json(JsonObjectType::ScheduledAmbientAgent) => {
-                    let typed_objects = objects
-                        .iter()
-                        .filter_map(|obj| {
-                            let server_obj: Option<&ServerScheduledAmbientAgent> = obj.into();
-                            server_obj.cloned()
-                        })
-                        .collect::<Vec<_>>();
-                    sqlite_events.push(Self::handle_object_updates(
-                        typed_objects,
-                        force_refresh,
-                        !is_first_load,
-                        ctx,
-                    ));
-                }
-                GenericStringObjectFormat::Json(JsonObjectType::CloudAgentConfig) => {
-                    let typed_objects = objects
-                        .iter()
-                        .filter_map(|obj| {
-                            let server_obj: Option<&ServerCloudAgentConfig> = obj.into();
-                            server_obj.cloned()
-                        })
-                        .collect::<Vec<_>>();
-                    sqlite_events.push(Self::handle_object_updates(
-                        typed_objects,
-                        force_refresh,
-                        !is_first_load,
-                        ctx,
-                    ));
+                // LOCAL FORK: every one of these formats is an agent object whose
+                // model (and therefore its `StringModel` impl) went with the agent.
+                // The variants are listed explicitly rather than behind a wildcard so
+                // that a newly added object type is still a compile error here. The
+                // server may still send them to an older account; we drop them instead
+                // of storing objects we can no longer interpret.
+                GenericStringObjectFormat::Json(
+                    JsonObjectType::AIFact
+                    | JsonObjectType::MCPServer
+                    | JsonObjectType::AIExecutionProfile
+                    | JsonObjectType::TemplatableMCPServer
+                    | JsonObjectType::CloudEnvironment
+                    | JsonObjectType::ScheduledAmbientAgent
+                    | JsonObjectType::CloudAgentConfig,
+                ) => {
+                    log::debug!(
+                        "Skipping {} agent cloud object(s) of format {format:?}: unsupported in this build.",
+                        objects.len()
+                    );
                 }
             }
         }
@@ -1253,11 +1165,9 @@ impl UpdateManager {
             ObjectUpdateMessage::TeamMembershipsChanged => {
                 self.handle_team_memberships_changed(ctx);
             }
-            ObjectUpdateMessage::AmbientTaskUpdated { task_id, timestamp } => {
-                if FeatureFlag::AmbientAgentsRTC.is_enabled() {
-                    self.handle_ambient_task_changed(task_id, timestamp, ctx);
-                }
-            }
+            // LOCAL FORK: ambient tasks were an agent feature; there is no ambient
+            // task model left to update, so the notification is dropped.
+            ObjectUpdateMessage::AmbientTaskUpdated { .. } => {}
         }
     }
 
@@ -1810,30 +1720,17 @@ impl UpdateManager {
                     }]);
                 }
             }
-            ServerCloudObject::AIExecutionProfile(server_profile) => {
-                // Update in-memory model with the fact that it was rejected. We don't update sqlite
-                // since we don't want to wipe away the user's content.
-                CloudModel::handle(ctx).update(ctx, |cloud_model, ctx| {
-                    if let Some(profile) = cloud_model.get_object_of_type_mut(&server_profile.id) {
-                        profile.set_conflicting_object(Arc::new(server_profile.clone()));
-
-                        // Setting the in-memory model state of the object to in conflict since all further sync
-                        // will be rejected until the conflict is cleared. Note that we don't want to clear the pending status
-                        // in the database as on the next app restart we want to fetch the up-to-date revision of the object
-                        // for refresh in initial load.
-                        profile
-                            .set_pending_content_changes_status(CloudObjectSyncStatus::InConflict);
-
-                        ctx.notify();
-                    }
-                });
-            }
             // folders and preferences are last-write-wins, no need to do anything here
             // TODO: Figure out how to deal with conflicts for AI rules INT-759
+            //
+            // LOCAL FORK: `AIExecutionProfile` used to record the server version as a
+            // conflict on the in-memory profile. That model went with the agent, so it
+            // joins the other agent object types that are simply ignored here.
             ServerCloudObject::Folder(_)
             | ServerCloudObject::Preference(_)
             | ServerCloudObject::AIFact(_)
             | ServerCloudObject::MCPServer(_)
+            | ServerCloudObject::AIExecutionProfile(_)
             | ServerCloudObject::TemplatableMCPServer(_)
             | ServerCloudObject::AmbientAgentEnvironment(_)
             | ServerCloudObject::ScheduledAmbientAgent(_)

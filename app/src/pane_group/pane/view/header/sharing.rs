@@ -184,10 +184,10 @@ impl<P: BackingView> PaneHeader<P> {
             return;
         }
 
-        let is_unsharable_conversation = self
-            .sharing_dialog()
-            .as_ref(app)
-            .is_unsharable_conversation(app);
+        // LOCAL FORK: `SharingDialog::is_unsharable_conversation` reported agent
+        // conversations that were not yet synced. There are no conversations left, so
+        // nothing shown in a pane header is ever unsharable for that reason.
+        let is_unsharable_conversation = false;
         let editability = self.sharing_dialog().as_ref(app).editability(app);
 
         let (primary_button_icon, primary_button_active, primary_tooltip_text) =

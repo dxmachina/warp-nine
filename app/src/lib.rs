@@ -141,6 +141,7 @@ use ::ai::index::full_source_code_embedding::SyncTask;
 use ::ai::index::full_source_code_embedding::manager::{
     CodebaseIndexManager, CodebaseIndexManagerConfig,
 };
+use ::ai::index::full_source_code_embedding::store_client::MockStoreClient;
 use ::ai::project_context::model::ProjectContextModel;
 use auth::auth_manager::AuthManager;
 use auth::auth_state::{AuthState, AuthStateProvider};
@@ -1491,7 +1492,6 @@ pub(crate) fn initialize_app(
         time_of_next_force_object_refresh,
         object_actions,
         experiments,
-        ai_queries,
         nld_prompts,
         persisted_workspaces,
         workspace_language_servers,
@@ -1499,8 +1499,9 @@ pub(crate) fn initialize_app(
         persisted_projects,
         persisted_project_rules,
         persisted_ignored_suggestions,
-        persisted_mcp_server_installations,
         mcp_servers_to_restore,
+        // LOCAL FORK: `ai_queries` and `mcp_server_installations` were dropped from
+        // `PersistedData` with the agent.
     ) = sqlite_data
         .map(|sqlite_data| {
             (
@@ -1513,7 +1514,6 @@ pub(crate) fn initialize_app(
                 sqlite_data.time_of_next_force_object_refresh,
                 sqlite_data.object_actions,
                 sqlite_data.experiments,
-                sqlite_data.ai_queries,
                 sqlite_data.nld_prompts,
                 sqlite_data.codebase_indices,
                 sqlite_data.workspace_language_servers,
@@ -1521,14 +1521,11 @@ pub(crate) fn initialize_app(
                 sqlite_data.projects,
                 sqlite_data.project_rules,
                 sqlite_data.ignored_suggestions,
-                sqlite_data.mcp_server_installations,
                 sqlite_data.mcp_servers_to_restore,
             )
         })
         .unwrap_or_else(|| {
             (
-                Default::default(),
-                Default::default(),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -1577,18 +1574,9 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(|ctx| {
         #[cfg_attr(target_family = "wasm", allow(unused_mut))]
         let mut manager = ::ai::api_keys::ApiKeyManager::new(ctx);
-        #[cfg(not(target_family = "wasm"))]
-        if matches!(launch_mode, LaunchMode::Tui { .. }) {
-            manager.subscribe_to_tui_api_key_changes(ctx);
-        }
-        #[cfg(not(target_family = "wasm"))]
-        manager.subscribe_to_settings_changes(ctx);
-        // Gemini Enterprise (GEAP) credential refresh triggers: workspace
-        // settings saves / team changes and the member's enablement toggle.
-        #[cfg(not(target_family = "wasm"))]
-        if FeatureFlag::GeminiEnterprise.is_enabled() {
-            manager.subscribe_to_geap_settings_changes(ctx);
-        }
+        // LOCAL FORK: the TUI api-key watcher, the AWS credential refresher and the
+        // Gemini Enterprise credential refresher were extension traits on
+        // `ApiKeyManager` defined under `app/src/ai/` and removed with the agent.
         // The Grok subscription refresher (`ai::grok_subscription`) has no
         // visibility into workspace policy, so wire the BYO API key policy in
         // here. The initial value resumes proactive refresh of any tokens
@@ -2179,12 +2167,16 @@ pub(crate) fn initialize_app(
 
         // LOCAL FORK: the per-tier limits came from the removed request usage
         // model. Fall back to the free-tier values the server used to hand out.
+        // The remote embedding store was `impl StoreClient for ServerApi` in
+        // `server/server_api/ai.rs`, which went with the agent; the manager is
+        // still registered for its consumers but backed by a no-op store client,
+        // so nothing is embedded or retrieved.
         let mut codebase_index_config = CodebaseIndexManagerConfig::new(
             indices_to_restore,
             Some(3),
             5000,
             100,
-            server_api_provider.as_ref(ctx).get(),
+            Arc::new(MockStoreClient),
             launch_mode.supports_indexing(),
         );
         if matches!(launch_mode, LaunchMode::RemoteServerDaemon { .. }) {

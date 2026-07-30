@@ -1015,10 +1015,17 @@ impl NotebookView {
     }
 
     pub fn is_plan(&self, ctx: &AppContext) -> bool {
-        self.active_notebook_data
-            .as_ref(ctx)
-            .ai_document_id(ctx)
-            .is_some()
+        // LOCAL FORK: `ActiveNotebookData::ai_document_id` went with the agent, but the
+        // notebook model still carries the id, so look it up directly. This keeps the
+        // plan/notebook tab icon correct for documents already in Warp Drive.
+        match self.active_notebook_data.as_ref(ctx).active_notebook() {
+            ActiveNotebook::CommittedNotebook(id) => CloudModel::as_ref(ctx)
+                .get_notebook(&id)
+                .and_then(|n| n.model().ai_document_id)
+                .is_some(),
+            ActiveNotebook::NewNotebook(notebook) => notebook.model().ai_document_id.is_some(),
+            ActiveNotebook::None => false,
+        }
     }
 
     fn mode<C: ModelAsRef>(&self, ctx: &C) -> Mode {
@@ -1403,14 +1410,8 @@ impl NotebookView {
             }
         }
 
-        if let Some(ai_document_id) = self.active_notebook_data.as_ref(ctx).ai_document_id(ctx) {
-            menu_items.push(
-                MenuItemFields::new("Attach to active session")
-                    .with_on_select_action(NotebookAction::AttachPlanAsContext(ai_document_id))
-                    .with_icon(icons::Icon::Paperclip)
-                    .into_item(),
-            );
-        }
+        // LOCAL FORK: the "Attach to active session" item attached a plan to an agent
+        // conversation as context, and went with the agent.
 
         // Add "Copy Link" to menu
         if let Some(link) = self.notebook_link(ctx) {
@@ -2336,10 +2337,8 @@ impl TypedActionView for NotebookView {
             NotebookAction::OpenLinkOnDesktop(_) => {
                 // No-op when not on wasm
             }
+            // LOCAL FORK: NotebookAction::AttachPlanAsContext removed with the agent.
             NotebookAction::Export => self.export(ctx),
-            NotebookAction::AttachPlanAsContext(id) => {
-                ctx.emit(NotebookEvent::AttachPlanAsContext(*id))
-            }
         };
     }
 }

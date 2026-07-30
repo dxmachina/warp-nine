@@ -300,9 +300,10 @@ pub(super) fn add_input_suggestions_overlays(
                 ),
             );
         }
-        InputSuggestionsMode::AIContextMenu { .. } => {
-            input.render_ai_context_menu(stack, &menu_positioning, app);
-        }
+        // LOCAL FORK: `render_ai_context_menu` (the @-mention context picker) went
+        // with the agent. The mode variant is kept so callers still compile, but
+        // nothing opens it and there is nothing to render.
+        InputSuggestionsMode::AIContextMenu { .. } => {}
         // SlashCommandsMenu is rendered separately via inline_slash_commands_menu_view
         InputSuggestionsMode::SlashCommands => {}
         // Conversation menu is rendered separately via inline_conversation_menu_view

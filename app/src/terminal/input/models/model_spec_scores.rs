@@ -52,8 +52,9 @@ pub fn render_model_spec_scores(
 ) -> Box<dyn Element> {
     let mut rows = vec![render_score_row(
         "Intelligence",
-        ScoreRowKind::Bar {
-        },
+        // LOCAL FORK: the score came from the `LLMSpec` parameter, which went with the
+        // agent, so the bar renders empty.
+        ScoreRowKind::Bar { value: None },
         None,
         layout.bg_bar_color,
         app,
@@ -61,8 +62,9 @@ pub fn render_model_spec_scores(
 
     rows.push(render_score_row(
         "Speed",
-        ScoreRowKind::Bar {
-        },
+        // LOCAL FORK: the score came from the `LLMSpec` parameter, which went with the
+        // agent, so the bar renders empty.
+        ScoreRowKind::Bar { value: None },
         None,
         layout.bg_bar_color,
         app,

@@ -34,6 +34,11 @@ use crate::server::telemetry::TelemetryEvent;
 use crate::terminal::model::session::SessionId;
 use crate::terminal::warpify::settings::{SshExtensionInstallMode, WarpifySettings};
 use crate::ui_components::blended_colors;
+// LOCAL FORK: was `ai::blocklist::block::keyboard_navigable_buttons`; the widget
+// has no agent dependencies and was rescued into `ui_components`.
+use crate::ui_components::keyboard_navigable_buttons::{
+    KeyboardNavigableButtons, rich_navigation_button,
+};
 use crate::{Appearance, send_telemetry_from_ctx};
 
 const PROMPT_BORDER_RADIUS: f32 = 8.;
@@ -61,6 +66,7 @@ pub enum SshRemoteServerChoiceViewEvent {
 /// Choice block prompting the user to install the remote-server binary on the remote host or skip.
 pub struct SshRemoteServerChoiceView {
     session_id: SessionId,
+    buttons: ViewHandle<KeyboardNavigableButtons>,
     do_not_ask_again_mouse_state: MouseStateHandle,
     do_not_ask_again_label_mouse_state: MouseStateHandle,
     manage_settings_mouse_state: MouseStateHandle,

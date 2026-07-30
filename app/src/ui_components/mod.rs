@@ -19,6 +19,10 @@ pub mod tab_selector;
 // navigable button strip with no agent dependencies, used by the SSH server
 // picker and the init-project and init-environment views, all of which stay.
 pub mod keyboard_navigable_buttons;
+// LOCAL FORK: rescued from ai/blocklist/block/ alongside
+// `keyboard_navigable_buttons`, which renders its "Recommended" badge. Only the
+// badge survives; the numbered option buttons went out with the agent.
+mod numbered_button;
 pub mod inline_action;
 // LOCAL FORK: rescued from ai/blocklist/block/. Generic toggle list widget,
 // no agent dependencies; the LSP server selector is built on it.

@@ -401,16 +401,13 @@ impl PromptRenderHelper {
             InputSettings::as_ref(app).is_universal_developer_input_enabled(app);
         let render_prompt_on_same_line =
             should_render_prompt_on_same_line(is_universal_input, model, app);
-        let padding_right = if should_render_prompt_using_editor_decorator_elements(
-            is_universal_input,
-            &self.ai_input_model,
-            model,
-            app,
-        ) {
-            LPROMPT_RIGHT_PADDING_SAME_LINE_PROMPT
-        } else {
-            *TERMINAL_VIEW_PADDING_LEFT
-        };
+        let padding_right =
+            if should_render_prompt_using_editor_decorator_elements(is_universal_input, model, app)
+            {
+                LPROMPT_RIGHT_PADDING_SAME_LINE_PROMPT
+            } else {
+                *TERMINAL_VIEW_PADDING_LEFT
+            };
         // If the active block hasn't received the precmd message, we're waiting for the next
         // prompt. However, we don't want the UI to flicker so we show the previous prompt
         // until the user changes the editor.
@@ -586,7 +583,6 @@ impl PromptRenderHelper {
         let should_render_prompt_using_editor_decorator_elements =
             should_render_prompt_using_editor_decorator_elements(
                 is_universal_input,
-                &self.ai_input_model,
                 terminal_model,
                 app,
             );

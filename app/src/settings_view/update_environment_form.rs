@@ -1,10 +1,15 @@
 #[cfg(not(target_family = "wasm"))]
 use std::collections::HashMap;
 
+// LOCAL FORK: was `crate::ai::cloud_environments::{AmbientAgentEnvironment, GithubRepo}`,
+// which only re-exported these two from `cloud_object_models`. That crate is kept, so
+// the import is repointed at it directly rather than deleted with the agent.
+use cloud_object_models::{AmbientAgentEnvironment, GithubRepo};
 use instant::{Duration, Instant};
 use log::debug;
 use url::Url;
-use warp_core::send_telemetry_from_ctx;
+// LOCAL FORK: every `send_telemetry_from_ctx!` in this file emitted a
+// `CloudAgentTelemetryEvent`, which went out with the agent.
 use warp_editor::editor::NavigationKey;
 use warp_graphql::queries::user_github_info::UserGithubInfoResult;
 use warpui::elements::{
@@ -29,8 +34,6 @@ use warpui::{
 use super::editor_text_colors;
 use super::settings_page::{InputListItem, render_input_list};
 use crate::ChannelState;
-// LOCAL FORK: the ambient agent environment model, its GitHub auth flow and its telemetry
-// all came out with the agent. This form is agent-only and should be deleted outright.
 use crate::appearance::Appearance;
 use crate::editor::{
     EditorOptions, EditorView, PropagateAndNoOpNavigationKeys, SingleLineEditorOptions, TextOptions,
@@ -48,6 +51,177 @@ use crate::view_components::{
     render_warning_box,
 };
 use crate::workspaces::user_workspaces::UserWorkspaces;
+
+/// LOCAL FORK: verbatim from `ai/ambient_agents/github_auth_url.rs`, which lived
+/// under `ai/` but named nothing in the agent — it only depends on `url` and
+/// `crate::ChannelState`, and `crate::uri` still handles the `next`/`source`
+/// callback it builds. Inlined here rather than deleted because this form is the
+/// only remaining caller; promote it back to its own module if a second one
+/// appears.
+mod github_auth_url {
+    use url::Url;
+
+    use crate::ChannelState;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum GithubAuthRedirectTarget {
+        SettingsEnvironments,
+        FocusCloudMode,
+    }
+
+    impl GithubAuthRedirectTarget {
+        fn next_path(self) -> &'static str {
+            match self {
+                Self::SettingsEnvironments => "settings/environments",
+                Self::FocusCloudMode => "action/focus_cloud_mode",
+            }
+        }
+    }
+
+    /// Indicates where the GitHub authorization flow was initiated from.
+    /// This affects the redirect URL used after auth completes.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub enum AuthSource {
+        /// Auth initiated from the settings page (default behavior: redirect to settings)
+        #[default]
+        Settings,
+        /// Auth initiated from cloud agent setup (skip redirect, just refresh in place)
+        CloudSetup,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum OAuthNextPlatform {
+        Native,
+        Web,
+    }
+
+    pub fn auth_url_with_next(
+        base_auth_url: &str,
+        target: GithubAuthRedirectTarget,
+        auth_source: AuthSource,
+    ) -> String {
+        let scheme = oauth_next_scheme();
+        build_auth_url_with_next(base_auth_url, target, &scheme, auth_source)
+    }
+
+    pub fn settings_environments_auth_url_with_next(base_auth_url: &str) -> String {
+        auth_url_with_next(
+            base_auth_url,
+            GithubAuthRedirectTarget::SettingsEnvironments,
+            AuthSource::Settings,
+        )
+    }
+
+    pub fn cloud_setup_auth_url_with_next(base_auth_url: &str) -> String {
+        auth_url_with_next(
+            base_auth_url,
+            GithubAuthRedirectTarget::FocusCloudMode,
+            AuthSource::CloudSetup,
+        )
+    }
+
+    pub(crate) fn build_auth_url_with_next(
+        base_auth_url: &str,
+        target: GithubAuthRedirectTarget,
+        scheme: &str,
+        auth_source: AuthSource,
+    ) -> String {
+        let Ok(mut url) = Url::parse(base_auth_url) else {
+            return base_auth_url.to_string();
+        };
+
+        let scheme_for_next = std::env::var("WARP_OAUTH_NEXT_SCHEME")
+            .ok()
+            .filter(|value| !value.is_empty())
+            .or_else(|| {
+                url.query_pairs()
+                    .find(|(key, _)| key == "scheme")
+                    .map(|(_, value)| value.into_owned())
+            })
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| scheme.to_string());
+
+        let platform = if cfg!(target_family = "wasm") {
+            OAuthNextPlatform::Web
+        } else {
+            OAuthNextPlatform::Native
+        };
+
+        let next_url = build_next_url(target, &scheme_for_next, auth_source, platform)
+            .unwrap_or_else(|| format!("{scheme_for_next}://{}", target.next_path()));
+
+        let existing_pairs = url
+            .query_pairs()
+            .filter(|(key, _)| key != "next")
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect::<Vec<_>>();
+
+        {
+            let mut query_pairs = url.query_pairs_mut();
+            query_pairs.clear();
+            for (key, value) in existing_pairs {
+                query_pairs.append_pair(&key, &value);
+            }
+            query_pairs.append_pair("next", &next_url);
+        }
+
+        url.to_string()
+    }
+
+    fn build_next_url(
+        target: GithubAuthRedirectTarget,
+        scheme_for_next: &str,
+        auth_source: AuthSource,
+        platform: OAuthNextPlatform,
+    ) -> Option<String> {
+        match platform {
+            OAuthNextPlatform::Native => {
+                let base = format!("{scheme_for_next}://{}", target.next_path());
+                let mut url = Url::parse(&base).ok()?;
+
+                if matches!(auth_source, AuthSource::CloudSetup) {
+                    url.query_pairs_mut()
+                        .append_pair("source", crate::uri::CLOUD_SETUP_SOURCE);
+                }
+
+                Some(url.to_string())
+            }
+            OAuthNextPlatform::Web => {
+                let mut url = Url::parse(&ChannelState::server_root_url()).ok()?;
+                url.set_query(None);
+
+                match target {
+                    GithubAuthRedirectTarget::SettingsEnvironments => {
+                        url.set_path("/settings/environments");
+                        {
+                            let mut pairs = url.query_pairs_mut();
+                            pairs.append_pair("oauth", "github");
+                            if matches!(auth_source, AuthSource::CloudSetup) {
+                                pairs.append_pair("source", crate::uri::CLOUD_SETUP_SOURCE);
+                            }
+                        }
+                    }
+                    GithubAuthRedirectTarget::FocusCloudMode => {
+                        url.set_path("/action/focus_cloud_mode");
+                    }
+                }
+
+                Some(url.to_string())
+            }
+        }
+    }
+
+    fn oauth_next_scheme() -> String {
+        if let Ok(override_value) = std::env::var("WARP_OAUTH_NEXT_SCHEME")
+            && !override_value.is_empty()
+        {
+            return override_value;
+        }
+        ChannelState::url_scheme().to_string()
+    }
+}
+
+use github_auth_url::{AuthSource, GithubAuthRedirectTarget};
 
 const SUBMIT_BUTTON_FOCUSED: &str = "SubmitButtonFocused";
 
@@ -611,12 +785,10 @@ impl UpdateEnvironmentForm {
             }
         };
 
-        // Subscribe to GitHubAuthNotifier to refetch repos when auth completes
-        ctx.subscribe_to_model(&GitHubAuthNotifier::handle(ctx), |me, _, event, ctx| {
-            if matches!(event, GitHubAuthEvent::AuthCompleted) {
-                me.fetch_github_repos(ctx);
-            }
-        });
+        // LOCAL FORK: the GitHubAuthNotifier singleton came out with the agent (it
+        // was registered from `ai::ambient_agents`), so there is nothing left to
+        // subscribe to. Repos are still refetched on `RetryFetchGithubRepos` and
+        // when the dropdown is reopened.
 
         let mut form = Self {
             self_handle: ctx.handle(),
@@ -1471,19 +1643,12 @@ impl UpdateEnvironmentForm {
             self.update_button_state(ctx);
         }
 
+        // LOCAL FORK: CloudAgentTelemetryEvent::ImageSuggested removed with the agent.
         self.suggest_image_state = SuggestImageState::Success {
             key,
             needs_custom_image,
             reason,
         };
-
-        send_telemetry_from_ctx!(
-            CloudAgentTelemetryEvent::ImageSuggested {
-                image,
-                needs_custom_image,
-            },
-            ctx
-        );
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -1562,26 +1727,18 @@ impl UpdateEnvironmentForm {
                             };
                         }
                         warp_graphql::queries::suggest_cloud_environment_image::SuggestCloudEnvironmentImageResult::UserFacingError(_) => {
+                            // LOCAL FORK: CloudAgentTelemetryEvent::ImageSuggestionFailed
+                            // removed with the agent.
                             let error_message = "Failed to suggest a Docker image".to_string();
-                            send_telemetry_from_ctx!(
-                                CloudAgentTelemetryEvent::ImageSuggestionFailed {
-                                    error: error_message.clone(),
-                                },
-                                ctx
-                            );
                             me.suggest_image_state = SuggestImageState::Error {
                                 key: key.clone(),
                                 message: error_message,
                             };
                         }
                         warp_graphql::queries::suggest_cloud_environment_image::SuggestCloudEnvironmentImageResult::Unknown => {
+                            // LOCAL FORK: CloudAgentTelemetryEvent::ImageSuggestionFailed
+                            // removed with the agent.
                             let error_message = "Unknown response from suggestCloudEnvironmentImage".to_string();
-                            send_telemetry_from_ctx!(
-                                CloudAgentTelemetryEvent::ImageSuggestionFailed {
-                                    error: error_message.clone(),
-                                },
-                                ctx
-                            );
                             me.suggest_image_state = SuggestImageState::Error {
                                 key: key.clone(),
                                 message: error_message,
@@ -1589,13 +1746,9 @@ impl UpdateEnvironmentForm {
                         }
                     },
                     Err(e) => {
+                        // LOCAL FORK: CloudAgentTelemetryEvent::ImageSuggestionFailed
+                        // removed with the agent.
                         let error_message = format!("Failed to suggest a Docker image: {}", e);
-                        send_telemetry_from_ctx!(
-                            CloudAgentTelemetryEvent::ImageSuggestionFailed {
-                                error: error_message.clone(),
-                            },
-                            ctx
-                        );
                         me.suggest_image_state = SuggestImageState::Error {
                             key: key.clone(),
                             message: error_message,
@@ -3296,20 +3449,15 @@ impl TypedActionView for UpdateEnvironmentForm {
 
                 let environment = self.form_state.to_ambient_agent_environment();
                 match &self.mode {
+                    // LOCAL FORK: the CloudAgentTelemetryEvent emitted alongside each
+                    // of these arms went out with the agent.
                     EnvironmentFormMode::Create => {
-                        send_telemetry_from_ctx!(CloudAgentTelemetryEvent::EnvironmentCreated, ctx);
                         ctx.emit(UpdateEnvironmentFormEvent::Created {
                             environment,
                             share_with_team: self.share_with_team,
                         });
                     }
                     EnvironmentFormMode::Edit { env_id } => {
-                        send_telemetry_from_ctx!(
-                            CloudAgentTelemetryEvent::EnvironmentUpdated {
-                                environment_id: env_id.into_server(),
-                            },
-                            ctx
-                        );
                         ctx.emit(UpdateEnvironmentFormEvent::Updated {
                             env_id: *env_id,
                             environment,
@@ -3319,12 +3467,8 @@ impl TypedActionView for UpdateEnvironmentForm {
             }
             UpdateEnvironmentFormAction::Delete => {
                 if let EnvironmentFormMode::Edit { env_id } = &self.mode {
-                    send_telemetry_from_ctx!(
-                        CloudAgentTelemetryEvent::EnvironmentDeleted {
-                            environment_id: env_id.into_server(),
-                        },
-                        ctx
-                    );
+                    // LOCAL FORK: CloudAgentTelemetryEvent::EnvironmentDeleted removed
+                    // with the agent.
                     ctx.emit(UpdateEnvironmentFormEvent::DeleteRequested { env_id: *env_id });
                 }
             }
@@ -3446,11 +3590,8 @@ impl TypedActionView for UpdateEnvironmentForm {
                 self.suggest_image(ctx);
             }
             UpdateEnvironmentFormAction::LaunchAgentForSelectedRepos => {
-                send_telemetry_from_ctx!(
-                    CloudAgentTelemetryEvent::LaunchedAgentFromEnvironmentForm,
-                    ctx
-                );
-
+                // LOCAL FORK: CloudAgentTelemetryEvent::LaunchedAgentFromEnvironmentForm
+                // removed with the agent.
                 let repos = self.selected_repos_as_remote_repo_args();
                 if repos.is_empty() {
                     return;
@@ -3481,10 +3622,8 @@ impl TypedActionView for UpdateEnvironmentForm {
                 self.fetch_github_repos(ctx);
             }
             UpdateEnvironmentFormAction::StartGithubAuth => {
-                send_telemetry_from_ctx!(
-                    CloudAgentTelemetryEvent::GitHubAuthFromEnvironmentForm,
-                    ctx
-                );
+                // LOCAL FORK: CloudAgentTelemetryEvent::GitHubAuthFromEnvironmentForm
+                // removed with the agent.
                 self.start_github_auth(ctx);
             }
             UpdateEnvironmentFormAction::OpenUrl(url) => {

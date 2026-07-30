@@ -10,7 +10,7 @@ use warpui::elements::{
 use warpui::keymap::Keystroke;
 use warpui::platform::Cursor;
 use warpui::prelude::{Align, ConstrainedBox, CrossAxisAlignment, Flex, MainAxisSize, Text};
-use warpui::ui_components::components::{Coords, UiComponentStyles};
+use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::ui_components::keyboard_shortcut::keystroke_to_keys;
 use warpui::{AppContext, SingletonEntity};
 

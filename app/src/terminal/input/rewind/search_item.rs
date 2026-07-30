@@ -28,7 +28,7 @@ const ICON_PADDING: f32 = 4.;
 /// Search item for rendering a rewind point in the rewind menu.
 #[derive(Debug, Clone)]
 pub struct RewindSearchItem {
-    /// The exchange ID to rewind to, or None for "Current".
+    // LOCAL FORK: the `exchange_id` to rewind to went away with agent conversations.
     query_text: String,
     file_changes: FileChangesInfo,
     query_match_result: Option<FuzzyMatchResult>,
@@ -40,7 +40,6 @@ impl RewindSearchItem {
     /// Create a "Current" item that dismisses the menu without rewinding.
     pub fn new_current() -> Self {
         Self {
-            exchange_id: None,
             query_text: "Current".to_string(),
             file_changes: FileChangesInfo::default(),
             query_match_result: None,
@@ -203,9 +202,7 @@ impl SearchItem for RewindSearchItem {
     }
 
     fn accept_result(&self) -> Self::Action {
-        SelectRewindPoint {
-            exchange_id: self.exchange_id,
-        }
+        SelectRewindPoint {}
     }
 
     fn execute_result(&self) -> Self::Action {

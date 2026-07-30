@@ -306,15 +306,13 @@ impl EditorView {
                     let is_udi_enabled = crate::settings::InputSettings::handle(ctx)
                         .as_ref(ctx)
                         .is_universal_developer_input_enabled(ctx);
-                    let current_input_mode = if self.is_ai_input {
-                    } else {
-                    };
+                    // LOCAL FORK: the reported input mode went with the agent, along with
+                    // the AI/terminal mode distinction it described.
                     send_telemetry_from_ctx!(
                         TelemetryEvent::VoiceInputUsed {
                             action: "start".to_string(),
                             session_duration_ms: None,
                             is_udi_enabled,
-                            current_input_mode,
                         },
                         ctx
                     );
@@ -422,9 +420,8 @@ impl EditorView {
         let is_udi_enabled = crate::settings::InputSettings::handle(ctx)
             .as_ref(ctx)
             .is_universal_developer_input_enabled(ctx);
-        let current_input_mode = if self.is_ai_input {
-        } else {
-        };
+        // LOCAL FORK: the reported input mode went with the agent, along with the
+        // AI/terminal mode distinction it described.
 
         match result {
             VoiceSessionResult::Audio {
@@ -436,7 +433,6 @@ impl EditorView {
                         action: "stop".to_string(),
                         session_duration_ms: Some(session_duration_ms),
                         is_udi_enabled,
-                        current_input_mode,
                     },
                     ctx
                 );
@@ -475,7 +471,6 @@ impl EditorView {
                         action: "cancel".to_string(),
                         session_duration_ms,
                         is_udi_enabled,
-                        current_input_mode,
                     },
                     ctx
                 );

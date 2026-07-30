@@ -91,10 +91,12 @@ pub enum TranscriptScope {
 }
 
 impl TranscriptScope {
-
     /// Returns whether the scope displays a conversation transcript.
+    ///
+    /// LOCAL FORK: the `Conversation` variant went with the agent, so no scope is
+    /// ever a conversation. Kept so callers outside this file keep compiling.
     pub fn is_conversation(self) -> bool {
-        matches!(self, Self::Conversation(_))
+        false
     }
 }
 
@@ -918,6 +920,9 @@ impl Block {
             leading_linefeeds_ignored: 0,
             is_ai_ugc_telemetry_enabled,
             restored_block_was_local: None,
+            // LOCAL FORK: blocks were created in a conversation or in the terminal;
+            // without the agent every new block starts in the terminal.
+            agent_view_visibility: AgentViewVisibility::new_from_terminal(),
             nld_overridden: false,
             is_oz_environment_startup_command: false,
             visible_bootstrap_block_event_sent: false,
@@ -1257,9 +1262,8 @@ impl Block {
         }
         if FeatureFlag::AgentView.is_enabled() {
             match transcript_scope {
-                // LOCAL FORK: blocks no longer track which conversations they are
-                // attached to, so nothing is visible in a conversation scope.
-                TranscriptScope::Conversation(_) => return true,
+                // LOCAL FORK: the `Conversation` scope went with the agent; only the
+                // terminal and unfiltered scopes are left.
                 TranscriptScope::Terminal => {
                     // Terminal view - hide blocks that were created in agent mode
                     if matches!(

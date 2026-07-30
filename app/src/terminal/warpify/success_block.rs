@@ -115,7 +115,6 @@ impl WarpifySuccessBlock {
                 output_grid: output_grid.into(),
                 selection_handle: Default::default(),
                 selected_text: Default::default(),
-                code_snippet_handles: Default::default(),
                 shell_type: shell.shell_type(),
                 can_write_to_rc,
             }

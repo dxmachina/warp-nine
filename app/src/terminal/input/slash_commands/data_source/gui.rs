@@ -176,19 +176,20 @@ impl GuiSlashCommandDataSource {
         &self,
         command: &StaticCommand,
         availability: Availability,
-        #[cfg(not(target_family = "wasm"))] ctx: &AppContext,
+        #[cfg(not(target_family = "wasm"))] _ctx: &AppContext,
     ) -> bool {
         if command.name == commands::FORK.name
             && availability.contains(Availability::CLOUD_MODE_V2_COMPOSER)
         {
             return false;
         }
-        // /continue-locally only applies to cloud Oz conversations. Non-Oz cloud runs
-        // (Claude, Gemini) are filtered out so the slash menu doesn't surface a no-op command.
+        // /continue-locally only applies to cloud Oz conversations.
+        //
+        // LOCAL FORK: `active_conversation_is_cloud_oz` went with the agent and there
+        // are no conversations left, so the command is always filtered out rather than
+        // being surfaced in the slash menu as a no-op.
         #[cfg(not(target_family = "wasm"))]
-        if command.name == commands::CONTINUE_LOCALLY.name
-            && !self.active_conversation_is_cloud_oz(ctx)
-        {
+        if command.name == commands::CONTINUE_LOCALLY.name {
             return false;
         }
         true

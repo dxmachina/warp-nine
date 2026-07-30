@@ -101,11 +101,7 @@ impl CommandPaletteItemAction {
             CommandPaletteItemAction::NavigateToTab { pane_group_id, .. } => ItemSummary::Tab {
                 pane_group_id: *pane_group_id,
             },
-            CommandPaletteItemAction::NavigateToConversation {
-                conversation_id, ..
-            } => ItemSummary::Conversation {
-                id: *conversation_id,
-            },
+            CommandPaletteItemAction::NavigateToConversation { .. } => ItemSummary::Conversation {},
             CommandPaletteItemAction::ForkConversation { .. } => ItemSummary::ForkConversation,
             CommandPaletteItemAction::NewSession { source } => ItemSummary::NewSession {
                 id: source.id().clone(),

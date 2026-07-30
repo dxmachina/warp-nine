@@ -35,8 +35,10 @@ pub use self::terminal_manager::{TerminalManagerInit, TerminalSurfaceInit, Termi
 #[cfg(windows)]
 pub use self::terminal_view_adaptor::shutdown_all_pty_event_loops;
 #[cfg(all(feature = "local_tty", not(feature = "remote_tty")))]
+// LOCAL FORK: `terminal_view_restored_blocks` removed with the agent (session
+// block restore went out with `SerializedBlockListItem`).
 pub(crate) use self::terminal_view_adaptor::{
-    TerminalViewSurfaceConfig, create_terminal_view_surface, terminal_view_restored_blocks,
+    TerminalViewSurfaceConfig, create_terminal_view_surface,
 };
 #[cfg(unix)]
 pub use self::unix::*;

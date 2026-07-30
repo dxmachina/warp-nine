@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use chrono::{DateTime, Local, TimeZone as _};
 use serde::{Deserialize, Serialize};
 use serde_bytes_repr::{ByteFmtDeserializer, ByteFmtSerializer};
@@ -19,33 +17,23 @@ use crate::util::extensions::TrimStringExt;
 ///
 /// This type decouples the persisted format from the in-app format, allowing
 /// internal changes to `AgentViewVisibility` without breaking serialization.
+///
+/// LOCAL FORK: both variants carried sets of `AIConversationId`, which went with
+/// the agent. The variants themselves are deliberately kept so that rows written
+/// by an older build still deserialize: serde ignores the now-unknown
+/// `conversation_ids` / `origin_conversation_id` members, and a legacy `Agent`
+/// row keeps hiding its block from the terminal transcript exactly as before.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SerializedAgentViewVisibility {
-    Terminal {
-    },
-    Agent {
-    },
+    Terminal {},
+    Agent {},
 }
 
 impl From<AgentViewVisibility> for SerializedAgentViewVisibility {
     fn from(value: AgentViewVisibility) -> Self {
         match value {
-            AgentViewVisibility::Terminal {
-                pending_conversation_ids,
-                conversation_ids,
-            } => SerializedAgentViewVisibility::Terminal {
-                pending_conversation_ids,
-                conversation_ids,
-            },
-            AgentViewVisibility::Agent {
-                origin_conversation_id,
-                pending_other_conversation_ids,
-                other_conversation_ids,
-            } => SerializedAgentViewVisibility::Agent {
-                origin_conversation_id,
-                pending_other_conversation_ids,
-                other_conversation_ids,
-            },
+            AgentViewVisibility::Terminal {} => SerializedAgentViewVisibility::Terminal {},
+            AgentViewVisibility::Agent {} => SerializedAgentViewVisibility::Agent {},
         }
     }
 }
@@ -53,22 +41,8 @@ impl From<AgentViewVisibility> for SerializedAgentViewVisibility {
 impl From<SerializedAgentViewVisibility> for AgentViewVisibility {
     fn from(value: SerializedAgentViewVisibility) -> Self {
         match value {
-            SerializedAgentViewVisibility::Terminal {
-                pending_conversation_ids,
-                conversation_ids,
-            } => AgentViewVisibility::Terminal {
-                pending_conversation_ids,
-                conversation_ids,
-            },
-            SerializedAgentViewVisibility::Agent {
-                origin_conversation_id,
-                pending_other_conversation_ids,
-                other_conversation_ids,
-            } => AgentViewVisibility::Agent {
-                origin_conversation_id,
-                pending_other_conversation_ids,
-                other_conversation_ids,
-            },
+            SerializedAgentViewVisibility::Terminal {} => AgentViewVisibility::Terminal {},
+            SerializedAgentViewVisibility::Agent {} => AgentViewVisibility::Agent {},
         }
     }
 }
@@ -78,17 +52,14 @@ fn default_as_true() -> bool {
 }
 
 /// Blocklist AI metadata associated with this block.
+///
+/// LOCAL FORK: the action id, conversation id, subagent task id and long-running
+/// control state all named agent-owned types and went with the agent. The struct
+/// is kept (and stays lenient about unknown members) so that `ai_metadata` JSON
+/// written by an older build still deserializes; those members are simply
+/// dropped on read.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SerializedAIMetadata {
-    /// The ID of the `AIAgentAction` associated with this block's requested command execution.
-    /// This is optional because not all AI-related blocks are associated with a requested command.
-    #[serde(alias = "action_id")]
-
-    /// The ID of the conversation to which this action belongs.
-
-
-    /// State governing user/agent interaction with the command in this block.
-
     /// `true` if the agent has previously written to this block.
     has_agent_written_to_block: bool,
 
@@ -101,10 +72,6 @@ pub struct SerializedAIMetadata {
 impl From<AgentInteractionMetadata> for SerializedAIMetadata {
     fn from(value: AgentInteractionMetadata) -> Self {
         SerializedAIMetadata {
-            requested_command_action_id: value.requested_command_action_id().cloned(),
-            conversation_id: *value.conversation_id(),
-            subagent_task_id: value.subagent_task_id().cloned(),
-            long_running_control_state: value.long_running_control_state().cloned(),
             has_agent_written_to_block: value.has_agent_written_to_block(),
             should_hide_block: value.should_hide_block(),
         }
@@ -113,14 +80,7 @@ impl From<AgentInteractionMetadata> for SerializedAIMetadata {
 
 impl From<SerializedAIMetadata> for AgentInteractionMetadata {
     fn from(value: SerializedAIMetadata) -> Self {
-        AgentInteractionMetadata::new(
-            value.requested_command_action_id,
-            value.conversation_id,
-            value.subagent_task_id,
-            value.long_running_control_state,
-            value.has_agent_written_to_block,
-            value.should_hide_block,
-        )
+        AgentInteractionMetadata::new(value.has_agent_written_to_block, value.should_hide_block)
     }
 }
 

@@ -337,9 +337,8 @@ impl DrivePanel {
             // with the agent, so there is nothing to create. The arm stays
             // because DriveIndexEvent still carries the variant.
             DriveIndexEvent::CreateAIFact { .. } => {}
-            DriveIndexEvent::AttachPlanAsContext(id) => {
-                ctx.emit(DrivePanelEvent::AttachPlanAsContext(*id))
-            }
+            // LOCAL FORK: the AttachPlanAsContext arm went out with the agent;
+            // neither DriveIndexEvent nor DrivePanelEvent carries the variant now.
         }
     }
 

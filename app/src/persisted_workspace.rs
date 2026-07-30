@@ -603,8 +603,7 @@ impl PersistedWorkspace {
     /// Explicitly registers a directory as a workspace, as if the user had navigated there.
     ///
     /// Creates or updates the entry with `navigated_ts = now`, persists to SQLite,
-    /// starts full repo-metadata indexing before triggering project-rules and codebase-index
-    /// scanning, and emits
+    /// starts full repo-metadata indexing, and emits
     /// [`PersistedWorkspaceEvent::WorkspaceAdded`] so subscribers can refresh their UI.
     pub fn user_added_workspace(&mut self, path: PathBuf, ctx: &mut ModelContext<Self>) {
         let now = Utc::now();
@@ -646,7 +645,8 @@ impl PersistedWorkspace {
                 );
             }
         }
-        self.index_repo(path.clone(), ctx);
+        // LOCAL FORK: codebase-index / project-rules scanning (`index_repo`) went
+        // out with the agent; repo-metadata indexing above is unaffected.
         ctx.emit(PersistedWorkspaceEvent::WorkspaceAdded { path });
     }
 

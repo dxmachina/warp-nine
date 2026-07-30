@@ -65,26 +65,24 @@ impl InlineMenuPositioner {
         ctx.subscribe_to_model(suggestions_mode_model, |me, _, _, ctx| {
             let suggestions_mode_model = me.suggestions_mode_model.as_ref(ctx);
             if suggestions_mode_model.is_inline_menu_open() {
-                if me.agent_view_controller.as_ref(ctx).is_active() {
-                    me.should_render_below_input = false;
-                } else {
-                    match *InputModeSettings::as_ref(ctx).input_mode {
-                        InputMode::PinnedToBottom => {
-                            me.should_render_below_input = false;
-                        }
-                        InputMode::PinnedToTop => me.should_render_below_input = true,
-                        InputMode::Waterfall => {
-                            let terminal_view_height = element_size_at_last_frame(
-                                &me.terminal_content_position_id,
-                                me.window_id,
-                                ctx,
-                            )
-                            .map(|size| size.y())
-                            .unwrap_or(me.size_info.pane_height_px().as_f32());
+                // LOCAL FORK: the agent view pinned the menu above the input. With no
+                // agent view, the input mode setting is the only thing that decides.
+                match *InputModeSettings::as_ref(ctx).input_mode {
+                    InputMode::PinnedToBottom => {
+                        me.should_render_below_input = false;
+                    }
+                    InputMode::PinnedToTop => me.should_render_below_input = true,
+                    InputMode::Waterfall => {
+                        let terminal_view_height = element_size_at_last_frame(
+                            &me.terminal_content_position_id,
+                            me.window_id,
+                            ctx,
+                        )
+                        .map(|size| size.y())
+                        .unwrap_or(me.size_info.pane_height_px().as_f32());
 
-                            me.should_render_below_input = terminal_view_height
-                                < me.inline_menu_height(ctx) + me.menu_frame_height(ctx);
-                        }
+                        me.should_render_below_input = terminal_view_height
+                            < me.inline_menu_height(ctx) + me.menu_frame_height(ctx);
                     }
                 }
                 ctx.emit(Updated::Repositioned);
@@ -215,11 +213,8 @@ impl InlineMenuPositioner {
         } else {
             0.
         };
-        if self.agent_view_controller.as_ref(app).is_active() {
-            header_height
-        } else {
-            header_height + standard_message_bar_height(app) + INLINE_MENU_BORDER_WIDTH
-        }
+        // LOCAL FORK: the agent view had no message bar, so it measured header only.
+        header_height + standard_message_bar_height(app) + INLINE_MENU_BORDER_WIDTH
     }
 
     /// Applies a resize delta to the given menu type's content height, clamping to the

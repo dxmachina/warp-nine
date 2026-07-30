@@ -18,7 +18,7 @@ use warp_terminal::model::{KeyboardModes, KeyboardModesApplyBehavior};
 use warpui::r#async::executor::Background;
 use warpui::color::ColorU;
 use warpui::units::{IntoLines, IntoPixels, Lines};
-use warpui::{AppContext, EntityId, ViewHandle, record_trace_event};
+use warpui::{AppContext, EntityId, record_trace_event};
 
 use super::ansi::{Handler, InputBufferValue};
 use super::block::{BlockId, BlockSize, BlockState, SerializedAIMetadata};
@@ -2421,7 +2421,7 @@ impl BlockList {
             honor_ps1,
             self.obfuscate_secrets,
             self.is_ai_ugc_telemetry_enabled,
-            self.active_conversation_id(),
+            // LOCAL FORK: blocks no longer carry an agent conversation id.
         );
         if let Some(is_local) = restored_block_was_local {
             block.set_restored_block_was_local(is_local);
@@ -2475,7 +2475,6 @@ impl BlockList {
             false,
             self.obfuscate_secrets,
             self.is_ai_ugc_telemetry_enabled,
-            None,
         )
     }
 
@@ -3227,9 +3226,11 @@ impl BlockList {
     }
 
 
-    pub fn has_active_ai_block(&self, app: &AppContext) -> bool {
-        self.last_non_hidden_ai_block_handle(app)
-            .is_some_and(|handle| !handle.as_ref(app).is_finished())
+    /// LOCAL FORK: AI blocks and `last_non_hidden_ai_block_handle` went with the
+    /// agent, so no block in this build is an AI block. Kept as a stub because
+    /// `terminal::input` still asks before deciding whether to focus the input.
+    pub fn has_active_ai_block(&self, _app: &AppContext) -> bool {
+        false
     }
 
     /// Returns the contents of all blocks associated with bootstrap.

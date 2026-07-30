@@ -85,7 +85,7 @@ static TAB_CONFIGS: LazyLock<Vec<InlineMenuTabConfig<InlineModelSelectorTab>>> =
     });
 
 struct TabSwitchSelection {
-    model_id: Option<LLMId>,
+    // LOCAL FORK: the selected model's id went with the agent; only the index survives.
     index: Option<usize>,
 }
 
@@ -186,25 +186,14 @@ impl InlineModelSelectorView {
         };
 
         ctx.subscribe_to_view(&menu_view, |me, _, event, ctx| match event {
-            InlineMenuEvent::AcceptedItem {
-                item,
-                cmd_or_ctrl_shift_enter,
-            } => {
-                ctx.emit(InlineModelSelectorEvent::SelectedModel {
-                    id: item.id.clone(),
-                    selected_tab: me.active_tab(ctx),
-                    set_as_default: *cmd_or_ctrl_shift_enter,
-                });
-            }
+            // LOCAL FORK: the menu item no longer carries the model id it accepted, so
+            // there is nothing to emit a selection for.
+            InlineMenuEvent::AcceptedItem { .. } => {}
             InlineMenuEvent::Dismissed => {
                 ctx.emit(InlineModelSelectorEvent::Dismissed);
             }
             InlineMenuEvent::TabChanged => {
                 me.selection_before_tab_switch = Some(TabSwitchSelection {
-                    model_id: me
-                        .menu_model(ctx)
-                        .selected_item()
-                        .map(|item| item.id.clone()),
                     index: me.menu_view.as_ref(ctx).selected_idx(),
                 });
                 me.rerun_query(ctx);
@@ -275,16 +264,11 @@ impl InlineModelSelectorView {
                 return;
             }
 
-            // On tab switch, try to preserve the previously selected model.
-            // If the model isn't present in the new tab's results, fall back
-            // to the same index position.
+            // On tab switch, fall back to the same index position.
+            // LOCAL FORK: preserving the previously selected model by id went with the
+            // agent, since menu items no longer carry a model id.
             if let Some(selection) = me.selection_before_tab_switch.take() {
-                let found_by_id = selection.model_id.is_some_and(|id| {
-                    me.menu_view.update(ctx, |menu, ctx| {
-                        menu.select_first_where(|item| item.id == id, ctx)
-                    })
-                });
-                if !found_by_id && let Some(idx) = selection.index {
+                if let Some(idx) = selection.index {
                     let count = me.menu_view.as_ref(ctx).result_count();
                     if count > 0 {
                         me.menu_view.update(ctx, |menu, ctx| {

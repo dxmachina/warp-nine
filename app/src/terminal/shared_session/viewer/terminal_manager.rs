@@ -4,13 +4,14 @@ use std::sync::Arc;
 use async_broadcast::InactiveReceiver;
 use parking_lot::FairMutex;
 use pathfinder_geometry::vector::Vector2F;
+// LOCAL FORK: `CLIAgentSessionState`, `SelectedAgentModel` and
+// `sharer::SessionSourceType` were only used by the agent-state mirroring below.
 use session_sharing_protocol::common::{
-    ActivePrompt, AddGuestsResponse, CLIAgentSessionState, CommandExecutionFailureReason,
-    LinkAccessLevelUpdateResponse, LongRunningCommandAgentInteraction, RemoveGuestResponse,
-    SelectedAgentModel, SessionId, TeamAccessLevelUpdateResponse,
-    UniversalDeveloperInputContextUpdate, UpdatePendingUserRoleResponse,
+    ActivePrompt, AddGuestsResponse, CommandExecutionFailureReason, LinkAccessLevelUpdateResponse,
+    LongRunningCommandAgentInteraction, RemoveGuestResponse, SessionId,
+    TeamAccessLevelUpdateResponse, UniversalDeveloperInputContextUpdate,
+    UpdatePendingUserRoleResponse,
 };
-use session_sharing_protocol::sharer::SessionSourceType;
 use session_sharing_protocol::viewer::SessionEndedReason;
 use settings::Setting as _;
 use warp_errors::report_error;
@@ -44,10 +45,9 @@ use crate::terminal::session_settings::SessionSettings;
 use crate::terminal::shared_session::SharedSessionStatus;
 use crate::terminal::shared_session::manager::Manager;
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
-use crate::terminal::shared_session::shared_handlers::{
-    ActiveRemoteUpdate, RemoteUpdateGuard, apply_auto_approve_agent_actions_update,
-    apply_input_mode_update,
-};
+// LOCAL FORK: `apply_input_mode_update`, `apply_auto_approve_agent_actions_update`
+// and the `ActiveRemoteUpdate` token they took removed with the agent.
+use crate::terminal::shared_session::shared_handlers::RemoteUpdateGuard;
 use crate::terminal::terminal_manager::{BlockSpacing, compute_block_size, terminal_colors_list};
 use crate::terminal::view::ExecuteCommandEvent;
 use crate::terminal::{
@@ -86,16 +86,11 @@ pub struct TerminalManager {
     current_network: Arc<FairMutex<Option<ModelHandle<Network>>>>,
     viewer_remote_update_guard: RemoteUpdateGuard,
     outbound_handlers_registered: bool,
-    /// Owns child discovery + status polling for an orchestrated ambient
-    /// agent run. Lazily created in `JoinedSuccessfully` on the first
-    /// ambient session join. `Arc<FairMutex<Option<...>>>` matches
-    /// `current_network` so the network-event closure can write into it
-    /// without `&mut self`.
-    orchestration_viewer_model: Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
-    /// `true` for the root viewer pane of an orchestrator, `false` for
-    /// per-child viewer panes. Skipping polling on children avoids
-    /// duplicated REST traffic and grandchild double-registration via the
-    /// transitive `ancestor_run_id` filter.
+    /// LOCAL FORK: `orchestration_viewer_model` (child discovery + status
+    /// polling for an orchestrated ambient agent run) came out with the agent.
+    /// This flag is retained only because it is still threaded through the
+    /// public constructors that `pane_group` calls; nothing reads it now.
+    #[allow(dead_code)]
     enable_orchestration_polling: bool,
 }
 
@@ -105,28 +100,9 @@ pub struct TerminalManagerInit {
 }
 
 impl TerminalManager {
-    fn send_selected_conversation_update_for_viewer_to_current_network(
-        guard: &RemoteUpdateGuard,
-        model: &Arc<FairMutex<TerminalModel>>,
-        current_network: &Arc<FairMutex<Option<ModelHandle<Network>>>>,
-        agent_view_controller: &ModelHandle<AgentViewController>,
-        ai_context_model: &ModelHandle<BlocklistAIContextModel>,
-        ctx: &mut AppContext,
-    ) {
-        let Some(update) =
-            build_selected_conversation_update(agent_view_controller, ai_context_model, ctx)
-        else {
-            return;
-        };
-
-        Self::send_input_context_update_to_current_network(
-            guard,
-            model,
-            current_network,
-            update,
-            ctx,
-        );
-    }
+    // LOCAL FORK: fn send_selected_conversation_update_for_viewer_to_current_network
+    // removed with the agent; it broadcast which agent conversation the viewer had
+    // selected.
 
     fn current_network(
         current_network: &Arc<FairMutex<Option<ModelHandle<Network>>>>,
@@ -164,7 +140,7 @@ impl TerminalManager {
         });
     }
 
-    /// Handles a failed viewer command request and clears any queued-command dispatch state.
+    /// Handles a failed viewer command request.
     fn handle_command_execution_request_failed(
         terminal_view: &mut TerminalView,
         reason: &CommandExecutionFailureReason,
@@ -172,7 +148,8 @@ impl TerminalManager {
     ) {
         let reason_string = command_execution_failure_reason_string(reason);
         terminal_view.show_persistent_toast(reason_string, ToastFlavor::Error, ctx);
-        terminal_view.clear_queued_command_in_flight(ctx);
+        // LOCAL FORK: `clear_queued_command_in_flight` cleared state owned by the
+        // agent's queued-query model, which went with the agent.
 
         // On command execution request, the input is frozen and set to a loading state.
         // We only need to restore the input for errors that aren't the result of a new buffer.
@@ -275,25 +252,16 @@ impl TerminalManager {
                 colors,
                 None, // model_event_sender - not used for viewer
                 prompt_type.clone(),
-                None, // initial_input_config - not used for viewer
-                None, // no conversation restoration for shared session viewer
+                // LOCAL FORK: the `initial_input_config` and
+                // `conversation_restoration` parameters came out with the agent.
                 Some(inactive_pty_reads_rx.clone()),
                 is_ambient_agent,
                 ctx,
             )
         });
 
-        let terminal_view_id = view.id();
-        let agent_view_controller = view.as_ref(ctx).agent_view_controller().clone();
-        let active_session = view.as_ref(ctx).active_session().clone();
-        ActiveAgentViewsModel::handle(ctx).update(ctx, |model, ctx| {
-            model.register_agent_view_controller(
-                &agent_view_controller,
-                &active_session,
-                terminal_view_id,
-                ctx,
-            );
-        });
+        // LOCAL FORK: the viewer's agent view controller registration with
+        // ActiveAgentViewsModel came out with the agent.
 
         let terminal_view = view.clone();
         let manager = Self {
@@ -309,7 +277,6 @@ impl TerminalManager {
             current_network: Arc::new(FairMutex::new(None)),
             viewer_remote_update_guard: RemoteUpdateGuard::new(),
             outbound_handlers_registered: false,
-            orchestration_viewer_model: Arc::new(FairMutex::new(None)),
             enable_orchestration_polling,
         };
         TerminalManagerInit {
@@ -509,8 +476,6 @@ impl TerminalManager {
             self.current_network.clone(),
             self.network_resources.prompt_type.clone(),
             self.viewer_remote_update_guard.clone(),
-            self.orchestration_viewer_model.clone(),
-            self.enable_orchestration_polling,
             ctx,
         );
         if !self.outbound_handlers_registered {
@@ -523,217 +488,11 @@ impl TerminalManager {
             );
             Self::handle_network_status_events(&self.view, self.current_network.clone(), ctx);
 
-            // Send model selection updates during session sharing (if viewer has Editor role)
-            let current_network_for_models = self.current_network.clone();
-            let terminal_view_id = self.view.id();
-            let model_clone = self.model.clone();
-            let model_remote_update_guard = self.viewer_remote_update_guard.clone();
-            ctx.subscribe_to_model(&LLMPreferences::handle(ctx), move |_prefs, event, ctx| {
-                // Only react to agent mode LLM changes
-                if !matches!(event, LLMPreferencesEvent::UpdatedActiveAgentModeLLM) {
-                    return;
-                }
-
-                let llm_prefs = &LLMPreferences::as_ref(ctx);
-                let selected_model_id: String = llm_prefs
-                    .get_active_base_model(ctx, Some(terminal_view_id))
-                    .id
-                    .clone()
-                    .into();
-
-                Self::send_input_context_update_to_current_network(
-                    &model_remote_update_guard,
-                    &model_clone,
-                    &current_network_for_models,
-                    UniversalDeveloperInputContextUpdate {
-                        selected_model: Some(SelectedAgentModel::new(selected_model_id)),
-                        ..Default::default()
-                    },
-                    ctx,
-                );
-            });
-
-            // Send input mode updates during session sharing (if viewer has Editor role).
-            // When AgentView is enabled, we only send updates when in an active agent view.
-            // For ambient agent sessions, input mode is controlled locally, so we skip sending updates.
-            let current_network_for_input_mode = self.current_network.clone();
-            let model_clone_for_input = self.model.clone();
-            let ai_input_model = self.view.as_ref(ctx).ai_input_model().clone();
-            let weak_view_for_input_mode = self.view.downgrade();
-            let input_mode_remote_update_guard = self.viewer_remote_update_guard.clone();
-            ctx.subscribe_to_model(&ai_input_model, move |_, event, ctx| {
-                // In ambient agent sessions, input mode is controlled locally.
-                if model_clone_for_input
-                    .lock()
-                    .is_shared_ambient_agent_session()
-                {
-                    return;
-                }
-
-                // When AgentView is enabled, only send input mode updates when in an active agent view.
-                if FeatureFlag::AgentView.is_enabled() {
-                    let Some(view) = weak_view_for_input_mode.upgrade(ctx) else {
-                        return;
-                    };
-                    let agent_view_controller = view.as_ref(ctx).agent_view_controller().clone();
-                    if !agent_view_controller.as_ref(ctx).is_active() {
-                        return;
-                    }
-                }
-
-                let config = event.updated_config();
-
-                Self::send_input_context_update_to_current_network(
-                    &input_mode_remote_update_guard,
-                    &model_clone_for_input,
-                    &current_network_for_input_mode,
-                    UniversalDeveloperInputContextUpdate {
-                        input_mode: Some((*config).into()),
-                        ..Default::default()
-                    },
-                    ctx,
-                );
-            });
-
-            let agent_view_controller = self.view.as_ref(ctx).agent_view_controller().clone();
-            let ai_context_model = self.view.as_ref(ctx).ai_context_model().clone();
-            // Send selected conversation updates during session sharing (if viewer has Editor role)
-            if FeatureFlag::AgentView.is_enabled() {
-                // When agent view is enabled, we listen to the agent view controller
-                // as the authoritative source for which conversation is selected.
-                let current_network_for_conversation = self.current_network.clone();
-                let model_for_conversation = self.model.clone();
-                let ai_context_model_for_conversation = ai_context_model.clone();
-                let conversation_remote_update_guard = self.viewer_remote_update_guard.clone();
-                ctx.subscribe_to_model(
-                    &agent_view_controller,
-                    move |agent_view_controller, event, ctx| match event {
-                        AgentViewControllerEvent::EnteredAgentView { .. }
-                        | AgentViewControllerEvent::ExitedAgentView { .. } => {
-                            Self::send_selected_conversation_update_for_viewer_to_current_network(
-                                &conversation_remote_update_guard,
-                                &model_for_conversation,
-                                &current_network_for_conversation,
-                                &agent_view_controller,
-                                &ai_context_model_for_conversation,
-                                ctx,
-                            );
-                        }
-                        AgentViewControllerEvent::ExitConfirmed { .. } => {}
-                    },
-                );
-            } else {
-                // When agent view is disabled, we fallback to the legacy behavior
-                // of listening for pending query state changes to know which conversation is selected.
-                let current_network_for_conversation = self.current_network.clone();
-                let model_for_conversation = self.model.clone();
-                let agent_view_controller_for_conversation = agent_view_controller.clone();
-                let conversation_remote_update_guard = self.viewer_remote_update_guard.clone();
-                ctx.subscribe_to_model(&ai_context_model, move |ai_context_model, event, ctx| {
-                    if !matches!(event, BlocklistAIContextEvent::PendingQueryStateUpdated) {
-                        return;
-                    }
-
-                    Self::send_selected_conversation_update_for_viewer_to_current_network(
-                        &conversation_remote_update_guard,
-                        &model_for_conversation,
-                        &current_network_for_conversation,
-                        &agent_view_controller_for_conversation,
-                        &ai_context_model,
-                        ctx,
-                    );
-                });
-            }
-
-            // Send auto-approve updates during session sharing (if viewer has Editor role)
-            let current_network_for_auto = self.current_network.clone();
-            let model_clone_for_auto = self.model.clone();
-            let view_id_for_auto = self.view.id();
-            let weak_view_for_auto = self.view.downgrade();
-            let auto_approve_remote_update_guard = self.viewer_remote_update_guard.clone();
-            ctx.subscribe_to_model(
-                &BlocklistAIHistoryModel::handle(ctx),
-                move |_, event, ctx| {
-                    // We intentionally keep this as a full match so new variants
-                    // are forced to be handled here
-                    #[allow(clippy::single_match)]
-                    match event {
-                        BlocklistAIHistoryEvent::UpdatedAutoexecuteOverride {
-                            terminal_surface_id,
-                        } => {
-                            if *terminal_surface_id != view_id_for_auto {
-                                return;
-                            }
-
-                            let Some(view) = weak_view_for_auto.upgrade(ctx) else {
-                                return;
-                            };
-
-                            let auto_approve = view
-                                .as_ref(ctx)
-                                .ai_context_model()
-                                .as_ref(ctx)
-                                .pending_query_autoexecute_override(ctx)
-                                .is_autoexecute_any_action();
-                            Self::send_input_context_update_to_current_network(
-                                &auto_approve_remote_update_guard,
-                                &model_clone_for_auto,
-                                &current_network_for_auto,
-                                UniversalDeveloperInputContextUpdate {
-                                    auto_approve_agent_actions: Some(auto_approve),
-                                    ..Default::default()
-                                },
-                                ctx,
-                            );
-                        }
-                        _ => {}
-                    }
-                },
-            );
-
-            // Broadcast CLI agent rich input open/close changes from viewer back to sharer.
-            let current_network_for_cli = self.current_network.clone();
-            let model_for_cli = self.model.clone();
-            let view_id_for_cli = self.view.id();
-            let cli_remote_update_guard = self.viewer_remote_update_guard.clone();
-            ctx.subscribe_to_model(&CLIAgentSessionsModel::handle(ctx), move |_, event, ctx| {
-                let CLIAgentSessionsModelEvent::InputSessionChanged {
-                    terminal_view_id,
-                    new_input_state,
-                    ..
-                } = event
-                else {
-                    return;
-                };
-                if *terminal_view_id != view_id_for_cli
-                    || !cli_remote_update_guard.should_broadcast()
-                {
-                    return;
-                }
-                let cli_agent_session = {
-                    let sessions_model = CLIAgentSessionsModel::as_ref(ctx);
-                    match sessions_model.session(view_id_for_cli) {
-                        Some(session) => CLIAgentSessionState::Active {
-                            cli_agent: session.agent.to_serialized_name(),
-                            is_rich_input_open: matches!(
-                                new_input_state,
-                                CLIAgentInputState::Open { .. }
-                            ),
-                        },
-                        None => CLIAgentSessionState::Inactive,
-                    }
-                };
-                Self::send_input_context_update_to_current_network(
-                    &cli_remote_update_guard,
-                    &model_for_cli,
-                    &current_network_for_cli,
-                    UniversalDeveloperInputContextUpdate {
-                        cli_agent_session: Some(cli_agent_session),
-                        ..Default::default()
-                    },
-                    ctx,
-                );
-            });
+            // LOCAL FORK: the viewer's outbound agent-state mirroring (selected LLM,
+            // agent input mode, selected conversation, auto-approve, CLI agent rich
+            // input) all subscribed to models that came out with the agent, so the
+            // whole outbound block is gone. Terminal-side viewing (PTY, view events,
+            // network status) is unaffected.
 
             self.outbound_handlers_registered = true;
         }
@@ -752,8 +511,6 @@ impl TerminalManager {
         current_network: Arc<FairMutex<Option<ModelHandle<Network>>>>,
         prompt_type: ModelHandle<PromptType>,
         viewer_remote_update_guard: RemoteUpdateGuard,
-        orchestration_viewer_model: Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
-        enable_orchestration_polling: bool,
         ctx: &mut AppContext,
     ) {
         // We use a weak view handle instead of a strong reference because we may add a subscription to the view which moves a strong reference of the Model into the callback,
@@ -780,73 +537,16 @@ impl TerminalManager {
                     ctx,
                 );
 
-                // Apply the universal developer input context if present.
-                let active_remote_update = viewer_remote_update_guard.start_remote_update();
-                if let Some(universal_developer_input_context) = universal_developer_input_context {
-                    if let Some(ref model) = universal_developer_input_context.selected_model {
-                        Self::handle_selected_agent_model_update(&weak_view_handle, model, &active_remote_update, ctx);
-                    }
-                    if let Some(ref input_mode) = universal_developer_input_context.input_mode {
-                        Self::handle_input_mode_update(&weak_view_handle, input_mode, &active_remote_update, ctx);
-                    }
-                    apply_cli_agent_state_update(
-                        &weak_view_handle,
-                        &universal_developer_input_context.cli_agent_session,
-                        &active_remote_update,
-                        ctx,
-                    );
-                    if let Some(ref selected_conversation) = universal_developer_input_context.selected_conversation {
-                        Self::handle_selected_conversation_update(
-                            &weak_view_handle,
-                            selected_conversation,
-                            &active_remote_update,
-                            ctx,
-                        );
-                    }
-                    // TODO(roland): we do not apply universal_developer_input_context.long_running_command_agent_interaction here
-                    // because the block it should apply to won't exist yet, until the `OrderedTerminalEvents` that come after are processed.
-                    // We should try to apply it after catching up to the latest state.
-                }
+                // LOCAL FORK: every limb of the universal developer input context
+                // applied on join (selected model, agent input mode, CLI agent
+                // state, selected conversation) drove agent state and came out with
+                // the agent, as did the ambient-session registration and the
+                // orchestration viewer model.
+                let _ = universal_developer_input_context;
+
                 let Some(view) = weak_view_handle.upgrade(ctx) else {
                     return;
                 };
-
-                let ambient_task_id: Option<AmbientAgentTaskId> = source
-                    .orchestrator_task_id()
-                    .and_then(|s| s.parse().ok());
-
-                // Mark terminal view as a shared ambient agent session view.
-                if matches!(&source.source_type, SessionSourceType::AmbientAgent { .. }) {
-                    let terminal_view_id = view.id();
-                    BlocklistAIHistoryModel::handle(ctx).update(ctx, |history, _ctx| {
-                        history.mark_terminal_surface_as_ambient_agent_session_view(terminal_view_id);
-                    });
-
-                    // Register this ambient session as active for conversation list tracking.
-                    if let Some(task_id) = ambient_task_id {
-                        ActiveAgentViewsModel::handle(ctx).update(ctx, |model, ctx| {
-                            model.register_ambient_session(terminal_view_id, task_id, ctx);
-                        });
-                    }
-                }
-
-                if enable_orchestration_polling
-                    && orchestration_viewer_model.lock().is_none()
-                    && let Some(task_id) = ambient_task_id {
-                        let terminal_view_id = view.id();
-                        let weak_view_handle_for_orch = weak_view_handle.clone();
-                        let orchestration_viewer_model_slot =
-                            orchestration_viewer_model.clone();
-                        let model = ctx.add_model(|model_ctx| {
-                            OrchestrationViewerModel::new(
-                                task_id,
-                                terminal_view_id,
-                                weak_view_handle_for_orch,
-                                model_ctx,
-                            )
-                        });
-                        *orchestration_viewer_model_slot.lock() = Some(model);
-                    }
 
                 let session_id = network.as_ref(ctx).session_id();
                 Manager::handle(ctx).update(ctx, |manager, ctx| {
@@ -854,20 +554,7 @@ impl TerminalManager {
                 });
 
                 view.update(ctx, |terminal_view, ctx| {
-                    if let Some(task_id) = ambient_task_id {
-                        let had_model = terminal_view.ambient_agent_view_model().is_some();
-                        // Begin viewing the ambient run. For top-level ambient viewers
-                        // (`enable_orchestration_polling`) that joined without a model — e.g.
-                        // a raw `shared_session` link that turns out to be a cloud run — this
-                        // creates and wires the model now that the source is known to be
-                        // ambient. Hidden orchestration child viewers intentionally have no
-                        // model, so we only initialize an already-present one for them.
-                        if enable_orchestration_polling || had_model {
-                            terminal_view
-                                .begin_viewing_ambient_session(task_id, session_id, ctx);
-                        }
-                    }
-
+                    // LOCAL FORK: `begin_viewing_ambient_session` went with the agent.
                     terminal_view.on_session_share_joined(
                         viewer_id.clone(),
                         *viewer_firebase_uid,
@@ -892,7 +579,6 @@ impl TerminalManager {
                     model.clone(),
                     &current_network,
                     &network,
-                    &orchestration_viewer_model,
                     is_ambient_agent,
                     ctx,
                 ) {
@@ -939,7 +625,6 @@ impl TerminalManager {
                     model.clone(),
                     &current_network,
                     &network,
-                    &orchestration_viewer_model,
                     is_ambient_agent,
                     ctx,
                 ) {
@@ -983,7 +668,6 @@ impl TerminalManager {
                     model.clone(),
                     &current_network,
                     &network,
-                    &orchestration_viewer_model,
                     is_ambient_agent,
                     ctx,
                 ) {
@@ -1012,25 +696,14 @@ impl TerminalManager {
                 );
             }
             NetworkEvent::UniversalDeveloperInputContextUpdated(context_update) => {
-                let active_remote_update = viewer_remote_update_guard.start_remote_update();
-
-                if let Some(ref model) = context_update.selected_model {
-                    Self::handle_selected_agent_model_update(&weak_view_handle, model, &active_remote_update, ctx);
-                }
-                if let Some(ref input_mode) = context_update.input_mode {
-                    Self::handle_input_mode_update(&weak_view_handle, input_mode, &active_remote_update, ctx);
-                }
-                if let Some(ref selected_conversation) = context_update.selected_conversation {
-                    Self::handle_selected_conversation_update(
-                        &weak_view_handle,
-                        selected_conversation,
-                        &active_remote_update,
-                        ctx,
-                    );
-                }
-                if let Some(auto_approve) = context_update.auto_approve_agent_actions {
-                    apply_auto_approve_agent_actions_update(&weak_view_handle, auto_approve, &active_remote_update, ctx);
-                }
+                // LOCAL FORK: the selected model, agent input mode, selected
+                // conversation, auto-approve and CLI agent limbs of this update all
+                // drove agent state and came out with the agent. Only the
+                // long-running command interaction below still applies.
+                //
+                // Held for the whole arm so applying an inbound update doesn't echo
+                // straight back to the sharer.
+                let _active_remote_update = viewer_remote_update_guard.start_remote_update();
 
                 if model
                     .lock()
@@ -1061,15 +734,6 @@ impl TerminalManager {
                             });
                         }
                     }
-                }
-
-                if let Some(ref cli_agent_session) = context_update.cli_agent_session {
-                    apply_cli_agent_state_update(
-                        &weak_view_handle,
-                        cli_agent_session,
-                        &active_remote_update,
-                        ctx,
-                    );
                 }
             }
             NetworkEvent::Reconnecting => {
@@ -1152,21 +816,11 @@ impl TerminalManager {
                 };
 
                 view.update(ctx, |view, ctx| {
-                    // In cloud-mode startup (before the first exchange), shared-session input
-                    // sync reflects environment setup commands. Skip applying remote edits so
-                    // the visible input isn't populated with setup-command text.
-                    let skip_during_setup = FeatureFlag::CloudModeSetupV2.is_enabled() && {
-                        let model = view.model.lock();
-                        is_cloud_agent_pre_first_exchange(
-                            view.ambient_agent_view_model(),
-                            view.agent_view_controller(),
-                            &model,
-                            ctx,
-                        )
-                    };
-                    if skip_during_setup {
-                        return;
-                    }
+                    // LOCAL FORK: the cloud-mode-startup guard here
+                    // (`is_cloud_agent_pre_first_exchange`) needed the ambient agent
+                    // view model and agent view controller, both of which came out
+                    // with the agent. Without a cloud agent there is no setup phase
+                    // to suppress, so remote input updates always apply.
                     view.apply_viewer_shared_session_input_update(block_id, operations.clone(), ctx);
                 })
             }
@@ -1441,57 +1095,10 @@ impl TerminalManager {
         });
     }
 
-    fn handle_selected_agent_model_update(
-        weak_view_handle: &WeakViewHandle<TerminalView>,
-        selected_model: &SelectedAgentModel,
-        guard: &ActiveRemoteUpdate,
-        ctx: &mut AppContext,
-    ) {
-        let Some(view) = weak_view_handle.upgrade(ctx) else {
-            return;
-        };
-
-        let terminal_view_id = view.id();
-        apply_selected_agent_model_update(terminal_view_id, selected_model, guard, ctx);
-    }
-
-    fn handle_input_mode_update(
-        weak_view_handle: &WeakViewHandle<TerminalView>,
-        input_mode: &session_sharing_protocol::common::InputMode,
-        guard: &ActiveRemoteUpdate,
-        ctx: &mut AppContext,
-    ) {
-        let Some(view) = weak_view_handle.upgrade(ctx) else {
-            return;
-        };
-        // During cloud startup (pre-first-exchange), keep local input mode stable
-        // and ignore remote shell/ai mode toggles from session-sharing context sync.
-        let is_pre_first_exchange = FeatureFlag::CloudModeSetupV2.is_enabled() && {
-            let view_ref = view.as_ref(ctx);
-            let model = view_ref.model.lock();
-            is_cloud_agent_pre_first_exchange(
-                view_ref.ambient_agent_view_model(),
-                view_ref.agent_view_controller(),
-                &model,
-                ctx,
-            )
-        };
-        let suppress_input_mode_update =
-            view.as_ref(ctx).is_shared_ambient_agent_session() || is_pre_first_exchange;
-        if suppress_input_mode_update {
-            return;
-        }
-        apply_input_mode_update(weak_view_handle, input_mode, guard, ctx);
-    }
-
-    fn handle_selected_conversation_update(
-        weak_view_handle: &WeakViewHandle<TerminalView>,
-        selected_conversation: &session_sharing_protocol::common::SelectedConversation,
-        guard: &ActiveRemoteUpdate,
-        ctx: &mut AppContext,
-    ) {
-        apply_selected_conversation_update(weak_view_handle, selected_conversation, guard, ctx);
-    }
+    // LOCAL FORK: fns handle_selected_agent_model_update, handle_input_mode_update
+    // and handle_selected_conversation_update removed with the agent. Each applied
+    // one limb of the sharer's agent state (selected LLM, agent input mode, selected
+    // conversation) onto the local agent models, all of which are gone.
 
     fn handle_view_events(
         current_network: Arc<FairMutex<Option<ModelHandle<Network>>>>,
@@ -1682,34 +1289,9 @@ impl TerminalManager {
         });
     }
 
-    /// Drops the [`OrchestrationViewerModel`] from the shared slot if one
-    /// exists. Called from terminal session-end paths. The model's
-    /// `ctx.spawn` continuations are entity-scoped, so dropping the
-    /// entity makes them no-ops; no explicit `.abort()` needed.
-    ///
-    /// The model also holds a viewer-mode registration on the shared
-    /// [`OrchestrationEventStreamer`]; we unregister explicitly here so
-    /// the streamer can refcount-tear-down the ancestor SSE on the last
-    /// pane close. The unregister API is idempotent.
-    fn stop_orchestration_polling(
-        orchestration_viewer_model: &Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
-        ctx: &mut AppContext,
-    ) {
-        let Some(handle) = orchestration_viewer_model.lock().take() else {
-            return;
-        };
-        let parent_task_id = handle.as_ref(ctx).parent_task_id();
-        let consumer_id = handle.id();
-        log::debug!(
-            "[orch-viewer] stopping orchestration viewer model parent_task_id={parent_task_id} \
-             consumer_id={consumer_id:?}"
-        );
-        OrchestrationEventStreamer::handle(ctx).update(ctx, move |streamer, _ctx| {
-            streamer.unregister_viewer_mode_consumer(parent_task_id, consumer_id);
-        });
-        // `handle` drops here, releasing the per-pane viewer model.
-        drop(handle);
-    }
+    // LOCAL FORK: fn stop_orchestration_polling removed with the agent, along with
+    // the OrchestrationViewerModel it dropped and the OrchestrationEventStreamer
+    // registration it released.
 
     /// Common teardown for the viewer session-end network events
     /// (`SessionEnded`, `ViewerRemoved`, `FailedToReconnect`).
@@ -1721,17 +1303,19 @@ impl TerminalManager {
     /// editable post-run state as a clean `SessionEnded`, rather than leaving a
     /// stale "session is live" gate that misroutes follow-ups to a local agent.
     /// Non-ambient panes use the generic [`Self::shared_session_ended`]
-    /// finished-viewer teardown (which cancels in-progress conversations).
+    /// finished-viewer teardown.
     ///
     /// Returns `false` when an ambient end was ignored because the ended network
     /// is no longer the current one (a stale event); callers should bail without
     /// surfacing an end-of-session toast.
+    ///
+    /// LOCAL FORK: the `orchestration_viewer_model` parameter and the
+    /// owner/non-owner polling teardown came out with the agent.
     fn handle_viewer_session_end(
         terminal_view: &ViewHandle<TerminalView>,
         model: Arc<FairMutex<TerminalModel>>,
         current_network: &Arc<FairMutex<Option<ModelHandle<Network>>>>,
         ended_network: &ModelHandle<Network>,
-        orchestration_viewer_model: &Arc<FairMutex<Option<ModelHandle<OrchestrationViewerModel>>>>,
         is_ambient_agent: bool,
         ctx: &mut AppContext,
     ) -> bool {
@@ -1745,18 +1329,7 @@ impl TerminalManager {
             ) {
                 return false;
             }
-            // Non-owner viewers (read-only) won't get a follow-up session;
-            // owners may handoff via `attach_execution_session` (same
-            // `TerminalManager`, same orchestrator `task_id`), so keep their
-            // model.
-            let is_owner = terminal_view.read(ctx, |terminal_view, app| {
-                terminal_view.owned_ambient_agent_task_id(app).is_some()
-            });
-            if !is_owner {
-                Self::stop_orchestration_polling(orchestration_viewer_model, ctx);
-            }
         } else {
-            Self::stop_orchestration_polling(orchestration_viewer_model, ctx);
             Self::shared_session_ended(terminal_view, model, ctx);
         }
         true
@@ -1769,23 +1342,8 @@ impl TerminalManager {
     ) {
         let terminal_view_id = terminal_view.id();
 
-        // When a shared session ends for a viewer, cancel any in-progress conversations.
-        BlocklistAIHistoryModel::handle(ctx).update(ctx, |history_model, ctx| {
-            history_model
-                .all_live_conversations_for_terminal_surface(terminal_view_id)
-                .filter(|conversation| conversation.status().is_in_progress())
-                .map(|conversation| conversation.id())
-                .collect::<Vec<_>>()
-                .into_iter()
-                .for_each(|conversation_id| {
-                    history_model.update_conversation_status(
-                        terminal_view_id,
-                        conversation_id,
-                        ConversationStatus::Cancelled,
-                        ctx,
-                    )
-                });
-        });
+        // LOCAL FORK: cancelling the viewer's in-progress agent conversations on
+        // session end went out with the agent's conversation history model.
 
         Manager::handle(ctx).update(ctx, |manager, _| {
             manager.left_share(terminal_view_id);
@@ -1824,24 +1382,14 @@ impl TerminalManager {
             .lock()
             .clear_write_to_pty_events_for_shared_session_tx();
         if FeatureFlag::HandoffCloudCloud.is_enabled() {
+            // LOCAL FORK: task ownership and the ambient agent view model went out
+            // with the agent, so there is no longer an "owner keeps an editable
+            // Cloud Mode pane" case — every ended ambient session lands in the
+            // read-only finished-viewer state.
+            model
+                .lock()
+                .set_shared_session_status(SharedSessionStatus::FinishedViewer);
             terminal_view.update(ctx, |terminal_view, ctx| {
-                // Owned ambient tasks remain editable Cloud Mode panes after their live shared
-                // session ends; non-owners are still read-only viewers of a finished session.
-                let owns_ambient_task = terminal_view.owned_ambient_agent_task_id(ctx).is_some();
-                model
-                    .lock()
-                    .set_shared_session_status(if owns_ambient_task {
-                        SharedSessionStatus::NotShared
-                    } else {
-                        SharedSessionStatus::FinishedViewer
-                    });
-                if let Some(ambient_agent_view_model) =
-                    terminal_view.ambient_agent_view_model().cloned()
-                {
-                    ambient_agent_view_model.update(ctx, |model, ctx| {
-                        model.record_ambient_execution_ended(ended_session_id, ctx);
-                    });
-                }
                 terminal_view.on_ambient_agent_execution_ended(ctx);
             });
         }
@@ -1876,20 +1424,8 @@ impl crate::terminal::TerminalManager for TerminalManager {
             return;
         }
 
-        let terminal_view_id = self.view.id();
-        ActiveAgentViewsModel::handle(app).update(app, |model, ctx| {
-            model.unregister_agent_view_controller(terminal_view_id, ctx);
-            model.unregister_ambient_session(terminal_view_id, ctx);
-        });
-
-        // Tear down the orchestration viewer model so its streamer
-        // registration is released and the ancestor SSE can close. The
-        // network-event paths (SessionEnded / ViewerRemoved /
-        // FailedToReconnect) also call this, but pane-close doesn't flow
-        // through them — without this, the SSE leaks until the app exits.
-        // `stop_orchestration_polling` is idempotent, so a later
-        // network-event-driven call is a no-op.
-        Self::stop_orchestration_polling(&self.orchestration_viewer_model, app);
+        // LOCAL FORK: the ActiveAgentViewsModel unregistration and the
+        // orchestration viewer model teardown both came out with the agent.
 
         if let NetworkState::Active(ref network) = self.network_state {
             network.update(app, |network, _| {

@@ -872,11 +872,8 @@ impl DisplayChip {
         is_in_agent_view: bool,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
-        // Re-render this chip whenever Agent Mode state changes so UDI font/color updates
-        // immediately on enter/exit.
-        ctx.subscribe_to_model(&config.agent_view_controller, |_me, _model, _event, ctx| {
-            ctx.notify();
-        });
+        // LOCAL FORK: the agent view controller this chip re-rendered on went with the
+        // agent; there is no Agent Mode state left to follow.
 
         let display_chip_kind = match chip_result.kind {
             // LOCAL FORK: the plan/todo list view was an agent surface and is gone, so the
@@ -1091,12 +1088,7 @@ impl DisplayChip {
             }
         });
 
-        // Subscribe to ambient agent model changes to re-render when the state changes
-        if let Some(ref ambient_agent_model) = config.ambient_agent_view_model {
-            ctx.subscribe_to_model(ambient_agent_model, |_, _, _, ctx| {
-                ctx.notify();
-            });
-        }
+        // LOCAL FORK: the ambient agent view model this chip re-rendered on went with the agent.
 
         // Cache the code review keybinding and subscribe to changes.
         let code_review_keybinding =
@@ -1132,9 +1124,7 @@ impl DisplayChip {
             session_context: config.session_context,
             menu_positioning_provider: config.menu_positioning_provider,
             is_shared_session_viewer: config.is_shared_session_viewer,
-            agent_view_controller: config.agent_view_controller.clone(),
             is_in_agent_view,
-            ambient_agent_view_model: config.ambient_agent_view_model,
             code_review_keybinding,
             terminal_view_id: config.terminal_view_id,
         }
@@ -1338,8 +1328,8 @@ impl DisplayChip {
             appearance.theme().ansi_fg_green()
         };
 
-        let is_interactive =
-            !self.is_shared_session_viewer && !self.is_cli_agent_session_active(app);
+        // LOCAL FORK: the CLI agent session check went with the agent; a session is never active.
+        let is_interactive = !self.is_shared_session_viewer;
         let is_in_agent_view = self.is_in_agent_view;
         let chip_text = self.text.clone();
         let hover = Hoverable::new(self.mouse_state.clone(), move |state| {
@@ -1464,8 +1454,8 @@ impl DisplayChip {
             appearance.monospace_font_family()
         };
         let font_size = udi_font_size(appearance);
-        let is_interactive =
-            !self.is_shared_session_viewer && !self.is_cli_agent_session_active(app);
+        // LOCAL FORK: the CLI agent session check went with the agent; a session is never active.
+        let is_interactive = !self.is_shared_session_viewer;
         let fallback_branch = self.text.clone();
         let tracking_status = tracking_status
             .clone()
@@ -1722,23 +1712,11 @@ impl DisplayChip {
         let appearance = Appearance::as_ref(app);
         let theme = appearance.theme();
 
-        // Check if we're in an ambient agent conversation.
-        // If so, the directory chip should be non-interactive.
-        let is_in_active_ambient_agent = self
-            .ambient_agent_view_model
-            .as_ref()
-            .map(|model| {
-                let m = model.as_ref(app);
-                m.is_ambient_agent() && !m.is_configuring_ambient_agent()
-            })
-            .unwrap_or(false);
-
         let mut stack = Stack::new();
 
-        // Menu is only allowed when the caller requests it and we're not in an active ambient
-        // agent session or CLI agent session.
-        let is_cli_agent_active = self.is_cli_agent_session_active(app);
-        let allow_show_menu = show_menu && !is_in_active_ambient_agent && !is_cli_agent_active;
+        // LOCAL FORK: the ambient agent and CLI agent session checks that used to suppress
+        // this menu went with the agent; neither can be active, so the caller decides.
+        let allow_show_menu = show_menu;
 
         let button = if allow_show_menu {
             let chip_text = self.text.clone();
@@ -1781,16 +1759,10 @@ impl DisplayChip {
         } else {
             // Non-interactive chip (either show_menu is false or in active ambient agent)
             let font_color = if self.is_in_agent_view {
-                // Use disabled text color when in active ambient agent
-                if is_in_active_ambient_agent {
-                    theme
-                        .disabled_text_color(blended_colors::neutral_1(theme).into())
-                        .into_solid()
-                } else {
-                    // In agent view but the chip is non-interactive for reasons other than an active
-                    // ambient agent session. Keep the normal agent-view subtext styling (not disabled).
-                    agent_view_chip_color(appearance)
-                }
+                // LOCAL FORK: the disabled styling was for an active ambient agent session,
+                // which cannot happen here any more, so this is always the normal
+                // agent-view subtext styling.
+                agent_view_chip_color(appearance)
             } else {
                 theme.ansi_fg_cyan()
             };
@@ -1808,7 +1780,9 @@ impl DisplayChip {
                 let chip_element = render_udi_chip(config, appearance);
                 let mut stack = Stack::new().with_child(chip_element);
 
-                if state.is_hovered() && !is_cli_agent_active {
+                // LOCAL FORK: the tooltip used to be suppressed during a CLI agent
+                // session; there are none, so it always shows on hover.
+                if state.is_hovered() {
                     let tool_tip = appearance
                         .ui_builder()
                         .tool_tip("Working directory".to_string())
@@ -2118,13 +2092,10 @@ impl TypedActionView for DisplayChip {
                 }
             },
             DisplayChipAction::ToggleMenu => {
-                // All ToggleMenu consumers (WorkingDirectory, GitBranch,
-                // GitBranchStatus, NodeVersion) route through shell commands
-                // (cd, git checkout, nvm use) that don't work in CLI agent
-                // context, so we suppress all of them.
-                if self.is_cli_agent_session_active(ctx) {
-                    return;
-                }
+                // LOCAL FORK: ToggleMenu used to be suppressed during a CLI agent session
+                // because its consumers (WorkingDirectory, GitBranch, GitBranchStatus,
+                // NodeVersion) route through shell commands. CLI agent sessions went with
+                // the agent, so the menus are always available.
                 match &mut self.display_chip_kind {
                     DisplayChipKind::GitBranch { menu, menu_open }
                     | DisplayChipKind::GitBranchStatus {

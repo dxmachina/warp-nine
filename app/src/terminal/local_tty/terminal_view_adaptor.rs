@@ -8,11 +8,12 @@ use parking_lot::FairMutex;
 use session_sharing_protocol::common::{
     ActivePrompt, AgentPromptFailureReason, CLIAgentSessionState, CommandExecutionFailureReason,
     ControlAction, ControlActionFailureReason, LongRunningCommandAgentInteraction,
-    WriteToPtyFailureReason,
+    UniversalDeveloperInputContextUpdate, WriteToPtyFailureReason,
 };
 #[cfg(not(any(test, feature = "integration_tests")))]
 use session_sharing_protocol::common::{
-    LongRunningCommandAgentInteractionState, SelectedConversation, UniversalDeveloperInputContext,
+    InputMode, LongRunningCommandAgentInteractionState, SelectedConversation,
+    UniversalDeveloperInputContext,
 };
 use session_sharing_protocol::sharer::{
     AddGuestsResponse, FailedToInitializeSessionReason, Lifetime, LinkAccessLevelUpdateResponse,
@@ -41,9 +42,9 @@ use crate::terminal::shared_session::manager::Manager;
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::terminal::shared_session::presence_manager::PresenceManager;
 use crate::terminal::shared_session::settings::SharedSessionSettings;
-use crate::terminal::shared_session::shared_handlers::{
-    RemoteUpdateGuard, apply_auto_approve_agent_actions_update, apply_input_mode_update,
-};
+// LOCAL FORK: `apply_input_mode_update` and
+// `apply_auto_approve_agent_actions_update` removed with the agent.
+use crate::terminal::shared_session::shared_handlers::RemoteUpdateGuard;
 use crate::terminal::shared_session::sharer::network::{
     Network, NetworkEvent, failed_to_add_guests_user_error,
     failed_to_initialize_session_user_error, session_terminated_reason_string,
@@ -52,7 +53,8 @@ use crate::terminal::shared_session::{
     SharedSessionActionSource, SharedSessionScrollbackType, SharedSessionSource,
     SharedSessionStatus, max_session_size,
 };
-use crate::terminal::view::{ConversationRestorationInNewPaneType, Event as TerminalViewEvent};
+// LOCAL FORK: `ConversationRestorationInNewPaneType` removed with the agent.
+use crate::terminal::view::Event as TerminalViewEvent;
 use crate::terminal::writeable_pty::terminal_manager_util::wire_up_remote_server_controller_with_view;
 use crate::terminal::{TerminalManager as TerminalManagerTrait, TerminalModel, TerminalView};
 use crate::view_components::ToastFlavor;
@@ -73,7 +75,8 @@ pub(crate) struct TerminalViewSurfaceConfig {
     pub(crate) resources: TerminalViewResources,
     pub(crate) model_event_sender: Option<SyncSender<ModelEvent>>,
     pub(crate) window_id: WindowId,
-    pub(crate) conversation_restoration: Option<ConversationRestorationInNewPaneType>,
+    // LOCAL FORK: `conversation_restoration:
+    // Option<ConversationRestorationInNewPaneType>` removed with the agent.
     pub(crate) has_conversation_restoration: bool,
     pub(crate) is_historical: bool,
     pub(crate) should_use_live_appearance: bool,
@@ -104,7 +107,6 @@ pub(crate) fn create_terminal_view_surface(
         resources,
         model_event_sender,
         window_id,
-        conversation_restoration,
         has_conversation_restoration,
         is_historical,
         should_use_live_appearance,
@@ -125,7 +127,6 @@ pub(crate) fn create_terminal_view_surface(
             colors,
             model_event_sender,
             prompt_type.clone(),
-            conversation_restoration,
             Some(inactive_pty_reads_rx),
             false,
             ctx,
@@ -355,7 +356,6 @@ impl TerminalManager<TerminalView> {
                     ctx,
                 ));
             } else {
-                let input_config = terminal_view.as_ref(ctx).input_config(ctx);
                 let input_replica_id = terminal_view
                     .as_ref(ctx)
                     .input()
@@ -399,7 +399,10 @@ impl TerminalManager<TerminalView> {
                 let cli_agent_session = CLIAgentSessionState::Inactive;
 
                 let universal_developer_input_context = UniversalDeveloperInputContext {
-                    input_mode: Some(input_config.into()),
+                    // LOCAL FORK: `TerminalView::input_config` read the agent input
+                    // model. The input is always a shell input now, which is the
+                    // protocol default.
+                    input_mode: Some(InputMode::default()),
                     selected_conversation,
                     auto_approve_agent_actions: Some(auto_approve_agent_actions),
                     selected_model: None,
@@ -939,26 +942,15 @@ impl TerminalManager<TerminalView> {
                 }
             }
             NetworkEvent::UniversalDeveloperInputContextUpdated(context_update) => {
-                let active_remote_update = sharer_remote_update_guard.start_remote_update();
+                // Held for the whole arm so the `apply_*` calls below don't echo
+                // back to the remote side.
+                let _active_remote_update = sharer_remote_update_guard.start_remote_update();
 
-                // LOCAL FORK: the selected agent model update was applied to the
-                // agent's LLM preferences.
-                if let Some(ref input_mode) = context_update.input_mode {
-                    let weak_view_handle = terminal_view.downgrade();
-                    apply_input_mode_update(&weak_view_handle, input_mode, &active_remote_update, ctx);
-                }
-                // LOCAL FORK: selected conversation updates targeted the agent
-                // conversation the viewer had focused.
-                if let Some(auto_approve) = context_update.auto_approve_agent_actions {
-                    let weak_view_handle = terminal_view.downgrade();
-                    apply_auto_approve_agent_actions_update(
-                        &weak_view_handle,
-                        auto_approve,
-                        &active_remote_update,
-                        ctx,
-                    );
-                }
-
+                // LOCAL FORK: the selected agent model, input mode, auto-approve
+                // and selected conversation limbs of this update all drove agent
+                // state and went out with the agent. Only the long-running
+                // command interaction below is still meaningful here.
+                //
                 // LOCAL FORK: CLI agent rich input state was mirrored from the viewer
                 // onto the agent's session model.
 

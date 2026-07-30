@@ -308,10 +308,8 @@ impl<S> TerminalManager<S> {
         let model_events =
             ctx.add_model(|ctx| ModelEventDispatcher::new(events_rx, sessions.clone(), ctx));
 
-        // Have ApiKeyManager subscribe to block completion events for AWS credential refresh
-        ai::api_keys::ApiKeyManager::handle(ctx).update(ctx, |manager, ctx| {
-            manager.register_model_event_dispatcher(&model_events, ctx);
-        });
+        // LOCAL FORK: the AWS Bedrock credential refresh that hooked ApiKeyManager up to
+        // block completion events lived in `ai::aws_credentials` and went with the agent.
 
         let preferred_shell = chosen_shell.unwrap_or_else(|| {
             AvailableShells::handle(ctx)

@@ -69,10 +69,8 @@ impl MockTerminalManager {
                 colors,
                 None,
                 prompt_type,
-                None,
-                // LOCAL FORK: conversation restoration loaded a view-only cloud
-                // conversation, which came out with the agent.
-                None,
+                // LOCAL FORK: the initial AI input config and conversation
+                // restoration parameters came out with the agent.
                 None, // inactive_pty_reads_rx
                 false,
                 ctx,

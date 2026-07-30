@@ -116,7 +116,6 @@ impl ControlItemRenderer {
 
     pub fn new_with_label_and_icon(label: String, icon: crate::ui_components::icons::Icon) -> Self {
         Self {
-            kind: None,
             custom_label: Some(label),
             custom_icon: Some(icon),
             identifier: None,
@@ -166,19 +165,15 @@ impl ControlItemRenderer {
     pub(crate) fn display_label(&self) -> &str {
         if let Some(label) = &self.custom_label {
             label
-        } else if let Some(kind) = &self.kind {
-            kind.display_label()
         } else {
             "Unknown"
         }
     }
 
+    // LOCAL FORK: the `kind` fallback resolved an `AgentToolbarItemKind`, removed with the
+    // agent. Every surviving item carries its own label and icon.
     fn display_icon(&self) -> Option<crate::ui_components::icons::Icon> {
-        if let Some(icon) = self.custom_icon {
-            Some(icon)
-        } else {
-            self.kind.as_ref().and_then(|k| k.icon())
-        }
+        self.custom_icon
     }
 
     fn render_internal(

@@ -1,7 +1,6 @@
 use crate::settings::AISettings;
 use std::collections::HashSet;
 
-use warp_core::features::FeatureFlag;
 use warpui::{AppContext, EntityId, SingletonEntity};
 
 use super::History;

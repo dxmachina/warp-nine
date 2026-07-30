@@ -55,9 +55,8 @@ use crate::terminal::shared_session::{
     SharedSessionStatus, join_link,
 };
 use crate::terminal::view::{
-    ContextMenuAction, Event, InlineBannerItem, InlineBannerType, PendingUserQueryKind,
-    RichContentInsertionPosition, SharedSessionBanners, SizeUpdateBuilder, TerminalAction,
-    TerminalView,
+    ContextMenuAction, Event, InlineBannerItem, InlineBannerType, SharedSessionBanners,
+    SizeUpdateBuilder, TerminalAction, TerminalView,
 };
 use crate::view_components::{DismissibleToast, ToastFlavor};
 use crate::{TelemetryEvent, send_telemetry_from_ctx};

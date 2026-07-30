@@ -2,8 +2,8 @@ use uuid::Uuid;
 use warp_errors::report_error;
 use warpui::r#async::SpawnedFutureHandle;
 use warpui::{
-    AppContext, ClosedWindowData, Entity, EntityId, ModelContext, ModelHandle, SingletonEntity,
-    ViewHandle, WeakViewHandle, WindowId,
+    AppContext, ClosedWindowData, Entity, EntityId, ModelContext, SingletonEntity, ViewHandle,
+    WeakViewHandle, WindowId,
 };
 
 use super::UndoCloseSettings;

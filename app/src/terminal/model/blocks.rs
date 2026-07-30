@@ -13,7 +13,6 @@ use selection::BlockListSelection;
 pub use selection::SelectionRange;
 use sum_tree::{Dimension, Item, SeekBias, SumTree};
 use warp_core::command::ExitCode;
-use warp_core::features::FeatureFlag;
 use warp_terminal::model::{KeyboardModes, KeyboardModesApplyBehavior};
 use warpui::r#async::executor::Background;
 use warpui::color::ColorU;

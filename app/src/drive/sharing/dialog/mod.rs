@@ -36,7 +36,7 @@ use super::{
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::CloudViewModel;
-use crate::cloud_object::{CloudObject, Owner, ServerGuestSubject};
+use crate::cloud_object::{CloudObject, Owner};
 use crate::editor::PropagateAndNoOpNavigationKeys;
 use crate::menu::{self, Menu, MenuItem, MenuItemFields};
 use crate::server::cloud_objects::update_manager::{

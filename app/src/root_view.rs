@@ -1,5 +1,5 @@
 use crate::settings::{
-    AISettings, QuakeModeSettings, ThemeSettings, apply_account_first_onboarding_settings,
+    AISettings, QuakeModeSettings, apply_account_first_onboarding_settings,
     apply_onboarding_settings,
 };
 use std::collections::HashMap;
@@ -12,8 +12,7 @@ use cfg_if::cfg_if;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use onboarding::{
-    AgentOnboardingEvent, AgentOnboardingView, OfferVariant, OnboardingEvent, OnboardingIntention,
-    SelectedSettings,
+    AgentOnboardingView, OfferVariant, OnboardingEvent, OnboardingIntention, SelectedSettings,
 };
 use parking_lot::Mutex;
 use pathfinder_geometry::rect::RectF;
@@ -25,8 +24,7 @@ use url::Url;
 use warp_core::context_flag::ContextFlag;
 use warp_core::safe_error;
 use warp_core::user_preferences::GetUserPreferences as _;
-use warp_errors::{report_error, report_if_error};
-use warpui::clipboard::ClipboardContent;
+use warp_errors::report_error;
 use warpui::elements::{
     Border, ChildAnchor, OffsetPositioning, ParentAnchor, ParentElement, ParentOffsetBounds, Stack,
 };
@@ -41,7 +39,7 @@ use warpui::{
     ViewContext, ViewHandle, WindowId, id,
 };
 
-use crate::app_state::{AppState, PaneUuid, WindowSnapshot};
+use crate::app_state::{AppState, WindowSnapshot};
 use crate::appearance::Appearance;
 use crate::auth::auth_manager::{AuthManager, AuthManagerEvent};
 use crate::auth::auth_override_warning_modal::{
@@ -49,9 +47,9 @@ use crate::auth::auth_override_warning_modal::{
 };
 use crate::auth::auth_state::AuthState;
 use crate::auth::auth_view_modal::{AuthRedirectPayload, AuthView, AuthViewVariant};
-use crate::auth::login_slide::{LoginSlideEvent, LoginSlideSource, LoginSlideView};
+use crate::auth::login_slide::{LoginSlideEvent, LoginSlideView};
 use crate::auth::needs_sso_link_view::NeedsSsoLinkView;
-use crate::auth::paste_auth_token_modal::{PasteAuthTokenModalEvent, PasteAuthTokenModalView};
+use crate::auth::paste_auth_token_modal::PasteAuthTokenModalView;
 #[cfg(target_family = "wasm")]
 use crate::auth::web_handoff::{WebHandoffEvent, WebHandoffView};
 use crate::auth::{AuthStateProvider, LoginFailureReason};
@@ -84,15 +82,13 @@ use crate::terminal::general_settings::GeneralSettings;
 use crate::terminal::keys_settings::KeysSettings;
 use crate::terminal::shell::ShellType;
 use crate::terminal::view::{TerminalAction, cell_size_and_padding};
-use crate::themes::onboarding_theme_picker_themes;
 use crate::themes::theme::{AnsiColorIdentifier, Blend, Fill, ThemeKind, WarpThemeConfig};
-use crate::uri::{OpenMCPSettingsArgs, OpenSettingsArgs};
+use crate::uri::OpenSettingsArgs;
 use crate::util::bindings::{self, is_binding_pty_compliant};
 use crate::util::traffic_lights::{TrafficLightData, TrafficLightMouseStates, traffic_light_data};
 use crate::view_components::DismissibleToast;
 use crate::window_settings::WindowSettings;
 use crate::workspace::hoa_onboarding::mark_hoa_onboarding_completed;
-use crate::workspace::tab_settings::TabSettings;
 use crate::workspace::view::OnboardingTutorial;
 use crate::workspace::{PaneViewLocator, Workspace, WorkspaceAction, WorkspaceRegistry};
 use crate::workspaces::team_tester::TeamTesterStatus;

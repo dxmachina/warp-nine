@@ -18,7 +18,7 @@ use warp_util::standardized_path::StandardizedPath;
 use warp_util::user_input::UserInput;
 use warpui::platform::WindowStyle;
 use warpui::text::SelectionType;
-use warpui::{App, ReadModel, UpdateView, WindowId};
+use warpui::{App, UpdateView, WindowId};
 use watcher::HomeDirectoryWatcher;
 use workflows::workflow::{Argument, ArgumentType, Workflow};
 

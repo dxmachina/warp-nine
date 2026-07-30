@@ -1,6 +1,5 @@
 use crate::settings::AISettings;
 use itertools::Itertools;
-use warp_core::features::FeatureFlag;
 use warpui::{Entity, ModelHandle, SingletonEntity};
 
 use crate::cloud_object::model::persistence::CloudModel;

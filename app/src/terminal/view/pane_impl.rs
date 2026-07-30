@@ -3,8 +3,8 @@
 use settings::Setting as _;
 use warp_core::context_flag::ContextFlag;
 use warpui::elements::{
-    ConstrainedBox, CrossAxisAlignment, Empty, Flex, MainAxisAlignment, MainAxisSize,
-    ParentElement, Shrinkable,
+    ConstrainedBox, CrossAxisAlignment, Flex, MainAxisAlignment, MainAxisSize, ParentElement,
+    Shrinkable,
 };
 use warpui::prelude::{ChildView, Container};
 use warpui::text_layout::ClipConfig;
@@ -36,7 +36,6 @@ use crate::terminal::shared_session::render_util::shared_session_indicator_color
 use crate::terminal::{TerminalManager, TerminalView};
 use crate::ui_components::{blended_colors, icons};
 use crate::util::bindings::keybinding_name_to_display_string;
-use crate::workspace::tab_settings::TabSettings;
 
 // LOCAL FORK: const PANE_HEADER_AGENT_SIZE removed with the agent icon-with-status
 // component it sized.

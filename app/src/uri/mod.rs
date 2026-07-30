@@ -13,8 +13,6 @@ use anyhow::{Result, anyhow, ensure};
 use itertools::Itertools;
 use session_sharing_protocol::common::SessionId;
 use url::Url;
-#[cfg(not(target_family = "wasm"))]
-use warp_errors::report_error;
 use warp_util::path::LineAndColumnArg;
 use warpui::notification::UserNotification;
 use warpui::platform::TerminationMode;

@@ -24,11 +24,10 @@ use warpui::ui_components::segmented_control::{
     RenderableOptionConfig, SegmentedControl, SegmentedControlEvent, TooltipConfig,
 };
 use warpui::{
-    AppContext, Element, Entity, EntityId, ModelHandle, SingletonEntity as _, TypedActionView,
-    View, ViewAsRef, ViewContext, ViewHandle,
+    AppContext, Element, Entity, EntityId, SingletonEntity as _, TypedActionView, View, ViewAsRef,
+    ViewContext, ViewHandle,
 };
 
-use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::network::NetworkStatus;
 #[cfg(not(target_family = "wasm"))]
 #[cfg(not(target_family = "wasm"))]

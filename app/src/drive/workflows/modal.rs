@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 
 use itertools::Itertools;
 use pathfinder_geometry::vector::vec2f;

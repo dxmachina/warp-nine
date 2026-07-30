@@ -1,6 +1,4 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use pathfinder_geometry::rect::RectF;
 use serde::{Deserialize, Serialize};

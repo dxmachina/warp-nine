@@ -1,7 +1,5 @@
-use crate::settings::ai::DefaultSessionMode;
 use crate::settings::{AISettings, CodeSettings};
-use onboarding::slides::{AgentAutonomy, AgentDevelopmentSettings};
-use onboarding::{SelectedSettings, SessionDefault, UICustomizationSettings};
+use onboarding::{SelectedSettings, UICustomizationSettings};
 use settings::Setting as _;
 use warp_core::features::FeatureFlag;
 use warp_errors::report_if_error;
@@ -9,7 +7,6 @@ use warpui::{AppContext, SingletonEntity as _};
 
 use crate::drive::settings::WarpDriveSettings;
 use crate::workspace::tab_settings::TabSettings;
-use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::FtueAccountClass;
 
 pub fn apply_account_first_onboarding_settings(

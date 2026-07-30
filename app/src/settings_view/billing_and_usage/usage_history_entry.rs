@@ -7,7 +7,7 @@ use warpui::elements::{
     MainAxisAlignment, MainAxisSize, MouseStateHandle, ParentElement, Radius, Shrinkable, Text,
 };
 use warpui::platform::Cursor;
-use warpui::{AppContext, Element, View};
+use warpui::{AppContext, Element};
 
 use crate::settings_view::billing_and_usage_page::BillingAndUsagePageAction;
 use crate::ui_components::blended_colors;

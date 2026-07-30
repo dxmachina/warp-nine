@@ -169,9 +169,6 @@ impl WorkflowModal {
                         ctx.notify();
                     }
                 }
-                AIRequestUsageModel::handle(ctx).update(ctx, |request_usage_model, ctx| {
-                    request_usage_model.refresh_request_usage_async(ctx);
-                });
             }
         );
 

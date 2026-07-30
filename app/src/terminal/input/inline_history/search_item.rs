@@ -27,11 +27,11 @@ pub struct InlineHistoryItem {
     timestamp: DateTime<Local>,
 }
 
+/// Padding inside the icon pill. Was shared with the agent's status element.
+const STATUS_ELEMENT_PADDING: f32 = 2.;
+
 #[derive(Debug, Clone)]
 enum HistoryItemType {
-    Conversation {
-        title: String,
-    },
     Command {
         command: String,
         linked_workflow_data: Option<LinkedWorkflowData>,
@@ -96,9 +96,6 @@ impl SearchItem for InlineHistoryItem {
     ) -> Box<dyn Element> {
         let icon_size = inline_styles::font_size(appearance);
         let icon = match &self.item_type {
-            HistoryItemType::Conversation { status, .. } => {
-                render_status_element(status, icon_size, appearance)
-            }
             HistoryItemType::Command { .. } => {
                 let icon_color = inline_styles::icon_color(appearance);
                 Container::new(
@@ -151,14 +148,6 @@ impl SearchItem for InlineHistoryItem {
             inline_styles::secondary_text_color(theme, background_color.into());
 
         let (display_text, match_indices, font_family) = match &self.item_type {
-            HistoryItemType::Conversation { title, .. } => {
-                let indices = self
-                    .name_match_result
-                    .as_ref()
-                    .map(|m| m.matched_indices.clone())
-                    .unwrap_or_default();
-                (title.clone(), indices, appearance.ui_font_family())
-            }
             HistoryItemType::Command { command, .. } => {
                 let indices = if self.prefix_match_len > 0 {
                     (0..self.prefix_match_len).collect()
@@ -229,14 +218,6 @@ impl SearchItem for InlineHistoryItem {
 
     fn accept_result(&self) -> Self::Action {
         match &self.item_type {
-            HistoryItemType::Conversation {
-                conversation_id,
-                title,
-                ..
-            } => AcceptHistoryItem::Conversation {
-                conversation_id: *conversation_id,
-                title: title.clone(),
-            },
             HistoryItemType::Command {
                 command,
                 linked_workflow_data,
@@ -256,7 +237,6 @@ impl SearchItem for InlineHistoryItem {
 
     fn accessibility_label(&self) -> String {
         match &self.item_type {
-            HistoryItemType::Conversation { title, .. } => format!("Conversation: {title}"),
             HistoryItemType::Command { command, .. } => format!("Command: {command}"),
             HistoryItemType::AIPrompt { query_text } => format!("AI prompt: {query_text}"),
         }

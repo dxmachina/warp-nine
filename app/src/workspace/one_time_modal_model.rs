@@ -88,14 +88,6 @@ impl OneTimeModalModel {
             },
         );
 
-        // The base-credit allowance that gates the free-AI-removal notice loads
-        // asynchronously, so re-evaluate the notice whenever request usage updates.
-        ctx.subscribe_to_model(&AIRequestUsageModel::handle(ctx), |me, _, event, ctx| {
-            if let AIRequestUsageModelEvent::RequestUsageUpdated = event {
-                me.maybe_recheck_free_ai_removal_modal(ctx);
-            }
-        });
-
         // Subscribe to auth manager events to automatically trigger modal when user becomes onboarded
         ctx.subscribe_to_model(&AuthManager::handle(ctx), |_, _, event, ctx| {
             let AuthManagerEvent::AuthComplete = event else {
@@ -114,7 +106,6 @@ impl OneTimeModalModel {
                             ctx.unsubscribe_from_model(&CloudPreferencesSyncer::handle(ctx));
                             me.has_completed_initial_modal_checks = true;
                             me.check_and_trigger_all_modals(ctx);
-                            maybe_ensure_handoff_chip_in_toolbar(ctx);
                         }
                     },
                 );

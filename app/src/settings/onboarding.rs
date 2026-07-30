@@ -29,11 +29,9 @@ pub fn apply_account_first_onboarding_settings(
 
     match selected_settings {
         SelectedSettings::AgentDrivenDevelopment {
-            agent_settings,
-            ui_customization,
-            ..
+            ui_customization, ..
         } => {
-            apply_agent_settings(agent_settings, app);
+            // LOCAL FORK: apply_agent_settings went away with the agent.
             if let Some(ui) = ui_customization {
                 apply_ui_customization_settings(ui, true, app);
             }
@@ -78,11 +76,9 @@ pub fn apply_onboarding_settings(
 ) {
     let is_ai_enabled = match selected_settings {
         SelectedSettings::AgentDrivenDevelopment {
-            agent_settings,
-            ui_customization,
-            ..
+            ui_customization, ..
         } => {
-            apply_agent_settings(agent_settings, app);
+            // LOCAL FORK: apply_agent_settings went away with the agent.
             if let Some(ui) = ui_customization {
                 apply_ui_customization_settings(ui, true, app);
             }

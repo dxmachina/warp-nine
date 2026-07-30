@@ -68,34 +68,7 @@ impl<'a> From<&'a UploadTarget> for NormalizedUploadTarget<'a> {
     }
 }
 
-#[cfg(feature = "local_fs")]
-impl<'a> From<&'a FileArtifactUploadTargetInfo> for NormalizedUploadTarget<'a> {
-    fn from(target: &'a FileArtifactUploadTargetInfo) -> Self {
-        Self {
-            url: &target.url,
-            method: &target.method,
-            headers: target
-                .headers
-                .iter()
-                .map(|header| (header.name.as_str(), header.value.as_str()))
-                .collect(),
-            fields: target
-                .fields
-                .iter()
-                .map(|field| NormalizedField {
-                    name: field.name.as_str(),
-                    value: match &field.value {
-                        UploadFieldValue::Static { value } => {
-                            NormalizedFieldValue::Static(value.as_str())
-                        }
-                        UploadFieldValue::ContentCrc32C => NormalizedFieldValue::ContentCrc32C,
-                        UploadFieldValue::ContentData => NormalizedFieldValue::ContentData,
-                    },
-                })
-                .collect(),
-        }
-    }
-}
+// LOCAL FORK: the FileArtifactUploadTargetInfo conversion went away with the agent harness.
 
 /// A source of bytes to upload to a presigned upload target.
 ///
@@ -397,33 +370,7 @@ fn encode_crc32c_base64(crc32c: u32) -> String {
     STANDARD.encode(crc32c.to_be_bytes())
 }
 
-/// Upload a file artifact. Always computes the base64 CRC32C so callers can
-/// pass it to `confirmFileArtifactUpload`.
-#[cfg(feature = "local_fs")]
-pub(crate) async fn upload_file_to_target(
-    http_client: &http_client::Client,
-    body: impl UploadBody,
-) -> Result<String> {
-    let normalized = NormalizedUploadTarget::from(target);
-    let error_context = UploadErrorContext {
-        transport: "Failed to upload artifact bytes",
-        failure: "Artifact upload",
-    };
-
-    // `confirmFileArtifactUpload` always needs the CRC32C, so we always compute
-    // it up front and then hand it to the dispatcher so the multipart path
-    // doesn't recompute it.
-    let crc32c_base64 = body.compute_crc32c_base64().await?;
-    send_upload(
-        http_client,
-        &normalized,
-        body,
-        Some(crc32c_base64.clone()),
-        error_context,
-    )
-    .await?;
-    Ok(crc32c_base64)
-}
+// LOCAL FORK: fn upload_file_to_target removed with the agent harness.
 
 #[cfg(test)]
 #[path = "presigned_upload_tests.rs"]

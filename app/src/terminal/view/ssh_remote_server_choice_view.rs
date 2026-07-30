@@ -38,6 +38,11 @@ use crate::{Appearance, send_telemetry_from_ctx};
 
 const PROMPT_BORDER_RADIUS: f32 = 8.;
 
+/// LOCAL FORK: was `ai::blocklist::inline_action::inline_action_header`, which came out
+/// with the agent. The value is the same so the prompt keeps its original gutters.
+const INLINE_ACTION_HORIZONTAL_PADDING: f32 = 16.;
+const INLINE_ACTION_HEADER_VERTICAL_PADDING: f32 = 10.;
+
 #[derive(Clone, Debug)]
 pub enum SshRemoteServerChoiceViewAction {
     Install,
@@ -110,15 +115,36 @@ impl SshRemoteServerChoiceView {
         &self.buttons
     }
 
+    /// Match the Figma design: a plain title row, no icon / chevron / action buttons.
+    ///
+    /// LOCAL FORK: this used `HeaderConfig` with no interaction mode, which rendered
+    /// exactly the markup below. `HeaderConfig` came out with the agent.
     fn render_header(&self, app: &AppContext) -> Box<dyn Element> {
-        // Match the Figma design: a plain title row, no icon / chevron /
-        // action buttons. `HeaderConfig` without an `interaction_mode` set
-        // renders exactly that.
-        HeaderConfig::new("Choose your experience for this remote session:", app)
-            .with_corner_radius_override(CornerRadius::with_top(Radius::Pixels(
-                PROMPT_BORDER_RADIUS,
-            )))
-            .render_header(app, None)
+        let appearance = Appearance::as_ref(app);
+        let theme = appearance.theme();
+        let background = theme.surface_2();
+        let title = Text::new_inline(
+            "Choose your experience for this remote session:",
+            appearance.ui_font_family(),
+            appearance.monospace_font_size(),
+        )
+        .soft_wrap(false)
+        .with_color(blended_colors::text_main(theme, background))
+        .finish();
+        Container::new(
+            Flex::row()
+                .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                .with_main_axis_size(MainAxisSize::Max)
+                .with_cross_axis_alignment(CrossAxisAlignment::Center)
+                .with_child(Container::new(title).with_margin_right(8.).finish())
+                .finish(),
+        )
+        .with_padding_left(INLINE_ACTION_HORIZONTAL_PADDING)
+        .with_padding_right(INLINE_ACTION_HORIZONTAL_PADDING)
+        .with_vertical_padding(INLINE_ACTION_HEADER_VERTICAL_PADDING)
+        .with_background(background)
+        .with_corner_radius(CornerRadius::with_top(Radius::Pixels(PROMPT_BORDER_RADIUS)))
+        .finish()
     }
 
     fn render_buttons(&self) -> Box<dyn Element> {

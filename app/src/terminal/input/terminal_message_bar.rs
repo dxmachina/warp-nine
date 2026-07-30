@@ -44,16 +44,8 @@ impl TerminalInputMessageBar {
         inline_history_model: ModelHandle<InlineMenuModel<AcceptHistoryItem, HistoryTab>>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
-        ctx.subscribe_to_model(&ai_input_model, |_, _, _, ctx| {
-            ctx.notify();
-        });
         ctx.subscribe_to_model(&input_buffer_model, |_, _, _, ctx| {
             ctx.notify();
-        });
-        ctx.subscribe_to_model(&context_model, |_, _, event, ctx| {
-            if let BlocklistAIContextEvent::UpdatedPendingContext { .. } = event {
-                ctx.notify();
-            }
         });
         ctx.subscribe_to_model(&suggestions_mode_model, |_, _, event, ctx| {
             let InputSuggestionsModeEvent::ModeChanged { .. } = event;
@@ -67,9 +59,7 @@ impl TerminalInputMessageBar {
 
         Self {
             terminal_model,
-            ai_input_model,
             input_buffer_model,
-            context_model,
             suggestions_mode_model,
             inline_history_model,
         }
@@ -99,14 +89,9 @@ impl View for TerminalInputMessageBar {
 
         let terminal_model = self.terminal_model.lock();
         let current_buffer = self.input_buffer_model.as_ref(app).current_value();
-        let context_model = self.context_model.as_ref(app);
-        let input_model = self.ai_input_model.as_ref(app);
-
         let args = TerminalMessageArgs {
             current_input: current_buffer,
             terminal_model: &terminal_model,
-            context_model,
-            input_model,
             app,
         };
 
@@ -143,10 +128,9 @@ pub struct TerminalMessageArgs<'a> {
 }
 
 impl<'a> TerminalMessageArgs<'a> {
+    // LOCAL FORK: AI input autodetection lived in the agent's input model.
     fn is_input_ai_detected(&self) -> bool {
-        !self.current_input.is_empty()
-            && self.input_model.is_ai_input_enabled()
-            && !self.input_model.is_input_type_locked()
+        false
     }
 }
 
@@ -154,11 +138,8 @@ struct ErroredBlockMessageProducer;
 impl MessageProvider<TerminalMessageArgs<'_>> for ErroredBlockMessageProducer {
     fn produce_message(&self, args: TerminalMessageArgs<'_>) -> Option<Message> {
         let block = args.terminal_model.block_list().last_non_hidden_block()?;
-        let context_block_ids = args.context_model.pending_context_block_ids();
-        if block.exit_code().was_successful()
-            || !args.current_input.is_empty()
-            || !context_block_ids.is_empty()
-        {
+        // LOCAL FORK: attached agent context no longer suppresses this message.
+        if block.exit_code().was_successful() || !args.current_input.is_empty() {
             return None;
         }
         let keystroke = keybinding_name_to_keystroke(SELECT_PREVIOUS_BLOCK_ACTION_NAME, args.app)?;
@@ -378,10 +359,6 @@ impl MessageTransformer<TerminalMessageArgs<'_>> for AutodetectedPromptMessageTr
             return false;
         }
 
-        // Don't append this message if there is attached context, just cause its
-        // too much text and overwhelming.
-        if args.context_model.pending_context_block_ids().is_empty()
-            && args.context_model.pending_context_selected_text().is_none()
         {
             let set_terminal_mode_keystroke =
                 keybinding_name_to_keystroke(SET_INPUT_MODE_TERMINAL_ACTION_NAME, args.app)
@@ -401,51 +378,18 @@ impl MessageTransformer<TerminalMessageArgs<'_>> for AutodetectedPromptMessageTr
     }
 }
 
+// LOCAL FORK: both transformers described pending agent context, which no longer exists.
 struct AttachedBlocksMessageTransformer;
 impl MessageTransformer<TerminalMessageArgs<'_>> for AttachedBlocksMessageTransformer {
-    fn transform_message(&self, message: &mut Message, args: TerminalMessageArgs<'_>) -> bool {
-        let context_block_ids = args.context_model.pending_context_block_ids();
-        if context_block_ids.is_empty() {
-            return false;
-        }
-
-        let Some(block_command) = context_block_ids
-            .iter()
-            .find_map(|id| args.terminal_model.block_list().block_with_id(id))
-            .map(|block| truncated_command_for_block(&block.command_to_string()))
-        else {
-            return false;
-        };
-
-        if context_block_ids.len() == 1 {
-            message.append_text(format!(" with `{}` attached", block_command).as_str());
-        } else {
-            let text = if context_block_ids.len() == 2 {
-                format!(" with `{}` and 1 other command attached", block_command)
-            } else {
-                format!(
-                    " with `{}` and {} other commands attached",
-                    block_command,
-                    context_block_ids.len().saturating_sub(1)
-                )
-            };
-            message.append_text(text.as_str());
-        }
-
-        true
+    fn transform_message(&self, _message: &mut Message, _args: TerminalMessageArgs<'_>) -> bool {
+        false
     }
 }
 
 struct AttachedTextSelectionMessageTransformer;
 impl MessageTransformer<TerminalMessageArgs<'_>> for AttachedTextSelectionMessageTransformer {
-    fn transform_message(&self, message: &mut Message, args: TerminalMessageArgs<'_>) -> bool {
-        if args.context_model.pending_context_selected_text().is_none()
-            || !args.context_model.pending_context_block_ids().is_empty()
-        {
-            return false;
-        }
-        message.append_text(" with text selection attached");
-        true
+    fn transform_message(&self, _message: &mut Message, _args: TerminalMessageArgs<'_>) -> bool {
+        false
     }
 }
 

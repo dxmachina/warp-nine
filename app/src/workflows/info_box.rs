@@ -910,20 +910,12 @@ impl WorkflowsMoreInfoView {
         match &self.workflow {
             WorkflowType::AIGenerated {
                 workflow,
-                origin: source,
+                origin: _source,
             } => {
                 let icon = if FeatureFlag::AgentMode.is_enabled() {
-                    match source {
-                        AIWorkflowOrigin::AgentMode => {
-                            Icon::new(icons::Icon::Prompt.into(), appearance.theme().accent())
-                                .finish()
-                        }
-                        _ => Icon::new(
-                            icons::Icon::Prompt.into(),
-                            ai_brand_color(appearance.theme()),
-                        )
-                        .finish(),
-                    }
+                    // LOCAL FORK: the per-origin brand color lived in the agent module, so every
+                    // origin now uses the theme accent.
+                    Icon::new(icons::Icon::Prompt.into(), appearance.theme().accent()).finish()
                 } else {
                     Icon::new(
                         icons::Icon::AiAssistant.into(),

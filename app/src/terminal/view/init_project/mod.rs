@@ -5,15 +5,15 @@ use std::path::{Path, PathBuf};
 
 use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
 use lsp::supported_servers::LSPServerType;
-use lsp_server_selector::{LSPServerInfo, create_lsp_server_selector};
+use lsp_server_selector::LSPServerInfo;
 pub use model::{InitProjectModel, InitProjectModelEvent, InitStepKind};
 use model::{InitStepData, InitStepStatus};
 use warp_core::ui::theme::Fill;
 #[cfg(feature = "local_fs")]
 use warp_errors::report_error;
 use warpui::elements::{
-    Border, ChildView, Container, CrossAxisAlignment, Empty, Flex, MouseStateHandle, ParentElement,
-    Text,
+    Border, ChildView, Container, CornerRadius, CrossAxisAlignment, Empty, Expanded, Flex,
+    MouseStateHandle, ParentElement, Radius, Text,
 };
 use warpui::ui_components::button::ButtonVariant;
 use warpui::ui_components::components::UiComponent;
@@ -23,6 +23,13 @@ use warpui::{
 };
 
 use crate::appearance::Appearance;
+use crate::ui_components::inline_action::inline_action_header::{
+    HeaderConfig, INLINE_ACTION_HORIZONTAL_PADDING, INLINE_ACTION_VERTICAL_PADDING,
+};
+use crate::ui_components::inline_action::status_icons::{in_progress_icon, yellow_stop_icon};
+use crate::ui_components::keyboard_navigable_buttons::{
+    KeyboardNavigableButtonBuilder, KeyboardNavigableButtons, simple_navigation_button,
+};
 use crate::code::lsp_telemetry::{LspEnablementSource, LspTelemetryEvent};
 use crate::server::telemetry::{
     AgentModeSetupCodebaseContextActionType, AgentModeSetupCreateEnvironmentActionType,
@@ -156,9 +163,11 @@ enum StepState {
     Welcome,
     CodebaseContext {
         mouse_states: CodebaseContextMouseStateHandles,
+        keyboard_nav_buttons: Option<ViewHandle<KeyboardNavigableButtons>>,
     },
     LanguageServersSingle {
         mouse_states: LanguageServersMouseStateHandles,
+        keyboard_nav_buttons: Option<ViewHandle<KeyboardNavigableButtons>>,
     },
     LanguageServersMultiple {
         skip_mouse_state: MouseStateHandle,
@@ -166,9 +175,11 @@ enum StepState {
     },
     ProjectRules {
         mouse_states: ProjectRulesMouseStateHandles,
+        keyboard_nav_buttons: Option<ViewHandle<KeyboardNavigableButtons>>,
     },
     CreateEnvironment {
         mouse_states: CreateEnvironmentMouseStateHandles,
+        keyboard_nav_buttons: Option<ViewHandle<KeyboardNavigableButtons>>,
     },
 }
 
@@ -229,7 +240,6 @@ impl InitStepBlock {
                     StepState::LanguageServersMultiple {
                         skip_mouse_state: MouseStateHandle::default(),
                         enable_mouse_state: MouseStateHandle::default(),
-                        lsp_selector: None,
                     }
                 } else {
                     StepState::LanguageServersSingle {
@@ -250,71 +260,57 @@ impl InitStepBlock {
 
         let mut new_block = Self { model, state };
 
-        // Create keyboard nav buttons or LSP selector based on step kind and status
+        // Create the keyboard nav buttons based on step kind and status.
         new_block.create_interactive_views(ctx);
 
         new_block
     }
 
     fn create_interactive_views(&mut self, ctx: &mut ViewContext<Self>) {
-        let step = self.model.as_ref(ctx).get_step(self.step_kind());
-        let Some(step) = step else { return };
+        let Some(step) = self.model.as_ref(ctx).get_step(self.step_kind()) else {
+            return;
+        };
 
-        match (&step.status, &mut self.state) {
+        let buttons = match (&step.status, &self.state) {
             (
                 InitStepStatus::Ready(InitStepData::CodebaseContext { pwd_path }),
-                StepState::CodebaseContext {
-                    mouse_states,
-                    keyboard_nav_buttons,
-                },
-            ) => {
-                // LOCAL FORK: the button strip was KeyboardNavigableButtons,
-                // which lived in the agent blocklist. Nothing renders here now.
-                *keyboard_nav_buttons = None;
-            }
+                StepState::CodebaseContext { mouse_states, .. },
+            ) => Self::create_codebase_context_buttons(pwd_path, mouse_states),
             (
                 InitStepStatus::Ready(InitStepData::LanguageServers { servers, repo_path }),
-                StepState::LanguageServersSingle {
-                    mouse_states,
-                    keyboard_nav_buttons,
-                },
+                StepState::LanguageServersSingle { mouse_states, .. },
             ) if servers.len() == 1 => {
-                // LOCAL FORK: the button strip was KeyboardNavigableButtons,
-                // which lived in the agent blocklist. Nothing renders here now.
-                *keyboard_nav_buttons = None;
-            }
-            (
-                InitStepStatus::Ready(InitStepData::LanguageServers { servers, repo_path }),
-                StepState::LanguageServersMultiple { lsp_selector, .. },
-            ) if servers.len() > 1 => {
-                *lsp_selector = Some(create_lsp_server_selector(
-                    servers.clone(),
-                    repo_path.clone(),
-                    ctx,
-                ));
+                Self::create_single_lsp_buttons(&servers[0], repo_path, mouse_states)
             }
             (
                 InitStepStatus::Ready(InitStepData::ProjectScopedRules { linkable_files }),
-                StepState::ProjectRules {
-                    mouse_states,
-                    keyboard_nav_buttons,
-                },
-            ) => {
-                // LOCAL FORK: the button strip was KeyboardNavigableButtons,
-                // which lived in the agent blocklist. Nothing renders here now.
-                *keyboard_nav_buttons = None;
-            }
+                StepState::ProjectRules { mouse_states, .. },
+            ) => Self::create_project_rules_buttons(linkable_files, mouse_states),
             (
                 InitStepStatus::Ready(InitStepData::CreateEnvironment),
-                StepState::CreateEnvironment {
-                    mouse_states,
-                    keyboard_nav_buttons,
-                },
-            ) => {
-                // LOCAL FORK: the button strip was KeyboardNavigableButtons,
-                // which lived in the agent blocklist. Nothing renders here now.
-                *keyboard_nav_buttons = None;
+                StepState::CreateEnvironment { mouse_states, .. },
+            ) => Self::create_environment_buttons(mouse_states),
+            _ => return,
+        };
+
+        let view = ctx.add_typed_action_view(|_| KeyboardNavigableButtons::new(buttons));
+        match &mut self.state {
+            StepState::CodebaseContext {
+                keyboard_nav_buttons,
+                ..
             }
+            | StepState::LanguageServersSingle {
+                keyboard_nav_buttons,
+                ..
+            }
+            | StepState::ProjectRules {
+                keyboard_nav_buttons,
+                ..
+            }
+            | StepState::CreateEnvironment {
+                keyboard_nav_buttons,
+                ..
+            } => *keyboard_nav_buttons = Some(view),
             _ => {}
         }
     }
@@ -337,10 +333,6 @@ impl InitStepBlock {
                 keyboard_nav_buttons: Some(buttons),
                 ..
             } => ctx.focus(buttons),
-            StepState::LanguageServersMultiple {
-                lsp_selector: Some(selector),
-                ..
-            } => ctx.focus(selector),
             _ => {}
         }
     }
@@ -462,40 +454,112 @@ impl InitStepBlock {
         ]
     }
 
+    /// Stacks a rendered [`HeaderConfig`] above a body, on the inline-action surface.
+    ///
+    /// LOCAL FORK: `RenderableAction` (ai/blocklist/inline_action/requested_action.rs)
+    /// composed these two. It was not rescued, so the composition lives here.
+    fn render_action_block(
+        header: HeaderConfig,
+        body: Box<dyn Element>,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
+        let theme = Appearance::as_ref(app).theme();
+        Flex::column()
+            .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .with_child(header.render(app))
+            .with_child(
+                Container::new(body)
+                    .with_horizontal_padding(INLINE_ACTION_HORIZONTAL_PADDING)
+                    .with_vertical_padding(INLINE_ACTION_VERTICAL_PADDING)
+                    .with_background(theme.surface_1())
+                    .with_corner_radius(CornerRadius::with_bottom(Radius::Pixels(7.)))
+                    .finish(),
+            )
+            .finish()
+    }
+
     /// Renders a "ready" state block with keyboard-navigable buttons and a header prompt.
     fn render_ready_with_buttons(
+        action_view: &ViewHandle<KeyboardNavigableButtons>,
         header_text: impl Into<std::borrow::Cow<'static, str>>,
         app: &AppContext,
     ) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
-        RenderableAction::new_with_element(ChildView::new(action_view).finish(), app)
-            .with_header(
-                HeaderConfig::new(header_text, app)
-                    .with_icon(yellow_stop_icon(appearance))
-                    .with_soft_wrap_title(),
-            )
-            .with_background_color(appearance.theme().surface_1().into_solid())
-            .with_content_item_spacing()
+        let header = HeaderConfig::new(header_text, app)
+            .with_icon(yellow_stop_icon(appearance))
+            .with_soft_wrap_title();
+        Self::render_action_block(header, ChildView::new(action_view).finish(), app)
+    }
+
+    /// Renders an in-progress step with the running spinner icon.
+    fn render_in_progress(text: &str, app: &AppContext) -> Box<dyn Element> {
+        let appearance = Appearance::as_ref(app);
+        Self::render_completion(text, in_progress_icon(appearance).finish(), None, app)
+    }
+
+    /// Renders an informational step prompt with no button row.
+    fn render_prompt_text(
+        header_text: impl Into<std::borrow::Cow<'static, str>>,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
+        let appearance = Appearance::as_ref(app);
+        HeaderConfig::new(header_text, app)
+            .with_icon(yellow_stop_icon(appearance))
+            .with_soft_wrap_title()
             .render(app)
-            .finish()
+    }
+
+    /// Renders a completion state with the given leading icon and an optional
+    /// trailing action button.
+    fn render_completion(
+        text: &str,
+        icon: Box<dyn Element>,
+        action_button: Option<Box<dyn Element>>,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
+        let appearance = Appearance::as_ref(app);
+        let mut row = Flex::row()
+            .with_cross_axis_alignment(CrossAxisAlignment::Center)
+            .with_child(Container::new(icon).with_margin_right(8.).finish())
+            .with_child(
+                Text::new(
+                    text.to_string(),
+                    appearance.ui_font_family(),
+                    appearance.monospace_font_size(),
+                )
+                .soft_wrap(true)
+                .finish(),
+            );
+        if let Some(action_button) = action_button {
+            row = row
+                .with_child(Expanded::new(1., Empty::new().finish()).finish())
+                .with_child(action_button);
+        }
+        row.finish()
     }
 
     /// Renders a success completion state with check icon.
     fn render_success_completion(text: &str, app: &AppContext) -> Box<dyn Element> {
-        RenderableAction::new(text, app)
-            .with_icon(Icon::Check.to_warpui_icon(Fill::success()).finish())
-            .with_content_item_spacing()
-            .render(app)
-            .finish()
+        Self::render_completion_with_button(text, None, app)
+    }
+
+    /// Renders a success completion state with check icon and an optional trailing button.
+    fn render_completion_with_button(
+        text: &str,
+        action_button: Option<Box<dyn Element>>,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
+        Self::render_completion(
+            text,
+            Icon::Check.to_warpui_icon(Fill::success()).finish(),
+            action_button,
+            app,
+        )
     }
 
     /// Renders a skipped/cancelled completion state with X icon.
     fn render_skipped_completion(text: &str, app: &AppContext) -> Box<dyn Element> {
-        RenderableAction::new(text, app)
-            .with_icon(Icon::X.to_warpui_icon(Fill::error()).finish())
-            .with_content_item_spacing()
-            .render(app)
-            .finish()
+        Self::render_completion(text, Icon::X.to_warpui_icon(Fill::error()).finish(), None, app)
     }
 
     /// Creates a regenerate AGENTS.md button.
@@ -575,8 +639,6 @@ impl InitStepBlock {
         )
         .with_color(theme.main_text_color(theme.background()).into_solid())
         .soft_wrap(true)
-        .finish()
-        .with_content_item_spacing()
         .finish();
 
         let content = Flex::column()
@@ -613,25 +675,11 @@ impl InitStepBlock {
                 else {
                     return Empty::new().finish();
                 };
-
-                RenderableAction::new_with_element(
-                    Container::new(ChildView::new(action_view).finish())
-                        .with_background(appearance.theme().surface_1())
-                        .finish(),
+                Self::render_ready_with_buttons(
+                    action_view,
+                    "Would you like the Agent to index this codebase? This will lead to more efficient and tailored help.",
                     app,
                 )
-                .with_header(
-                    HeaderConfig::new(
-                        "Would you like the Agent to index this codebase? This will lead to more efficient and tailored help.",
-                        app,
-                    )
-                    .with_icon(yellow_stop_icon(appearance))
-                    .with_soft_wrap_title(),
-                )
-                .with_background_color(appearance.theme().surface_1().into_solid())
-                .with_content_item_spacing()
-                .render(app)
-                .finish()
             }
             InitStepStatus::Running => {
                 // Codebase context doesn't have a "running" state
@@ -657,29 +705,26 @@ impl InitStepBlock {
         };
 
         match indexing_result {
-            CodebaseIndexingResult::Accepted => {
-                RenderableAction::new("Codebase index started", app)
-                    .with_icon(Icon::Check.to_warpui_icon(Fill::success()).finish())
-                    .with_action_button(
-                        Appearance::as_ref(app)
-                            .ui_builder()
-                            .button(
-                                ButtonVariant::Outlined,
-                                mouse_states.view_status_button.clone(),
-                            )
-                            .with_text_label("View index status".to_string())
-                            .build()
-                            .on_click(|ctx, _, _| {
-                                ctx.dispatch_typed_action(
-                                    InitProjectBlockAction::ViewCodebaseContextStatus,
-                                );
-                            })
-                            .finish(),
-                    )
-                    .with_content_item_spacing()
-                    .render(app)
-                    .finish()
-            }
+            CodebaseIndexingResult::Accepted => Self::render_completion_with_button(
+                "Codebase index started",
+                Some(
+                    Appearance::as_ref(app)
+                        .ui_builder()
+                        .button(
+                            ButtonVariant::Outlined,
+                            mouse_states.view_status_button.clone(),
+                        )
+                        .with_text_label("View index status".to_string())
+                        .build()
+                        .on_click(|ctx, _, _| {
+                            ctx.dispatch_typed_action(
+                                InitProjectBlockAction::ViewCodebaseContextStatus,
+                            );
+                        })
+                        .finish(),
+                ),
+                app,
+            ),
             CodebaseIndexingResult::Skipped => {
                 Self::render_skipped_completion("Codebase index cancelled", app)
             }
@@ -738,27 +783,13 @@ impl InitStepBlock {
         )
     }
 
-    fn render_multiple_lsp_ready(&self, repo_path: &Path, app: &AppContext) -> Box<dyn Element> {
-        let appearance = Appearance::as_ref(app);
-        let StepState::LanguageServersMultiple {
-            skip_mouse_state,
-            enable_mouse_state,
-            lsp_selector: Some(action_view),
-        } = &self.state
-        else {
-            return Empty::new().finish();
-        };
-
-        lsp_server_selector::render_lsp_selector_block(
-            action_view,
-            repo_path,
-            skip_mouse_state,
-            enable_mouse_state,
-            appearance,
+    /// LOCAL FORK: the multi-server picker was an agent block kit view, so this is
+    /// now just the prompt text.
+    fn render_multiple_lsp_ready(&self, _repo_path: &Path, app: &AppContext) -> Box<dyn Element> {
+        Self::render_prompt_text(
+            "Enable language server support for this codebase? This will give you smarter code navigation, inline error checking, and more.",
             app,
         )
-        .with_content_item_spacing()
-        .finish()
     }
 
     fn render_completed_language_servers(
@@ -819,15 +850,7 @@ impl InitStepBlock {
                     app,
                 )
             }
-            InitStepStatus::Running => {
-                // AI is generating AGENTS.md - show in-progress state
-                let appearance = Appearance::as_ref(app);
-                RenderableAction::new("Generating AGENTS.md...", app)
-                    .with_icon(in_progress_icon(appearance).finish())
-                    .with_content_item_spacing()
-                    .render(app)
-                    .finish()
-            }
+            InitStepStatus::Running => Self::render_in_progress("Generating AGENTS.md...", app),
             InitStepStatus::Completed(result) => self.render_completed_project_rules(result, app),
         }
     }
@@ -858,14 +881,7 @@ impl InitStepBlock {
                     app,
                 )
             }
-            InitStepStatus::Running => {
-                let appearance = Appearance::as_ref(app);
-                RenderableAction::new("Creating environment...", app)
-                    .with_icon(in_progress_icon(appearance).finish())
-                    .with_content_item_spacing()
-                    .render(app)
-                    .finish()
-            }
+            InitStepStatus::Running => Self::render_in_progress("Creating environment...", app),
             InitStepStatus::Completed(result) => {
                 self.render_completed_create_environment(result, app)
             }
@@ -891,6 +907,20 @@ impl InitStepBlock {
         }
     }
 
+    fn render_rules_configured(
+        text: &str,
+        init_completed: bool,
+        regenerate_mouse_state: &MouseStateHandle,
+        button_disabled: bool,
+        appearance: &Appearance,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
+        let action_button = init_completed.then(|| {
+            Self::regenerate_button(regenerate_mouse_state, button_disabled, appearance)
+        });
+        Self::render_completion_with_button(text, action_button, app)
+    }
+
     fn render_completed_project_rules(
         &self,
         result: &InitActionResult,
@@ -913,29 +943,23 @@ impl InitStepBlock {
             }
             ProjectScopedRulesResult::GenerateNew {
                 button_disabled, ..
-            } => {
-                let mut action = RenderableAction::new("Project rules configured", app)
-                    .with_icon(Icon::Check.to_warpui_icon(Fill::success()).finish());
-                if init_completed {
-                    action = action.with_action_button(Self::regenerate_button(
-                        &mouse_states.regenerate_button,
-                        *button_disabled,
-                        appearance,
-                    ));
-                }
-                action.with_content_item_spacing().render(app).finish()
-            }
+            } => Self::render_rules_configured(
+                "Project rules configured",
+                init_completed,
+                &mouse_states.regenerate_button,
+                *button_disabled,
+                appearance,
+                app,
+            ),
             ProjectScopedRulesResult::AlreadyExists { button_disabled } => {
-                let mut action = RenderableAction::new("Project rules already configured", app)
-                    .with_icon(Icon::Check.to_warpui_icon(Fill::success()).finish());
-                if init_completed {
-                    action = action.with_action_button(Self::regenerate_button(
-                        &mouse_states.regenerate_button,
-                        *button_disabled,
-                        appearance,
-                    ));
-                }
-                action.with_content_item_spacing().render(app).finish()
+                Self::render_rules_configured(
+                    "Project rules already configured",
+                    init_completed,
+                    &mouse_states.regenerate_button,
+                    *button_disabled,
+                    appearance,
+                    app,
+                )
             }
             ProjectScopedRulesResult::Skipped => {
                 Self::render_skipped_completion("Project rules skipped", app)

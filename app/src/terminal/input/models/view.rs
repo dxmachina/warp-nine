@@ -1,21 +1,18 @@
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
+use ai::LLMId;
 use ai::api_keys::{ApiKeyManager, ApiKeyManagerEvent};
 use pathfinder_color::ColorU;
 use warp_core::ui::appearance::Appearance;
 use warp_core::ui::theme::Fill;
 use warp_core::ui::theme::color::internal_colors;
-use warpui::elements::{ChildView, MainAxisSize};
+use warpui::elements::ChildView;
 use warpui::{
     AppContext, Element, Entity, EntityId, ModelHandle, SingletonEntity as _, View, ViewContext,
     ViewHandle,
 };
 
-use crate::ai::blocklist::agent_view::AgentViewController;
-use crate::ai::blocklist::block::cli_controller::{CLISubagentController, CLISubagentEvent};
-use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
-use crate::ai::llms::{LLMId, LLMPreferences, LLMPreferencesEvent};
 use crate::features::FeatureFlag;
 use crate::search::data_source::{Query, QueryFilter};
 use crate::search::mixer::{SearchMixer, SearchMixerEvent};
@@ -28,10 +25,8 @@ use crate::terminal::input::models::data_source::{AcceptModel, ModelSelectorData
 use crate::terminal::input::suggestions_mode_model::{
     InputSuggestionsModeEvent, InputSuggestionsModeModel,
 };
-use crate::terminal::view::ambient_agent::AmbientAgentViewModel;
 use crate::ui_components::icons::Icon;
 use crate::view_components::action_button::{ActionButton, ActionButtonTheme, ButtonSize};
-use crate::view_components::alert::{Alert, AlertConfig};
 use crate::workspace::WorkspaceAction;
 
 struct ManageDefaultsTheme;
@@ -110,30 +105,19 @@ pub struct InlineModelSelectorView {
     /// prompt is stashed in the suggestions-mode buffer snapshot and restored
     /// when the selector closes.
     prompt_parked_for_search: bool,
-    /// Retained so a lazily-created ambient view model can be attached after construction on the
-    /// shared-session viewer path (see `set_ambient_agent_view_model`). It also lives inside the
-    /// search mixer; this handle points at the same model.
-    model_selector_data_source: ModelHandle<ModelSelectorDataSource>,
 }
 
 impl InlineModelSelectorView {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         terminal_view_id: EntityId,
-        ambient_agent_view_model: Option<ModelHandle<AmbientAgentViewModel>>,
         suggestions_mode_model: ModelHandle<InputSuggestionsModeModel>,
-        agent_view_controller: ModelHandle<AgentViewController>,
         input_buffer_model: &ModelHandle<InputBufferModel>,
-        cli_subagent_controller: ModelHandle<CLISubagentController>,
         positioner: &ModelHandle<InlineMenuPositioner>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let window_id = ctx.window_id();
-        let data_source = ctx.add_model(move |_| {
-            // Built without the ambient model; the setter (called below for construction and by
-            // the lazy shared-session viewer path) is the single point that attaches it.
-            ModelSelectorDataSource::new(terminal_view_id, window_id, None)
-        });
+        let data_source =
+            ctx.add_model(move |_| ModelSelectorDataSource::new(terminal_view_id, window_id));
 
         let tab_configs = TAB_CONFIGS.clone();
         let initial_filters = tab_configs
@@ -175,51 +159,18 @@ impl InlineModelSelectorView {
                 })),
             };
 
+            // LOCAL FORK: the banner explained which agent a model applied to; there
+            // is only one model list left, so it has nothing to say.
             ctx.add_typed_action_view(|ctx| {
-                let menu = InlineMenuView::new_with_tabs(
+                InlineMenuView::new_with_tabs(
                     mixer.clone(),
                     positioner.clone(),
                     &suggestions_mode_model,
-                    agent_view_controller,
                     tab_configs,
                     None,
                     ctx,
                 )
-                .with_header_config(header_config);
-
-                let menu_model = menu.model().clone();
-                let cli_ctrl = cli_subagent_controller.clone();
-                menu.with_banner_fn(move |app| {
-                    let active_tab = menu_model
-                        .as_ref(app)
-                        .active_tab_id()
-                        .unwrap_or(InlineModelSelectorTab::BaseAgent);
-                    let history = BlocklistAIHistoryModel::as_ref(app);
-
-                    let main_agent_in_progress = history
-                        .active_conversation(terminal_view_id)
-                        .is_some_and(|c| !c.is_empty() && c.status().is_in_progress());
-                    let is_cli_agent_in_control_or_tagged_in =
-                        cli_ctrl.as_ref(app).is_agent_in_control_or_tagged_in();
-                    let message = match active_tab {
-                        InlineModelSelectorTab::FullTerminalUse if main_agent_in_progress && !is_cli_agent_in_control_or_tagged_in => {
-                            Some("You're using the base agent. Full terminal use models only apply to the full terminal use agent.")
-                        }
-                        InlineModelSelectorTab::BaseAgent if is_cli_agent_in_control_or_tagged_in => {
-                            Some("You're using the full terminal use agent. Base models only apply to the base agent.")
-                        }
-                        _ => None,
-                    };
-
-                    message.map(|msg| {
-                        let appearance = Appearance::as_ref(app);
-                        Alert::new().render(
-                            AlertConfig::warning(msg.to_string())
-                                .with_main_axis_size(MainAxisSize::Max),
-                            appearance,
-                        )
-                    })
-                })
+                .with_header_config(header_config)
             })
         } else {
             ctx.add_typed_action_view(|ctx| {
@@ -227,7 +178,6 @@ impl InlineModelSelectorView {
                     mixer.clone(),
                     positioner.clone(),
                     &suggestions_mode_model,
-                    agent_view_controller,
                     tab_configs,
                     None,
                     ctx,
@@ -297,25 +247,6 @@ impl InlineModelSelectorView {
             me.rerun_query(ctx);
         });
 
-        ctx.subscribe_to_model(
-            &LLMPreferences::handle(ctx),
-            |me, _, event, ctx| match event {
-                LLMPreferencesEvent::UpdatedAvailableLLMs
-                | LLMPreferencesEvent::UpdatedActiveAgentModeLLM
-                    if me
-                        .suggestions_mode_model
-                        .as_ref(ctx)
-                        .is_inline_model_selector() =>
-                {
-                    me.mixer.update(ctx, |mixer, ctx| {
-                        if let Some(query) = mixer.current_query().cloned() {
-                            mixer.run_query(query, ctx);
-                        }
-                    });
-                }
-                _ => (),
-            },
-        );
         ctx.subscribe_to_model(&ApiKeyManager::handle(ctx), |me, _, event, ctx| {
             if !matches!(event, ApiKeyManagerEvent::KeysUpdated) {
                 return;
@@ -332,32 +263,6 @@ impl InlineModelSelectorView {
                 });
             }
         });
-
-        ctx.subscribe_to_model(&cli_subagent_controller, |me, _, event, ctx| match event {
-            CLISubagentEvent::SpawnedSubagent { .. }
-            | CLISubagentEvent::FinishedSubagent { .. }
-            | CLISubagentEvent::UpdatedControl { .. } => {
-                me.menu_view.update(ctx, |_, ctx| ctx.notify());
-            }
-            CLISubagentEvent::UpdatedInstruction { .. }
-            | CLISubagentEvent::UpdatedLastSnapshot
-            | CLISubagentEvent::ToggledHideResponses
-            | CLISubagentEvent::ControlHandedBackAfterTransfer => {}
-        });
-
-        ctx.subscribe_to_model(
-            &BlocklistAIHistoryModel::handle(ctx),
-            move |me, _, event, ctx| {
-                if let BlocklistAIHistoryEvent::UpdatedConversationStatus {
-                    terminal_surface_id: event_terminal_surface_id,
-                    ..
-                } = event
-                    && *event_terminal_surface_id == terminal_view_id
-                {
-                    me.menu_view.update(ctx, |_, ctx| ctx.notify());
-                }
-            },
-        );
 
         ctx.subscribe_to_model(&mixer, |me, _, event, ctx| {
             let SearchMixerEvent::ResultsChanged = event;
@@ -390,21 +295,11 @@ impl InlineModelSelectorView {
                 return;
             }
 
-            // If the user is actively filtering, don't override their selection.
-            if me.filter_results_by_input
-                && !me.input_buffer_model.as_ref(ctx).current_value().is_empty()
-            {
-                return;
-            }
-
-            let active_id = me.active_model_id_for_current_tab(ctx);
-
-            me.menu_view.update(ctx, |menu, ctx| {
-                menu.select_first_where(|item| item.id == active_id, ctx);
-            });
+            // LOCAL FORK: without LLM preferences there is no "active" model to
+            // preselect, so the menu keeps its default selection.
         });
 
-        let mut me = Self {
+        Self {
             menu_view,
             mixer,
             suggestions_mode_model,
@@ -413,29 +308,10 @@ impl InlineModelSelectorView {
             selection_before_tab_switch: None,
             filter_results_by_input: true,
             prompt_parked_for_search: false,
-            model_selector_data_source: data_source,
-        };
-        // Route ambient wiring through the setter so construction and the lazy shared-session
-        // viewer path share one implementation.
-        if let Some(ambient_agent_view_model) = ambient_agent_view_model {
-            me.set_ambient_agent_view_model(ambient_agent_view_model, ctx);
         }
-        me
     }
 
-    /// Attaches a lazily-created ambient agent view model to the picker's data source so a
-    /// shared-session viewer's follow-up lists the correct (cloud-pane) model set. Used when a
-    /// raw-link viewer only learns the run is ambient at `SessionJoined`. Idempotent.
-    pub fn set_ambient_agent_view_model(
-        &mut self,
-        ambient_agent_view_model: ModelHandle<AmbientAgentViewModel>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.model_selector_data_source
-            .update(ctx, |data_source, ctx| {
-                data_source.set_ambient_agent_view_model(ambient_agent_view_model, ctx);
-            });
-    }
+    // LOCAL FORK: fn set_ambient_agent_view_model removed with the agent.
 
     fn menu_model<'a>(
         &self,
@@ -450,19 +326,7 @@ impl InlineModelSelectorView {
             .unwrap_or(InlineModelSelectorTab::BaseAgent)
     }
 
-    fn active_model_id_for_current_tab(&self, ctx: &ViewContext<Self>) -> LLMId {
-        let llm_preferences = LLMPreferences::as_ref(ctx);
-        match self.active_tab(ctx) {
-            InlineModelSelectorTab::BaseAgent => llm_preferences
-                .get_active_base_model(ctx, Some(self.terminal_view_id))
-                .id
-                .clone(),
-            InlineModelSelectorTab::FullTerminalUse => llm_preferences
-                .get_active_cli_agent_model(ctx, Some(self.terminal_view_id))
-                .id
-                .clone(),
-        }
-    }
+    // LOCAL FORK: fn active_model_id_for_current_tab removed with the agent.
 
     fn rerun_query(&self, ctx: &mut ViewContext<Self>) {
         let filters = self.menu_model(ctx).active_tab_filters();

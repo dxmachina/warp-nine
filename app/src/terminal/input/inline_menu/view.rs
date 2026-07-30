@@ -344,7 +344,6 @@ impl<A: InlineMenuAction> InlineMenuView<A> {
             mixer,
             positioner,
             input_suggestions_model,
-            agent_view_controller,
             inline_menu_model,
             ctx,
         )
@@ -366,7 +365,6 @@ impl<A: InlineMenuAction, T: 'static + Send + Sync + Clone + PartialEq> InlineMe
             mixer,
             positioner,
             input_suggestions_model,
-            agent_view_controller,
             inline_menu_model,
             ctx,
         )
@@ -386,12 +384,6 @@ impl<A: InlineMenuAction, T: 'static + Send + Sync> InlineMenuView<A, T> {
             positioner: positioner.clone(),
         };
         let message_bar = ctx.add_view(|ctx| InlineMenuMessageBar::new(menu_bar_args, ctx));
-
-        ctx.subscribe_to_model(&agent_view_controller, |_, _, event, ctx| match event {
-            AgentViewControllerEvent::EnteredAgentView { .. }
-            | AgentViewControllerEvent::ExitedAgentView { .. } => ctx.notify(),
-            _ => (),
-        });
 
         ctx.subscribe_to_model(
             input_suggestions_model,
@@ -498,7 +490,6 @@ impl<A: InlineMenuAction, T: 'static + Send + Sync> InlineMenuView<A, T> {
             model: inline_menu_model,
             positioner,
             message_bar,
-            agent_view_controller,
             selection: InlineMenuSelection::default(),
             hovered_idx: None,
             details_pane_target: DetailsPaneTarget::default(),
@@ -1134,11 +1125,8 @@ impl<A: InlineMenuAction, T: 'static + Send + Sync> View for InlineMenuView<A, T
                             !is_rendering_below_input || !has_header,
                             false,
                         )
-                        .with_border_fill(if self.agent_view_controller.as_ref(app).is_active() {
-                            input::agent::styles::default_border_color(theme)
-                        } else {
-                            input::terminal::styles::default_border_color(theme)
-                        }),
+                        // LOCAL FORK: the agent border style went away with the agent view.
+                        .with_border_fill(input::terminal::styles::default_border_color(theme)),
                 )
                 .finish(),
         )

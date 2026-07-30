@@ -15,6 +15,10 @@ use warpui::{AppContext, Element, SingletonEntity, TypedActionView, ViewContext,
 use super::{InitProjectBlockAction, InitStepBlock};
 use crate::appearance::Appearance;
 use crate::ui_components::blended_colors;
+use crate::ui_components::inline_action::inline_action_header::INLINE_ACTION_HORIZONTAL_PADDING;
+use crate::ui_components::inline_action::inline_action_icons::icon_size;
+use crate::ui_components::inline_action::status_icons::yellow_stop_icon;
+use crate::ui_components::toggleable_items::{ToggleableItemBuilder, ToggleableItemsView};
 
 #[derive(Debug, Clone)]
 pub struct LSPServerInfo {
@@ -56,6 +60,7 @@ pub fn create_lsp_server_selector(
     ctx.subscribe_to_view(
         &view_handle,
         move |parent_me, lsp_view_handle, event, parent_ctx| {
+            use crate::ui_components::toggleable_items::ToggleableItemsEvent;
 
             match event {
                 ToggleableItemsEvent::SelectionChanged => {
@@ -88,6 +93,7 @@ pub fn create_lsp_server_selector(
 
 /// Renders the complete LSP server selector block with header and checkboxes.
 pub fn render_lsp_selector_block(
+    action_view: &ViewHandle<ToggleableItemsView<LSPServerInfo>>,
     repo_path: &std::path::Path,
     skip_mouse_state: &MouseStateHandle,
     enable_mouse_state: &MouseStateHandle,

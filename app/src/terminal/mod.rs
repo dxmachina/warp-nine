@@ -90,7 +90,7 @@ pub use writeable_pty::{PtyIntent, PtyIntentEvent, TerminalSurface};
 #[cfg(windows)]
 pub mod wsl;
 
-pub use cli_agent::CLIAgent;
+// LOCAL FORK: CLIAgent went with the agent.
 
 pub use block_list_settings::*;
 pub use mock_terminal_manager::MockTerminalManager;

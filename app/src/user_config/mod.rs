@@ -64,8 +64,6 @@ pub enum WarpConfigUpdateEvent {
     /// The local `custom_model_routers/` custom model routers were created, modified, or deleted.
     #[cfg_attr(not(feature = "local_fs"), allow(dead_code))]
     ModelConfigs,
-    /// Emitted when one or more `custom_model_routers/` files failed to parse.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
     /// The settings file (`settings.toml`) was created, modified, or deleted.
     #[cfg_attr(not(feature = "local_fs"), expect(dead_code))]
     Settings,
@@ -123,17 +121,7 @@ impl WarpConfig {
         &self.local_user_workflows
     }
 
-    /// The local (YAML-sourced) custom model routers.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    pub fn custom_model_routers(&self) -> &Vec<CustomModelRouter> {
-        &self.custom_model_routers
-    }
-
-    /// Parse errors for `custom_model_routers/` files that failed to load.
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    pub fn custom_model_router_errors(&self) -> &Vec<ModelConfigError> {
-        &self.custom_model_router_errors
-    }
+    // LOCAL FORK: fns custom_model_routers and custom_model_router_errors removed with the agent.
 
     /// Saving the newly created launch configuration to the WarpConfig that we currently
     /// have.

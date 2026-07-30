@@ -74,7 +74,6 @@ impl InlineHistoryMenuDataSource {
         Self {
             terminal_view_id,
             active_session,
-            agent_view_controller,
         }
     }
 
@@ -199,11 +198,7 @@ impl SyncDataSource for InlineHistoryMenuDataSource {
         let prefix_match_len = trimmed_query.len();
 
         let session_id = self.active_session.as_ref(app).session(app).map(|s| s.id());
-        let is_agent_view = self.agent_view_controller.as_ref(app).is_active();
-
-        if is_agent_view {
-            return Ok(self.build_agent_view_results(query, prefix_match_len, session_id, app));
-        }
+        // LOCAL FORK: the agent view had its own result set; it is gone.
 
         let include_commands =
             query.filters.is_empty() || query.filters.contains(&QueryFilter::Commands);

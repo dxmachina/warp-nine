@@ -5,13 +5,25 @@ use warpui::elements::{
     ChildView, ConstrainedBox, Container, CrossAxisAlignment, Flex, MainAxisAlignment,
     MainAxisSize, ParentElement,
 };
-use warpui::{Action, AppContext, Element, TypedActionView, View, ViewContext, ViewHandle};
+use warpui::{
+    Action, AppContext, Element, SingletonEntity, TypedActionView, View, ViewContext, ViewHandle,
+};
 
 use crate::ui_components::icons::Icon;
 use crate::view_components::action_button::{
     ActionButton, ActionButtonTheme, AdjoinedSide, ButtonSize, KeystrokeSource,
 };
 const BUTTON_MARGIN: f32 = 8.;
+
+/// LOCAL FORK: inlined from the agent's inline-action icons module so the
+/// expansion chevron keeps matching the monospace line height.
+fn icon_size(app: &AppContext) -> f32 {
+    let appearance = Appearance::as_ref(app);
+    app.font_cache().line_height(
+        appearance.monospace_font_size(),
+        appearance.line_height_ratio(),
+    )
+}
 
 // Size switch thresholds for responsive button behavior
 pub const SMALL_SIZE_SWITCH_THRESHOLD: f32 = 400.0;

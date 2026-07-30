@@ -8,9 +8,7 @@ use crate::search::mixer::SearchMixer;
 use crate::terminal::input::buffer_model::{InputBufferModel, InputBufferUpdateEvent};
 use crate::terminal::input::inline_menu::{InlineMenuEvent, InlineMenuPositioner, InlineMenuView};
 use crate::terminal::input::rewind::data_source::{RewindDataSource, SelectRewindPoint};
-use crate::terminal::input::suggestions_mode_model::{
-    InputSuggestionsModeEvent, InputSuggestionsModeModel,
-};
+use crate::terminal::input::suggestions_mode_model::InputSuggestionsModeModel;
 
 /// Events emitted by RewindMenuView.
 #[derive(Debug, Clone)]
@@ -37,7 +35,7 @@ impl RewindMenuView {
         input_buffer_model: &ModelHandle<InputBufferModel>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
-        let data_source = ctx.add_model(|_| RewindDataSource::new(conversation_id));
+        let data_source = ctx.add_model(|_| RewindDataSource::new());
 
         let mixer = ctx.add_model(|ctx| {
             let mut mixer = SearchMixer::<SelectRewindPoint>::new();
@@ -51,7 +49,6 @@ impl RewindMenuView {
                 mixer.clone(),
                 positioner.clone(),
                 &input_suggestions_model,
-                agent_view_controller,
                 ctx,
             )
         });
@@ -71,20 +68,8 @@ impl RewindMenuView {
             }
         });
 
-        ctx.subscribe_to_model(
-            &input_suggestions_model,
-            |me, input_suggestions_model, event, ctx| {
-                let InputSuggestionsModeEvent::ModeChanged { .. } = event;
-                if let Some(conversation_id) =
-                    input_suggestions_model.as_ref(ctx).rewind_conversation_id()
-                {
-                    me.data_source.update(ctx, |ds, _| {
-                        ds.set_conversation_id(conversation_id);
-                    });
-                    me.refresh_results("", ctx);
-                }
-            },
-        );
+        // LOCAL FORK: the rewind menu was scoped to an agent conversation; the
+        // data source no longer has one to be pointed at.
 
         ctx.subscribe_to_model(input_buffer_model, |me, _, event, ctx| {
             if me.input_suggestions_model.as_ref(ctx).is_rewind_menu() {

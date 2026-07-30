@@ -403,11 +403,8 @@ impl Network {
                 num_cols: size_info.columns(),
             }
         };
-        let selected_model_id: String = crate::ai::llms::LLMPreferences::as_ref(ctx)
-            .get_active_base_model(ctx, Some(terminal_view_id))
-            .id
-            .clone()
-            .into();
+        // LOCAL FORK: LLM preferences went away with the agent, so no model is advertised.
+        let selected_model_id = String::new();
         let startup_retry = StartupRetryState::new(startup_max_attempts(&source));
         let startup_config = StartupConfig {
             scrollback: scrollback.clone(),

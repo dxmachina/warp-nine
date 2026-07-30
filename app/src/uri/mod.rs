@@ -252,38 +252,8 @@ impl UriHost {
                 }
             }
             UriHost::Conversation => {
-                // We expect the uri to have the conversation ID as the last segment.
-                // e.g. warp://conversation/{conversation_id}
-                let conversation_id: Option<ServerConversationToken> = url
-                    .path_segments()
-                    .into_iter()
-                    .flatten()
-                    .last()
-                    .map(|s| ServerConversationToken::new(s.to_owned()));
-
-                if let Some(conversation_id) = conversation_id {
-                    // If there's an existing window, open the conversation in a new tab. Otherwise, open a new window.
-                    match primary_window_id.and_then(|window_id| {
-                        ctx.root_view_id(window_id)
-                            .map(|view_id| (window_id, view_id))
-                    }) {
-                        Some((primary_window_id, root_view_id)) => {
-                            ctx.dispatch_action(
-                                primary_window_id,
-                                &[root_view_id],
-                                "root_view:open_cloud_conversation_in_existing_window",
-                                &conversation_id,
-                                log::Level::Info,
-                            );
-                        }
-                        None => ctx.dispatch_global_action(
-                            "root_view:open_conversation_viewer",
-                            &conversation_id,
-                        ),
-                    }
-                } else {
-                    log::warn!("Failed to open conversation with uri={url}");
-                }
+                // LOCAL FORK: there are no agent conversations to open.
+                log::warn!("Ignoring conversation uri={url}");
             }
             UriHost::Drive => {
                 // We expect the uri to have the ID of the object we are trying to open and the object_type.
@@ -387,10 +357,7 @@ impl UriHost {
                         );
                     }
                     Some("environments") => {
-                        // Notify that GitHub auth completed so views can refresh
-                        GitHubAuthNotifier::handle(ctx).update(ctx, |notifier, ctx| {
-                            notifier.notify_auth_completed(ctx);
-                        });
+                        // LOCAL FORK: GitHubAuthNotifier told agent views to refresh; it is gone.
 
                         // Open settings page unless auth was initiated from cloud setup
                         // (cloud setup users should stay on their current page)
@@ -485,14 +452,9 @@ impl UriHost {
                 ctx.dispatch_global_action("root_view::open_new", &());
             }
             UriHost::Mcp => {
-                #[cfg(not(target_family = "wasm"))]
-                {
-                    let result = crate::ai::mcp::TemplatableMCPServerManager::handle(ctx)
-                        .update(ctx, |manager, _ctx| manager.handle_oauth_callback(url));
-                    if let Err(e) = result {
-                        report_error!(e.context("Failed to handle MCP OAuth callback"));
-                    }
-                }
+                // LOCAL FORK: MCP servers were managed by the agent, so there is no
+                // OAuth callback to route.
+                log::warn!("Ignoring MCP uri={url}");
             }
             UriHost::Codex => {
                 dispatch_action_in_new_or_existing_window(
@@ -1130,17 +1092,10 @@ impl Action {
                 }
             }
             Action::FocusCloudMode => {
-                let active_agent_views = ActiveAgentViewsModel::as_ref(ctx);
-                let focused_conversation = primary_window_id
-                    .and_then(|wid| active_agent_views.get_focused_conversation(wid));
-                let mut terminal_view_id = match focused_conversation {
-                };
-                if terminal_view_id.is_none() {
-                    terminal_view_id = find_cloud_mode_terminal_view_id(primary_window_id, ctx);
-                }
-                if terminal_view_id.is_none() {
-                    terminal_view_id = active_agent_views.get_last_focused_terminal_id();
-                }
+                // LOCAL FORK: the focused/last-focused agent conversation lookups went
+                // with the agent, so only the cloud-mode pane search is left.
+                let mut terminal_view_id =
+                    find_cloud_mode_terminal_view_id(primary_window_id, ctx);
                 if terminal_view_id.is_none() {
                     terminal_view_id = primary_window_id
                         .and_then(|window_id| active_terminal_view_id_in_window(window_id, ctx));
@@ -1157,16 +1112,9 @@ impl Action {
                             ctx,
                         );
                     });
-                    // Notify after focusing so Cloud Mode panes can retry in the selected pane.
-                    GitHubAuthNotifier::handle(ctx).update(ctx, |notifier, ctx| {
-                        notifier.notify_auth_completed(ctx);
-                    });
                     return;
                 }
 
-                GitHubAuthNotifier::handle(ctx).update(ctx, |notifier, ctx| {
-                    notifier.notify_auth_completed(ctx);
-                });
                 dispatch_action_in_new_or_existing_window(
                     primary_window_id,
                     "root_view:open_settings_page_in_existing_window",
@@ -1175,8 +1123,8 @@ impl Action {
                     ctx,
                 );
             }
-            Action::AutoHandoffToCloud { trigger } => {
-                trigger_auto_handoff_to_cloud(*trigger, ctx);
+            Action::AutoHandoffToCloud { .. } => {
+                // LOCAL FORK: there is no local agent conversation to hand off.
             }
         }
     }

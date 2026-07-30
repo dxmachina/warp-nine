@@ -1,5 +1,4 @@
 use pathfinder_color::ColorU;
-use warp_errors::report_error;
 use warpui::elements::{
     Align, ChildView, ClippedScrollStateHandle, ClippedScrollable, CrossAxisAlignment, Dismiss,
     Element, Flex, MouseStateHandle, ParentElement, ScrollbarWidth,
@@ -12,8 +11,7 @@ use warpui::{
 
 use crate::appearance::Appearance;
 use crate::modal::MODAL_BACKDROP_OPACITY;
-use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::ids::{ClientId, SyncId};
+use crate::server::ids::SyncId;
 use crate::settings_view::update_environment_form::{
     EnvironmentFormInitArgs, UpdateEnvironmentForm, UpdateEnvironmentFormEvent,
 };
@@ -61,11 +59,11 @@ impl HandoffEnvironmentCreationModal {
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let environment_form = ctx.add_typed_action_view(move |ctx| {
+            // LOCAL FORK: the GitHub auth redirect target and auth source described
+            // the cloud agent setup flow, which is gone.
             let mut form = UpdateEnvironmentForm::new(EnvironmentFormInitArgs::Create, ctx);
-            form.set_github_auth_redirect_target(GithubAuthRedirectTarget::FocusCloudMode);
             form.set_show_header(false, ctx);
             form.set_should_handle_escape_from_editor(true);
-            form.set_auth_source(AuthSource::CloudSetup);
             match context {
                 HandoffEnvironmentCreationModalContext::Handoff => {}
                 HandoffEnvironmentCreationModalContext::Orchestration => {
@@ -101,46 +99,13 @@ impl HandoffEnvironmentCreationModal {
         ctx: &mut ViewContext<Self>,
     ) {
         match event {
-            UpdateEnvironmentFormEvent::Created {
-                environment,
-                share_with_team,
-            } => {
-                let owner = if *share_with_team {
-                    cloud_environments::owner_for_new_environment(ctx)
-                } else {
-                    cloud_environments::owner_for_new_personal_environment(ctx)
-                };
-
-                let Some(owner) = owner else {
-                    report_error!("Unable to create environment: not logged in");
-                    ctx.emit(HandoffEnvironmentCreationModalEvent::CreationFailed {
-                        error_message: "Not logged in".to_string(),
-                    });
-                    return;
-                };
-
-                let client_id = ClientId::default();
-                let create_future =
-                    UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-                        update_manager.create_ambient_agent_environment_online(
-                            environment.clone(),
-                            client_id,
-                            owner,
-                            ctx,
-                        )
-                    });
-
-                ctx.spawn(create_future, |_me, result, ctx| match result {
-                    Ok(server_id) => {
-                        let env_id = SyncId::ServerId(server_id);
-                        ctx.emit(HandoffEnvironmentCreationModalEvent::Created { env_id });
-                    }
-                    Err(err) => {
-                        report_error!(&err);
-                        ctx.emit(HandoffEnvironmentCreationModalEvent::CreationFailed {
-                            error_message: err.to_string(),
-                        });
-                    }
+            UpdateEnvironmentFormEvent::Created { .. } => {
+                // LOCAL FORK: creating a cloud agent environment needed the agent's
+                // owner resolution and its UpdateManager online-create path. Both are
+                // gone, so the request can only fail.
+                ctx.emit(HandoffEnvironmentCreationModalEvent::CreationFailed {
+                    error_message: "Cloud environments are not available in this build"
+                        .to_string(),
                 });
             }
             UpdateEnvironmentFormEvent::Cancelled => {

@@ -2,7 +2,6 @@ use std::borrow::Cow;
 
 use chrono::{DateTime, Local};
 use session_sharing_protocol::common::SessionId;
-use warp_core::channel::ChannelState;
 use warp_core::ui::appearance::Appearance;
 use warpui::color::ColorU;
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
@@ -50,18 +49,6 @@ impl ShareableObject {
                 .get_by_uid(&id.uid())
                 .and_then(|object| object.object_link()),
             ShareableObject::Session { session_id, .. } => Some(join_link(session_id)),
-            ShareableObject::AIConversation(id) => {
-                // Use the unified helper that checks both loaded conversation and historical metadata
-                BlocklistAIHistoryModel::as_ref(app)
-                    .get_server_conversation_metadata(id)
-                    .map(|m| {
-                        format!(
-                            "{}/conversation/{}",
-                            ChannelState::server_root_url(),
-                            m.server_conversation_token.as_str()
-                        )
-                    })
-            }
         }
     }
 }

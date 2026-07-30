@@ -1068,12 +1068,14 @@ impl CodeView {
         // If a CLI agent is active, send appropriate content to the PTY (or rich input if open).
         let window_id = ctx.window_id();
         if let Some(terminal_view) = get_context_target_terminal_view(window_id, ctx) {
+            // LOCAL FORK: the two prompt builders lived in the removed
+            // `terminal::cli_agent` module; their formats are inlined here.
             let prompt = if start_line == end_line {
                 // Single-line: send the literal text with file/line context.
-                build_selection_substring_prompt(&file_path, start_line, &selected_text)
+                format!("{file_path} L{start_line}: {selected_text}")
             } else {
                 // Multi-line: send a line-range reference with format note.
-                build_selection_line_range_prompt(&file_path, start_line, end_line)
+                format!("{file_path} L{start_line}-L{end_line}")
             };
             if let Some(routing) = terminal_view.update(ctx, |tv, ctx| {
                 tv.try_send_text_to_cli_agent_or_rich_input(prompt, ctx)

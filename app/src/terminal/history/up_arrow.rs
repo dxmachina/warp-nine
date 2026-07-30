@@ -16,24 +16,7 @@ pub struct UpArrowHistoryConfig {
     pub include_prompts: bool,
 }
 
-impl UpArrowHistoryConfig {
-    /// Derives the config from the current input config.
-    /// When the input is locked to a specific type, only that type is included.
-    /// When unlocked (auto-detection), both types are included.
-    pub fn for_input_config(input_config: &InputConfig) -> Self {
-        if input_config.is_locked {
-            Self {
-                include_commands: input_config.is_shell(),
-                include_prompts: input_config.is_ai(),
-            }
-        } else {
-            Self {
-                include_commands: true,
-                include_prompts: true,
-            }
-        }
-    }
-}
+// LOCAL FORK: fn UpArrowHistoryConfig::for_input_config removed with the agent.
 
 fn sort_and_dedupe_suggestions<'a>(
     mut suggestions: Vec<HistoryInputSuggestion<'a>>,
@@ -72,47 +55,22 @@ fn sort_and_dedupe_suggestions<'a>(
         .map(|(_, suggestion)| suggestion)
         .collect()
 }
-/// Returns de-duplicated prompt history ordered for up-arrow presentation.
-///
-/// Prompts from other terminal surfaces precede prompts from the requested
-/// surface, and repeated text keeps its newest occurrence.
-fn prompt_history_for_terminal_surface(
-    terminal_surface_id: EntityId,
-    app: &AppContext,
-) -> Vec<AIQueryHistory> {
-    let ignored_prompts = if app.has_singleton_model::<IgnoredSuggestionsModel>() {
-        IgnoredSuggestionsModel::handle(app)
-            .as_ref(app)
-            .get_ignored_suggestions_for_type(SuggestionType::AIQuery)
-    } else {
-        HashSet::new()
-    };
-    let suggestions = BlocklistAIHistoryModel::handle(app)
-        .as_ref(app)
-        .all_ai_queries(Some(terminal_surface_id))
-        .filter(|entry| !ignored_prompts.contains(&entry.query_text))
-        .filter(|entry| !entry.query_text.trim().is_empty())
-        .map(|entry| HistoryInputSuggestion::AIQuery { entry })
-        .collect();
-    let sorted = sort_and_dedupe_suggestions(suggestions, None, &HashSet::new());
-
-    sorted
-        .into_iter()
-        .filter_map(|suggestion| match suggestion {
-            HistoryInputSuggestion::AIQuery { entry } => Some(entry),
-            HistoryInputSuggestion::Command { .. } => None,
-        })
-        .collect()
-}
+// LOCAL FORK: fn prompt_history_for_terminal_surface removed with the agent.
 
 impl History {
     pub(crate) fn up_arrow_suggestions_for_terminal_surface<'a>(
         &'a self,
-        terminal_surface_id: EntityId,
+        _terminal_surface_id: EntityId,
         session_id: Option<SessionId>,
         config: UpArrowHistoryConfig,
         app: &'a AppContext,
     ) -> Vec<HistoryInputSuggestion<'a>> {
+        // LOCAL FORK: prompt history went with the agent, so only shell commands
+        // are ever offered here.
+        if !config.include_commands {
+            return vec![];
+        }
+
         let ignored_suggestions = app
             .has_singleton_model::<IgnoredSuggestionsModel>()
             .then(|| IgnoredSuggestionsModel::handle(app).as_ref(app));
@@ -137,38 +95,8 @@ impl History {
             .filter(move |entry| include_agent_commands || !entry.is_agent_executed)
             .map(|entry| HistoryInputSuggestion::Command { entry });
 
-        let should_include_prompts = config.include_prompts
-            && if app.has_singleton_model::<AISettings>() {
-                FeatureFlag::AgentMode.is_enabled()
-                    && AISettings::handle(app).as_ref(app).is_any_ai_enabled(app)
-            } else {
-                true
-            };
         let all_live_session_ids = self.all_live_session_ids();
-        if !should_include_prompts {
-            if !config.include_commands {
-                return vec![];
-            }
-            return sort_and_dedupe_suggestions(
-                commands.collect(),
-                session_id,
-                &all_live_session_ids,
-            );
-        }
-
-        let ai_queries = prompt_history_for_terminal_surface(terminal_surface_id, app)
-            .into_iter()
-            .map(|entry| HistoryInputSuggestion::AIQuery { entry });
-
-        let suggestions: Vec<HistoryInputSuggestion<'a>> =
-            match (config.include_commands, config.include_prompts) {
-                (true, true) => commands.chain(ai_queries).collect(),
-                (true, false) => commands.collect(),
-                (false, true) => ai_queries.collect(),
-                (false, false) => vec![],
-            };
-
-        sort_and_dedupe_suggestions(suggestions, session_id, &all_live_session_ids)
+        sort_and_dedupe_suggestions(commands.collect(), session_id, &all_live_session_ids)
     }
 }
 

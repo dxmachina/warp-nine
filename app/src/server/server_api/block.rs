@@ -38,10 +38,7 @@ pub trait BlockClient: 'static + Send + Sync {
     ) -> Result<String, anyhow::Error>;
 
     async fn blocks_owned_by_user(&self) -> Result<Vec<Block>, anyhow::Error>;
-
-    async fn generate_shared_block_title(
-        &self,
-    ) -> Result<GenerateBlockTitleResponse, anyhow::Error>;
+    // LOCAL FORK: fn generate_shared_block_title removed with the agent.
 }
 
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
@@ -136,27 +133,7 @@ impl BlockClient for ServerApi {
         }
     }
 
-    async fn generate_shared_block_title(
-        &self,
-    ) -> Result<GenerateBlockTitleResponse, anyhow::Error> {
-        let auth_token = self.get_or_refresh_access_token().await?;
-        let request_builder = self.base_client.http_client().post(format!(
-            "{}/ai/generate_block_title",
-            ChannelState::server_root_url()
-        ));
-        let response = if let Some(token) = auth_token.as_bearer_token() {
-            request_builder.bearer_auth(token)
-        } else {
-            request_builder
-        }
-        .json(&request)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-        Ok(response)
-    }
+    // LOCAL FORK: fn generate_shared_block_title removed with the agent.
 }
 
 impl TryFrom<GqlBlock> for Block {

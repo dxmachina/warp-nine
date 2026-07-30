@@ -1,5 +1,3 @@
-use warp_core::ui::color::ContrastingColor;
-use warp_core::ui::color::contrast::MinimumAllowedContrast;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::{
     Border, Clipped, ConstrainedBox, Container, DispatchEventResult, DropTarget, Element,
@@ -18,9 +16,8 @@ use super::{
 };
 use crate::appearance::Appearance;
 use crate::context_chips::spacing;
-use crate::editor::{EnterAction, EnterSettings, TextColors};
+use crate::editor::{EnterSettings, TextColors};
 use crate::features::FeatureFlag;
-use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::view::TerminalAction;
 
 impl Input {
@@ -155,38 +152,9 @@ impl Input {
     /// CLI agent brand icon in `AgentInputFooter::render_cli_mode_footer`.
     pub(super) fn update_cli_agent_editor_text_colors(&mut self, ctx: &mut ViewContext<Self>) {
         let appearance = Appearance::as_ref(ctx);
-        let default_colors = TextColors::from_appearance(appearance);
-
-        // Only override while the CLI agent rich input is actually open - the
-        // same editor is reused for the normal terminal input and for other
-        // modes (AI, shared sessions), and those shouldn't see the override.
-        let rich_input_open =
-            CLIAgentSessionsModel::as_ref(ctx).is_input_open(self.terminal_view_id);
-
-        let alt_screen_bg = if rich_input_open {
-            let terminal_model = self.model.lock();
-            terminal_model
-                .is_alt_screen_active()
-                .then(|| terminal_model.alt_screen().inferred_bg_color())
-                .flatten()
-        } else {
-            None
-        };
-
-        let text_colors = match alt_screen_bg {
-            Some(bg) => TextColors {
-                default_color: default_colors
-                    .default_color
-                    .on_background(bg.into(), MinimumAllowedContrast::Text),
-                disabled_color: default_colors
-                    .disabled_color
-                    .on_background(bg.into(), MinimumAllowedContrast::Text),
-                hint_color: default_colors
-                    .hint_color
-                    .on_background(bg.into(), MinimumAllowedContrast::Text),
-            },
-            None => default_colors,
-        };
+        // LOCAL FORK: CLI agent sessions went with the agent, so the rich input
+        // is never open and the editor always keeps the theme default colors.
+        let text_colors = TextColors::from_appearance(appearance);
 
         self.editor.update(ctx, |editor, ctx| {
             editor.set_text_colors(text_colors, ctx);
@@ -203,27 +171,9 @@ impl Input {
     ///
     /// When rich input is **closed**, `EnterSettings::default()` is restored.
     pub(super) fn update_cli_agent_enter_settings(&mut self, ctx: &mut ViewContext<Self>) {
-        let rich_input_open =
-            CLIAgentSessionsModel::as_ref(ctx).is_input_open(self.terminal_view_id);
-
-        let settings = if rich_input_open {
-            let submit_on_ctrl_enter =
-                *crate::settings::AISettings::as_ref(ctx).submit_on_ctrl_enter;
-            EnterSettings {
-                // Always Emit so input_enter handles menus before submit/newline.
-                enter: EnterAction::Emit,
-                // Toggle ON  → Emit (submit path in input_ctrl_enter).
-                // Toggle OFF → InsertNewLineIfMultiLine (baseline newline).
-                ctrl_enter: if submit_on_ctrl_enter {
-                    EnterAction::Emit
-                } else {
-                    EnterAction::InsertNewLineIfMultiLine
-                },
-                ..Default::default()
-            }
-        } else {
-            EnterSettings::default()
-        };
+        // LOCAL FORK: CLI agent sessions went with the agent, so the rich input
+        // is never open; the editor keeps baseline enter behaviour.
+        let settings = EnterSettings::default();
 
         self.editor.update(ctx, |editor, _ctx| {
             editor.set_enter_settings(settings);

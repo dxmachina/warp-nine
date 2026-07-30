@@ -141,24 +141,25 @@ impl From<AttachedReviewComment> for api::ReviewComment {
                     diff_content: content.content,
                     lines_added: content.lines_added.as_u32(),
                     lines_removed: content.lines_removed.as_u32(),
-                    current: val.head.to_owned().map(Into::into),
-                    base: val.base.map(Into::into),
+                    // LOCAL FORK: the comment no longer carries base/head revisions.
+                    current: None,
+                    base: None,
                 })
             }
             AttachedReviewCommentTarget::File { absolute_file_path } => {
                 api::review_comment::CommentTarget::CommentedFile(
                     api::review_comment::CommentedFile {
                         file_path: absolute_file_path.display_path(),
-                        current: val.head.to_owned().map(Into::into),
-                        base: val.base.map(Into::into),
+                        current: None,
+                        base: None,
                     },
                 )
             }
             AttachedReviewCommentTarget::General => {
                 api::review_comment::CommentTarget::CommentedDiffset(
                     api::review_comment::CommentedDiffset {
-                        current: val.head.to_owned().map(Into::into),
-                        base: val.base.map(Into::into),
+                        current: None,
+                        base: None,
                     },
                 )
             }
@@ -213,8 +214,6 @@ impl AttachedReviewComment {
         AttachedReviewComment {
             id: comment.id,
             content: comment.comment_content,
-            base,
-            head,
             target: AttachedReviewCommentTarget::Line {
                 absolute_file_path,
                 line: comment.line,
@@ -226,9 +225,8 @@ impl AttachedReviewComment {
         }
     }
 
-    pub fn head(&self) -> Option<&CurrentHead> {
-        self.head.as_ref()
-    }
+    // LOCAL FORK: fn head removed with the agent; comments no longer carry a
+    // revision pair.
 
     pub fn origin(&self) -> &CommentOrigin {
         &self.origin

@@ -53,7 +53,7 @@ use crate::pane_group::{
 use crate::safe_triangle::SafeTriangle;
 use crate::tab::{SelectedTabColor, TabData, tab_position_id};
 use crate::terminal::session_settings::SessionSettings;
-use crate::terminal::view::TerminalViewState;
+use crate::terminal::view::{TerminalView, TerminalViewState};
 use crate::themes::theme::Fill as ThemeFill;
 use crate::ui_components::buttons::combo_inner_button;
 use crate::ui_components::icon_with_status::{IconWithStatusVariant, render_icon_with_status};
@@ -890,7 +890,6 @@ enum VerticalTabsResolvedMode {
 pub(super) enum SummaryPaneKind {
     Terminal,
     OzAgent { is_ambient: bool },
-    CLIAgent { agent: CLIAgent, is_ambient: bool },
     Code { title: String },
     CodeDiff,
     File,
@@ -1018,18 +1017,15 @@ fn push_normalized_unique_summary_label(
         return;
     }
     seen.insert(normalized.clone(), ());
-    values.push(VerticalTabsSummaryPrimaryLabel {
-        text: normalized,
-        status,
-    });
+    values.push(VerticalTabsSummaryPrimaryLabel { text: normalized });
 }
 
 /// Stable sort that moves labels with a known `ConversationStatus` ahead of labels without
 /// one, while preserving the relative first-seen order within each group. Used in Summary
 /// mode so the visible 3-line title region (and the `+ N more` overflow) prioritizes
 /// conversation lines over plain terminal / non-conversation lines.
-fn sort_summary_primary_labels_status_first(values: &mut [VerticalTabsSummaryPrimaryLabel]) {
-    values.sort_by_key(|label| label.status.is_none());
+fn sort_summary_primary_labels_status_first(_values: &mut [VerticalTabsSummaryPrimaryLabel]) {
+    // LOCAL FORK: labels no longer carry a conversation status to sort on.
 }
 
 fn normalize_summary_text(text: &str) -> Option<String> {
@@ -1410,14 +1406,7 @@ fn render_detail_kind_badge_icon(
         TypedPane::Terminal(terminal_pane) => {
             let terminal_view = terminal_pane.terminal_view(app);
             let terminal_view = terminal_view.as_ref(app);
-            let cli_agent_session = CLIAgentSessionsModel::as_ref(app).session(terminal_view.id());
-            if let Some(icon) = cli_agent_session.and_then(|session| session.agent.icon()) {
-                let color = cli_agent_session
-                    .and_then(|session| session.agent.brand_color())
-                    .map(WarpThemeFill::Solid)
-                    .unwrap_or_else(|| theme.accent());
-                return icon.to_warpui_icon(color).finish();
-            }
+            // LOCAL FORK: CLI agent sessions went away with the agent.
 
             let icon = if terminal_view.is_ambient_agent_session(app) {
                 WarpIcon::CloudFilled
@@ -3274,14 +3263,11 @@ fn resolve_icon_with_status_variant(
         TypedPane::Terminal(terminal_pane) => {
             let terminal_view = terminal_pane.terminal_view(app);
             let terminal_view = terminal_view.as_ref(app);
-            match terminal_view_agent_icon_variant(terminal_view, app) {
-                _ => {
-                    // Plain terminal: use foreground color per design spec
-                    IconWithStatusVariant::Neutral {
-                        icon: WarpIcon::Terminal,
-                        icon_color: main_text,
-                    }
-                }
+            // LOCAL FORK: plain terminal; the agent icon variants are gone.
+            let _ = terminal_view;
+            IconWithStatusVariant::Neutral {
+                icon: WarpIcon::Terminal,
+                icon_color: main_text,
             }
         }
         TypedPane::Code(_) => match icon_from_file_path(title, appearance) {
@@ -3338,9 +3324,9 @@ fn has_unread_activity(typed: &TypedPane<'_>, app: &AppContext) -> bool {
 }
 
 fn has_unread_activity_for_terminal_view(terminal_view_id: EntityId, app: &AppContext) -> bool {
-    AgentNotificationsModel::as_ref(app)
-        .notifications()
-        .has_unread_for_terminal_view(terminal_view_id)
+    // LOCAL FORK: agent notifications went away with the agent.
+    let _ = (terminal_view_id, app);
+    false
 }
 
 const INDICATOR_DOT_SIZE: f32 = 8.;
@@ -3474,11 +3460,9 @@ impl TypedPane<'_> {
             TypedPane::Terminal(terminal_pane) => {
                 let terminal_view = terminal_pane.terminal_view(app);
                 let terminal_view = terminal_view.as_ref(app);
-                // Route through the shared helper so summary mode agrees with
-                // `resolve_icon_with_status_variant` on what the tab represents.
-                match terminal_view_agent_icon_variant(terminal_view, app) {
-                    Some(_) | None => SummaryPaneKind::Terminal,
-                }
+                // LOCAL FORK: every terminal tab is a plain terminal now.
+                let _ = terminal_view;
+                SummaryPaneKind::Terminal
             }
             TypedPane::Code(_) => SummaryPaneKind::Code {
                 title: title.to_string(),
@@ -3650,12 +3634,10 @@ fn build_vertical_tabs_summary_data(
                     terminal_title_fallback_font(&agent_text),
                     terminal_view.last_completed_command_text(),
                 );
-                let status = summary_conversation_status_for_terminal(terminal_view, app);
                 push_normalized_unique_summary_label(
                     &mut primary_labels,
                     &mut primary_seen,
                     primary_label.text(),
-                    status,
                 );
 
                 if let Some(working_directory) = working_directory {
@@ -3692,7 +3674,6 @@ fn build_vertical_tabs_summary_data(
                     &mut primary_labels,
                     &mut primary_seen,
                     &pane_title,
-                    None,
                 );
                 push_normalized_unique_summary_text(
                     &mut working_directories,
@@ -3715,7 +3696,6 @@ fn build_vertical_tabs_summary_data(
                     &mut primary_labels,
                     &mut primary_seen,
                     &pane_title,
-                    None,
                 );
             }
         }
@@ -3957,7 +3937,7 @@ fn terminal_pane_search_text_fragments(
         primary_text,
         working_directory,
         terminal_view.current_git_branch(app),
-        terminal_kind_badge_label(agent_text.is_oz_agent, agent_text.cli_agent),
+        terminal_kind_badge_label(agent_text.is_oz_agent),
         pull_request_label,
         terminal_view.current_diff_line_changes(app),
     )
@@ -4033,10 +4013,8 @@ fn terminal_primary_line_data(
     }
 }
 
-fn terminal_kind_badge_label(is_oz_agent: bool, cli_agent: Option<CLIAgent>) -> String {
-    if let Some(cli_agent) = cli_agent {
-        cli_agent.display_name().to_string()
-    } else if is_oz_agent {
+fn terminal_kind_badge_label(is_oz_agent: bool) -> String {
+    if is_oz_agent {
         "Oz".to_string()
     } else {
         "Terminal".to_string()
@@ -4056,7 +4034,12 @@ struct TerminalAgentText {
     cli_agent_title: Option<String>,
     cli_agent_latest_user_prompt: Option<String>,
     is_oz_agent: bool,
-    cli_agent: Option<CLIAgent>,
+}
+
+/// LOCAL FORK: agent tab text came from the agent's conversation and CLI session models,
+/// so tabs now fall back to plain terminal titles.
+fn terminal_agent_text(_terminal_view: &TerminalView, _app: &AppContext) -> TerminalAgentText {
+    TerminalAgentText::default()
 }
 
 fn agent_tab_text_preference(app: &AppContext) -> AgentTabTextPreference {
@@ -4165,13 +4148,10 @@ impl PaneGroup {
 
 /// Returns the [`SummaryPaneKind`] representing how the given pane should
 /// be rendered visually, matching the treatment used by vertical tabs
-/// Summary mode. For Terminal panes, distinguishes Oz vs Oz cloud vs each
-/// known CLI agent (Claude, Codex, …) by routing through
-/// `terminal_view_agent_icon_variant`; for other pane types it falls back
-/// to `TypedPane::summary_pane_kind`. Returns `None` when `pane_id` does
-/// not resolve to a pane in `pane_group` so callers can skip stale ids
-/// via `filter_map`; note this is distinct from a known pane that
-/// classifies as `SummaryPaneKind::Other`.
+/// Summary mode. Falls back to `TypedPane::summary_pane_kind`. Returns
+/// `None` when `pane_id` does not resolve to a pane in `pane_group` so
+/// callers can skip stale ids via `filter_map`; note this is distinct from
+/// a known pane that classifies as `SummaryPaneKind::Other`.
 pub(super) fn pane_summary_kind(
     pane_group: &PaneGroup,
     pane_id: PaneId,
@@ -4194,8 +4174,8 @@ fn resolved_terminal_working_directory(
     let working_directory = terminal_view
         .display_working_directory(app)
         .filter(|wd| !wd.trim().is_empty());
-    cloud_agent_working_directory_and_env(terminal_view, working_directory.as_deref(), app)
-        .or(working_directory)
+    // LOCAL FORK: cloud environment names came from the agent's ambient task data.
+    working_directory
 }
 
 
@@ -4568,7 +4548,7 @@ fn render_summary_tab_item(
                     .iter()
                     .take(MAX_VISIBLE_PRIMARY_LABELS)
                     .collect();
-                let reserve_prefix_slot = visible_labels.iter().any(|label| label.status.is_some());
+                let reserve_prefix_slot = false;
 
                 for (idx, label) in visible_labels.iter().enumerate() {
                     let line = render_summary_primary_label_line(
@@ -4724,25 +4704,18 @@ fn render_summary_primary_label_line(
 ) -> Box<dyn Element> {
     // Reserve a slot wide enough for the status pill so non-conversation lines align with
     // conversation lines in the same region. STATUS_ELEMENT_PADDING is the 2px padding inside
-    // the pill from `render_status_element`.
+    // the pill.
     const STATUS_ELEMENT_PADDING: f32 = 2.;
     let prefix_slot_size = VERTICAL_TABS_SUMMARY_STATUS_ICON_SIZE + STATUS_ELEMENT_PADDING * 2.;
     let text = render_text_line(&label.text, text_color, ClipConfig::end(), appearance);
 
-    let prefix: Option<Box<dyn Element>> = match (label.status.as_ref(), reserve_prefix_slot) {
-        (Some(status), _) => Some(render_status_element(
-            status,
-            VERTICAL_TABS_SUMMARY_STATUS_ICON_SIZE,
-            appearance,
-        )),
-        (None, true) => Some(
-            ConstrainedBox::new(Empty::new().finish())
-                .with_width(prefix_slot_size)
-                .with_height(prefix_slot_size)
-                .finish(),
-        ),
-        (None, false) => None,
-    };
+    // LOCAL FORK: labels no longer carry a conversation status pill.
+    let prefix: Option<Box<dyn Element>> = reserve_prefix_slot.then(|| {
+        ConstrainedBox::new(Empty::new().finish())
+            .with_width(prefix_slot_size)
+            .with_height(prefix_slot_size)
+            .finish()
+    });
 
     let Some(prefix) = prefix else {
         return text;
@@ -4850,29 +4823,6 @@ pub(super) fn render_summary_pane_kind_icon_circle(
     let padding = total_size * SUMMARY_INLINE_PADDING_RATIO;
     let (icon_element, background): (Box<dyn Element>, ElementFill) = match kind {
         SummaryPaneKind::OzAgent { .. } => unreachable!("handled by ambient_agent_variant"),
-        SummaryPaneKind::CLIAgent { agent, .. } => {
-            let icon_color = agent.brand_icon_color();
-            let icon_element = agent
-                .icon()
-                .map(|icon| {
-                    icon.to_warpui_icon(WarpThemeFill::Solid(icon_color))
-                        .finish()
-                })
-                .unwrap_or_else(|| {
-                    WarpIcon::Terminal
-                        .to_warpui_icon(theme.sub_text_color(theme.background()))
-                        .finish()
-                });
-            (
-                icon_element,
-                ThemeFill::Solid(
-                    agent
-                        .brand_color()
-                        .unwrap_or(ColorU::new(100, 100, 100, 255)),
-                )
-                .into(),
-            )
-        }
         SummaryPaneKind::Code { title } => (
             icon_from_file_path(&title, appearance).unwrap_or_else(|| {
                 WarpIcon::Code2
@@ -4922,14 +4872,6 @@ fn ambient_agent_variant(kind: &SummaryPaneKind) -> Option<IconWithStatusVariant
             status: None,
             is_ambient: *is_ambient,
         }),
-        SummaryPaneKind::CLIAgent {
-            agent,
-            is_ambient: true,
-        } => Some(IconWithStatusVariant::CLIAgent {
-            agent: *agent,
-            status: None,
-            is_ambient: true,
-        }),
         _ => None,
     }
 }
@@ -4953,10 +4895,6 @@ fn summary_pane_kind_icon(
         // render_summary_pane_kind_icon_circle before summary_pane_kind_icon is called.
         // Kept for completeness in case callers change.
         SummaryPaneKind::OzAgent { .. } => (WarpIcon::Agent, main_text),
-        SummaryPaneKind::CLIAgent { agent, .. } => (
-            agent.icon().unwrap_or(WarpIcon::Terminal),
-            WarpThemeFill::Solid(agent.brand_icon_color()),
-        ),
         SummaryPaneKind::Code { .. } => (WarpIcon::Code2, sub_text),
         SummaryPaneKind::CodeDiff => (WarpIcon::Diff, sub_text),
         SummaryPaneKind::File => (WarpIcon::File, sub_text),
@@ -6497,34 +6435,7 @@ fn render_detail_badge(
     badge.finish()
 }
 
-fn render_detail_status_pill(
-    appearance: &Appearance,
-) -> Box<dyn Element> {
-    let theme = appearance.theme();
-    let (icon, color) = status.status_icon_and_color(theme, StatusColorStyle::Standard);
-    Container::new(
-        Flex::row()
-            .with_main_axis_size(MainAxisSize::Min)
-            .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_spacing(4.)
-            .with_child(
-                ConstrainedBox::new(icon.to_warpui_icon(WarpThemeFill::Solid(color)).finish())
-                    .with_width(12.)
-                    .with_height(12.)
-                    .finish(),
-            )
-            .with_child(
-                Text::new_inline(status.to_string(), appearance.ui_font_family(), 10.)
-                    .with_color(WarpThemeFill::Solid(color).into())
-                    .finish(),
-            )
-            .finish(),
-    )
-    .with_padding(Padding::uniform(2.).with_left(4.).with_right(4.))
-    .with_background(ThemeFill::Solid(coloru_with_opacity(color, 10)))
-    .with_corner_radius(CornerRadius::with_all(Radius::Pixels(2.)))
-    .finish()
-}
+// LOCAL FORK: fn render_detail_status_pill removed with the agent.
 
 fn render_detail_wrapping_text(
     text: impl Into<String>,
@@ -6616,18 +6527,10 @@ fn render_terminal_detail_section(
     let text_colors = detail_sidecar_text_colors(theme);
     let working_directory = resolved_terminal_working_directory(terminal_view, app);
     let git_branch = terminal_view.current_git_branch(app);
-    let cli_agent_session = CLIAgentSessionsModel::as_ref(app).session(terminal_view.id());
     let agent_text = terminal_agent_text(terminal_view, app);
     let (conversation_display_title, cli_agent_title) =
         preferred_agent_tab_titles(&agent_text, agent_tab_text_preference(app));
-    let kind_label = terminal_kind_badge_label(agent_text.is_oz_agent, agent_text.cli_agent);
-    let status = if let Some(session) = cli_agent_session.filter(|s| s.supports_rich_status()) {
-        Some(session.status.to_conversation_status())
-    } else if agent_text.is_oz_agent {
-        terminal_view.selected_conversation_status_for_display(app)
-    } else {
-        None
-    };
+    let kind_label = terminal_kind_badge_label(agent_text.is_oz_agent);
 
     let title_text = terminal_view.terminal_title_from_shell();
     let primary_line = terminal_primary_line_data(
@@ -6644,9 +6547,7 @@ fn render_terminal_detail_section(
         .with_cross_axis_alignment(CrossAxisAlignment::Start)
         .with_spacing(DETAIL_SIDECAR_SECTION_GAP);
 
-    if let Some(status) = status.as_ref() {
-        section.add_child(render_detail_status_pill(status, appearance));
-    }
+    // LOCAL FORK: the conversation status pill went away with the agent.
     if let Some(working_directory) = working_directory.filter(|wd| !wd.trim().is_empty()) {
         section.add_child(render_detail_wrapping_text(
             working_directory,

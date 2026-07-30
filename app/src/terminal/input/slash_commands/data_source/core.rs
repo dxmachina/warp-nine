@@ -1,31 +1,21 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use ai::skills::SkillProvider;
 use fuzzy_match::FuzzyMatchResult;
 use ordered_float::OrderedFloat;
 #[cfg(not(target_family = "wasm"))]
 use repo_metadata::repositories::DetectedRepositories;
-use warp_core::features::FeatureFlag;
-use warp_core::ui::Icon as WarpIcon;
 use warp_core::ui::appearance::Appearance;
 #[cfg(not(target_family = "wasm"))]
 use warp_util::local_or_remote_path::LocalOrRemotePath;
 use warpui::fonts::FamilyId;
 use warpui::{AppContext, Entity, EntityId, ModelContext, ModelHandle, SingletonEntity};
 
-use crate::ai::agent_conversations_model::{AgentConversationsModel, AgentConversationsModelEvent};
-use crate::ai::blocklist::block::cli_controller::{CLISubagentController, CLISubagentEvent};
-use crate::ai::blocklist::{BlocklistAIHistoryEvent, BlocklistAIHistoryModel};
-use crate::ai::skills::{SkillDescriptor, SkillManager};
 use crate::search::slash_command_menu::fuzzy_match::SlashCommandFuzzyMatchResult;
 use crate::search::slash_command_menu::static_commands::{Availability, commands};
 use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::settings::{
     AISettings, AISettingsChangedEvent, PrivacySettings, PrivacySettingsChangedEvent,
-};
-use crate::terminal::cli_agent_sessions::{
-    CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
 };
 use crate::terminal::input::slash_command_model::{
     DetectedCommand, DetectedSkillCommand, ParsedSlashCommandInput,
@@ -71,8 +61,7 @@ pub struct CommonCommandGates {
 /// availability. The callback remains concrete, so this helper does not require a surface trait.
 pub(super) fn subscribe_to_shared_dependencies<T>(
     active_session: &ModelHandle<ActiveSession>,
-    cli_subagent_controller: &ModelHandle<CLISubagentController>,
-    terminal_view_id: EntityId,
+    _terminal_view_id: EntityId,
     recompute_active_commands: fn(&mut T, &mut ModelContext<T>),
     ctx: &mut ModelContext<T>,
 ) where
@@ -83,14 +72,7 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
             recompute_active_commands(me, ctx);
         }
     });
-    ctx.subscribe_to_model(cli_subagent_controller, move |me, _, event, ctx| {
-        if let CLISubagentEvent::SpawnedSubagent { .. }
-        | CLISubagentEvent::FinishedSubagent { .. }
-        | CLISubagentEvent::UpdatedControl { .. } = event
-        {
-            recompute_active_commands(me, ctx);
-        }
-    });
+    // LOCAL FORK: the subagent-control subscription went with the agent.
     ctx.subscribe_to_model(&AISettings::handle(ctx), move |me, _, event, ctx| {
         if matches!(
             event,
@@ -118,47 +100,8 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
             recompute_active_commands(me, ctx);
         }
     });
-    ctx.subscribe_to_model(
-        &CLIAgentSessionsModel::handle(ctx),
-        move |me, _, event, ctx| {
-            if let CLIAgentSessionsModelEvent::InputSessionChanged {
-                terminal_view_id: event_terminal_view_id,
-                ..
-            } = event
-                && *event_terminal_view_id == terminal_view_id
-            {
-                recompute_active_commands(me, ctx);
-            }
-        },
-    );
-    // Recompute when the active conversation switches so commands gated on the active
-    // conversation's task (e.g. /continue-locally) update on navigation.
-    ctx.subscribe_to_model(
-        &BlocklistAIHistoryModel::handle(ctx),
-        move |me, _, event, ctx| {
-            if matches!(
-                event,
-                BlocklistAIHistoryEvent::SetActiveConversation { .. }
-                    | BlocklistAIHistoryEvent::ClearedActiveConversation { .. }
-            ) {
-                recompute_active_commands(me, ctx);
-            }
-        },
-    );
-    // Recompute when task data is updated so commands gated on a conversation's task
-    // harness (e.g. /continue-locally) appear once the task fetch resolves.
-    ctx.subscribe_to_model(
-        &AgentConversationsModel::handle(ctx),
-        move |me, _, event, ctx| {
-            if matches!(
-                event,
-                AgentConversationsModelEvent::TasksUpdated
-                    | AgentConversationsModelEvent::NewTasksReceived
-            ) {
-                recompute_active_commands(me, ctx);
-            }
-        },
-    );
+    // LOCAL FORK: the CLI agent session, conversation-history and cloud-task
+    // subscriptions went with the agent.
 }
 
 /// State shared by GUI and TUI slash command data sources.
@@ -168,7 +111,6 @@ pub(super) fn subscribe_to_shared_dependencies<T>(
 /// the wrapping surface types.
 pub struct SlashCommandDataSourceState {
     active_session: ModelHandle<ActiveSession>,
-    cli_subagent_controller: ModelHandle<CLISubagentController>,
     terminal_view_id: EntityId,
     active_commands_by_id: HashMap<SlashCommandId, StaticCommand>,
     active_repo_root: Option<PathBuf>,
@@ -176,12 +118,10 @@ pub struct SlashCommandDataSourceState {
 impl SlashCommandDataSourceState {
     pub(super) fn new(
         active_session: ModelHandle<ActiveSession>,
-        cli_subagent_controller: ModelHandle<CLISubagentController>,
         terminal_view_id: EntityId,
     ) -> Self {
         Self {
             active_session,
-            cli_subagent_controller,
             terminal_view_id,
             active_commands_by_id: HashMap::new(),
             active_repo_root: None,
@@ -256,25 +196,14 @@ pub trait SlashCommandDataSource {
         })
     }
 
-    /// Matches `buffer` against skills available for the active working directory, returning the
-    /// detected skill and space-delimited argument, if provided.
-    fn parse_skill_command(&self, buffer: &str, ctx: &AppContext) -> Option<DetectedSkillCommand> {
-        let (possible_command, possible_argument) = split_command_and_argument(buffer);
-        let skill_name = possible_command.strip_prefix('/')?;
-
-        let active_session = self.active_session().as_ref(ctx);
-        let cwd_path = active_session.current_working_directory_location(ctx);
-        let matched_skill = SkillManager::handle(ctx)
-            .as_ref(ctx)
-            .get_skills_for_working_directory(cwd_path.as_ref(), ctx)
-            .into_iter()
-            .find(|skill| skill.name == skill_name)?;
-
-        Some(DetectedSkillCommand {
-            reference: matched_skill.reference,
-            name: matched_skill.name,
-            argument: possible_argument.map(str::to_owned),
-        })
+    /// LOCAL FORK: skills were served by the agent's SkillManager, so no input
+    /// ever resolves to a skill command now.
+    fn parse_skill_command(
+        &self,
+        _buffer: &str,
+        _ctx: &AppContext,
+    ) -> Option<DetectedSkillCommand> {
+        None
     }
 
     /// Update the active repository root for this terminal. Returns whether the value changed,
@@ -330,14 +259,9 @@ pub trait SlashCommandDataSource {
             availability |= Availability::REPOSITORY;
         }
 
-        if !self
-            .state()
-            .cli_subagent_controller
-            .as_ref(ctx)
-            .is_agent_in_control()
-        {
-            availability |= Availability::NO_LRC_CONTROL;
-        }
+        // LOCAL FORK: nothing can take long-running-command control now that the
+        // subagent controller went with the agent.
+        availability |= Availability::NO_LRC_CONTROL;
 
         if UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx) {
             availability |= Availability::CODEBASE_CONTEXT;
@@ -434,30 +358,16 @@ pub trait SlashCommandDataSource {
         }
     }
 
-    /// Whether there is an active conversation, given whether the agent view is active.
-    /// There is always an active conversation in the agent view.
-    fn has_active_conversation(&self, is_agent_view_active: bool, ctx: &AppContext) -> bool {
+    /// LOCAL FORK: conversations were tracked by the agent's history model, so
+    /// only the agent view can report one.
+    fn has_active_conversation(&self, is_agent_view_active: bool, _ctx: &AppContext) -> bool {
         is_agent_view_active
-            || crate::ai::blocklist::BlocklistAIHistoryModel::as_ref(ctx)
-                .active_conversation(self.terminal_view_id())
-                .is_some()
     }
 
-    /// Returns `true` if the CLI agent rich input is currently open for this terminal.
-    fn is_cli_agent_input_open(&self, ctx: &AppContext) -> bool {
-        CLIAgentSessionsModel::as_ref(ctx).is_input_open(self.terminal_view_id())
-    }
-
-    /// Returns the supported skill providers for the active CLI agent, or `None` if
-    /// CLI agent input is not open (meaning no filtering should be applied).
-    fn active_cli_agent_providers(
-        &self,
-        ctx: &AppContext,
-    ) -> Option<&'static [ai::skills::SkillProvider]> {
-        CLIAgentSessionsModel::as_ref(ctx)
-            .session(self.terminal_view_id())
-            .filter(|s| matches!(s.input_state, CLIAgentInputState::Open { .. }))
-            .map(|s| s.agent.supported_skill_providers())
+    /// LOCAL FORK: CLI agent sessions went with the agent, so the rich input is
+    /// never open.
+    fn is_cli_agent_input_open(&self, _ctx: &AppContext) -> bool {
+        false
     }
 
     /// Fuzzy-match the active commands against `query_text`. Returns scored [`InlineItem`]s with
@@ -496,62 +406,10 @@ pub trait SlashCommandDataSource {
         results
     }
 
-    /// Fuzzy-match skills for the current working directory against `query_text`. Returns an empty
-    /// vector when skills are globally unavailable. The caller decides whether skills apply for its
-    /// surface (e.g. GUI hides them in cloud mode).
-    fn match_skills(&self, query_text: &str, app: &AppContext) -> Vec<InlineItem> {
-        if !FeatureFlag::ListSkills.is_enabled() || !AISettings::as_ref(app).is_any_ai_enabled(app)
-        {
-            return Vec::new();
-        }
-
-        let cli_agent_providers = self.active_cli_agent_providers(app);
-        let active_session = self.active_session().as_ref(app);
-        let cwd_path = active_session.current_working_directory_location(app);
-        let skills = SkillManager::handle(app)
-            .as_ref(app)
-            .get_skills_for_working_directory(cwd_path.as_ref(), app);
-
-        let skill_manager = SkillManager::as_ref(app);
-        let mut results = Vec::new();
-        for mut skill in skills {
-            // In CLI agent input mode, only show skills that exist in a supported
-            // provider folder. We check all paths (not just the deduplicated
-            // provider) because deduplication may have picked a higher-priority
-            // provider even when the skill also exists in the CLI agent's folder.
-            if let Some(providers) = &cli_agent_providers {
-                if !skill_manager.skill_exists_for_any_provider(&skill, providers) {
-                    continue;
-                }
-                // Re-map the provider to the best supported one so the icon
-                // reflects the active CLI agent's native provider.
-                skill.provider = skill_manager.best_supported_provider(&skill, providers);
-            }
-            let Some(fuzzy_result) = SlashCommandFuzzyMatchResult::try_match(
-                query_text,
-                &skill.name,
-                Some(&skill.description),
-            ) else {
-                continue;
-            };
-            let score = fuzzy_result.score();
-            // Only include results with score > 25 once the user has started typing a query
-            if query_text.len() > 1 && score <= 25.0 {
-                continue;
-            }
-            let prefix_boost = prefix_match_bonus(query_text, &skill.name);
-            results.push(
-                InlineItem::from_skill(&skill, app)
-                    .with_name_match_result(fuzzy_result.name_match_result)
-                    .with_description_match_result(fuzzy_result.description_match_result)
-                    .with_score(
-                        OrderedFloat(score) * SCORE_MULTIPLIER
-                            + OrderedFloat(prefix_boost) * SCORE_MULTIPLIER
-                            + OrderedFloat(1. / skill.name.len() as f64),
-                    ),
-            );
-        }
-        results
+    /// LOCAL FORK: skills were catalogued by the agent's SkillManager, so there
+    /// is nothing to match. Kept so callers do not have to branch.
+    fn match_skills(&self, _query_text: &str, _app: &AppContext) -> Vec<InlineItem> {
+        Vec::new()
     }
 
     /// Active commands ordered for the zero-state (empty query) menu.
@@ -677,38 +535,7 @@ impl InlineItem {
         }
     }
 
-    pub(super) fn from_skill(skill: &SkillDescriptor, app: &AppContext) -> Self {
-        let appearance = Appearance::handle(app).as_ref(app);
-        // Use icon_override if set (e.g. Figma skills), otherwise derive from provider.
-        let icon = if let Some(override_icon) = skill.icon_override {
-            override_icon
-        } else {
-            match skill.provider {
-                SkillProvider::Warp => WarpIcon::Warp,
-                SkillProvider::Claude => WarpIcon::ClaudeLogo,
-                SkillProvider::Codex => WarpIcon::OpenAILogo,
-                SkillProvider::Gemini => WarpIcon::GeminiLogo,
-                SkillProvider::Droid => WarpIcon::DroidLogo,
-                SkillProvider::OpenCode => WarpIcon::OpenCodeLogo,
-                _ => WarpIcon::Warp,
-            }
-        };
-
-        Self {
-            action: AcceptSlashCommandOrSavedPrompt::Skill {
-                reference: skill.reference.clone(),
-                name: skill.name.clone(),
-            },
-            icon_path: Some(icon.into()),
-            name: format!("/{}", &skill.name),
-            description: Some(skill.description.clone()),
-            font_family: appearance.monospace_font_family(),
-            name_match_result: None,
-            description_match_result: None,
-            score: OrderedFloat(f64::MIN),
-            compact_layout: false,
-        }
-    }
+    // LOCAL FORK: fn from_skill removed with the agent.
 
     fn with_name_match_result(mut self, result: Option<FuzzyMatchResult>) -> Self {
         self.name_match_result = result;

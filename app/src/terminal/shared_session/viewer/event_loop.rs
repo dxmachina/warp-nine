@@ -8,9 +8,6 @@ use session_sharing_protocol::common::{
 };
 use warpui::{Entity, ModelContext, SingletonEntity, WeakViewHandle};
 
-use crate::ai::agent::AIAgentActionId;
-use crate::ai::blocklist::block::cli_controller::LongRunningCommandControlState;
-use crate::ai::blocklist::history_model::BlocklistAIHistoryModel;
 use crate::features::FeatureFlag;
 use crate::terminal::event_listener::ChannelEventListener;
 use crate::terminal::model::ansi::{self};
@@ -18,7 +15,6 @@ use crate::terminal::model::block::AgentInteractionMetadata;
 use crate::terminal::shared_session::ai_agent::decode_agent_response_event;
 use crate::terminal::shared_session::shared_handlers::RemoteUpdateGuard;
 use crate::terminal::shared_session::{SharedSessionStatus, decode_scrollback};
-use crate::terminal::view::ambient_agent::is_cloud_agent_pre_first_exchange;
 use crate::terminal::{TerminalModel, TerminalView};
 
 /// If we end up buffering more than this many events,
@@ -194,48 +190,10 @@ impl EventLoop {
                 } => {
                     let should_clear_input = ai_metadata.is_none();
 
-                    // If we have AI metadata, map the tool_call_id back to the owning conversation
-                    let reconstructed_ai_metadata = ai_metadata.and_then(|ai_metadata| {
-                        let action_id: AIAgentActionId = ai_metadata.tool_call_id.into();
-
-                        // Try to map the action back to its owning conversation.
-                        let Some(conversation_id) =
-                            self.terminal_view.upgrade(ctx).and_then(|view| {
-                                view.read(ctx, |view, app| {
-                                    let terminal_view_id = view.id();
-                                    let history = BlocklistAIHistoryModel::as_ref(app);
-
-                                    // Try to map the action back to its owning conversation.
-                                    history
-                                        .conversation_id_for_action(&action_id, terminal_view_id)
-                                        // Fallback to active conversation if no exact match is found.
-                                        .or_else(|| {
-                                            history.active_conversation_id(terminal_view_id)
-                                        })
-                                })
-                            })
-                        else {
-                            // If we can't find the conversation ID, we can't reconstruct the AI metadata.
-                            return None;
-                        };
-
-                        Some(AgentInteractionMetadata::new(
-                            Some(action_id),
-                            conversation_id,
-                            None,
-                            // If the sharer started this as an agent-monitored long-running command,
-                            // reflect that in the viewer's metadata so the command can be rendered as an agent long-running command.
-                            // Further state will be inferred from the sharer's agent events.
-                            ai_metadata.is_agent_monitored.then_some(
-                                LongRunningCommandControlState::Agent {
-                                    is_blocked: false,
-                                    should_hide_responses: false,
-                                },
-                            ),
-                            false,
-                            true,
-                        ))
-                    });
+                    // LOCAL FORK: the sharer's AI metadata was mapped back to a
+                    // conversation through the agent's history model. With the
+                    // agent gone there is nothing to reconstruct.
+                    let reconstructed_ai_metadata: Option<AgentInteractionMetadata> = None;
 
                     let start_outcome = self
                         .terminal_model
@@ -257,18 +215,10 @@ impl EventLoop {
                                 // Skip during cloud setup: clearing on every setup command would
                                 // wipe a follow-up the viewer is composing. Mirrors the
                                 // `InputUpdated` guard.
-                                let skip_clear_during_setup =
-                                    FeatureFlag::CloudModeSetupV2.is_enabled() && {
-                                        let model = view.model.lock();
-                                        is_cloud_agent_pre_first_exchange(
-                                            view.ambient_agent_view_model(),
-                                            view.agent_view_controller(),
-                                            &model,
-                                            ctx,
-                                        )
-                                    };
-                                if skip_clear_during_setup || view.has_queued_command_in_flight(ctx)
-                                {
+                                // LOCAL FORK: cloud-agent setup detection went
+                                // with the agent, so there is no setup phase to
+                                // skip the clear for.
+                                if view.has_queued_command_in_flight(ctx) {
                                     return;
                                 }
                                 view.input().update(ctx, |input, ctx| {
@@ -286,20 +236,7 @@ impl EventLoop {
                                 });
                             });
                         }
-                        if let Some(ai_metadata) = reconstructed_ai_metadata
-                            && let Some(view) = self.terminal_view.upgrade(ctx)
-                            && let Some(action_id) = ai_metadata.requested_command_action_id()
-                        {
-                            view.update(ctx, |view, ctx| {
-                                view.ai_controller().update(ctx, |controller, ctx| {
-                                    controller.mark_action_as_remotely_executing_in_shared_session(
-                                        action_id,
-                                        *ai_metadata.conversation_id(),
-                                        ctx,
-                                    );
-                                });
-                            });
-                        }
+                        // LOCAL FORK: remote-execution marking went with the agent.
                     }
                 }
                 OrderedTerminalEventType::Resize { window_size } => {

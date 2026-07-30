@@ -80,9 +80,6 @@ impl BillingCycleUsageSectionView {
             }
             ctx.notify();
         });
-        ctx.subscribe_to_model(&AIRequestUsageModel::handle(ctx), |_, _, _, ctx| {
-            ctx.notify()
-        });
         ctx.subscribe_to_model(&AuthManager::handle(ctx), |_, _, _, ctx| ctx.notify());
         ctx.subscribe_to_model(&TeamUpdateManager::handle(ctx), |_, _, _, ctx| ctx.notify());
 
@@ -442,23 +439,10 @@ impl BillingCycleUsageSectionView {
         appearance: &Appearance,
         app: &AppContext,
     ) -> Option<Box<dyn Element>> {
-        if self.selected_period_end.is_some() {
-            return None;
-        }
-        let theme = appearance.theme();
-        let reset_str = AIRequestUsageModel::as_ref(app)
-            .next_refresh_time_local()
-            .format("Resets %b %d, %-I:%M %p")
-            .to_string();
-        Some(
-            Text::new_inline(
-                reset_str,
-                appearance.ui_font_family(),
-                appearance.ui_font_size(),
-            )
-            .with_color(theme.sub_text_color(theme.background()).into())
-            .finish(),
-        )
+        // LOCAL FORK: the refresh time came from the agent's request usage model, so
+        // there is no reset label to render.
+        let _ = (appearance, app);
+        None
     }
 
     // "May 13 - Jun 13, 2026"

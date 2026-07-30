@@ -12,7 +12,6 @@ pub use cloud_object_models::{
     DEFAULT_COMMAND_EXECUTION_DENYLIST,
 };
 use indexmap::IndexMap;
-use regex::Regex;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use settings::{
@@ -2096,7 +2095,6 @@ impl AISettings {
     pub fn register_and_subscribe_to_events(app: &mut AppContext) {
         Self::register(app);
         app.add_singleton_model(FocusedTerminalInfo::new);
-        CompiledCommandsForCodingAgentToolbar::register(app);
 
         app.update_model(&Self::handle(app), |_me, ctx| {
             ctx.subscribe_to_model(&FocusedTerminalInfo::handle(ctx), |_me, _, event, ctx| {
@@ -2365,53 +2363,7 @@ impl AISettings {
         );
     }
 
-    /// Updates the quota info based on the latest RequestLimitInfo.
-    ///
-    /// This method finds or creates the appropriate CycleInfo based on the
-    /// request_limit_info's next refresh time and updates its fields accordingly.
-    pub fn update_quota_info(
-        &mut self,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        // Convert ServerTimestamp to DateTime<Utc>
-        let next_refresh_time = request_limit_info.next_refresh_time.utc();
-        let now = Utc::now();
-
-        // Check if request_limit_info has unlimited requests
-        let is_quota_exceeded = !request_limit_info.is_unlimited
-            && request_limit_info.num_requests_used_since_refresh >= request_limit_info.limit;
-
-        let mut cycle_history = self.ai_request_quota_info.cycle_history.clone();
-
-        // Track if we updated an existing cycle
-        let mut updated_existing_cycle = false;
-
-        // Find or create a cycle that matches the current period
-        if let Some(current_cycle) = cycle_history.last_mut()
-            && now <= current_cycle.end_date
-        {
-            // Update existing cycle
-            current_cycle.was_quota_exceeded = is_quota_exceeded;
-            updated_existing_cycle = true;
-        }
-
-        // Only create a new cycle if we didn't update an existing one
-        if !updated_existing_cycle {
-            // Create a new cycle
-            let new_cycle = CycleInfo {
-                end_date: next_refresh_time,
-                was_quota_exceeded: is_quota_exceeded,
-                banner_state: BannerState::default(),
-            };
-
-            cycle_history.push(new_cycle);
-        }
-
-        report_if_error!(
-            self.ai_request_quota_info
-                .set_value(AIRequestQuotaInfo { cycle_history }, ctx)
-        );
-    }
+    // LOCAL FORK: fn update_quota_info removed with the agent.
 
     pub fn is_command_denylist_editable(&self, app: &AppContext) -> bool {
         self.is_any_ai_enabled(app)
@@ -2560,23 +2512,7 @@ impl AISettings {
         );
     }
 
-    pub fn set_cli_agent_for_command(
-        &mut self,
-        pattern: &str,
-        agent: Option<CLIAgent>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let mut map = self.cli_agent_footer_enabled_commands.value().0.clone();
-        if !map.contains_key(pattern) {
-            return;
-        }
-        let value = agent.map(|a| a.to_serialized_name()).unwrap_or_default();
-        map.insert(pattern.to_string(), value);
-        report_if_error!(
-            self.cli_agent_footer_enabled_commands
-                .set_value(ToolbarCommandMap::new(map), ctx)
-        );
-    }
+    // LOCAL FORK: fn set_cli_agent_for_command removed with the agent.
 
     /// Whether the feature-intro popover with the given id key has been seen.
     pub fn is_feature_intro_seen(&self, key: &str) -> bool {
@@ -2638,60 +2574,8 @@ impl AISettings {
     }
 }
 
-/// Singleton model that caches compiled regexes for the `cli_agent_footer_enabled_commands`
-/// setting. Each entry pairs a compiled regex with the CLI agent it maps to.
-pub struct CompiledCommandsForCodingAgentToolbar {
-    regexes: Vec<(Regex, CLIAgent)>,
-}
-
-impl CompiledCommandsForCodingAgentToolbar {
-    fn parse(app: &AppContext) -> Vec<(Regex, CLIAgent)> {
-        AISettings::as_ref(app)
-            .cli_agent_footer_enabled_commands
-            .value()
-            .iter()
-            .filter_map(|(pattern, agent_name)| {
-                let regex = Regex::new(pattern).ok()?;
-                let agent = CLIAgent::from_serialized_name(agent_name);
-                Some((regex, agent))
-            })
-            .collect()
-    }
-
-    fn register(app: &mut AppContext) {
-        let handle = app.add_singleton_model(|ctx| Self {
-            regexes: Self::parse(ctx),
-        });
-        let ai_settings = AISettings::handle(app);
-        app.subscribe_to_model(&ai_settings, move |_, event, ctx| {
-            if matches!(
-                event,
-                AISettingsChangedEvent::CLIAgentToolbarEnabledCommands { .. }
-            ) {
-                let regexes = Self::parse(ctx);
-                handle.update(ctx, |me, _| {
-                    me.regexes = regexes;
-                });
-            }
-        });
-    }
-
-    /// Returns the CLI agent assigned to the first matching pattern, or `None`
-    /// if no pattern matches the command.
-    pub fn matched_agent(app: &AppContext, command: &str) -> Option<CLIAgent> {
-        Self::as_ref(app)
-            .regexes
-            .iter()
-            .find(|(regex, _)| regex.is_match(command))
-            .map(|(_, agent)| *agent)
-    }
-}
-
-impl Entity for CompiledCommandsForCodingAgentToolbar {
-    type Event = ();
-}
-
-impl SingletonEntity for CompiledCommandsForCodingAgentToolbar {}
+// LOCAL FORK: struct CompiledCommandsForCodingAgentToolbar removed with the
+// agent; it mapped commands to the deleted CLIAgent enum.
 
 #[cfg(test)]
 #[path = "ai_tests.rs"]

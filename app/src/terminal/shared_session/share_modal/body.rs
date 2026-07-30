@@ -96,14 +96,8 @@ impl Body {
         // client and server to ensure that the actual share won't be started if the size is
         // too large.
 
-        // Check if agent shared sessions is enabled and there are active conversations
-        self.has_agent_conversations = if FeatureFlag::AgentSharedSessions.is_enabled() {
-            BlocklistAIHistoryModel::as_ref(ctx)
-                .all_live_conversations_for_terminal_surface(terminal_view_id)
-                .any(|conv| conv.exchange_count() > 0)
-        } else {
-            false
-        };
+        // LOCAL FORK: there is no agent conversation history to share.
+        self.has_agent_conversations = false;
 
         // Calculate the size of agent conversation response events that will be sent during initialization.
         // Only include this if the feature flag is enabled, since the events won't be sent otherwise.

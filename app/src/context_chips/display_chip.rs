@@ -879,24 +879,9 @@ impl DisplayChip {
         });
 
         let display_chip_kind = match chip_result.kind {
-            ContextChipKind::AgentPlanAndTodoList => {
-                let context_model = config.ai_context_model.clone();
-                let view_id = config.terminal_view_id;
-                let plan_and_todo_list = ctx.add_typed_action_view(|ctx| {
-                    PlanAndTodoListView::new(
-                        context_model,
-                        config.menu_positioning_provider.clone(),
-                        view_id,
-                        is_in_agent_view,
-                        ctx,
-                    )
-                });
-
-                // LOCAL FORK: this forwarded plan/todo-list events into an AIDocument pane.
-                // The list, the event and the pane are all agent surfaces and are gone.
-
-                DisplayChipKind::AgentPlanAndTodoList { plan_and_todo_list }
-            }
+            // LOCAL FORK: the plan/todo list view was an agent surface and is gone, so the
+            // chip renders nothing.
+            ContextChipKind::AgentPlanAndTodoList => DisplayChipKind::AgentPlanAndTodoList {},
             ContextChipKind::ShellGitBranch => DisplayChipKind::GitBranch {
                 menu_open: false,
                 menu: Self::git_branch_menu(&chip_result.on_click_values, ctx),
@@ -1335,9 +1320,7 @@ impl DisplayChip {
 
     pub fn should_render(&self, app: &AppContext) -> bool {
         match &self.display_chip_kind {
-            DisplayChipKind::AgentPlanAndTodoList { plan_and_todo_list } => {
-                plan_and_todo_list.as_ref(app).should_render(app)
-            }
+            DisplayChipKind::AgentPlanAndTodoList {} => false,
             _ => true,
         }
     }
@@ -1999,9 +1982,7 @@ impl DisplayChip {
                 Some(self.node_version_chip(popup, *popup_open, app))
             }
             DisplayChipKind::CondaEnvironment => Some(self.conda_environment_chip(app)),
-            DisplayChipKind::AgentPlanAndTodoList { plan_and_todo_list } => {
-                Some(ChildView::new(plan_and_todo_list).finish())
-            }
+            DisplayChipKind::AgentPlanAndTodoList {} => None,
             DisplayChipKind::GitBranch { menu_open, menu } => {
                 Some(self.git_branch_chip(*menu_open, menu, app))
             }

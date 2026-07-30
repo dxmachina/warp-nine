@@ -2,7 +2,7 @@ mod interaction_mode;
 mod serialized_block;
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io;
 use std::iter::DoubleEndedIterator;
 use std::num::NonZeroUsize;
@@ -57,6 +57,9 @@ use crate::terminal::model::blockgrid::BlockGrid;
 use crate::terminal::model::grid::grid_handler::TermMode;
 use crate::terminal::model::index::{Point, VisibleRow};
 use crate::terminal::model::iterm_image::ITermImage;
+use crate::terminal::model::secret_detection::{
+    SECRET_REDACTION_REPLACEMENT_CHARACTER, find_secrets_in_text,
+};
 use crate::terminal::model::secrets::ObfuscateSecrets;
 use crate::terminal::model::session::SessionId;
 use crate::terminal::model::terminal_model::{BlockIndex, WithinBlock};
@@ -132,6 +135,22 @@ const BACKGROUND_OUTPUT_RENDER_DELAY_MS: u64 = 100;
 /// for block summaries given to AI.
 const MIN_TERMINAL_WIDTH_FOR_TRUNCATION_CALCULATIONS: usize = 150;
 
+/// LOCAL FORK: this lived in the agent's redaction module. Redacts every
+/// detected secret in-place, replacing each byte with the redaction character.
+fn redact_secrets(input: &mut String) {
+    let mut secrets: Vec<_> = find_secrets_in_text(input)
+        .into_iter()
+        .map(|r| r.byte_range)
+        .collect();
+    // Replace from the end to preserve indices.
+    secrets.sort_by_key(|range| range.start);
+    for range in secrets.into_iter().rev() {
+        let replacement =
+            SECRET_REDACTION_REPLACEMENT_CHARACTER.repeat(range.end.saturating_sub(range.start));
+        input.replace_range(range.start..range.end, &replacement);
+    }
+}
+
 /// Blocklist Env Var metadata associated with this block.
 #[derive(Debug, Clone)]
 pub struct BlocklistEnvVarMetadata {
@@ -156,45 +175,14 @@ pub enum AgentViewVisibility {
 impl AgentViewVisibility {
     /// Visibility for a block created in the top-level terminal (not in an agent view).
     pub fn new_from_terminal() -> Self {
-        Self::Terminal {
-            pending_conversation_ids: HashSet::new(),
-            conversation_ids: HashSet::new(),
-        }
+        Self::Terminal {}
     }
 
 
 
 
 
-    /// Moves the block from pending context to attached context for the given conversation ID.
-    /// Returns true if the conversation was in pending and was promoted, false otherwise.
-    fn promote_pending_to_attached(&mut self, id: AIConversationId) -> bool {
-        match self {
-            Self::Terminal {
-                pending_conversation_ids,
-                conversation_ids,
-            } => {
-                if pending_conversation_ids.remove(&id) {
-                    conversation_ids.insert(id);
-                    true
-                } else {
-                    false
-                }
-            }
-            Self::Agent {
-                pending_other_conversation_ids,
-                other_conversation_ids,
-                ..
-            } => {
-                if pending_other_conversation_ids.remove(&id) {
-                    other_conversation_ids.insert(id);
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-    }
+    // LOCAL FORK: fn promote_pending_to_attached removed with the agent.
 
 }
 
@@ -964,13 +952,7 @@ impl Block {
 
 
 
-    /// Moves the block from pending context to attached context for the given conversation ID.
-    pub(super) fn promote_pending_to_attached(
-        &mut self,
-    ) -> bool {
-        self.agent_view_visibility
-            .promote_pending_to_attached(conversation_id)
-    }
+    // LOCAL FORK: fn promote_pending_to_attached removed with the agent.
 
     pub fn agent_view_visibility(&self) -> &AgentViewVisibility {
         &self.agent_view_visibility
@@ -1275,30 +1257,9 @@ impl Block {
         }
         if FeatureFlag::AgentView.is_enabled() {
             match transcript_scope {
-                TranscriptScope::Conversation(active_id) => {
-                    // Agent view is active - show only blocks that belong to this conversation
-                    let visible_in_conversation = match &self.agent_view_visibility {
-                        AgentViewVisibility::Terminal {
-                            pending_conversation_ids,
-                            conversation_ids,
-                        } => {
-                            pending_conversation_ids.contains(active_id)
-                                || conversation_ids.contains(active_id)
-                        }
-                        AgentViewVisibility::Agent {
-                            origin_conversation_id,
-                            pending_other_conversation_ids,
-                            other_conversation_ids,
-                        } => {
-                            active_id == origin_conversation_id
-                                || pending_other_conversation_ids.contains(active_id)
-                                || other_conversation_ids.contains(active_id)
-                        }
-                    };
-                    if !visible_in_conversation {
-                        return true;
-                    }
-                }
+                // LOCAL FORK: blocks no longer track which conversations they are
+                // attached to, so nothing is visible in a conversation scope.
+                TranscriptScope::Conversation(_) => return true,
                 TranscriptScope::Terminal => {
                     // Terminal view - hide blocks that were created in agent mode
                     if matches!(

@@ -13,6 +13,21 @@ use crate::settings_view::billing_and_usage_page::BillingAndUsagePageAction;
 use crate::ui_components::blended_colors;
 use crate::ui_components::icons::Icon;
 
+/// LOCAL FORK: this lived next to the agent's usage views. Displays whole
+/// numbers when the value is effectively whole, one decimal place otherwise.
+fn format_credits(credits: f32) -> String {
+    if credits.fract() < 0.1 {
+        let whole = credits.trunc() as i32;
+        if whole == 1 {
+            format!("{whole} credit")
+        } else {
+            format!("{whole} credits")
+        }
+    } else {
+        format!("{credits:.1} credits")
+    }
+}
+
 pub struct UsageHistoryEntry {
     // If no entry is provided, we will assume that this is a placeholder entry
     // to display in the loading UI.
@@ -37,32 +52,12 @@ impl UsageHistoryEntry {
         }
     }
 
-    pub fn render(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
-        let mut res = Flex::column()
+    // LOCAL FORK: the expanded per-conversation breakdown was rendered by the
+    // agent's ConversationUsageView, so only the header row survives.
+    pub fn render(&self, appearance: &Appearance, _app: &AppContext) -> Box<dyn Element> {
+        let res = Flex::column()
             .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
             .with_child(self.render_header(appearance));
-
-        if let Some(entry) = &self.entry
-            && self.is_expanded
-        {
-            res = res
-                .with_child(
-                    // Separator between header and usage component
-                    Container::new(Empty::new().finish())
-                        .with_border(
-                            Border::top(2.0).with_border_fill(appearance.theme().outline()),
-                        )
-                        .with_overdraw_bottom(0.)
-                        .finish(),
-                )
-                .with_child(
-                    ConversationUsageView::new(
-                        ConversationUsageInfo::from(entry),
-                        self.tooltip_mouse_state.clone(),
-                    )
-                    .render(app),
-                );
-        }
 
         Container::new(res.finish())
             .with_border(Border::all(2.).with_border_fill(appearance.theme().surface_3()))

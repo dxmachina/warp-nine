@@ -9,6 +9,15 @@ use warpui::{
 };
 
 use crate::appearance::Appearance;
+use crate::ui_components::inline_action::inline_action_header::{
+    HeaderConfig, INLINE_ACTION_HEADER_VERTICAL_PADDING, INLINE_ACTION_HORIZONTAL_PADDING,
+    INLINE_ACTION_VERTICAL_PADDING,
+};
+use crate::ui_components::inline_action::inline_action_icons::cancelled_icon;
+use crate::ui_components::inline_action::status_icons::yellow_stop_icon;
+use crate::ui_components::keyboard_navigable_buttons::{
+    KeyboardNavigableButtons, simple_navigation_button,
+};
 
 const EXPLANATION_TEXT: &str = "Would you like to create an environment for this project so you can run cloud agents in it? The agent will guide you through choosing GitHub repos, configuring a Docker image, and specifying startup commands.";
 const NO_REPOS_HELP_TEXT: &str = "If you want to create an environment with repos, rerun this command and pass in file paths or GitHub links as arguments, e.g. \"/create-environment <filepath> <GitHub URL>\".";
@@ -26,6 +35,7 @@ pub enum InitEnvironmentBlockEvent {
 
 enum SetupState {
     Pending {
+        action_view: ViewHandle<KeyboardNavigableButtons>,
     },
     Skipped,
 }
@@ -93,6 +103,7 @@ impl InitEnvironmentBlock {
 
     fn render_pending_step(
         &self,
+        action_view: &ViewHandle<KeyboardNavigableButtons>,
         app: &AppContext,
     ) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
@@ -118,15 +129,26 @@ impl InitEnvironmentBlock {
         }
         content.add_child(ChildView::new(action_view).finish());
 
-        RenderableAction::new_with_element(content.finish(), app)
-            .with_header(
-                HeaderConfig::new(EXPLANATION_TEXT, app)
-                    .with_icon(yellow_stop_icon(appearance))
-                    .with_corner_radius_override(CornerRadius::with_top(Radius::Pixels(8.)))
-                    .with_soft_wrap_title(),
+        let header = HeaderConfig::new(EXPLANATION_TEXT, app)
+            .with_icon(yellow_stop_icon(appearance))
+            .with_corner_radius_override(CornerRadius::with_top(Radius::Pixels(8.)))
+            .with_soft_wrap_title()
+            .render(app);
+
+        // LOCAL FORK: `RenderableAction` (ai/blocklist/inline_action/requested_action.rs)
+        // wrapped the header and body together. It was not rescued, so the two are
+        // stacked directly here.
+        Flex::column()
+            .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .with_child(header)
+            .with_child(
+                Container::new(content.finish())
+                    .with_horizontal_padding(INLINE_ACTION_HORIZONTAL_PADDING)
+                    .with_vertical_padding(INLINE_ACTION_VERTICAL_PADDING)
+                    .with_background(theme.surface_1())
+                    .with_corner_radius(CornerRadius::with_bottom(Radius::Pixels(8.)))
+                    .finish(),
             )
-            .with_background_color(theme.surface_1().into_solid())
-            .render(app)
             .finish()
     }
 }
@@ -145,10 +167,22 @@ impl View for InitEnvironmentBlock {
 
         let rendered_step = match &self.setup_state {
             SetupState::Pending { action_view } => self.render_pending_step(action_view, app),
-            SetupState::Skipped => RenderableAction::new("Environment setup cancelled", app)
-                .with_icon(cancelled_icon(appearance).finish())
-                .with_content_item_spacing()
-                .render(app)
+            SetupState::Skipped => Flex::row()
+                .with_cross_axis_alignment(CrossAxisAlignment::Center)
+                .with_child(
+                    Container::new(cancelled_icon(appearance).finish())
+                        .with_margin_right(8.)
+                        .finish(),
+                )
+                .with_child(
+                    Text::new(
+                        "Environment setup cancelled",
+                        appearance.ui_font_family(),
+                        appearance.monospace_font_size(),
+                    )
+                    .soft_wrap(true)
+                    .finish(),
+                )
                 .finish(),
         };
         Container::new(rendered_step).with_padding_top(16.).finish()

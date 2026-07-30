@@ -924,10 +924,6 @@ impl TeamsPageView {
                 self.update_team_members_state(ctx);
                 self.update_approved_domains_state(ctx);
 
-                AIRequestUsageModel::handle(ctx).update(ctx, |usage_model, ctx| {
-                    usage_model.refresh_request_usage_async(ctx);
-                });
-
                 ctx.emit(TeamsPageViewEvent::TeamsChanged);
             }
             UserWorkspacesEvent::ToggleInviteLinksSuccess => {
@@ -1056,13 +1052,10 @@ impl TeamsPageView {
         }
     }
 
-    fn should_show_reload_credits_confirmation(&self, ctx: &AppContext) -> bool {
-        FeatureFlag::BillingAndUsagePageV2.is_enabled()
-            && self
-                .ai_request_usage_model
-                .as_ref(ctx)
-                .total_user_interactive_bonus_credits_remaining()
-                > 0
+    // LOCAL FORK: the remaining-credit balance came from the removed request
+    // usage model, so the reload-credits variant can never be selected.
+    fn should_show_reload_credits_confirmation(&self, _ctx: &AppContext) -> bool {
+        false
     }
 
     fn show_team_action_confirmation(
@@ -2225,8 +2218,9 @@ impl TeamsWidget {
         let current_user_email = view.auth_state.user_email().unwrap_or_default();
         let has_admin_permissions = team_metadata.has_admin_permissions(&current_user_email);
         let is_owner = team_metadata.has_owner_permissions(&current_user_email);
-        let remaining_workspace_credits =
-            ai_request_usage_model.total_current_workspace_bonus_credits_remaining(app);
+        // LOCAL FORK: bonus grant balances were cached by the removed request
+        // usage model; there is no local source for them any more.
+        let remaining_workspace_credits = 0;
         let delete_disabled_reason = team_metadata
             .get_delete_disabled_reason(&current_user_email, remaining_workspace_credits);
 
@@ -4376,17 +4370,11 @@ impl SettingsWidget for TeamsWidget {
         let content = if NetworkStatus::as_ref(app).is_online() {
             let teams = view.user_workspaces.as_ref(app);
             let cloud_model = view.cloud_model.as_ref(app);
-            let ai_request_usage_model = view.ai_request_usage_model.as_ref(app);
 
             match teams.team_for_view_handle(&view.self_handle, app) {
-                Some(team) => self.render_team_management_page(
-                    team,
-                    cloud_model,
-                    ai_request_usage_model,
-                    view,
-                    appearance,
-                    app,
-                ),
+                Some(team) => {
+                    self.render_team_management_page(team, cloud_model, view, appearance, app)
+                }
                 None => self.render_create_team_page_with_banner(view, appearance, app),
             }
         } else {

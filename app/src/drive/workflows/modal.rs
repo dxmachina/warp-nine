@@ -206,7 +206,7 @@ impl WorkflowEditorErrorState {
 }
 
 impl WorkflowModal {
-    pub fn new(ai_client: Arc<dyn AIClient>, ctx: &mut ViewContext<Self>) -> Self {
+    pub fn new(ctx: &mut ViewContext<Self>) -> Self {
         let appearance = Appearance::as_ref(ctx);
         let header_font_size = appearance.header_font_size();
         let ui_font_family = appearance.ui_font_family();
@@ -285,7 +285,6 @@ impl WorkflowModal {
             arguments_rows: Vec::new(),
             show_unsaved_changes_dialog: false,
             revision_ts: None,
-            ai_client,
             ai_metadata_assist_state: AiAssistState::PreRequest,
             breadcrumbs: Default::default(),
             clicked_breadcrumb: None,

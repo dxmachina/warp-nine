@@ -40,14 +40,12 @@ impl TuiSlashCommandDataSource {
     pub fn new(args: TuiDataSourceArgs, ctx: &mut ModelContext<Self>) -> Self {
         let TuiDataSourceArgs {
             active_session,
-            cli_subagent_controller,
             terminal_view_id,
             terminal_model,
         } = args;
 
         subscribe_to_shared_dependencies(
             &active_session,
-            &cli_subagent_controller,
             terminal_view_id,
             Self::recompute_active_commands,
             ctx,
@@ -65,32 +63,21 @@ impl TuiSlashCommandDataSource {
                     me.recompute_active_commands(ctx);
                 }
             });
-            ctx.subscribe_to_model(&AIRequestUsageModel::handle(ctx), |me, _, event, ctx| {
-                if matches!(event, AIRequestUsageModelEvent::RequestUsageUpdated) {
-                    me.recompute_active_commands(ctx);
-                }
-            });
+            // LOCAL FORK: the AI request-usage subscription went with the agent.
         }
 
         let mut me = Self {
-            state: SlashCommandDataSourceState::new(
-                active_session,
-                cli_subagent_controller,
-                terminal_view_id,
-            ),
+            state: SlashCommandDataSourceState::new(active_session, terminal_view_id),
             terminal_model,
         };
         me.recompute_active_commands(ctx);
         me
     }
 
-    /// Returns whether this TUI surface routes AI work to its local execution host.
-    ///
-    /// This reuses the GUI's canonical routing decision. TUI surfaces have no
-    /// `AmbientAgentViewModel`, so shared-session state comes from the terminal model.
-    pub fn local_skills_available(&self, app: &AppContext) -> bool {
-        let terminal_model = self.terminal_model.lock();
-        resolve_ai_query_routing(self.terminal_view_id(), None, &terminal_model, app).is_local()
+    /// LOCAL FORK: AI query routing went with the agent, and skills went with
+    /// it, so nothing is ever served locally.
+    pub fn local_skills_available(&self, _app: &AppContext) -> bool {
+        false
     }
     pub fn set_active_repo_root(
         &mut self,
@@ -105,10 +92,10 @@ impl TuiSlashCommandDataSource {
     fn recompute_active_commands(&mut self, ctx: &mut ModelContext<Self>) {
         let availability = self.availability(ctx);
         let gates = self.common_command_gates(ctx);
+        // LOCAL FORK: the voice credit check went with the agent's request-usage model.
         #[cfg(feature = "voice_input")]
         let voice_command_is_available = AISettings::as_ref(ctx).is_voice_input_enabled(ctx)
             && UserWorkspaces::as_ref(ctx).is_voice_enabled()
-            && AIRequestUsageModel::as_ref(ctx).can_request_voice()
             && self.local_skills_available(ctx);
         #[cfg(not(feature = "voice_input"))]
         let voice_command_is_available = false;

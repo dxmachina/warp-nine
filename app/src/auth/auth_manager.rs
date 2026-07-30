@@ -27,6 +27,7 @@ use super::user::User;
 use super::user_properties::UserProperties;
 use super::{AuthStateProvider, UserUid};
 use crate::autoupdate::AutoupdateState;
+use crate::persisted_workspace::PersistedWorkspace;
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::graphql::get_user_facing_error_message;
@@ -48,7 +49,6 @@ use crate::{
     GlobalResourceHandlesProvider, TelemetryEvent, persistence, send_telemetry_from_ctx,
     send_telemetry_sync_from_ctx,
 };
-use crate::persisted_workspace::PersistedWorkspace;
 
 #[derive(Debug)]
 pub enum AuthManagerEvent {
@@ -383,7 +383,6 @@ impl AuthManager {
                 let UserProperties {
                     user,
                     server_experiments,
-                    llms,
                 } = user_output.into();
 
                 self.set_and_persist(Some(user.clone()), Some(credentials), ctx);
@@ -426,14 +425,6 @@ impl AuthManager {
 
                 CloudPreferencesSyncer::handle(ctx).update(ctx, |model, ctx| {
                     model.handle_user_fetched(self.auth_state.clone(), ctx)
-                });
-
-                AIRequestUsageModel::handle(ctx).update(ctx, |usage_model, ctx| {
-                    usage_model.refresh_request_usage_async(ctx);
-                });
-
-                LLMPreferences::handle(ctx).update(ctx, |prefs, ctx| {
-                    prefs.update_feature_model_choices(Ok(llms), ctx);
                 });
 
                 PersistedWorkspace::handle(ctx).update(ctx, |index_manager_updater, ctx| {

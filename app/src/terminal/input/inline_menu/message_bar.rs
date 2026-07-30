@@ -30,24 +30,15 @@ impl<A: InlineMenuAction, T: 'static + Send + Sync> InlineMenuMessageBar<A, T> {
     pub fn new(args: InlineMenuMessageBarArgs<A, T>, ctx: &mut ViewContext<Self>) -> Self {
         let InlineMenuMessageBarArgs {
             inline_menu_model,
-            agent_view_controller,
             positioner,
         } = args;
 
         ctx.subscribe_to_model(&inline_menu_model, |_, _, _, ctx| {
             ctx.notify();
         });
-        ctx.subscribe_to_model(&agent_view_controller, |_, _, event, ctx| match event {
-            AgentViewControllerEvent::EnteredAgentView { .. }
-            | AgentViewControllerEvent::ExitedAgentView { .. } => {
-                ctx.notify();
-            }
-            _ => (),
-        });
 
         Self {
             inline_menu_model,
-            agent_view_controller,
             positioner,
         }
     }
@@ -77,7 +68,8 @@ impl<A: InlineMenuAction, T: 'static + Send + Sync> View for InlineMenuMessageBa
             .expect("Empty message producer always returns Some().");
 
         let message_bar = render_standard_message_bar(message, None, app);
-        if !self.agent_view_controller.as_ref(app).is_active() {
+        // LOCAL FORK: the agent view is gone, so the bordered layout always applies.
+        {
             let is_rendering_below_input = self
                 .positioner
                 .as_ref(app)
@@ -94,8 +86,6 @@ impl<A: InlineMenuAction, T: 'static + Send + Sync> View for InlineMenuMessageBa
                         .with_border_fill(Appearance::as_ref(app).theme().outline()),
                 )
                 .finish()
-        } else {
-            message_bar
         }
     }
 }

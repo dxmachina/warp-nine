@@ -1,146 +1,19 @@
-//! Manages how we write to and read from our SQLite database for our AI features.
+//! Manages how we write to and read from our SQLite database for terminal blocks.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use diesel::prelude::*;
 use diesel::result::Error;
 use diesel::sqlite::SqliteConnection;
-use itertools::Itertools;
 
-use super::model::Block;
 use super::{model, schema};
-use crate::app_state::PaneUuid;
-use crate::persistence::schema::ai_queries;
 use crate::terminal::model::block::{SerializedAgentViewVisibility, SerializedBlock};
 
 const MAX_TERMINAL_BLOCKS_TO_PERSIST_PER_SESSION: i64 = 100;
 
-type PersistedBlocks = HashMap<PaneUuid, Vec<SerializedBlockListItem>>;
+// LOCAL FORK: the AIQuery row structs and their read limits went with the
+// agent; nothing writes or reads the `ai_queries` table any more.
 
-/// An AI query read from the SQLite DB.
-#[derive(Identifiable, Insertable, Queryable, Selectable)]
-#[diesel(table_name = ai_queries)]
-#[diesel(primary_key(id))]
-pub(super) struct AIQuery {
-    pub(super) id: i32,
-    pub(super) exchange_id: String,
-    pub(super) conversation_id: String,
-    pub(super) start_ts: NaiveDateTime,
-    pub(super) output_status: String,
-    pub(super) input: String,
-    pub(super) working_directory: Option<String>,
-    pub(super) model_id: String,
-    pub(super) coding_model_id: String,
-
-    // Planning model selection is deprecated and unused.
-    #[allow(unused)]
-    pub(super) planning_model_id: String,
-}
-
-impl TryFrom<AIQuery> for PersistedAIInput {
-    type Error = anyhow::Error;
-
-    fn try_from(value: AIQuery) -> Result<Self, Self::Error> {
-        Ok(Self {
-            start_ts: Local.from_utc_datetime(&value.start_ts),
-            inputs: serde_json::from_str(&value.input)?,
-            exchange_id: value.exchange_id.try_into()?,
-            conversation_id: value.conversation_id.try_into()?,
-            output_status: serde_json::from_str(&value.output_status)?,
-            working_directory: value.working_directory,
-            model_id: value.model_id.into(),
-            coding_model_id: value.coding_model_id.into(),
-        })
-    }
-}
-
-/// A new AI query to be inserted into the SQLite DB.
-#[derive(Insertable, AsChangeset)]
-#[diesel(table_name = ai_queries)]
-#[diesel(treat_none_as_null = true)]
-pub(super) struct NewAIQuery {
-    pub(super) exchange_id: String,
-    pub(super) conversation_id: String,
-    pub(super) start_ts: NaiveDateTime,
-    pub(super) output_status: String,
-    pub(super) input: String,
-    pub(super) working_directory: Option<String>,
-    pub(super) model_id: String,
-}
-
-impl TryFrom<&PersistedAIInput> for NewAIQuery {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &PersistedAIInput) -> Result<Self, Self::Error> {
-        Ok(Self {
-            start_ts: value.start_ts.naive_utc(),
-            input: serde_json::to_string(&value.inputs)?,
-            working_directory: value.working_directory.clone(),
-            exchange_id: value.exchange_id.to_string(),
-            conversation_id: value.conversation_id.to_string(),
-            output_status: serde_json::to_string(&value.output_status)?,
-            model_id: value.model_id.clone().into(),
-        })
-    }
-}
-
-/// Fixed cap on how many recent AI query rows we read from SQLite at startup for performance
-const MAX_AI_QUERIES_READ_LIMIT: i64 = 2000;
-
-/// Maximum number of recent AI queries kept for up-arrow prompt history.
-/// TODO(alokedesai): Consider loading all AI queries by paginating the SQL query.
-const MAX_AI_QUERIES_FOR_UPARROW: usize = 100;
-
-/// Maximum number of recent AI queries scanned for NLD prompt-history matching.
-const MAX_AI_QUERIES_FOR_NLD: usize = 2000;
-
-
-
-
-const AI_QUERIES_COUNT_LIMIT: i64 = 10_000;
-
-
-
-/// Returns the most recent [`MAX_BLOCK_COUNT_PER_SESSION`] block list items for each session. The
-/// items are in chronological order.
-pub(super) fn get_all_restored_blocks(
-    conn: &mut SqliteConnection,
-) -> Result<PersistedBlocks, diesel::result::Error> {
-    let terminal_sessions = schema::terminal_panes::table
-        .select(model::TerminalSession::as_select())
-        .load::<model::TerminalSession>(conn)?;
-
-    let block_lists = Block::belonging_to(&terminal_sessions)
-        .select(Block::as_select())
-        .order_by(schema::blocks::columns::id.asc())
-        .load::<Block>(conn)?
-        .grouped_by(&terminal_sessions);
-
-    let mut all_block_items_by_pane = block_lists
-        .into_iter()
-        .zip(terminal_sessions)
-        .map(|(blocks, terminal_pane)| {
-            (
-                PaneUuid(terminal_pane.uuid),
-                blocks.into_iter().map(Into::into).collect(),
-            )
-        })
-        .collect::<HashMap<_, Vec<SerializedBlockListItem>>>();
-
-    for (_, blocks) in all_block_items_by_pane.iter_mut() {
-        blocks.sort_by_key(|item| item.start_ts());
-        // Only keep most recent command blocks
-        blocks.drain(
-            0..blocks
-                .len()
-                .saturating_sub(MAX_TERMINAL_BLOCKS_TO_PERSIST_PER_SESSION as usize),
-        );
-    }
-
-    Ok(all_block_items_by_pane)
-}
+// LOCAL FORK: fn get_all_restored_blocks removed with the agent; its result
+// type came from the agent block list and nothing reads it any more.
 
 pub(super) fn save_block(
     conn: &mut SqliteConnection,

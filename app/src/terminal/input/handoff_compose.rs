@@ -25,20 +25,13 @@ impl HandoffComposeState {
         self.active
     }
 
-    pub(crate) fn activate(
-        &mut self,
-        ctx: &mut ModelContext<Self>,
-    ) {
+    pub(crate) fn activate(&mut self, ctx: &mut ModelContext<Self>) {
         self.active = true;
         self.has_explicit_environment_selection = false;
-        self.entry_point = entry_point;
         ctx.emit(HandoffComposeStateEvent::ActiveChanged);
     }
 
-    #[cfg_attr(target_family = "wasm", allow(dead_code))]
-    pub(crate) fn entry_point(&self) -> HandoffEntryPoint {
-        self.entry_point
-    }
+    // LOCAL FORK: fn entry_point removed with the agent.
 
     pub(crate) fn exit(&mut self, ctx: &mut ModelContext<Self>) {
         if !self.active && !self.has_explicit_environment_selection {

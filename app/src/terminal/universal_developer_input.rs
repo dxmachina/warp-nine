@@ -8,7 +8,6 @@ use std::sync::Arc;
 use pathfinder_color::ColorU;
 #[cfg(not(target_family = "wasm"))]
 use settings::Setting as _;
-use warp_core::features::FeatureFlag;
 use warp_core::ui::appearance::Appearance;
 use warp_core::ui::color::contrast::{
     MinimumAllowedContrast, foreground_color_with_minimum_contrast,
@@ -18,8 +17,7 @@ use warp_core::ui::theme;
 use warp_core::ui::theme::color::internal_colors;
 use warpui::elements::{
     ChildView, Clipped, Container, CornerRadius, CrossAxisAlignment, Fill, Flex, MainAxisAlignment,
-    MainAxisSize, ParentElement, Radius, Rect, Shrinkable, SizeConstraintCondition,
-    SizeConstraintSwitch,
+    MainAxisSize, ParentElement, Radius, Rect,
 };
 use warpui::ui_components::components::UiComponentStyles;
 use warpui::ui_components::segmented_control::{
@@ -89,7 +87,6 @@ impl AtContextMenuDisabledReason {
     pub fn get_disable_reason(
         _active_block_metadata: Option<&BlockMetadata>,
         _sessions: &Sessions,
-        _input_config: &InputConfig,
         _ctx: &AppContext,
     ) -> Option<AtContextMenuDisabledReason> {
         Some(AtContextMenuDisabledReason::Wasm)
@@ -131,11 +128,10 @@ impl AtContextMenuDisabledReason {
             })
             .unwrap_or((false, false));
 
-        // Only check the setting if we're in shell mode
-        if input_config.input_type == InputType::Shell
-            && !*InputSettings::as_ref(ctx)
-                .at_context_menu_in_terminal_mode
-                .value()
+        // LOCAL FORK: every session is shell mode now, so the setting always applies.
+        if !*InputSettings::as_ref(ctx)
+            .at_context_menu_in_terminal_mode
+            .value()
         {
             return Some(AtContextMenuDisabledReason::DisabledInTerminalMode);
         }
@@ -147,23 +143,7 @@ impl AtContextMenuDisabledReason {
             return Some(AtContextMenuDisabledReason::Subshell);
         }
 
-        // Allow @ context menu outside of git repositories, when we have categories available.
-        // Repo-based restrictions will be enforced at the category level
-        // (e.g., Code will only be available inside a git repository).
-
-        // This condition kicks in if we're locked in shell mode and not in a git repository, so we have
-        // no categories available.
-        if AIContextMenu::get_categories_for_mode(
-            input_config.input_type.is_ai() || !input_config.is_locked,
-            false,
-            false, /* is_in_ambient_agent */
-            false, /* is_cli_agent_input */
-            ctx,
-        )
-        .is_empty()
-        {
-            return Some(AtContextMenuDisabledReason::NoObjectsAvailable);
-        }
+        // LOCAL FORK: the @ menu's category set lived in the agent's context menu.
 
         None
     }
@@ -173,47 +153,7 @@ const AT_CONTEXT_TOOLTIP: &str = "Attach context";
 
 const BLURRED_OPACITY: Opacity = 50;
 
-// Threshold calculation that estimates the width needed for the profile/model selector
-// This is used for determining whether the selector should be rendered as full or compact
-fn calculate_profile_model_selector_threshold(
-    terminal_view_id: EntityId,
-    appearance: &Appearance,
-    ctx: &AppContext,
-) -> f32 {
-    let font_size = appearance.monospace_font_size();
-    let has_multiple_profiles = AIExecutionProfilesModel::as_ref(ctx).has_multiple_profiles();
-
-    // base_constant represents a constant width for padding in the UDI.
-    // We estimate the width of the remaining UDI elements with a scaling factor multiplied by font size.
-    // We consider both profile name and model name lengths since they are variable width.
-    let base_constant = 50.0;
-
-    // Calculate text width using em_width for accurate character width
-    let scaled_font_size = calculate_scaled_font_size(appearance);
-    let em_width = ctx
-        .font_cache()
-        .em_width(appearance.monospace_font_family(), scaled_font_size);
-
-    let llm_preferences = LLMPreferences::as_ref(ctx);
-    let active_llm = llm_preferences.get_active_base_model(ctx, Some(terminal_view_id));
-    let model_name_char_count = active_llm.menu_display_name().chars().count() as f32;
-    let model_text_width = model_name_char_count * em_width;
-
-    if has_multiple_profiles {
-        let profile_name_char_count = AIExecutionProfilesModel::as_ref(ctx)
-            .active_profile(Some(terminal_view_id), ctx)
-            .data()
-            .display_name()
-            .chars()
-            .count();
-        let profile_text_width = (profile_name_char_count as f32 * em_width)
-            .min(calculate_max_profile_name_width(appearance));
-
-        font_size * 20.0 + profile_text_width + model_text_width
-    } else {
-        20.0 * font_size + base_constant + model_text_width
-    }
-}
+// LOCAL FORK: fn calculate_profile_model_selector_threshold removed with the agent.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputToggleMode {
@@ -241,18 +181,7 @@ impl ActionButtonTheme for UDIDisabledButtonTheme {
     }
 }
 
-impl From<&BlocklistAIInputModel> for InputToggleMode {
-    fn from(input_model: &BlocklistAIInputModel) -> Self {
-        if input_model.is_input_type_locked() {
-            match input_model.input_type() {
-                InputType::Shell => InputToggleMode::Terminal,
-                InputType::AI => InputToggleMode::AgentMode,
-            }
-        } else {
-            InputToggleMode::AutoDetection
-        }
-    }
-}
+// LOCAL FORK: impl From<&BlocklistAIInputModel> for InputToggleMode removed with the agent.
 
 /// Denormalized state that is required to render UDI styles that isn't easily directly accessible
 /// because its owned by other views in other parts of the hierarchy and was never extracted to a
@@ -315,7 +244,7 @@ impl UniversalDeveloperInputButtonBar {
 
         let mic_button_view = ctx.add_typed_action_view(|_ctx| {
             #[cfg_attr(not(feature = "voice_input"), allow(unused_mut))]
-            let mut button = ActionButton::new("", PromptIconButtonTheme::new(false))
+            let mut button = ActionButton::new("", NakedTheme)
                 .with_icon(Icon::Microphone)
                 .with_tooltip("Voice input")
                 .with_size(button_size)
@@ -332,7 +261,7 @@ impl UniversalDeveloperInputButtonBar {
         });
 
         let at_button_view = ctx.add_typed_action_view(|_ctx| {
-            ActionButton::new("", PromptIconButtonTheme::new(false))
+            ActionButton::new("", NakedTheme)
                 .with_icon(Icon::AtSign)
                 .with_tooltip(AT_CONTEXT_TOOLTIP)
                 .with_size(button_size)
@@ -346,7 +275,7 @@ impl UniversalDeveloperInputButtonBar {
         });
 
         let file_button_view = ctx.add_typed_action_view(|_ctx| {
-            ActionButton::new("", PromptIconButtonTheme::new(false))
+            ActionButton::new("", NakedTheme)
                 .with_icon(Icon::Plus)
                 .with_tooltip("Attach file")
                 .with_size(button_size)
@@ -358,7 +287,7 @@ impl UniversalDeveloperInputButtonBar {
         });
 
         let slash_command_menu_view = ctx.add_typed_action_view(|_ctx| {
-            ActionButton::new("", PromptIconButtonTheme::new(false))
+            ActionButton::new("", NakedTheme)
                 .with_icon(Icon::SlashCommands)
                 .with_tooltip("Slash commands")
                 .with_size(button_size)
@@ -371,41 +300,8 @@ impl UniversalDeveloperInputButtonBar {
                 })
         });
 
-        let profile_model_selector_full = ctx.add_typed_action_view(|ctx| {
-            let mut selector = ProfileModelSelector::new(
-                menu_positioning_provider.clone(),
-                terminal_view_id,
-                input_model.clone(),
-                ambient_agent_view_model.clone(),
-                terminal_model.clone(),
-                None,
-                ctx,
-            );
-            selector.set_render_compact(false, ctx);
-            selector
-        });
-
-        let profile_model_selector_compact = ctx.add_typed_action_view(|ctx| {
-            let mut selector = ProfileModelSelector::new(
-                menu_positioning_provider.clone(),
-                terminal_view_id,
-                input_model.clone(),
-                ambient_agent_view_model.clone(),
-                terminal_model.clone(),
-                None,
-                ctx,
-            );
-            selector.set_render_compact(true, ctx);
-            selector
-        });
-
-        ctx.subscribe_to_view(&profile_model_selector_full, |me, _, event, ctx| {
-            me.handle_profile_model_selector_event(event, ctx);
-        });
-
-        ctx.subscribe_to_view(&profile_model_selector_compact, |me, _, event, ctx| {
-            me.handle_profile_model_selector_event(event, ctx);
-        });
+        // LOCAL FORK: the profile/model selector was an agent surface.
+        let _ = &menu_positioning_provider;
 
         // Create segmented control options based on auto-detection setting
         let ai_settings = AISettings::as_ref(ctx);
@@ -413,7 +309,8 @@ impl UniversalDeveloperInputButtonBar {
 
         let mut options = vec![InputToggleMode::Terminal, InputToggleMode::AgentMode];
 
-        let mut default_option = input_model.as_ref(ctx).into();
+        // LOCAL FORK: the input model that drove the initial toggle went away with the agent.
+        let mut default_option = InputToggleMode::Terminal;
         if is_autodetection_enabled {
             options.push(InputToggleMode::AutoDetection);
         } else if default_option == InputToggleMode::AutoDetection {
@@ -428,19 +325,12 @@ impl UniversalDeveloperInputButtonBar {
         }));
 
         let ui_state_clone = cached_ui_state.clone();
-        let input_model_clone = input_model.clone();
         let segmented_control_view = ctx.add_typed_action_view(|ctx| {
             SegmentedControl::new(
                 options,
                 move |option, is_selected, app| {
                     let ui_state = ui_state_clone.borrow();
-                    build_renderable_option_config(
-                        option,
-                        is_selected,
-                        &input_model_clone,
-                        &ui_state,
-                        app,
-                    )
+                    build_renderable_option_config(option, is_selected, &ui_state, app)
                 },
                 default_option,
                 segmented_control_styles(ctx),
@@ -449,14 +339,8 @@ impl UniversalDeveloperInputButtonBar {
         // Subscribe to segmented control events
         ctx.subscribe_to_view(&segmented_control_view, |_, _, event, ctx| match event {
             SegmentedControlEvent::OptionSelected(input_mode) => match input_mode {
-                InputToggleMode::Terminal => {
-                    ctx.emit(UniversalDeveloperInputButtonBarEvent::InputTypeSelected(
-                    ));
-                }
-                InputToggleMode::AgentMode => {
-                    ctx.emit(UniversalDeveloperInputButtonBarEvent::InputTypeSelected(
-                    ));
-                }
+                // LOCAL FORK: selecting an input type drove the agent's input model.
+                InputToggleMode::Terminal | InputToggleMode::AgentMode => {}
                 InputToggleMode::AutoDetection => {
                     ctx.emit(UniversalDeveloperInputButtonBarEvent::EnableAutoDetection);
                 }
@@ -497,12 +381,7 @@ impl UniversalDeveloperInputButtonBar {
             ctx.notify();
         });
 
-        let prompt_alert = ctx.add_typed_action_view(PromptAlertView::new);
-        ctx.subscribe_to_view(&prompt_alert, |_, _, event, ctx| {
-            ctx.emit(UniversalDeveloperInputButtonBarEvent::PromptAlert(
-                event.clone(),
-            ));
-        });
+        // LOCAL FORK: the prompt alert view was an agent surface.
 
         ctx.subscribe_to_model(&NetworkStatus::handle(ctx), |_, _, _, ctx| {
             ctx.notify();
@@ -510,60 +389,16 @@ impl UniversalDeveloperInputButtonBar {
         ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), |_, _, _, ctx| {
             ctx.notify();
         });
-        ctx.subscribe_to_model(&AIRequestUsageModel::handle(ctx), |_, _, _, ctx| {
-            ctx.notify()
-        });
-
         ctx.subscribe_to_model(&SessionSettings::handle(ctx), |_, _, event, ctx| {
             if let SessionSettingsChangedEvent::ShowModelSelectorsInPrompt { .. } = event {
                 ctx.notify();
             }
         });
 
-        // Subscribe to AIExecutionProfilesModel to potentially show/hide the profile selector button when profiles are added/removed
-        ctx.subscribe_to_model(&AIExecutionProfilesModel::handle(ctx), |_, _, _, ctx| {
-            ctx.notify();
-        });
-
-        ctx.subscribe_to_model(
-            &BlocklistAIHistoryModel::handle(ctx),
-            |me, _, event, ctx| {
-                if event
-                    .terminal_surface_id()
-                    .is_some_and(|id| id != me.terminal_view_id)
-                {
-                    return;
-                }
-
-                match event {
-                    BlocklistAIHistoryEvent::StartedNewConversation { .. }
-                    | BlocklistAIHistoryEvent::SetActiveConversation { .. }
-                    | BlocklistAIHistoryEvent::UpdatedTodoList { .. }
-                    | BlocklistAIHistoryEvent::UpdatedConversationStatus { .. } => {
-                        ctx.notify();
-                    }
-                    _ => (),
-                }
-            },
-        );
-
-        ctx.subscribe_to_model(&input_model, move |me, input_model, event, ctx| {
-            if !event.did_update_input_config() {
-                return;
-            }
-            let input_mode = InputToggleMode::from(input_model.as_ref(ctx));
-            me.segmented_control.update(ctx, |control, ctx| {
-                control.set_selected_option(input_mode, ctx);
-            });
-            me.notify_and_notify_children(ctx);
-        });
+        // LOCAL FORK: the execution-profile, conversation-history and input models are gone.
 
         // Keep the control disabled state in sync with role changes
         ctx.subscribe_to_model(&SessionPermissionsManager::handle(ctx), |me, _, _, ctx| {
-            me.update_segmented_control_disabled_state(ctx);
-        });
-        // Keep the control disabled state in sync with agent control state
-        ctx.subscribe_to_model(&cli_subagent_controller, move |me, _, _, ctx| {
             me.update_segmented_control_disabled_state(ctx);
         });
 
@@ -573,10 +408,7 @@ impl UniversalDeveloperInputButtonBar {
             at_button: at_button_view,
             file_button: file_button_view,
             slash_command_button: slash_command_menu_view,
-            profile_model_selector_full,
-            profile_model_selector_compact,
             segmented_control: segmented_control_view,
-            prompt_alert,
             cached_ui_state,
             terminal_model,
         };
@@ -606,29 +438,7 @@ impl UniversalDeveloperInputButtonBar {
         self.notify_and_notify_children(ctx);
     }
 
-    fn handle_profile_model_selector_event(
-        &mut self,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            ProfileModelSelectorEvent::OpenSettings(settings_section) => {
-                ctx.emit(UniversalDeveloperInputButtonBarEvent::OpenSettings(
-                    *settings_section,
-                ));
-            }
-            ProfileModelSelectorEvent::MenuVisibilityChanged { open } => {
-                if *open {
-                    // When model selector menu opens, close other overlays
-                    ctx.emit(UniversalDeveloperInputButtonBarEvent::ModelSelectorOpened);
-                } else {
-                    ctx.emit(UniversalDeveloperInputButtonBarEvent::ModelSelectorClosed);
-                }
-            }
-            ProfileModelSelectorEvent::ToggleInlineModelSelector => {
-                // UDI button bar doesn't need to handle this; it's only relevant in AgentInputFooter.
-            }
-        }
-    }
+    // LOCAL FORK: fn handle_profile_model_selector_event removed with the agent.
 
     fn notify_and_notify_children(&self, ctx: &mut ViewContext<Self>) {
         ctx.notify();
@@ -715,39 +525,26 @@ impl UniversalDeveloperInputButtonBar {
 
     fn update_button_bar_styles(&self, ctx: &mut ViewContext<Self>) {
         self.update_icon_button_themes(ctx);
-
-        let is_blurred = self.cached_ui_state.borrow().is_button_bar_blurred();
-        self.profile_model_selector_compact
-            .update(ctx, |selector, ctx| selector.set_blurred(is_blurred, ctx));
-        self.profile_model_selector_full
-            .update(ctx, |selector, ctx| selector.set_blurred(is_blurred, ctx));
     }
 
-    /// Update the themes of the icon buttons to reflect the blurred state
+    /// LOCAL FORK: the blurred icon-button theme lived in the agent's prompt UI, so the
+    /// buttons keep their default theme.
     fn update_icon_button_themes(&self, ctx: &mut ViewContext<Self>) {
-        let is_blurred = self.cached_ui_state.borrow().is_button_bar_blurred();
-        let theme = PromptIconButtonTheme::new(is_blurred);
-
-        self.mic_button.update(ctx, |button, ctx| {
-            button.set_theme(theme.clone(), ctx);
-        });
-
-        self.at_button.update(ctx, |button, ctx| {
-            button.set_theme(theme.clone(), ctx);
-        });
-
-        self.slash_command_button.update(ctx, |button, ctx| {
-            button.set_theme(theme.clone(), ctx);
-        });
-
-        self.file_button.update(ctx, |button, ctx| {
-            button.set_theme(theme.clone(), ctx);
-        });
+        for button in [
+            &self.mic_button,
+            &self.at_button,
+            &self.slash_command_button,
+            &self.file_button,
+        ] {
+            button.update(ctx, |button, ctx| {
+                button.set_theme(NakedTheme, ctx);
+            });
+        }
     }
 
-    pub fn is_profile_model_selector_open(&self, ctx: &impl ViewAsRef) -> bool {
-        self.profile_model_selector_full.as_ref(ctx).is_open()
-            || self.profile_model_selector_compact.as_ref(ctx).is_open()
+    pub fn is_profile_model_selector_open(&self, _ctx: &impl ViewAsRef) -> bool {
+        // LOCAL FORK: the profile/model selector went away with the agent.
+        false
     }
 }
 
@@ -783,7 +580,7 @@ impl View for UniversalDeveloperInputButtonBar {
             .finish()
         };
 
-        let build_buttons = |model_selector_element: Box<dyn warpui::Element>| {
+        let build_buttons = || {
             // Create a horizontal layout with buttons arranged in a row
             let mut buttons = Flex::row()
                 .with_main_axis_size(MainAxisSize::Max)
@@ -815,43 +612,12 @@ impl View for UniversalDeveloperInputButtonBar {
                 buttons = buttons.with_child(ChildView::new(&self.file_button).finish());
             }
 
-            let show_model_selector = FeatureFlag::ProfilesDesignRevamp.is_enabled()
-                || *SessionSettings::as_ref(app).show_model_selectors_in_prompt;
-            if show_model_selector {
-                buttons = buttons
-                    .with_child(create_divider())
-                    .with_child(model_selector_element);
-            }
-
-            if !self.prompt_alert.as_ref(app).is_no_alert() {
-                buttons = buttons.with_child(
-                    Shrinkable::new(
-                        1.,
-                        Clipped::new(ChildView::new(&self.prompt_alert).finish()).finish(),
-                    )
-                    .finish(),
-                );
-            }
+            // LOCAL FORK: the model selector and prompt alert were agent surfaces.
 
             buttons.finish()
         };
 
-        let compact_threshold =
-            calculate_profile_model_selector_threshold(self.terminal_view_id, appearance, app);
-        let content = SizeConstraintSwitch::new(
-            // We only need to add left padding to the full profile model selector because the
-            // compact selector icons follow the UDI button styling with ~4px margin horizontally.
-            build_buttons(
-                Container::new(ChildView::new(&self.profile_model_selector_full).finish())
-                    .with_padding_left(4.0)
-                    .finish(),
-            ),
-            vec![(
-                SizeConstraintCondition::WidthLessThan(compact_threshold),
-                build_buttons(ChildView::new(&self.profile_model_selector_compact).finish()),
-            )],
-        )
-        .finish();
+        let content = build_buttons();
 
         Container::new(Clipped::new(content).finish())
             .with_padding_bottom(12.0)
@@ -922,15 +688,14 @@ fn build_renderable_option_config(
     let appearance = Appearance::as_ref(app);
     let theme = appearance.theme();
 
-    let input_model = input_model.as_ref(app);
-    let current_input_type = input_model.input_type();
-
     let terminal_keybindings = TerminalKeybindings::as_ref(app);
 
-    let compute_colors = |input_type, accent_color| {
+    // LOCAL FORK: the current input type came from the agent's input model, so only the
+    // terminal option is ever the active one.
+    let compute_colors = |is_current_input_type: bool, accent_color| {
         let fg_color = if is_selected {
             theme.background().into_solid()
-        } else if input_type == current_input_type && !ui_state.is_input_empty {
+        } else if is_current_input_type && !ui_state.is_input_empty {
             accent_color
         } else {
             theme.sub_text_color(theme.surface_1()).into_solid()
@@ -948,7 +713,7 @@ fn build_renderable_option_config(
     let mut config = match option {
         InputToggleMode::Terminal => {
             let accent_color = theme.terminal_colors().normal.blue.into();
-            let (fg_color, bg_color) = compute_colors(InputType::Shell, accent_color);
+            let (fg_color, bg_color) = compute_colors(true, accent_color);
 
             RenderableOptionConfig {
                 icon_path: Icon::Terminal.into(),
@@ -964,7 +729,7 @@ fn build_renderable_option_config(
         }
         InputToggleMode::AgentMode => {
             let accent_color = theme.terminal_colors().normal.yellow.into();
-            let (fg_color, bg_color) = compute_colors(InputType::AI, accent_color);
+            let (fg_color, bg_color) = compute_colors(false, accent_color);
 
             RenderableOptionConfig {
                 icon_path: Icon::AgentMode.into(),

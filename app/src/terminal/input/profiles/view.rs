@@ -4,7 +4,7 @@ use warpui::{
 };
 
 use crate::search::data_source::Query;
-use crate::search::mixer::{SearchMixer, SearchMixerEvent};
+use crate::search::mixer::SearchMixer;
 use crate::terminal::input::buffer_model::{InputBufferModel, InputBufferUpdateEvent};
 use crate::terminal::input::inline_menu::{InlineMenuEvent, InlineMenuPositioner, InlineMenuView};
 use crate::terminal::input::profiles::data_source::{
@@ -49,18 +49,12 @@ impl InlineProfileSelectorView {
                 mixer.clone(),
                 positioner.clone(),
                 &suggestions_mode_model,
-                agent_view_controller,
                 ctx,
             )
         });
 
         ctx.subscribe_to_view(&menu_view, |_, _, event, ctx| match event {
             InlineMenuEvent::AcceptedItem { item, .. } => match item {
-                SelectProfileMenuItem::Profile { profile_id } => {
-                    ctx.emit(InlineProfileSelectorEvent::SelectedProfile {
-                        profile_id: profile_id.clone(),
-                    });
-                }
                 SelectProfileMenuItem::ManageProfiles => {
                     ctx.emit(InlineProfileSelectorEvent::ManageProfiles);
                 }
@@ -118,62 +112,9 @@ impl InlineProfileSelectorView {
             });
         });
 
-        ctx.subscribe_to_model(
-            &AIExecutionProfilesModel::handle(ctx),
-            |me, _, event, ctx| {
-                if !me.suggestions_mode_model.as_ref(ctx).is_profile_selector() {
-                    return;
-                }
-
-                match event {
-                    | AIExecutionProfilesModelEvent::ProfileDeleted
-                    | AIExecutionProfilesModelEvent::ProfileUpdated(_) => {
-                        me.mixer.update(ctx, |mixer, ctx| {
-                            if let Some(query) = mixer.current_query().cloned() {
-                                mixer.run_query(query, ctx);
-                            }
-                        });
-                    }
-                    AIExecutionProfilesModelEvent::UpdatedActiveProfile { terminal_view_id } => {
-                        if *terminal_view_id != me.terminal_view_id {
-                            return;
-                        }
-                        me.mixer.update(ctx, |mixer, ctx| {
-                            if let Some(query) = mixer.current_query().cloned() {
-                                mixer.run_query(query, ctx);
-                            }
-                        });
-                    }
-                }
-            },
-        );
-
-        ctx.subscribe_to_model(&mixer, |me, _, event, ctx| {
-            let SearchMixerEvent::ResultsChanged = event;
-            if !me.suggestions_mode_model.as_ref(ctx).is_profile_selector() {
-                return;
-            }
-
-            // Pre-highlight the active profile when no filter query is entered.
-            if me.input_buffer_model.as_ref(ctx).current_value().is_empty() {
-                let active_profile_id = AIExecutionProfilesModel::as_ref(ctx)
-                    .active_profile(Some(me.terminal_view_id), ctx)
-                    .id()
-                    .clone();
-                me.menu_view.update(ctx, |menu, ctx| {
-                    menu.select_first_where(
-                        |item| {
-                            matches!(
-                                item,
-                                SelectProfileMenuItem::Profile { profile_id }
-                                    if *profile_id == active_profile_id
-                            )
-                        },
-                        ctx,
-                    );
-                });
-            }
-        });
+        // LOCAL FORK: the execution profile model and the active-profile
+        // pre-highlight it drove went with the agent. Only "Manage profiles"
+        // remains in this menu, so there is nothing left to re-query or select.
 
         Self {
             menu_view,

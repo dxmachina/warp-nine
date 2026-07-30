@@ -67,35 +67,21 @@ pub enum ClosedItem {
 
 impl ClosedItem {
     fn discard(self, ctx: &mut ModelContext<UndoCloseStack>) {
-        let history_model = BlocklistAIHistoryModel::handle(ctx);
-
+        // LOCAL FORK: discarding used to mark the closed panes' conversations
+        // historical and drop their agent-view focus state. Both models went
+        // with the agent, so only pane cleanup is left.
         match self {
             ClosedItem::Window(data) => {
                 let ClosedWindowData { window_id, .. } = *data;
-                ActiveAgentViewsModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.remove_focused_state_for_window(window_id, ctx);
-                });
                 if let Some(workspace) = window_workspace(window_id, ctx) {
                     workspace.update(ctx, |workspace, ctx| {
                         for pane_group in workspace.tab_views() {
-                            // Mark conversations from all terminal panes in each tab
-                            Self::mark_conversations_historical_for_pane_group(
-                                pane_group,
-                                &history_model,
-                                ctx,
-                            );
                             Self::clean_up_pane_group(pane_group, ctx);
                         }
                     });
                 }
             }
             ClosedItem::Tab { data, .. } => {
-                // Mark conversations from all terminal panes in the tab
-                Self::mark_conversations_historical_for_pane_group(
-                    &data.pane_group,
-                    &history_model,
-                    ctx,
-                );
                 Self::clean_up_pane_group(&data.pane_group, ctx);
             }
             ClosedItem::Pane { data } => {

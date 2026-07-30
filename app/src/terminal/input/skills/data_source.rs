@@ -86,16 +86,14 @@ impl SkillSelectorDataSource {
             active_session,
             terminal_view_id,
             include_bundled: false,
-            ambient_agent_view_model,
         }
     }
 
 
-    /// True when the pane is a cloud agent pane (viewer, disconnected follow-up, or read-only
-    /// tombstone). Skills invoke locally and must be hidden for any cloud pane since running a
-    /// skill locally is disconnected from the remote session.
+    /// LOCAL FORK: this reported whether the pane was a cloud agent pane, which
+    /// it read off the ambient agent view model. No pane is one any more.
     fn is_cloud_pane(&self) -> bool {
-        self.ambient_agent_view_model.is_some()
+        false
     }
 
     pub fn set_include_bundled(&mut self, include_bundled: bool) {

@@ -955,7 +955,6 @@ impl TerminalModel {
         event_proxy: ChannelEventListener,
         background_executor: Arc<Background>,
         should_show_bootstrap_block: bool,
-        restored_blocks: Option<&[SerializedBlockListItem]>,
         honor_ps1: bool,
         is_inverted: bool,
         session_startup_path: Option<PathBuf>,
@@ -963,7 +962,6 @@ impl TerminalModel {
         use super::session::get_local_hostname;
 
         let mut terminal_model = Self::new(
-            restored_blocks,
             sizes,
             colors,
             event_proxy,
@@ -1042,7 +1040,6 @@ impl TerminalModel {
             obfuscate_secrets,
         );
         let block_list = BlockList::new(
-            restored_blocks,
             sizes,
             event_proxy.clone(),
             background_executor,
@@ -1119,7 +1116,6 @@ impl TerminalModel {
         shell_state: ShellLaunchState,
     ) -> Self {
         Self::new_internal(
-            restored_blocks,
             sizes,
             colors,
             event_proxy,

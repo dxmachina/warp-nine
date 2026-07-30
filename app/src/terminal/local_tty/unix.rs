@@ -22,7 +22,9 @@ use nix::sys::termios::{self, InputFlags, SetArg};
 use serde::{Deserialize, Serialize};
 use signal_hook_mio::v1_0::Signals;
 use warp_core::channel::ChannelState;
-use warp_core::cli_agent_protocol::{WARP_CLI_AGENT_PROTOCOL_VERSION_ENV, WARP_CLIENT_VERSION_ENV};
+use warp_core::cli_agent_protocol::{
+    CLI_AGENT_PROTOCOL_VERSION, WARP_CLI_AGENT_PROTOCOL_VERSION_ENV, WARP_CLIENT_VERSION_ENV,
+};
 use warp_core::features::FeatureFlag;
 use warp_core::safe_error;
 use warp_errors::report_if_error;
@@ -387,7 +389,7 @@ fn build_host_shell_command(
     if FeatureFlag::HOANotifications.is_enabled() {
         builder.env(
             WARP_CLI_AGENT_PROTOCOL_VERSION_ENV,
-            current_protocol_version().to_string(),
+            CLI_AGENT_PROTOCOL_VERSION.to_string(),
         );
     }
 
@@ -893,7 +895,7 @@ fn build_docker_sandbox_command(
     if FeatureFlag::HOANotifications.is_enabled() {
         builder.env(
             WARP_CLI_AGENT_PROTOCOL_VERSION_ENV,
-            current_protocol_version().to_string(),
+            CLI_AGENT_PROTOCOL_VERSION.to_string(),
         );
     }
     if shell_debug_mode {

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use ai::document::AIDocumentId;
 use anyhow::{Context, Result, anyhow};
 use async_channel::Sender;
 use async_trait::async_trait;

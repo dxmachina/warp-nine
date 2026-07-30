@@ -122,34 +122,7 @@ struct EnvironmentDisplayData {
 }
 
 impl EnvironmentDisplayData {
-    fn from_cloud_environment(env: &CloudAmbientAgentEnvironment) -> Self {
-        let model = &env.model().string_model;
-
-        // For environments, the server revision timestamp reflects the last successful edit.
-        // We prefer it over `metadata_last_updated_ts` because the latter may not be refreshed
-        // locally immediately after an update.
-        let last_edited_ts = env
-            .metadata
-            .revision
-            .clone()
-            .map(ServerTimestamp::from)
-            .or(env.metadata.metadata_last_updated_ts);
-
-        Self {
-            id: env.id,
-            name: model.name.clone(),
-            description: model.description.clone(),
-            docker_image: model.base_image_display(),
-            github_repos: model
-                .github_repos
-                .iter()
-                .map(|r| (r.owner.clone(), r.repo.clone()))
-                .collect(),
-            setup_commands: model.setup_commands.clone(),
-            last_edited_ts,
-            last_used_ts: env.metadata.last_task_run_ts,
-        }
-    }
+    // LOCAL FORK: fn from_cloud_environment removed with the agent.
 
     fn matches_search_query(&self, query: &str) -> bool {
         let query = query.trim();
@@ -242,15 +215,8 @@ pub struct EnvironmentsPageView {
 }
 
 impl EnvironmentsPageView {
-    fn ensure_environment_mouse_states(&mut self, ctx: &mut ViewContext<Self>) {
-        let environments = CloudAmbientAgentEnvironment::get_all(ctx);
-        for env in &environments {
-            self.copy_button_mouse_states.entry(env.id).or_default();
-            self.edit_button_mouse_states.entry(env.id).or_default();
-            self.share_button_mouse_states.entry(env.id).or_default();
-            self.card_hover_mouse_states.entry(env.id).or_default();
-            self.view_runs_link_mouse_states.entry(env.id).or_default();
-        }
+    fn ensure_environment_mouse_states(&mut self, _ctx: &mut ViewContext<Self>) {
+        // LOCAL FORK: the environment list came from the agent's cloud environment model.
     }
     pub fn update_page(&mut self, page: EnvironmentsPage, ctx: &mut ViewContext<Self>) {
         self.current_page = page.clone();
@@ -259,16 +225,8 @@ impl EnvironmentsPageView {
         match &page {
             EnvironmentsPage::Edit { env_id } => {
                 // Extract environment data for edit mode
-                let env_data = CloudAmbientAgentEnvironment::get_by_id(env_id, ctx).map(|env| {
-                    let model = &env.model().string_model;
-                    EnvironmentFormValues {
-                        name: model.name.clone(),
-                        description: model.description.clone().unwrap_or_default(),
-                        selected_repos: model.github_repos.clone(),
-                        docker_image: model.base_image_display(),
-                        setup_commands: model.setup_commands.clone(),
-                    }
-                });
+                // LOCAL FORK: environment records came out with the agent.
+                let env_data: Option<EnvironmentFormValues> = None;
 
                 if let Some(initial_values) = env_data {
                     self.environment_form.update(ctx, |form, ctx| {
@@ -393,56 +351,6 @@ impl EnvironmentsPageView {
             me.handle_delete_confirmation_event(event, ctx);
         });
 
-        let agent_assisted_environment_modal =
-            ctx.add_typed_action_view(AgentAssistedEnvironmentModal::new);
-        ctx.subscribe_to_view(
-            &agent_assisted_environment_modal,
-            |me, _, event, ctx| match event {
-                AgentAssistedEnvironmentModalEvent::Cancelled => {
-                    me.agent_assisted_environment_modal
-                        .update(ctx, |modal, ctx| {
-                            modal.hide(ctx);
-                        });
-                    ctx.emit(SettingsPageEvent::AgentAssistedEnvironmentModalToggled {
-                        is_open: false,
-                    });
-                    ctx.notify();
-                }
-                AgentAssistedEnvironmentModalEvent::Confirmed { repo_paths } => {
-                    me.agent_assisted_environment_modal
-                        .update(ctx, |modal, ctx| {
-                            modal.hide(ctx);
-                        });
-                    ctx.emit(SettingsPageEvent::AgentAssistedEnvironmentModalToggled {
-                        is_open: false,
-                    });
-
-                    let arg = CreateEnvironmentArg {
-                        repos: repo_paths.clone(),
-                    };
-
-                    let window_id = ctx.window_id();
-                    let primary_window_and_view = ctx
-                        .root_view_id(window_id)
-                        .map(|view_id| (window_id, view_id));
-
-                    if let Some((primary_window_id, root_view_id)) = primary_window_and_view {
-                        ctx.dispatch_action(
-                            primary_window_id,
-                            &[root_view_id],
-                            "root_view:create_environment_in_existing_window_and_run",
-                            &arg,
-                            log::Level::Info,
-                        );
-                    } else {
-                        ctx.dispatch_global_action("root_view:create_environment_and_run", arg);
-                    }
-
-                    ctx.notify();
-                }
-            },
-        );
-
         let environment_setup_mode_selector =
             ctx.add_typed_action_view(EnvironmentSetupModeSelector::new);
         ctx.subscribe_to_view(&environment_setup_mode_selector, |me, _, event, ctx| {
@@ -476,29 +384,13 @@ impl EnvironmentsPageView {
             }
         });
 
-        // Initialize mouse states for existing environments
-        let mut copy_button_mouse_states = HashMap::new();
-        let mut edit_button_mouse_states = HashMap::new();
-        let mut share_button_mouse_states = HashMap::new();
-        let mut card_hover_mouse_states = HashMap::new();
-        let mut view_runs_link_mouse_states = HashMap::new();
-        for env in CloudAmbientAgentEnvironment::get_all(ctx) {
-            copy_button_mouse_states
-                .entry(env.id)
-                .or_insert_with(MouseStateHandle::default);
-            edit_button_mouse_states
-                .entry(env.id)
-                .or_insert_with(MouseStateHandle::default);
-            share_button_mouse_states
-                .entry(env.id)
-                .or_insert_with(MouseStateHandle::default);
-            card_hover_mouse_states
-                .entry(env.id)
-                .or_insert_with(MouseStateHandle::default);
-            view_runs_link_mouse_states
-                .entry(env.id)
-                .or_insert_with(MouseStateHandle::default);
-        }
+        // LOCAL FORK: there are no environments to seed mouse states for; the cloud
+        // environment model came out with the agent.
+        let copy_button_mouse_states = HashMap::new();
+        let edit_button_mouse_states = HashMap::new();
+        let share_button_mouse_states = HashMap::new();
+        let card_hover_mouse_states = HashMap::new();
+        let view_runs_link_mouse_states = HashMap::new();
 
         // Create pane configuration for BackingView support
         let pane_configuration =
@@ -527,7 +419,6 @@ impl EnvironmentsPageView {
             pending_delete_env_id: None,
             pending_share_server_id: None,
             delete_confirmation_dialog,
-            agent_assisted_environment_modal,
             new_env_button,
             environment_setup_mode_selector,
             is_environment_setup_mode_selector_open: false,
@@ -560,13 +451,7 @@ impl EnvironmentsPageView {
     pub fn pane_configuration(&self) -> ModelHandle<crate::pane_group::pane::PaneConfiguration> {
         self.pane_configuration.clone()
     }
-    pub fn set_github_auth_redirect_target(
-        &mut self,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.environment_form
-            .update(ctx, |form, _| form.set_github_auth_redirect_target(target));
-    }
+    // LOCAL FORK: fn set_github_auth_redirect_target removed with the agent.
 
     /// Focus the environments page view.
     pub fn focus(&mut self, ctx: &mut ViewContext<Self>) {
@@ -723,84 +608,14 @@ impl EnvironmentsPageView {
         event: &UpdateEnvironmentFormEvent,
         ctx: &mut ViewContext<Self>,
     ) {
+        // LOCAL FORK: creating, saving and deleting environments all went through the
+        // agent's cloud environment model and its sync manager, so only the cancel path
+        // still does anything.
         match event {
-            UpdateEnvironmentFormEvent::Created {
-                environment,
-                share_with_team,
-            } => {
-                // Generate a client ID for tracking the create operation
-                let client_id = ClientId::default();
-                self.pending_create_client_id = Some(client_id);
-
-                let owner = if *share_with_team {
-                    cloud_environments::owner_for_new_environment(ctx)
-                } else {
-                    cloud_environments::owner_for_new_personal_environment(ctx)
-                };
-
-                let Some(owner) = owner else {
-                    self.show_error_toast(
-                        "Unable to create environment: not logged in.".to_string(),
-                        ctx,
-                    );
-                    return;
-                };
-
-                // Create via UpdateManager
-                UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-                    update_manager.create_ambient_agent_environment(
-                        environment.clone(),
-                        client_id,
-                        owner,
-                        ctx,
-                    );
-                });
-
-                // Navigate back to list
-                self.update_page(EnvironmentsPage::List, ctx);
-            }
-            UpdateEnvironmentFormEvent::Updated {
-                env_id,
-                environment,
-            } => {
-                // Verify the environment still exists
-                let Some(existing_env) = CloudAmbientAgentEnvironment::get_by_id(env_id, ctx)
-                else {
-                    self.show_error_toast(
-                        "Unable to save: environment no longer exists.".to_string(),
-                        ctx,
-                    );
-                    return;
-                };
-
-                // Get the revision from the existing environment
-                let revision = existing_env.metadata.revision.clone();
-
-                // Track the pending save to show success toast when complete
-                self.pending_save_env_id = Some(*env_id);
-
-                // Update via UpdateManager
-                UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-                    update_manager.update_ambient_agent_environment(
-                        environment.clone(),
-                        *env_id,
-                        revision,
-                        ctx,
-                    );
-                });
-
-                // Navigate back to list
-                self.update_page(EnvironmentsPage::List, ctx);
-            }
-            UpdateEnvironmentFormEvent::DeleteRequested { env_id } => {
-                // Get the environment name for the confirmation dialog
-                if let Some(env) = CloudAmbientAgentEnvironment::get_by_id(env_id, ctx) {
-                    let env_name = env.model().string_model.name.clone();
-                    self.delete_confirmation_dialog.update(ctx, |dialog, ctx| {
-                        dialog.show(*env_id, env_name, ctx);
-                    });
-                    ctx.notify();
-                }
+            UpdateEnvironmentFormEvent::Created { .. }
+            | UpdateEnvironmentFormEvent::Updated { .. }
+            | UpdateEnvironmentFormEvent::DeleteRequested { .. } => {
+                self.show_error_toast("Environments are not available.".to_string(), ctx);
             }
             UpdateEnvironmentFormEvent::Cancelled => {
                 // Navigate back to list
@@ -809,14 +624,7 @@ impl EnvironmentsPageView {
         }
     }
 
-    fn open_agent_assisted_environment_modal(&mut self, ctx: &mut ViewContext<Self>) {
-        self.agent_assisted_environment_modal
-            .update(ctx, |modal, ctx| {
-                modal.show(ctx);
-            });
-        ctx.emit(SettingsPageEvent::AgentAssistedEnvironmentModalToggled { is_open: true });
-        ctx.notify();
-    }
+    // LOCAL FORK: fn open_agent_assisted_environment_modal removed with the agent.
 
     fn open_environment_setup_mode_selector(&mut self, ctx: &mut ViewContext<Self>) {
         if self.is_environment_setup_mode_selector_open {
@@ -852,9 +660,9 @@ impl EnvironmentsPageView {
                     EnvironmentSetupMode::RemoteGitHub => {
                         self.update_page(EnvironmentsPage::Create, ctx);
                     }
-                    EnvironmentSetupMode::LocalRepositories => {
-                        self.open_agent_assisted_environment_modal(ctx);
-                    }
+                    // LOCAL FORK: local-repository setup ran through the agent-assisted
+                    // modal, which is gone.
+                    EnvironmentSetupMode::LocalRepositories => {}
                 }
             }
             EnvironmentSetupModeSelectorEvent::Dismissed => {
@@ -927,9 +735,7 @@ impl TypedActionView for EnvironmentsPageView {
             EnvironmentsPageAction::OpenCreatePage => {
                 self.update_page(EnvironmentsPage::Create, ctx);
             }
-            EnvironmentsPageAction::OpenAgentAssistedCreateModal => {
-                self.open_agent_assisted_environment_modal(ctx);
-            }
+            EnvironmentsPageAction::OpenAgentAssistedCreateModal => {}
             EnvironmentsPageAction::OpenEnvironmentSetupModeSelector => {
                 self.open_environment_setup_mode_selector(ctx);
             }
@@ -1082,16 +888,9 @@ impl EnvironmentsPageWidget {
         //
         // We keep the owner alongside the display data so we can partition the list into Personal
         // vs Team scoped sections.
-        let mut environments: Vec<(Owner, EnvironmentDisplayData)> =
-            CloudAmbientAgentEnvironment::get_all(app)
-                .iter()
-                .map(|env| {
-                    (
-                        env.permissions.owner,
-                        EnvironmentDisplayData::from_cloud_environment(env),
-                    )
-                })
-                .collect();
+        // LOCAL FORK: the cloud environment model came out with the agent, so the list is
+        // always empty and the page renders its zero state.
+        let mut environments: Vec<(Owner, EnvironmentDisplayData)> = Vec::new();
 
         let has_any_environments = !environments.is_empty();
 

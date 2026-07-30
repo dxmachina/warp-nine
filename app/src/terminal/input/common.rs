@@ -477,7 +477,7 @@ pub(super) fn maybe_add_buy_credits_banner(
     buy_credits_banner: &ViewHandle<BuyCreditsBanner>,
     input_view_handle: &WeakViewHandle<Input>,
     is_focused: bool,
-    terminal_view_id: EntityId,
+    _terminal_view_id: EntityId,
     is_input_at_top: bool,
     app: &AppContext,
 ) {
@@ -490,19 +490,11 @@ pub(super) fn maybe_add_buy_credits_banner(
     // and either:
     // 1. OutOfCredits: for users that are not auto-reload enabled
     // 2. MonthlyLimitReached: Auto-reload enabled and is blocked by monthly limit
-    let ai_request_usage = AIRequestUsageModel::as_ref(app);
-    // LOCAL FORK: this tested the credits banner state against agent-only
-    // variants of the display-state enum. With those gone the banner never shows.
+    // LOCAL FORK: the banner state came from AIRequestUsageModel and was gated
+    // on the active model's BYO API key, both of which went with the agent.
+    // With no agent there are no credits to buy, so it never shows.
     let should_show_banner = false;
-    let is_using_api_key_for_current_model = should_show_key_icon_for_model(
-        LLMPreferences::as_ref(app).get_active_base_model(app, Some(terminal_view_id)),
-        app,
-    );
-    if can_purchase_addon_credits
-        && is_focused
-        && should_show_banner
-        && !is_using_api_key_for_current_model
-    {
+    if can_purchase_addon_credits && is_focused && should_show_banner {
         add_buy_credits_banner_overlay(stack, buy_credits_banner, is_input_at_top);
     }
 }

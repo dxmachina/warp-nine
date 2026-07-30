@@ -847,8 +847,7 @@ enum Indicator {
     Maximized,
     /// We should show a shell indicator for the tab.
     Shell(ShellIndicatorType),
-    Agent {
-    },
+    // LOCAL FORK: the Agent conversation-status indicator went with the agent.
     AmbientAgent,
 }
 
@@ -1016,8 +1015,6 @@ impl<'a> TabComponent<'a> {
             Indicator::None
         } else if are_inputs_synced {
             Indicator::Synced
-        } else if let Some(agent) = Self::agent_indicator(tab, ctx) {
-            agent
         } else if let Some(shell_indicator_type) = shell_indicator_type {
             Indicator::Shell(shell_indicator_type)
         } else if has_active_pane_state_indicator {
@@ -1154,7 +1151,7 @@ impl<'a> TabComponent<'a> {
 
     /// Check if the given indicator is an agent task indicator
     fn is_agent_task_indicator(indicator: &Indicator) -> bool {
-        matches!(indicator, Indicator::Agent { .. } | Indicator::AmbientAgent)
+        matches!(indicator, Indicator::AmbientAgent)
     }
 
     /// Get the current working directory for the tooltip if this is an agent task
@@ -1433,21 +1430,6 @@ impl<'a> TabComponent<'a> {
                     .to_warpui_icon(internal_colors::neutral_5(self.appearance.theme()).into())
                     .finish(),
             ),
-            Indicator::Agent {
-                conversation_status,
-            } => {
-                if let Some(status) = conversation_status {
-                    if FeatureFlag::NewTabStyling.is_enabled() {
-                        let icon_size = 22.0 - STATUS_ELEMENT_PADDING * 2.;
-                        Some(render_status_element(status, icon_size, self.appearance))
-                    } else {
-                        Some(status.render_icon(self.appearance).finish())
-                    }
-                } else {
-                    let icon_color = self.appearance.theme().nonactive_ui_text_color();
-                    Some(Icon::Agent.to_warpui_icon(icon_color).finish())
-                }
-            }
             Indicator::AmbientAgent => {
                 // Always use the active tab font color for the ambient agent cloud icon, with a safe fallback.
                 let active_styles = self.styles.default.merge(self.styles.active);

@@ -56,11 +56,7 @@ impl CloudModeV2HistoryMenuView {
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let data_source = ctx.add_model(|_| {
-            InlineHistoryMenuDataSource::new(
-                terminal_view_id,
-                active_session,
-                agent_view_controller.clone(),
-            )
+            InlineHistoryMenuDataSource::new(terminal_view_id, active_session)
         });
 
         let mixer = ctx.add_model(|ctx| {
@@ -75,7 +71,6 @@ impl CloudModeV2HistoryMenuView {
                 mixer.clone(),
                 positioner.clone(),
                 input_suggestions_model,
-                agent_view_controller,
                 ctx,
             )
             .with_compact_layout()

@@ -242,19 +242,9 @@ impl TerminalView {
 
         let should_render_ambient_agent_indicator = self.is_cloud_agent_session(app);
         let theme = appearance.theme();
-        let render_agent_circle = |variant| {
-            render_icon_with_status(
-                variant,
-                PANE_HEADER_AGENT_SIZE,
-                0.,
-                theme,
-                theme.background(),
-            )
-        };
         let pane_indicator = if should_render_ambient_agent_indicator {
-            // Shared/viewed ambient session: route through the shared helper so the pane header
-            // renders the same brand-color circle + cloud lobe + status as the vertical tab.
-            terminal_view_agent_icon_variant(self, app).map(render_agent_circle)
+            // LOCAL FORK: no agent means no agent status circle to render here.
+            None
         } else if let Some(shared_session) = self.shared_session.as_ref() {
             if let Some(Viewer {
                 sharer: Some(sharer),
@@ -286,9 +276,8 @@ impl TerminalView {
                     .selected_conversation(app)
                     .is_some())
         {
-            // Conversation-bound terminal: same shared helper — produces an OzAgent variant for
-            // local conversations and a CLIAgent variant for the (rare) CLI-backed terminal.
-            terminal_view_agent_icon_variant(self, app).map(render_agent_circle)
+            // LOCAL FORK: no agent means no agent status circle to render here.
+            None
         } else {
             self.render_terminal_mode_indicator(app)
         };
@@ -443,17 +432,10 @@ impl TerminalView {
             let pinned_header = ConstrainedBox::new(header)
                 .with_height(PANE_HEADER_HEIGHT)
                 .finish();
-            let secondary_row: Box<dyn Element> = if self.is_orchestration_split_off() {
-                crate::ai::blocklist::agent_view::render_orchestration_breadcrumbs(
-                    self.agent_view_controller.as_ref(app),
-                    self.mouse_states.parent_conversation_header_link.clone(),
-                    self.mouse_states.breadcrumbs_horizontal_scroll.clone(),
-                    app,
-                )
-                .unwrap_or_else(|| Empty::new().finish())
-            } else {
-                ChildView::new(&self.orchestration_pill_bar).finish()
-            };
+            // LOCAL FORK: orchestration breadcrumbs lived in the agent view, so the
+            // pill bar is the only secondary row left.
+            let secondary_row: Box<dyn Element> =
+                ChildView::new(&self.orchestration_pill_bar).finish();
             return Flex::column()
                 .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
                 .with_child(pinned_header)

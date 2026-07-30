@@ -16,10 +16,6 @@ use warpui::{
 };
 
 use crate::WorkspaceAction;
-use crate::ai::blocklist::agent_view::{
-    AgentViewController, AgentViewControllerEvent, AgentViewEntryOrigin,
-    ENTER_AGENT_VIEW_NEW_CONVERSATION_KEYSTROKE, ENTER_CLOUD_AGENT_VIEW_NEW_CONVERSATION_KEYSTROKE,
-};
 use crate::appearance::Appearance;
 use crate::settings::{AISettings, AISettingsChangedEvent, InputModeSettings};
 use crate::terminal::event::BlockType;
@@ -58,11 +54,9 @@ pub struct TerminalViewZeroStateBlock {
 
 impl TerminalViewZeroStateBlock {
     pub fn new(
-        agent_view_controller: &ModelHandle<AgentViewController>,
         model_events_dispatcher: &ModelHandle<ModelEventDispatcher>,
         ctx: &mut ViewContext<Self>,
     ) -> Self {
-        let controller_clone = agent_view_controller.clone();
         ctx.subscribe_to_model(
             model_events_dispatcher,
             move |me, model_events_dispatcher, event, ctx| {
@@ -71,27 +65,10 @@ impl TerminalViewZeroStateBlock {
                 {
                     me.should_hide = true;
                     ctx.unsubscribe_to_model(&model_events_dispatcher);
-                    ctx.unsubscribe_to_model(&controller_clone);
                     ctx.notify();
                 }
             },
         );
-
-        let model_events_clone = model_events_dispatcher.clone();
-        ctx.subscribe_to_model(agent_view_controller, move |me, controller, event, ctx| {
-            if let AgentViewControllerEvent::ExitedAgentView {
-                original_exchange_count,
-                final_exchange_count,
-                ..
-            } = event
-                && original_exchange_count != final_exchange_count
-            {
-                me.should_hide = true;
-                ctx.unsubscribe_to_model(&model_events_clone);
-                ctx.unsubscribe_to_model(&controller);
-                ctx.notify()
-            }
-        });
 
         ctx.subscribe_to_model(&AISettings::handle(ctx), |me, _, event, ctx| {
             if matches!(event, AISettingsChangedEvent::IsAnyAIEnabled { .. })
@@ -179,39 +156,8 @@ impl View for TerminalViewZeroStateBlock {
                     .finish(),
             );
 
+        // LOCAL FORK: the two "start a conversation" entries went away with the agent view.
         let mut items = vec![
-            render_standard_message(
-                Message::new(vec![MessageItem::clickable(
-                    vec![
-                        MessageItem::keystroke(ENTER_AGENT_VIEW_NEW_CONVERSATION_KEYSTROKE.clone()),
-                        MessageItem::text("start a new agent conversation"),
-                    ],
-                    |ctx| {
-                        ctx.dispatch_typed_action(TerminalAction::StartNewAgentConversation {
-                            origin: AgentViewEntryOrigin::Input {
-                                was_prompt_autodetected: false,
-                            },
-                        });
-                    },
-                    self.state_handles.start_new_conversation.clone(),
-                )]),
-                app,
-            ),
-            render_standard_message(
-                Message::new(vec![MessageItem::clickable(
-                    vec![
-                        MessageItem::keystroke(
-                            ENTER_CLOUD_AGENT_VIEW_NEW_CONVERSATION_KEYSTROKE.clone(),
-                        ),
-                        MessageItem::text("start a new cloud agent conversation"),
-                    ],
-                    |ctx| {
-                        ctx.dispatch_typed_action(TerminalAction::EnterCloudAgentView);
-                    },
-                    self.state_handles.start_cloud_conversation.clone(),
-                )]),
-                app,
-            ),
             render_standard_message(
                 Message::new(vec![MessageItem::clickable(
                     vec![

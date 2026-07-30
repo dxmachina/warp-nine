@@ -127,14 +127,6 @@ use super::shell::ShellType;
 use super::universal_developer_input::{
     UniversalDeveloperInputButtonBar, UniversalDeveloperInputButtonBarEvent,
 };
-use super::view::ambient_agent::{
-    AmbientAgentViewModel, AmbientAgentViewModelEvent, is_cloud_agent_pre_first_exchange,
-};
-use super::view::inline_banner::{
-    PromptSuggestionBannerState, ZeroStatePromptSuggestionTriggeredFrom,
-    ZeroStatePromptSuggestionType,
-};
-use super::view::queued_prompts_panel::{QueuedPromptsPanelEvent, QueuedPromptsPanelView};
 use super::view::{
     ExecuteCommandEvent, PADDING_LEFT as TERMINAL_VIEW_PADDING_LEFT, SyncInputType, TerminalAction,
 };
@@ -142,64 +134,9 @@ use super::warpify::SubshellSource;
 use super::{History, HistoryEntry, SizeInfo, TerminalModel, UpArrowHistoryConfig, prompt};
 #[allow(unused_imports)]
 use crate::ASSETS;
-use crate::ai::AIRequestUsageModel;
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::agent::{
-    AIAgentContext, AIAgentExchangeId, CancellationReason, EntrypointType, ImageContext,
-};
-use crate::ai::agent_conversations_model::{
-    AgentConversationNavigationSubject, AgentConversationsModel,
-};
-use crate::ai::ambient_agents::telemetry::HandoffEntryPoint;
-use crate::ai::attachment_utils::MAX_ATTACHMENT_SIZE_BYTES;
-use crate::ai::block_context::BlockContext;
-use crate::ai::blocklist::agent_view::shortcuts::AgentShortcutViewModel;
-use crate::ai::blocklist::agent_view::{
-    AgentInputFooter, AgentInputFooterEvent, AgentViewController, AgentViewEntryOrigin,
-    EphemeralMessageModel, is_in_cloud_context,
-};
-use crate::ai::blocklist::block::cli_controller::{CLISubagentController, CLISubagentEvent};
-use crate::ai::blocklist::block::status_bar::BlocklistAIStatusBar;
-use crate::ai::blocklist::conversation_selection::ConversationSelectionHandle;
-#[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
-use crate::ai::blocklist::handoff::{
-    HandoffLaunchAttachments, PendingCloudLaunch, suggest_handoff_environment,
-};
-use crate::ai::blocklist::prompt::prompt_alert::{PromptAlertEvent, PromptAlertView};
+// LOCAL FORK: the agent's conversation, attachment, prompt-suggestion, model-preference
+// and skill machinery all came out with it. Only the terminal's own input editor is kept.
 use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
-use crate::ai::blocklist::{
-    AttachmentType, BLOCK_CONTEXT_ATTACHMENT_REGEX, BlocklistAIActionModel,
-    BlocklistAIContextEvent, BlocklistAIContextModel, BlocklistAIController,
-    BlocklistAIControllerEvent, BlocklistAIHistoryEvent, BlocklistAIHistoryModel,
-    BlocklistAIInputEvent, BlocklistAIInputModel, DIFF_HUNK_ATTACHMENT_REGEX,
-    DRIVE_OBJECT_ATTACHMENT_REGEX, InputConfig, InputType, InputTypeAutoDetectionSource,
-    PendingAttachment, PendingFile, QueuedQuery, QueuedQueryEvent, QueuedQueryId, QueuedQueryModel,
-    QueuedQueryOrigin, SlashCommandRequest, ai_brand_color, ai_indicator_height,
-    render_ai_agent_mode_icon, render_ai_follow_up_icon,
-};
-use crate::ai::cloud_agent_settings::CloudAgentSettings;
-use crate::ai::cloud_environments::CloudAmbientAgentEnvironment;
-use crate::ai::connected_self_hosted_workers::{
-    ConnectedSelfHostedWorkersEvent, ConnectedSelfHostedWorkersModel,
-};
-#[cfg(not(target_family = "wasm"))]
-use crate::ai::conversation_export::export_conversation_markdown;
-use crate::ai::document::ai_document_model::{AIDocumentId, AIDocumentVersion};
-use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
-use crate::ai::harness_availability::HarnessAvailabilityModel;
-use crate::ai::llms::{LLMPreferences, LLMPreferencesEvent};
-use crate::ai::mcp::TemplatableMCPServerManager;
-use crate::ai::predict::next_command_model::{
-    NextCommandModel, NextCommandModelEvent, NextCommandSuggestionState, ZeroStateSuggestionInfo,
-    is_command_valid, is_next_command_enabled,
-};
-use crate::ai::predict::predict_am_queries::PredictAMQueriesRequest;
-use crate::ai::predict::prompt_suggestions::{
-    has_pending_code_or_unit_test_prompt_suggestion,
-    is_accept_prompt_suggestion_bound_to_ctrl_enter,
-};
-use crate::ai::skills::{SkillOpenOrigin, SkillTelemetryEvent};
-use crate::ai_assistant::execution_context::WarpAiExecutionContext;
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::channel::{Channel, ChannelState};
 use crate::cloud_object::model::actions::ObjectActionType;
@@ -242,16 +179,10 @@ use crate::tips::{
     Tip, TipAction, TipHint, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
 };
 use crate::search::QueryFilter;
-use crate::search::ai_context_menu::mixer::AIContextMenuSearchableAction;
-use crate::search::ai_context_menu::search::is_valid_search_query;
-use crate::search::ai_context_menu::view::AIContextMenuAction;
 use crate::search::slash_command_menu::static_commands::commands::{self, COMMAND_REGISTRY};
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::SyncId;
 use crate::server::server_api::ServerApi;
-#[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
-use crate::server::server_api::ai::AttachmentInput;
-use crate::server::server_api::ai::{AIClient, AttachmentFileInfo};
 use crate::server::telemetry::{
     AICommandSearchEntrypoint, AgentModeAutoDetectionFalsePositivePayload,
     AgentModeAutoDetectionSettingOrigin, AnonymousUserSignupEntrypoint, CommandXRayTrigger,
@@ -270,22 +201,13 @@ use crate::suggestions::ignored_suggestions_model::{
 };
 use crate::terminal::CLIAgent;
 use crate::terminal::buy_credits_banner::{BuyCreditsBanner, BuyCreditsBannerEvent};
-#[cfg(not(target_family = "wasm"))]
-use crate::terminal::cli_agent_sessions::plugin_manager::PluginModalKind;
-use crate::terminal::cli_agent_sessions::{
-    CLIAgentInputState, CLIAgentSessionsModel, CLIAgentSessionsModelEvent,
-};
 use crate::terminal::input::buffer_model::InputBufferModel;
 use crate::terminal::input::cloud_mode_v2_history_menu::CloudModeV2HistoryMenuView;
-use crate::terminal::input::conversations::{
-    InlineConversationMenuEvent, InlineConversationMenuView,
-};
 use crate::terminal::input::inline_history::InlineHistoryMenuView;
 use crate::terminal::input::inline_menu::InlineMenuPositioner;
 use crate::terminal::input::models::{
     InlineModelSelectorEvent, InlineModelSelectorTab, InlineModelSelectorView,
 };
-use crate::terminal::input::plans::{InlinePlanMenuEvent, InlinePlanMenuView};
 use crate::terminal::input::profiles::{InlineProfileSelectorEvent, InlineProfileSelectorView};
 use crate::terminal::input::prompts::{InlinePromptsMenuEvent, InlinePromptsMenuView};
 use crate::terminal::input::repos::{InlineReposMenuEvent, InlineReposMenuView};
@@ -303,17 +225,11 @@ use crate::terminal::input::suggestions_mode_model::{
     InputSuggestionsModeEvent, InputSuggestionsModeModel,
 };
 use crate::terminal::input::terminal_message_bar::TerminalInputMessageBar;
-use crate::terminal::input::user_query::{UserQueryMenuEvent, UserQueryMenuView};
 use crate::terminal::model::session::active_session::ActiveSession;
 use crate::terminal::model::session::shell_quote_arg;
 use crate::terminal::package_installers::command_at_cursor_has_common_package_installer_prefix;
 use crate::terminal::prompt_render_helper::should_render_ps1_prompt;
 use crate::terminal::universal_developer_input::AtContextMenuDisabledReason;
-use crate::terminal::view::ambient_agent::{
-    AuthSecretFtuxView, AuthSecretFtuxViewEvent, AuthSecretSelector, AuthSecretSelectorEvent,
-    HarnessSelector, HarnessSelectorEvent, HostSelector, HostSelectorEvent, NakedHeaderButtonTheme,
-};
-use crate::terminal::view::inline_banner::{PromptSuggestionsEvent, PromptSuggestionsView};
 use crate::terminal::view::{AIQueryRouting, CodeDiffAction, resolve_ai_query_routing};
 use crate::ui_components::blended_colors;
 use crate::ui_components::icons::Icon;
@@ -1814,123 +1730,8 @@ impl DeferredRemoteOperations {
     }
 }
 
-/// Per-attachment outcome from [`upload_pending_attachments_to_task`].
-enum TaskAttachmentUploadOutcome {
-    /// Successfully uploaded to the task's storage bucket. `attachment_id` is the
-    /// server-assigned identifier the new VM downloads at startup.
-    Uploaded {
-        attachment_id: String,
-        file_name: String,
-    },
-    /// Could not be uploaded — decode error, size limit exceeded, or HTTP failure.
-    /// `error` is a human-readable message suitable for display.
-    Failed { file_name: String, error: String },
-}
-
-/// Decode, size-check, and upload `pending_attachments` to the given task's storage
-/// bucket via presigned URLs obtained from the server. Returns one [`TaskAttachmentUploadOutcome`]
-/// per input attachment in the same order.
-///
-/// The outer `Err` is returned only when [`AIClient::prepare_attachments_for_upload`] fails
-/// (meaning no individual uploads were attempted). Decode errors, size-limit violations,
-/// and individual HTTP failures are surfaced as [`TaskAttachmentUploadOutcome::Failed`]
-/// entries so each caller can choose its own error-handling policy (fail-fast vs. best-effort).
-async fn upload_pending_attachments_to_task(
-    ai_client: Arc<dyn AIClient>,
-    server_api: Arc<ServerApi>,
-    task_id: crate::ai::ambient_agents::AmbientAgentTaskId,
-    pending_attachments: Vec<PendingAttachment>,
-) -> anyhow::Result<Vec<TaskAttachmentUploadOutcome>> {
-    let n = pending_attachments.len();
-    // Reserve a slot for each input attachment; filled below in original order.
-    let mut outcomes: Vec<Option<TaskAttachmentUploadOutcome>> =
-        std::iter::repeat_with(|| None).take(n).collect();
-    // Collect successfully decoded files together with their original index so we can
-    // zip the prepare-upload response back to the correct outcome slot.
-    let mut files_to_upload: Vec<(usize, String, String, Vec<u8>)> = Vec::new();
-
-    for (i, attachment) in pending_attachments.into_iter().enumerate() {
-        let decoded = match attachment {
-            PendingAttachment::File(file) => std::fs::read(&file.file_path)
-                .map(|bytes| (file.file_name.clone(), file.mime_type.clone(), bytes))
-                .map_err(|e| (file.file_name, format!("Failed to read attachment: {e}"))),
-            PendingAttachment::Image(image) => base64::engine::general_purpose::STANDARD
-                .decode(&image.data)
-                .map(|bytes| (image.file_name.clone(), image.mime_type.clone(), bytes))
-                .map_err(|e| (image.file_name, format!("Failed to decode attachment: {e}"))),
-        };
-        match decoded {
-            Ok((file_name, mime_type, bytes)) => {
-                if bytes.len() > MAX_ATTACHMENT_SIZE_BYTES {
-                    outcomes[i] = Some(TaskAttachmentUploadOutcome::Failed {
-                        file_name: file_name.clone(),
-                        error: format!("{file_name} exceeds the 10 MB attachment limit"),
-                    });
-                } else {
-                    files_to_upload.push((i, file_name, mime_type, bytes));
-                }
-            }
-            Err((file_name, error)) => {
-                outcomes[i] = Some(TaskAttachmentUploadOutcome::Failed { file_name, error });
-            }
-        }
-    }
-
-    if !files_to_upload.is_empty() {
-        let file_infos: Vec<AttachmentFileInfo> = files_to_upload
-            .iter()
-            .map(|(_, name, mime, _)| AttachmentFileInfo {
-                filename: name.clone(),
-                mime_type: mime.clone(),
-            })
-            .collect();
-
-        let prepare_response = ai_client
-            .prepare_attachments_for_upload(&task_id, &file_infos)
-            .await?;
-
-        if prepare_response.attachments.len() != files_to_upload.len() {
-            anyhow::bail!(
-                "Attachment upload preparation returned {} targets for {} files",
-                prepare_response.attachments.len(),
-                files_to_upload.len()
-            );
-        }
-
-        for ((orig_idx, file_name, mime_type, file_bytes), upload_info) in files_to_upload
-            .iter()
-            .zip(prepare_response.attachments.iter())
-        {
-            let result = server_api
-                .http_client()
-                .put(&upload_info.upload_url)
-                .header("Content-Type", mime_type.as_str())
-                .body(file_bytes.clone())
-                .send()
-                .await;
-
-            outcomes[*orig_idx] = Some(match result {
-                Ok(resp) if resp.status().is_success() => TaskAttachmentUploadOutcome::Uploaded {
-                    attachment_id: upload_info.attachment_id.clone(),
-                    file_name: file_name.clone(),
-                },
-                Ok(resp) => TaskAttachmentUploadOutcome::Failed {
-                    file_name: file_name.clone(),
-                    error: format!("HTTP {}", resp.status()),
-                },
-                Err(e) => TaskAttachmentUploadOutcome::Failed {
-                    file_name: file_name.clone(),
-                    error: e.to_string(),
-                },
-            });
-        }
-    }
-
-    Ok(outcomes
-        .into_iter()
-        .map(|o| o.expect("all slots filled during upload_pending_attachments_to_task"))
-        .collect())
-}
+// LOCAL FORK: TaskAttachmentUploadOutcome and upload_pending_attachments_to_task
+// removed with the agent; they uploaded attachments to an ambient agent task.
 
 pub fn init(app: &mut AppContext) {
     use warpui::keymap::macros::*;
@@ -2700,27 +2501,8 @@ impl Input {
                 ctx.notify();
             }
         });
-        ctx.subscribe_to_model(&agent_view_controller, |me, _, event, ctx| {
-            use crate::ai::blocklist::agent_view::AgentViewControllerEvent;
-            if let AgentViewControllerEvent::EnteredAgentView { origin, .. } = event {
-                me.close_suggestion_modes_for_new_conversation(ctx);
-                // Entering Agent View can remove multiline same-line prompt decorator content in a
-                // single render pass. Reset shrink-delay so we don't hold onto stale input height
-                // for one frame (which shows up as extra bottom padding/jitter).
-                me.editor.update(ctx, |editor, ctx| {
-                    editor.reset_height_shrink_delay(ctx);
-                });
-
-                if *origin == AgentViewEntryOrigin::CloudAgent {
-                    // By default, shared session viewers cannot edit the input - override that for composing ambient agent queries.
-                    me.editor.update(ctx, |editor, ctx| {
-                        editor.set_interaction_state(InteractionState::Editable, ctx);
-                    });
-                    me.set_zero_state_hint_text(ctx);
-                }
-            }
-            ctx.notify();
-        });
+        // LOCAL FORK: the agent view controller subscription that reset input height and
+        // editability on entering agent view came out with the agent.
 
         let prompt_selection_state_handle = SelectionHandle::default();
 
@@ -14581,61 +14363,7 @@ impl Input {
         true
     }
 
-    /// Upload pending attachments to the task definition before emitting the text-only cloud
-    /// follow-up event. `SubmitCloudFollowup` only carries the prompt text, so this helper owns
-    /// the prompt and attachment payloads until the async upload either succeeds and submits the
-    /// prompt or fails and restores the input. A new VM execution downloads these task attachments
-    /// during startup.
-    fn upload_files_then_submit_cloud_followup(
-        &mut self,
-        task_id: crate::ai::ambient_agents::AmbientAgentTaskId,
-        prompt: String,
-        pending_attachments: Vec<PendingAttachment>,
-        ctx: &mut ViewContext<Self>,
-    ) -> SpawnedFutureHandle {
-        let ai_client = ServerApiProvider::as_ref(ctx).get_ai_client();
-        let server_api = ServerApiProvider::as_ref(ctx).get();
-
-        ctx.spawn(
-            async move {
-                // Fail fast: any per-attachment failure (decode, size-limit, or HTTP) is fatal
-                // on the VM-down follow-up path; the user can fix the attachment and retry.
-                let outcomes = upload_pending_attachments_to_task(
-                    ai_client,
-                    server_api,
-                    task_id,
-                    pending_attachments,
-                )
-                .await
-                .map_err(|e| format!("Failed to prepare attachment uploads: {e:#}"))?;
-                for outcome in &outcomes {
-                    if let TaskAttachmentUploadOutcome::Failed { error, .. } = outcome {
-                        return Err(error.clone());
-                    }
-                }
-                Ok::<(), String>(())
-            },
-            move |input, result, ctx| {
-                if let Err(error) = result {
-                    input.restore_cloud_followup_input_after_upload_failure(&prompt, ctx);
-                    let window_id = ctx.window_id();
-                    ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                        toast_stack.add_ephemeral_toast(
-                            DismissibleToast::error(format!("Couldn't upload attachment: {error}")),
-                            window_id,
-                            ctx,
-                        );
-                    });
-                    return;
-                }
-
-                input.ai_context_model.update(ctx, |context_model, ctx| {
-                    context_model.clear_pending_attachments(ctx);
-                });
-                ctx.emit(Event::SubmitCloudFollowup { prompt });
-            },
-        )
-    }
+    // LOCAL FORK: fn upload_files_then_submit_cloud_followup removed with the agent.
 
     fn emit_input_buffer_submitted_telemetry(&self, ctx: &mut ViewContext<Self>) {
         let input_model = self.ai_input_model.as_ref(ctx);
@@ -14697,130 +14425,7 @@ impl Input {
         }
     }
 
-    /// Uploads image and file attachments to GCS via presigned URLs, then emits `SendAgentPrompt`
-    /// with the resulting `FileReference` attachments appended.
-    #[allow(clippy::too_many_arguments)]
-    fn upload_files_then_send_prompt(
-        task_id: crate::ai::ambient_agents::AmbientAgentTaskId,
-        server_conversation_token: Option<
-            session_sharing_protocol::common::ServerConversationToken,
-        >,
-        prompt: String,
-        base_attachments: Vec<AgentAttachment>,
-        pending_images: &[crate::ai::agent::ImageContext],
-        pending_files: &[crate::ai::blocklist::PendingFile],
-        queued_query_retry: Option<(AIConversationId, usize, QueuedQuery)>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let ai_client = ServerApiProvider::as_ref(ctx).get_ai_client();
-        let server_api = ServerApiProvider::as_ref(ctx).get();
-
-        // Combine images and files into a unified list so
-        // `upload_pending_attachments_to_task` can handle both kinds uniformly.
-        let pending_attachments: Vec<PendingAttachment> = pending_images
-            .iter()
-            .cloned()
-            .map(PendingAttachment::Image)
-            .chain(pending_files.iter().cloned().map(PendingAttachment::File))
-            .collect();
-        let pending_count = pending_attachments.len();
-
-        ctx.spawn(
-            async move {
-                // Best-effort: continue with successful uploads even when individual
-                // attachments fail (decode / size-limit / HTTP). Return `None` only when
-                // the prepare call fails entirely (maps to the "too many attachments" toast).
-                let outcomes = match upload_pending_attachments_to_task(
-                    ai_client,
-                    server_api,
-                    task_id,
-                    pending_attachments,
-                )
-                .await
-                {
-                    Ok(outcomes) => outcomes,
-                    Err(e) => {
-                        log::error!(
-                            "Failed to prepare attachment uploads for task {task_id}: {e:#}"
-                        );
-                        return None;
-                    }
-                };
-
-                let mut uploaded = Vec::new();
-                for outcome in outcomes {
-                    match outcome {
-                        TaskAttachmentUploadOutcome::Uploaded {
-                            attachment_id,
-                            file_name,
-                        } => {
-                            uploaded.push(AgentAttachment::FileReference {
-                                attachment_id,
-                                file_name,
-                            });
-                        }
-                        TaskAttachmentUploadOutcome::Failed { file_name, error } => {
-                            log::warn!("Failed to upload attachment {file_name}: {error}");
-                        }
-                    }
-                }
-
-                if uploaded.len() < pending_count {
-                    log::warn!(
-                        "Only {}/{} attachments uploaded successfully",
-                        uploaded.len(),
-                        pending_count
-                    );
-                }
-
-                Some(uploaded)
-            },
-            move |input, maybe_uploaded, ctx| {
-                let is_queued_prompt = queued_query_retry.is_some();
-                let uploaded_files = match maybe_uploaded {
-                    Some(uploaded_files) => uploaded_files,
-                    None => {
-                        if let Some((conversation_id, insert_index, query)) = queued_query_retry {
-                            QueuedQueryModel::handle(ctx).update(ctx, |model, ctx| {
-                                model.restore_fired_row(conversation_id, insert_index, query, ctx);
-                            });
-                        }
-                        // Prepare request failed (e.g. attachment limit exceeded).
-                        // Keep pending attachments so the user can retry, unfreeze input,
-                        // and show an error toast.
-                        input.unfreeze_agent_input(false, ctx);
-                        let window_id = ctx.window_id();
-                        ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                            toast_stack.add_ephemeral_toast(
-                                DismissibleToast::error(
-                                    "Too many attachments for this conversation.".to_string(),
-                                ),
-                                window_id,
-                                ctx,
-                            );
-                        });
-                        return;
-                    }
-                };
-
-                if !is_queued_prompt {
-                    // Upload succeeded — clear pending attachments now.
-                    input.ai_context_model.update(ctx, |context_model, ctx| {
-                        context_model.clear_pending_attachments(ctx);
-                    });
-                }
-
-                let mut all_attachments = base_attachments;
-                all_attachments.extend(uploaded_files);
-
-                ctx.emit(Event::SendAgentPrompt {
-                    server_conversation_token,
-                    prompt,
-                    attachments: all_attachments,
-                });
-            },
-        );
-    }
+    // LOCAL FORK: fn upload_files_then_send_prompt removed with the agent.
 
     /// Returns true if toggling the input mode is disabled.
     fn is_input_mode_toggle_disabled(&self, ctx: &ViewContext<Self>) -> bool {

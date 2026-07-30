@@ -10,9 +10,6 @@ use super::core::subscribe_to_shared_dependencies;
 use super::{
     InlineItem, SlashCommandDataSource, SlashCommandDataSourceState, UpdatedActiveCommands,
 };
-#[cfg(not(target_family = "wasm"))]
-#[cfg(not(target_family = "wasm"))]
-#[cfg(not(target_family = "wasm"))]
 use crate::search::SyncDataSource;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::DataSourceRunErrorWrapper;
@@ -51,26 +48,15 @@ impl GuiSlashCommandDataSource {
     ) -> Self {
         let GuiDataSourceArgs {
             active_session,
-            agent_view_controller,
-            cli_subagent_controller,
             terminal_view_id,
-            ambient_agent_view_model,
         } = args;
 
         subscribe_to_shared_dependencies(
             &active_session,
-            &cli_subagent_controller,
             terminal_view_id,
             Self::recompute_active_commands,
             ctx,
         );
-        ctx.subscribe_to_model(&agent_view_controller, |me, _, event, ctx| match event {
-            AgentViewControllerEvent::EnteredAgentView { .. }
-            | AgentViewControllerEvent::ExitedAgentView { .. } => {
-                me.recompute_active_commands(ctx);
-            }
-            _ => (),
-        });
         // Preserve the existing GUI subscriptions whose settings affect GUI-only command gates.
         ctx.subscribe_to_model(&PrivacySettings::handle(ctx), |me, _, event, ctx| {
             if matches!(
@@ -90,22 +76,10 @@ impl GuiSlashCommandDataSource {
         });
 
         let mut me = Self {
-            state: SlashCommandDataSourceState::new(
-                active_session,
-                cli_subagent_controller,
-                terminal_view_id,
-            ),
-            agent_view_controller,
-            ambient_agent_view_model: None,
+            state: SlashCommandDataSourceState::new(active_session, terminal_view_id),
             is_cloud_mode_v2,
         };
-        // Route ambient wiring through the setter so construction and the lazy shared-session
-        // viewer path share one implementation.
-        if let Some(ambient_agent_view_model) = ambient_agent_view_model {
-            me.set_ambient_agent_view_model(ambient_agent_view_model, ctx);
-        } else {
-            me.recompute_active_commands(ctx);
-        }
+        me.recompute_active_commands(ctx);
         me
     }
 
@@ -114,8 +88,9 @@ impl GuiSlashCommandDataSource {
         self.is_cloud_mode_v2
     }
 
-    pub fn is_agent_view_active(&self, ctx: &AppContext) -> bool {
-        self.agent_view_controller.as_ref(ctx).is_active()
+    pub fn is_agent_view_active(&self, _ctx: &AppContext) -> bool {
+        // LOCAL FORK: there is no agent view to be in anymore.
+        false
     }
 
     pub fn set_active_repo_root(
@@ -219,13 +194,10 @@ impl GuiSlashCommandDataSource {
         true
     }
 
-    fn is_cloud_mode(&self, ctx: &AppContext) -> bool {
+    fn is_cloud_mode(&self, _ctx: &AppContext) -> bool {
+        // LOCAL FORK: without the ambient agent view model, only the cloud mode v2
+        // composer can be a cloud pane.
         self.is_cloud_mode_v2
-            || (FeatureFlag::CloudMode.is_enabled()
-                && self
-                    .ambient_agent_view_model
-                    .as_ref()
-                    .is_some_and(|model| model.as_ref(ctx).is_ambient_agent()))
     }
 
 

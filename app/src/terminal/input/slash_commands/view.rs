@@ -96,7 +96,6 @@ impl InlineSlashCommandView {
                 mixer.clone(),
                 positioner.clone(),
                 &suggestions_mode_model,
-                agent_view_controller,
                 ctx,
             )
         });

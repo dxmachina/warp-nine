@@ -21,34 +21,16 @@ use super::{
 };
 // Imports below are only consumed by the non-wasm `launch_local_*_child`
 // dispatch helpers; gating them keeps the wasm build warning-clean.
-use crate::AIExecutionProfilesModel;
-use crate::ai::active_agent_views_model::ActiveAgentViewsModel;
-use crate::ai::agent::conversation::{AIConversationId, ConversationStatus};
-use crate::ai::agent::{RenderableAIError, StartAgentExecutionMode};
-use crate::ai::ambient_agents::AmbientAgentTaskId;
-use crate::ai::ambient_agents::task::normalize_orchestrator_agent_name;
-#[cfg(feature = "local_fs")]
-use crate::ai::blocklist::BlocklistAIHistoryEvent;
-use crate::ai::blocklist::agent_view::{AgentViewControllerEvent, AgentViewEntryOrigin};
-use crate::ai::blocklist::orchestration_event_streamer::OrchestrationEventStreamer;
-use crate::ai::blocklist::{BlocklistAIHistoryModel, StartAgentRequest};
-#[cfg(not(target_family = "wasm"))]
-use crate::ai::blocklist::{apply_child_agent_model_override, prepare_local_oz_child_launch};
-use crate::ai::conversation_utils;
-use crate::ai::llms::LLMPreferences;
-use crate::ai::orchestration::{RemoteChildLaunchConfig, prepare_remote_child_launch};
+// LOCAL FORK: the conversation, execution profile, ambient task and child agent models
+// this pane wired up all came out with the agent.
 use crate::app_state::{AmbientAgentPaneSnapshot, LeafContents, TerminalPaneSnapshot};
 use crate::code::buffer_location::LocalOrRemotePath;
 #[cfg(feature = "local_fs")]
 use crate::pane_group::CodeSource;
 use crate::pane_group::Event::OpenConversationHistory;
-use crate::pane_group::child_agent::{
-    ErrorChildAgentConversationRequest, create_error_child_agent_conversation,
-};
 use crate::pane_group::{self, Direction, PaneGroup};
 use crate::persistence::{BlockCompleted, ModelEvent};
 use crate::session_management::SessionNavigationData;
-use crate::terminal::cli_agent_sessions::CLIAgentSessionsModel;
 use crate::terminal::general_settings::GeneralSettings;
 #[cfg(not(target_family = "wasm"))]
 use crate::terminal::shared_session::SharedSessionSource;
@@ -61,13 +43,7 @@ use crate::view_components::ToastFlavor;
 use crate::workspace::sync_inputs::SyncedInputState;
 use crate::workspace::{PaneViewLocator, WorkspaceRegistry};
 #[cfg(not(target_family = "wasm"))]
-use crate::{
-    pane_group::child_agent::{
-        HiddenChildAgentConversation, HiddenChildAgentConversationRequest,
-        HiddenChildAgentTaskContext, create_hidden_child_agent_conversation,
-    },
-    terminal::shared_session::IsSharedSessionCreator,
-};
+use crate::terminal::shared_session::IsSharedSessionCreator;
 
 pub type TerminalPaneView = PaneView<TerminalView>;
 
@@ -555,31 +531,8 @@ impl PaneContent for TerminalPane {
         let the_model = manager.as_ref(ctx).model();
         let lock = the_model.lock();
 
-        // Check if this is a conversation transcript viewer
-        if lock.is_conversation_transcript_viewer() {
-            // Try to get the conversation token from the history model
-            let history_model = crate::ai::blocklist::BlocklistAIHistoryModel::handle(ctx);
-            let terminal_view_id = self.terminal_view(ctx).id();
-
-            // Find the conversation for this terminal view
-            // We're assuming the conversation transcript view only has one conversation.
-            // TODO(roland): store conversation id or server conversation token on the model ConversationTranscriptViewerStatus
-            if let Some(conversation) = history_model
-                .as_ref(ctx)
-                .all_live_conversations_for_terminal_surface(terminal_view_id)
-                .next()
-                && let Some(token) = conversation.server_conversation_token()
-            {
-                let url_string = token.conversation_link();
-                if let Ok(url) = url::Url::parse(&url_string) {
-                    return Ok(ShareableLink::Pane { url });
-                }
-            }
-
-            // If we can't get the conversation link yet (still loading or not available),
-            // return Expected error to preserve the current browser URL
-            return Err(ShareableLinkError::Expected);
-        }
+        // LOCAL FORK: a conversation transcript viewer used to resolve its share link from
+        // the agent's history model; that pane kind no longer exists.
 
         // Check for shared session status
         let session_status = lock.shared_session_status();
@@ -697,25 +650,7 @@ fn stop_local_agent_conversation(
     true
 }
 
-fn cancel_cloud_agent_task(
-    task_id: Option<AmbientAgentTaskId>,
-    conversation_id: AIConversationId,
-    show_toast: bool,
-    ctx: &mut ViewContext<PaneGroup>,
-) -> bool {
-    let Some(task_id) = task_id else {
-        log::warn!(
-            "cancel_cloud_agent_task: cloud conversation {conversation_id:?} has no task id"
-        );
-        return false;
-    };
-    if show_toast {
-        crate::ai::ambient_agents::cancel_task_with_toast(task_id, ctx);
-    } else {
-        crate::ai::ambient_agents::cancel_task_silently(task_id, ctx);
-    }
-    true
-}
+// LOCAL FORK: fn cancel_cloud_agent_task removed with the agent.
 
 fn stop_agent_conversation(
     group: &PaneGroup,
@@ -1317,59 +1252,13 @@ fn handle_terminal_view_event(
                     force_open: *force_open,
                 });
             }
-            Event::ToggleAIDocumentPane {
-                document_id,
-                document_version,
-            } => {
-                if let Some(conversation_id) =
-                    crate::ai::document::ai_document_model::AIDocumentModel::as_ref(ctx)
-                        .get_conversation_id_for_document_id(document_id)
-                {
-                    group.toggle_ai_document_pane(
-                        conversation_id,
-                        *document_id,
-                        *document_version,
-                        ctx,
-                    );
-                }
-            }
+            // LOCAL FORK: the AI document model that resolved these panes is gone.
+            Event::ToggleAIDocumentPane { .. } => {}
             Event::HideAIDocumentPanes => {
                 group.close_all_ai_document_panes(ctx);
             }
-            Event::OpenAIDocumentPane {
-                document_id,
-                document_version,
-                is_auto_open,
-            } => {
-                let should_open = if *is_auto_open {
-                    // Auto-open: only open if there's already a visible plan pane
-                    // (to replace it with the newest plan) or if there's enough space.
-                    let has_visible_ai_doc_pane = group
-                        .ai_document_panes()
-                        .any(|pane_id| !group.is_pane_hidden_for_close(pane_id));
-
-                    has_visible_ai_doc_pane
-                        || group
-                            .terminal_view_from_pane_id(terminal_pane_id, ctx)
-                            .is_some_and(|tv| tv.as_ref(ctx).can_auto_open_panel())
-                } else {
-                    // User-triggered: always open.
-                    true
-                };
-
-                if should_open
-                    && let Some(conversation_id) =
-                        crate::ai::document::ai_document_model::AIDocumentModel::as_ref(ctx)
-                            .get_conversation_id_for_document_id(document_id)
-                {
-                    group.open_ai_document_pane(
-                        conversation_id,
-                        *document_id,
-                        *document_version,
-                        ctx,
-                    );
-                }
-            }
+            // LOCAL FORK: the AI document model that resolved these panes is gone.
+            Event::OpenAIDocumentPane { .. } => {}
             Event::OpenAgentProfileEditor { profile_id } => {
                 ctx.emit(pane_group::Event::OpenAgentProfileEditor {
                     profile_id: profile_id.clone(),
@@ -1820,106 +1709,7 @@ fn launch_remote_child(
     Some(conversation_id)
 }
 
-#[cfg(feature = "local_fs")]
-fn handle_ai_history_event(
-    event: &BlocklistAIHistoryEvent,
-    terminal_view_id: EntityId,
-    terminal_pane_id: TerminalPaneId,
-    model_event_sender: SyncSender<ModelEvent>,
-    is_shared_ambient_agent_session: bool,
-    ctx: &mut ViewContext<PaneGroup>,
-) {
-    use crate::ai::blocklist::maybe_build_ai_query_upsert_event;
-
-    if event
-        .terminal_surface_id()
-        .is_some_and(|id| id != terminal_view_id)
-    {
-        return;
-    }
-
-    match event {
-        BlocklistAIHistoryEvent::AppendedExchange { .. }
-        | BlocklistAIHistoryEvent::UpdatedStreamingExchange { .. } => {
-            // Check if session restoration is enabled.
-            if !*GeneralSettings::as_ref(ctx).restore_session
-                || !AppExecutionMode::as_ref(ctx).can_save_session()
-            {
-                return;
-            }
-            let Some(upsert_ai_query_event) = maybe_build_ai_query_upsert_event(
-                event,
-                terminal_view_id,
-                is_shared_ambient_agent_session,
-                ctx,
-            ) else {
-                return;
-            };
-            let _ = ctx.spawn(
-                // Sending over a sync sender can block the current thread, so we
-                // do this async.
-                async move { model_event_sender.send(upsert_ai_query_event) },
-                move |_, res, _| {
-                    if let Err(err) = res {
-                        report_error!(
-                            anyhow::Error::new(err).context("Error sending upsert AI query event"),
-                            extra: { "terminal_pane_id" => ?terminal_pane_id }
-                        );
-                    }
-                },
-            );
-        }
-        BlocklistAIHistoryEvent::ClearedConversationsForTerminalSurface { .. }
-        | BlocklistAIHistoryEvent::ClearedActiveConversation { .. } => {
-            ctx.emit(pane_group::Event::InvalidatedActiveConversation);
-        }
-        BlocklistAIHistoryEvent::RemoveConversation {
-            conversation_id, ..
-        } => {
-            let conversation_id = conversation_id.to_string();
-            // On remove, delete all related AI query and multi-agent conversation data for this conversation.
-            let _ = ctx.spawn(
-                async move {
-                    model_event_sender.send(ModelEvent::DeleteAIConversation {
-                        conversation_id: conversation_id.clone(),
-                    })?;
-                    model_event_sender.send(ModelEvent::DeleteMultiAgentConversations {
-                        conversation_ids: vec![conversation_id],
-                    })
-                },
-                |_, res, _| {
-                    if let Err(err) = res {
-                        report_error!(
-                            anyhow::Error::new(err)
-                                .context("Error sending delete events for conversation")
-                        );
-                    }
-                },
-            );
-        }
-        // DeletedConversation SQL cleanup is handled directly in delete_conversation().
-        BlocklistAIHistoryEvent::DeletedConversation { .. }
-        | BlocklistAIHistoryEvent::StartedNewConversation { .. }
-        | BlocklistAIHistoryEvent::UpdatedConversationStatus { .. }
-        | BlocklistAIHistoryEvent::ReassignedExchange { .. }
-        | BlocklistAIHistoryEvent::SetActiveConversation { .. }
-        | BlocklistAIHistoryEvent::UpdatedTodoList { .. }
-        | BlocklistAIHistoryEvent::UpdatedAutoexecuteOverride { .. }
-        | BlocklistAIHistoryEvent::SplitConversation { .. }
-        | BlocklistAIHistoryEvent::RestoredConversations { .. }
-        | BlocklistAIHistoryEvent::CreatedSubtask { .. }
-        | BlocklistAIHistoryEvent::UpgradedTask { .. }
-        | BlocklistAIHistoryEvent::UpdatedConversationTitle { .. }
-        | BlocklistAIHistoryEvent::UpdatedConversationMetadata { .. }
-        | BlocklistAIHistoryEvent::UpdatedConversationArtifacts { .. }
-        | BlocklistAIHistoryEvent::ConversationServerTokenAssigned { .. }
-        | BlocklistAIHistoryEvent::ConversationTransferredBetweenTerminalSurfaces { .. }
-        | BlocklistAIHistoryEvent::NewConversationRequestComplete { .. }
-        | BlocklistAIHistoryEvent::OrchestrationConfigUpdated { .. }
-        | BlocklistAIHistoryEvent::ConversationUsageMetadataUpdated { .. }
-        | BlocklistAIHistoryEvent::LocalSharedSessionEstablished { .. } => (),
-    }
-}
+// LOCAL FORK: fn handle_ai_history_event removed with the agent.
 
 #[cfg(all(test, not(target_family = "wasm")))]
 #[path = "terminal_pane_tests.rs"]

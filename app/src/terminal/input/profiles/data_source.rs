@@ -1,8 +1,7 @@
 use fuzzy_match::match_indices_case_insensitive;
 use ordered_float::OrderedFloat;
-use warpui::{AppContext, Entity, EntityId, SingletonEntity};
+use warpui::{AppContext, Entity, EntityId};
 
-use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::search::SyncDataSource;
 use crate::search::data_source::{Query, QueryResult};
 use crate::search::mixer::DataSourceRunErrorWrapper;
@@ -34,13 +33,8 @@ impl SyncDataSource for ProfileSelectorDataSource {
     fn run_query(
         &self,
         query: &Query,
-        app: &AppContext,
+        _app: &AppContext,
     ) -> Result<Vec<QueryResult<Self::Action>>, DataSourceRunErrorWrapper> {
-        let profiles_model = AIExecutionProfilesModel::as_ref(app);
-        let active_profile_id = profiles_model
-            .active_profile(Some(self.terminal_view_id), app)
-            .id()
-            .clone();
         let query_text = query.text.trim().to_lowercase();
         let mut results = Vec::new();
         if query_text.is_empty() {
@@ -58,39 +52,8 @@ impl SyncDataSource for ProfileSelectorDataSource {
             ));
         }
 
-        let mut profiles: Vec<(ExecutionProfileId, String)> = profiles_model
-            .get_all_profile_ids()
-            .into_iter()
-            .filter_map(|profile_id| {
-                let profile_info = profiles_model.get_profile_by_id(&profile_id, app)?;
-                let profile_name = profile_info.data().display_name();
-                Some((profile_id, profile_name))
-            })
-            .collect();
-        profiles.sort_by(|(_, a), (_, b)| a.to_lowercase().cmp(&b.to_lowercase()));
-
-        for (profile_id, profile_name) in profiles {
-            let is_active = profile_id == active_profile_id;
-            if query_text.is_empty() {
-                results.push(QueryResult::from(ProfileSearchItem::new_profile_item(
-                    profile_id,
-                    profile_name,
-                    is_active,
-                )));
-                continue;
-            }
-
-            if let Some(match_result) =
-                match_indices_case_insensitive(&profile_name.to_lowercase(), &query_text)
-            {
-                let score = match_result.score;
-                results.push(QueryResult::from(
-                    ProfileSearchItem::new_profile_item(profile_id, profile_name, is_active)
-                        .with_match_result(match_result)
-                        .with_score(OrderedFloat(score as f64)),
-                ));
-            }
-        }
+        // LOCAL FORK: the per-profile entries came from AIExecutionProfilesModel,
+        // which went with the agent. Only "Manage profiles" is left.
 
         Ok(results)
     }

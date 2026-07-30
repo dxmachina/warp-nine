@@ -14,15 +14,9 @@ use warpui::{
     ViewHandle,
 };
 
-use super::cloud_conversation_continuation::TombstoneCta;
-use crate::ai::agent::conversation::AIConversationId;
-use crate::ai::agent_management::telemetry::{AgentManagementTelemetryEvent, ArtifactType};
-use crate::ai::ambient_agents::{
-    AmbientAgentTask, AmbientAgentTaskId, AmbientConversationStatus,
-    conversation_output_status_from_conversation,
-};
-use crate::ai::artifacts::{Artifact, ArtifactButtonsRow, ArtifactButtonsRowEvent};
-use crate::ai::blocklist::{BlocklistAIHistoryModel, format_credits};
+// LOCAL FORK: the conversation, ambient task, artifact and history models this tombstone
+// displays all came out with the agent. This view is agent-only and should be deleted
+// outright.
 use crate::appearance::Appearance;
 use crate::server::ids::SyncId;
 use crate::server::server_api::ServerApiProvider;
@@ -291,18 +285,6 @@ impl ConversationEndedTombstoneView {
                         ctx
                     );
                     ctx.open_url(url);
-                }
-                ArtifactButtonsRowEvent::ViewScreenshots { artifact_uids } => {
-                    crate::ai::artifacts::open_screenshot_lightbox(artifact_uids, ctx);
-                }
-                ArtifactButtonsRowEvent::DownloadFile { artifact_uid } => {
-                    send_telemetry_from_ctx!(
-                        AgentManagementTelemetryEvent::TombstoneArtifactClicked {
-                            artifact_type: ArtifactType::File
-                        },
-                        ctx
-                    );
-                    crate::ai::artifacts::download_file_artifact(artifact_uid, ctx);
                 }
             },
         );

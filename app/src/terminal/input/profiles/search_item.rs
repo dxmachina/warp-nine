@@ -38,7 +38,6 @@ impl ProfileSearchItem {
     ) -> Self {
         Self {
             kind: ProfileSearchItemKind::Profile {
-                profile_id,
                 profile_name,
                 is_selected,
             },

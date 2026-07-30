@@ -128,7 +128,7 @@ pub struct CommandSearchView {
 }
 
 impl CommandSearchView {
-    pub fn new(ai_client: Arc<dyn AIClient>, ctx: &mut ViewContext<Self>) -> Self {
+    pub fn new(ctx: &mut ViewContext<Self>) -> Self {
         let search_bar_state =
             ctx.add_model(|_| SearchBarState::new(SearchResultOrdering::BottomUp));
 
@@ -192,7 +192,6 @@ impl CommandSearchView {
 
         Self {
             auth_state: AuthStateProvider::as_ref(ctx).get().clone(),
-            ai_client,
             zero_state_handle,
             menu_positioning: Default::default(),
             handle: ctx.handle(),
@@ -224,22 +223,7 @@ impl CommandSearchView {
             // Add data sources in lowest->highest priority order.  If results from two
             // data sources produce the same ranking score, the data source added first
             // will show up higher in the list (i.e.: further away from the input).
-            if AISettings::as_ref(ctx).is_any_ai_enabled(ctx) {
-                mixer.add_sync_source(
-                    WarpAIDataSource::new(self.ai_client.clone(), None),
-                    HashSet::from([QueryFilter::NaturalLanguage]),
-                );
-                mixer.add_async_source(
-                    WarpAIDataSource::new(self.ai_client.clone(), ai_execution_context),
-                    HashSet::from([QueryFilter::NaturalLanguage]),
-                    AddAsyncSourceOptions {
-                        debounce_interval: Some(Duration::from_millis(50)),
-                        run_in_zero_state: false,
-                        run_when_unfiltered: false,
-                    },
-                    ctx,
-                );
-            }
+            // LOCAL FORK: the natural-language data source went with the agent.
 
             if WarpDriveSettings::is_warp_drive_enabled(ctx) {
                 mixer.add_sync_source(
@@ -350,7 +334,7 @@ impl CommandSearchView {
         menu_positioning: MenuPositioning,
         ctx: &mut ViewContext<Self>,
     ) {
-        self.reset_command_search_mixer(session_id, session_context, ai_execution_context, ctx);
+        self.reset_command_search_mixer(session_id, session_context, ctx);
         let ordering = match menu_positioning {
             MenuPositioning::AboveInputBox => SearchResultOrdering::BottomUp,
             MenuPositioning::BelowInputBox => SearchResultOrdering::TopDown,
@@ -814,12 +798,9 @@ impl CommandSearchView {
                     .first_data_source_error()
                     .map(|(.., e)| e)
                 {
-                    let is_ratelimit_error = error
-                        .as_any()
-                        .downcast_ref::<GenerateCommandsFromNaturalLanguageError>()
-                        // LOCAL FORK: the rate-limit variant was agent-only.
-                        .map(|_generate_commands_error| false)
-                        .unwrap_or(false);
+                    // LOCAL FORK: the only rate-limited data source was the
+                    // agent's natural-language one, so nothing rate-limits now.
+                    let is_ratelimit_error = false;
                     column.add_child(self.render_error_header(
                         app,
                         error.user_facing_error(),

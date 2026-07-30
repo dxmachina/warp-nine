@@ -3,15 +3,13 @@
 
 use std::collections::HashMap;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 #[cfg(test)]
 use mockall::automock;
 
 use super::ServerApi;
 pub use super::presigned_upload::UploadBody;
-#[cfg(not(target_family = "wasm"))]
-use crate::server::retry_strategies::with_bounded_retry;
 
 /// A presigned upload target returned by the server.
 #[serde_with::serde_as]
@@ -168,231 +166,18 @@ impl ReportShutdownRequest {
 }
 
 /// Trait for API endpoints used to support third-party agent harnesses in Oz.
+///
+/// LOCAL FORK: every method on this trait served the deleted agent harness, so the trait
+/// and its `ServerApi` implementation are empty shells kept only so that
+/// `ServerApi::get_harness_support_client` still has a type to hand out.
 #[cfg_attr(test, automock)]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
-pub trait HarnessSupportClient: 'static + Send + Sync {
-    pub(crate) async fn get_public_api_response_for_task(
-        &self,
-        path: &str,
-    ) -> Result<http_client::Response> {
-        let auth_token = self
-            .get_or_refresh_access_token()
-            .await
-            .context("Failed to get access token for API request")?;
-
-        let url = format!("{}/api/v1/{}", crate::ChannelState::server_root_url(), path);
-
-        let mut request = self.base_client.http_client().get(&url);
-        if let Some(token) = auth_token.as_bearer_token() {
-            request = request.bearer_auth(token);
-        }
-
-        for (name, value) in self.ambient_agent_headers_for_task(task_id).await? {
-            request = request.header(name, value);
-        }
-
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("Failed to send API request to {url}"))?;
-
-        if response.status().is_success() {
-            Ok(response)
-        } else {
-            Err(Self::error_from_response(response).await)
-        }
-    }
-
-    pub(crate) async fn post_public_api_response_for_task<B>(
-        &self,
-        path: &str,
-        body: &B,
-    ) -> Result<http_client::Response>
-    where
-        B: serde::Serialize,
-    {
-        let auth_token = self
-            .get_or_refresh_access_token()
-            .await
-            .context("Failed to get access token for API request")?;
-
-        let url = format!("{}/api/v1/{}", crate::ChannelState::server_root_url(), path);
-
-        let mut request = self.base_client.http_client().post(&url).json(body);
-        if let Some(token) = auth_token.as_bearer_token() {
-            request = request.bearer_auth(token);
-        }
-
-        for (name, value) in self.ambient_agent_headers_for_task(task_id).await? {
-            request = request.header(name, value);
-        }
-
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("Failed to send API request to {url}"))?;
-
-        if response.status().is_success() {
-            Ok(response)
-        } else {
-            Err(Self::error_from_response(response).await)
-        }
-    }
-
-    pub(crate) async fn resolve_prompt_for_task(
-        &self,
-        request: ResolvePromptRequest,
-    ) -> Result<ResolvedHarnessPrompt> {
-        let response = self
-            .post_public_api_response_for_task(task_id, "harness-support/resolve-prompt", &request)
-            .await?;
-        let url = response.url().clone();
-        response
-            .json::<ResolvedHarnessPrompt>()
-            .await
-            .with_context(|| format!("Failed to deserialize response from {url}"))
-    }
-
-    pub(crate) async fn fetch_transcript_for_task(
-        &self,
-    ) -> Result<bytes::Bytes> {
-        #[cfg(not(target_family = "wasm"))]
-        {
-            with_bounded_retry("fetch task-scoped harness-support transcript", || async {
-                let response = self
-                    .get_public_api_response_for_task(task_id, "harness-support/transcript")
-                    .await?;
-                response
-                    .bytes()
-                    .await
-                    .context("Failed to read task-scoped harness-support transcript body")
-            })
-            .await
-        }
-        #[cfg(target_family = "wasm")]
-        {
-            let _ = task_id;
-            unreachable!(
-                "fetch_transcript_for_task is not supported on wasm; agent_sdk is not built on this target"
-            );
-        }
-    }
-}
+pub trait HarnessSupportClient: 'static + Send + Sync {}
 
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
-impl HarnessSupportClient for ServerApi {
-
-    async fn get_transcript_upload_target(
-        &self,
-    ) -> Result<UploadTarget> {
-        self.post_public_api(
-            "harness-support/transcript",
-            &GetUploadTargetRequest {
-            },
-        )
-        .await
-    }
-
-    async fn get_block_snapshot_upload_target(
-        &self,
-    ) -> Result<UploadTarget> {
-        self.post_public_api(
-            "harness-support/block-snapshot",
-            &GetUploadTargetRequest {
-            },
-        )
-        .await
-    }
-
-    async fn resolve_prompt(&self, request: ResolvePromptRequest) -> Result<ResolvedHarnessPrompt> {
-        self.post_public_api("harness-support/resolve-prompt", &request)
-            .await
-    }
-
-    async fn report_artifact(&self, artifact: &Artifact) -> Result<ReportArtifactResponse> {
-        self.post_public_api("harness-support/report-artifact", artifact)
-            .await
-    }
-
-    async fn notify_user(&self, message: &str) -> Result<()> {
-        self.post_public_api_unit(
-            "harness-support/notify-user",
-            &NotifyUserRequest {
-                message: message.to_string(),
-            },
-        )
-        .await
-    }
-
-    async fn finish_task(&self, success: bool, summary: &str) -> Result<()> {
-        self.post_public_api_unit(
-            "harness-support/finish-task",
-            &FinishTaskRequest {
-                success,
-                summary: summary.to_string(),
-            },
-        )
-        .await
-    }
-
-    async fn report_clean_shutdown(&self) -> Result<()> {
-        self.post_public_api_unit(
-            "harness-support/report-shutdown",
-            &ReportShutdownRequest::clean(),
-        )
-        .await
-    }
-
-    async fn report_error_shutdown(
-        &self,
-        error_category: String,
-        error_message: String,
-    ) -> Result<()> {
-        self.post_public_api_unit(
-            "harness-support/report-shutdown",
-            &ReportShutdownRequest::abnormal(error_category, error_message),
-        )
-        .await
-    }
-
-    async fn get_snapshot_upload_targets(
-        &self,
-        request: &SnapshotUploadRequest,
-    ) -> Result<Vec<UploadTarget>> {
-        let response: SnapshotUploadResponse = self
-            .post_public_api("harness-support/upload-snapshot", request)
-            .await?;
-        Ok(response.uploads)
-    }
-
-    async fn fetch_transcript(&self) -> Result<bytes::Bytes> {
-        #[cfg(not(target_family = "wasm"))]
-        {
-            with_bounded_retry("fetch harness-support transcript", || async {
-                let response = self
-                    .get_public_api_response("harness-support/transcript")
-                    .await?;
-                response
-                    .bytes()
-                    .await
-                    .context("Failed to read harness-support transcript body")
-            })
-            .await
-        }
-        #[cfg(target_family = "wasm")]
-        {
-            unreachable!(
-                "fetch_transcript is not supported on wasm; agent_sdk is not built on this target"
-            );
-        }
-    }
-
-    fn http_client(&self) -> &http_client::Client {
-        self.base_client.http_client()
-    }
-}
+impl HarnessSupportClient for ServerApi {}
 
 /// Upload a blob to a presigned upload target.
 pub async fn upload_to_target(

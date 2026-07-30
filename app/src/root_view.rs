@@ -349,14 +349,7 @@ pub fn init(app: &mut AppContext) {
         );
     }
 
-    app.add_global_action(
-        "root_view:open_conversation_viewer",
-        open_conversation_viewer,
-    );
-    app.add_action(
-        "root_view:open_cloud_conversation_in_existing_window",
-        RootView::open_cloud_conversation_in_existing_window,
-    );
+    // LOCAL FORK: conversation viewer actions removed with the agent.
 
     app.add_global_action("root_view:create_environment", create_environment);
     app.add_global_action(
@@ -407,14 +400,7 @@ pub fn init(app: &mut AppContext) {
         RootView::open_settings_in_existing_window,
     );
 
-    app.add_global_action(
-        "root_view:open_mcp_settings_in_new_window",
-        open_mcp_settings_in_new_window,
-    );
-    app.add_action(
-        "root_view:open_mcp_settings_in_existing_window",
-        RootView::open_mcp_settings_in_existing_window,
-    );
+    // LOCAL FORK: MCP settings actions removed with the agent.
 
     app.add_global_action(
         "root_view:open_codex_in_new_window",
@@ -2103,12 +2089,12 @@ impl RootView {
         self.account_first_refresh_in_flight = true;
         let workspace_refresh = TeamUpdateManager::handle(ctx)
             .update(ctx, |manager, ctx| manager.refresh_workspace_metadata(ctx));
-        let request_limit_refresh = AIRequestUsageModel::handle(ctx)
-            .update(ctx, |model, ctx| model.refresh_request_usage(ctx));
         let _ = ctx.spawn(
             async move {
                 let _ = workspace_refresh.await;
-                request_limit_refresh.await.unwrap_or(None)
+                // LOCAL FORK: the AI request-usage refresh went with the agent,
+                // so there is no fresh request limit to report.
+                None::<usize>
             },
             |me, fresh_request_limit, ctx| {
                 me.account_first_refresh_in_flight = false;

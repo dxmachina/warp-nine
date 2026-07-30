@@ -11,6 +11,8 @@ use warp_core::settings::macros::define_settings_group;
 use warp_core::settings::{RespectUserSyncSetting, SupportedPlatforms, SyncToCloud};
 pub use working_directory_config::*;
 
+use warp_core::features::FeatureFlag;
+
 use crate::context_chips::ContextChipKind;
 use crate::context_chips::prompt::PromptSelection;
 
@@ -133,43 +135,20 @@ impl GithubPrPromptChipDefaultValidation {
 }
 
 /// Shared behavior for toolbar chip selection types.
-/// Each variant stores either a `Default` (resolved via type-specific defaults) or `Custom` left/right item lists.
+///
+/// LOCAL FORK: this used to be expressed in `AgentToolbarItemKind`, which mixed
+/// context chips with agent-only controls (model selector, NLD toggle, voice
+/// input). Only the context chips survive, so the trait speaks in chips.
 pub trait ToolbarChipSelection {
-    fn default_left_items() -> Vec<AgentToolbarItemKind>;
-    fn default_right_items() -> Vec<AgentToolbarItemKind>;
-    fn left_items(&self) -> Vec<AgentToolbarItemKind>;
-    fn right_items(&self) -> Vec<AgentToolbarItemKind>;
-
-    fn left_chips(&self) -> Vec<ContextChipKind> {
-        self.left_items()
-            .into_iter()
-            .filter_map(|item| match item {
-                AgentToolbarItemKind::ContextChip(kind) => Some(kind),
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn right_chips(&self) -> Vec<ContextChipKind> {
-        self.right_items()
-            .into_iter()
-            .filter_map(|item| match item {
-                AgentToolbarItemKind::ContextChip(kind) => Some(kind),
-                _ => None,
-            })
-            .collect()
-    }
+    fn default_left_chips() -> Vec<ContextChipKind>;
+    fn default_right_chips() -> Vec<ContextChipKind>;
+    fn left_chips(&self) -> Vec<ContextChipKind>;
+    fn right_chips(&self) -> Vec<ContextChipKind>;
 
     fn all_chips(&self) -> Vec<ContextChipKind> {
         let mut chips = self.left_chips();
         chips.extend(self.right_chips());
         chips
-    }
-
-    fn all_items(&self) -> Vec<AgentToolbarItemKind> {
-        let mut items = self.left_items();
-        items.extend(self.right_items());
-        items
     }
 }
 
@@ -193,30 +172,38 @@ pub enum AgentToolbarChipSelection {
     #[schemars(description = "Use the default toolbar layout.")]
     Default,
     #[schemars(description = "Use a custom arrangement of toolbar items.")]
-    Custom {
-    },
+    Custom {},
 }
 
 impl ToolbarChipSelection for AgentToolbarChipSelection {
-    fn default_left_items() -> Vec<AgentToolbarItemKind> {
-        AgentToolbarItemKind::default_left()
+    fn default_left_chips() -> Vec<ContextChipKind> {
+        let mut chips = vec![
+            ContextChipKind::Ssh,
+            ContextChipKind::WorkingDirectory,
+            ContextChipKind::ShellGitBranch,
+            ContextChipKind::GitDiffStats,
+        ];
+        if FeatureFlag::GithubPrPromptChip.is_enabled() {
+            chips.push(ContextChipKind::GithubPullRequest);
+        }
+        chips
     }
 
-    fn default_right_items() -> Vec<AgentToolbarItemKind> {
-        AgentToolbarItemKind::default_right()
+    fn default_right_chips() -> Vec<ContextChipKind> {
+        vec![ContextChipKind::AgentPlanAndTodoList]
     }
 
-    fn left_items(&self) -> Vec<AgentToolbarItemKind> {
+    fn left_chips(&self) -> Vec<ContextChipKind> {
         match self {
-            Self::Default => Self::default_left_items(),
-            Self::Custom { left, .. } => left.clone(),
+            Self::Default => Self::default_left_chips(),
+            Self::Custom {} => Vec::new(),
         }
     }
 
-    fn right_items(&self) -> Vec<AgentToolbarItemKind> {
+    fn right_chips(&self) -> Vec<ContextChipKind> {
         match self {
-            Self::Default => Self::default_right_items(),
-            Self::Custom { right, .. } => right.clone(),
+            Self::Default => Self::default_right_chips(),
+            Self::Custom {} => Vec::new(),
         }
     }
 }
@@ -241,30 +228,32 @@ pub enum CLIAgentToolbarChipSelection {
     #[schemars(description = "Use the default toolbar layout.")]
     Default,
     #[schemars(description = "Use a custom arrangement of toolbar items.")]
-    Custom {
-    },
+    Custom {},
 }
 
 impl ToolbarChipSelection for CLIAgentToolbarChipSelection {
-    fn default_left_items() -> Vec<AgentToolbarItemKind> {
-        AgentToolbarItemKind::cli_default_left()
+    fn default_left_chips() -> Vec<ContextChipKind> {
+        vec![ContextChipKind::GitDiffStats]
     }
 
-    fn default_right_items() -> Vec<AgentToolbarItemKind> {
-        AgentToolbarItemKind::cli_default_right()
+    fn default_right_chips() -> Vec<ContextChipKind> {
+        vec![
+            ContextChipKind::WorkingDirectory,
+            ContextChipKind::ShellGitBranch,
+        ]
     }
 
-    fn left_items(&self) -> Vec<AgentToolbarItemKind> {
+    fn left_chips(&self) -> Vec<ContextChipKind> {
         match self {
-            Self::Default => Self::default_left_items(),
-            Self::Custom { left, .. } => left.clone(),
+            Self::Default => Self::default_left_chips(),
+            Self::Custom {} => Vec::new(),
         }
     }
 
-    fn right_items(&self) -> Vec<AgentToolbarItemKind> {
+    fn right_chips(&self) -> Vec<ContextChipKind> {
         match self {
-            Self::Default => Self::default_right_items(),
-            Self::Custom { right, .. } => right.clone(),
+            Self::Default => Self::default_right_chips(),
+            Self::Custom {} => Vec::new(),
         }
     }
 }

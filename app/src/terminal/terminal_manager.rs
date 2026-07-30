@@ -133,7 +133,6 @@ pub(super) fn create_terminal_model(
         should_collect_ai_ugc_telemetry(ctx, PrivacySettings::as_ref(ctx).is_telemetry_enabled);
 
     TerminalModel::new(
-        restored_blocks.map(|v| v.as_slice()),
         sizes,
         terminal_colors_list(ctx),
         channel_event_proxy,

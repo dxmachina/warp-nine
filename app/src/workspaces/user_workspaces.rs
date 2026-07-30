@@ -620,14 +620,11 @@ impl UserWorkspaces {
         })
     }
 
+    /// LOCAL FORK: per-host LLM configuration was keyed by the agent's
+    /// `LLMModelHost` and is no longer carried on the workspace, so no host is
+    /// ever configured.
     pub fn aws_bedrock_host_settings(&self) -> Option<&super::workspace::LlmHostSettings> {
-        self.current_workspace().and_then(|workspace| {
-            workspace
-                .settings
-                .llm_settings
-                .host_configs
-                .get(&LLMModelHost::AwsBedrock)
-        })
+        None
     }
 
     /// Did the admin enable AWS Bedrock for the current workspace?
@@ -666,14 +663,9 @@ impl UserWorkspaces {
         }
     }
 
+    /// LOCAL FORK: see [`Self::aws_bedrock_host_settings`].
     pub fn gemini_enterprise_host_settings(&self) -> Option<&super::workspace::LlmHostSettings> {
-        self.current_workspace().and_then(|workspace| {
-            workspace
-                .settings
-                .llm_settings
-                .host_configs
-                .get(&LLMModelHost::GeminiEnterprise)
-        })
+        None
     }
 
     /// Did the admin enable Gemini Enterprise (GEAP) for the current workspace?

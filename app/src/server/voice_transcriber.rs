@@ -21,15 +21,12 @@ impl ServerVoiceTranscriber {
 impl Transcriber for ServerVoiceTranscriber {
     async fn transcribe(
         &self,
-        wav_base64: String,
-        language: Option<String>,
+        _wav_base64: String,
+        _language: Option<String>,
     ) -> Result<String, TranscribeError> {
-        let request = TranscribeRequest {
-            audio: Some(wav_base64),
-            language,
-            ..Default::default()
-        };
-        let response = self.server_api.transcribe(&request).await;
+        // LOCAL FORK: the request payload type lived with the agent, so the audio and
+        // language are no longer carried to the endpoint.
+        let response = self.server_api.transcribe().await;
         match response {
             Ok(response) => Ok(response.text),
             Err(e) => Err(e),

@@ -172,79 +172,8 @@ struct UsageHistoryState {
     load_more_button: ViewHandle<ActionButton>,
 }
 
-struct GrantBucket {
-}
-
-impl GrantBucket {
-    fn is_empty(&self) -> bool {
-        self.grants.is_empty()
-    }
-
-    fn total_balance(&self) -> i64 {
-        self.grants
-            .iter()
-            .map(|g| g.request_credits_remaining as i64)
-            .sum()
-    }
-
-    fn expiry_label(&self) -> String {
-        let expiries: Vec<_> = self.grants.iter().filter_map(|g| g.expiration).collect();
-        if expiries.is_empty() {
-            return String::new();
-        }
-        let first = expiries[0];
-        if expiries
-            .iter()
-            .all(|e| e.date_naive() == first.date_naive())
-        {
-            let local = first.with_timezone(&Local);
-            format!("Expires {}", local.format("%b %d, %Y"))
-        } else {
-            String::new()
-        }
-    }
-}
-
-struct ClassifiedGrants {
-    personal: GrantBucket,
-    team: GrantBucket,
-}
-
-impl ClassifiedGrants {
-    fn new(grants: &[BonusGrant], workspace_uid: Option<WorkspaceUid>) -> Self {
-        let now = chrono::Utc::now();
-        let mut personal = Vec::new();
-        let mut team = Vec::new();
-
-        for grant in grants {
-            if grant.expiration.is_some_and(|exp| now >= exp) {
-                continue;
-            }
-            if grant.request_credits_remaining <= 0 {
-                continue;
-            }
-            let in_user_scope = grant.scope == BonusGrantScope::User;
-            let in_workspace_scope =
-                workspace_uid.is_some_and(|uid| grant.scope == BonusGrantScope::Workspace(uid));
-            if grant.grant_type == BonusGrantType::AmbientOnly {
-                continue;
-            } else if in_user_scope {
-                personal.push(grant.clone());
-            } else if in_workspace_scope {
-                team.push(grant.clone());
-            }
-        }
-
-        Self {
-            personal: GrantBucket { grants: personal },
-            team: GrantBucket { grants: team },
-        }
-    }
-
-    fn has_any(&self) -> bool {
-        !self.personal.is_empty() || !self.team.is_empty()
-    }
-}
+// LOCAL FORK: GrantBucket and ClassifiedGrants removed with the agent; bonus grants
+// were part of the agent's request usage model.
 
 pub struct BillingAndUsagePageV2View {
     self_handle: WeakViewHandle<Self>,
@@ -276,10 +205,6 @@ impl BillingAndUsagePageV2View {
         let team_update_manager = TeamUpdateManager::handle(ctx);
         ctx.subscribe_to_model(&team_update_manager, |_, _handle, _, ctx| {
             ctx.notify();
-        });
-
-        ctx.subscribe_to_model(&AIRequestUsageModel::handle(ctx), |_, _, _, ctx| {
-            ctx.notify()
         });
 
         ctx.subscribe_to_model(
@@ -428,8 +353,6 @@ impl BillingAndUsagePageV2View {
                     ToastFlavor::Success,
                     ctx,
                 );
-                AIRequestUsageModel::handle(ctx)
-                    .update(ctx, |m, ctx| m.refresh_request_usage_async(ctx));
             }
             UserWorkspacesEvent::PurchaseAddonCreditsRejected(err) => {
                 self.addon_credits.purchase_loading = false;
@@ -765,109 +688,9 @@ impl BillingAndUsagePageV2View {
         appearance: &Appearance,
         app: &AppContext,
     ) -> Option<Box<dyn Element>> {
-        let theme = appearance.theme();
-        let ai_model = AIRequestUsageModel::as_ref(app);
-
-        let has_base_credits = ai_model.request_limit() > 0;
-
-        let grants = ai_model.bonus_grants();
-        let workspace_uid = UserWorkspaces::as_ref(app)
-            .current_workspace()
-            .map(|ws| ws.uid);
-        let classified = ClassifiedGrants::new(grants, workspace_uid);
-
-        if !has_base_credits && !classified.has_any() {
-            return None;
-        }
-
-        let mut cards_row = Flex::row()
-            .with_spacing(8.)
-            .with_main_axis_size(MainAxisSize::Max);
-
-        let outline_color = theme.outline().into_solid();
-
-        if has_base_credits {
-            let reset_str = ai_model
-                .next_refresh_time_local()
-                .format("Resets %b %d at %-I:%M %p")
-                .to_string();
-            let base_remaining = ai_model
-                .request_limit()
-                .saturating_sub(ai_model.requests_used()) as i64;
-            let base_limit = (!ai_model.is_unlimited()).then(|| ai_model.request_limit() as i64);
-            cards_row.add_child(
-                Expanded::new(
-                    1.,
-                    render_balance_card(
-                        appearance,
-                        BASE_CREDITS_DOT_COLOR,
-                        "Base credits",
-                        &reset_str,
-                        base_remaining,
-                        base_limit,
-                        outline_color,
-                    ),
-                )
-                .finish(),
-            );
-        }
-
-        if !classified.personal.is_empty() {
-            cards_row.add_child(
-                Expanded::new(
-                    1.,
-                    render_balance_card(
-                        appearance,
-                        BONUS_CREDITS_DOT_COLOR,
-                        "Personal credits",
-                        &classified.personal.expiry_label(),
-                        classified.personal.total_balance(),
-                        None,
-                        outline_color,
-                    ),
-                )
-                .finish(),
-            );
-        }
-
-        if !classified.team.is_empty() {
-            cards_row.add_child(
-                Expanded::new(
-                    1.,
-                    render_balance_card(
-                        appearance,
-                        BONUS_CREDITS_DOT_COLOR,
-                        "Team credits",
-                        &classified.team.expiry_label(),
-                        classified.team.total_balance(),
-                        None,
-                        outline_color,
-                    ),
-                )
-                .finish(),
-            );
-        }
-
-        Some(
-            Flex::column()
-                .with_child(
-                    Container::new(
-                        Text::new_inline("Balance", appearance.ui_font_family(), HEADER_FONT_SIZE)
-                            .with_style(Properties::default().weight(Weight::Bold))
-                            .with_color(theme.active_ui_text_color().into())
-                            .finish(),
-                    )
-                    .with_margin_bottom(12.)
-                    .finish(),
-                )
-                .with_child(cards_row.finish())
-                .with_child(
-                    ConstrainedBox::new(Empty::new().finish())
-                        .with_height(24.)
-                        .finish(),
-                )
-                .finish(),
-        )
+        // LOCAL FORK: every balance card was fed by the agent's request usage model.
+        let _ = (appearance, app);
+        None
     }
 
 
@@ -1509,12 +1332,6 @@ impl BillingAndUsagePageV2View {
 
     fn render_overview_tab(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
         let mut content = Flex::column().with_cross_axis_alignment(CrossAxisAlignment::Stretch);
-        let ai_model = AIRequestUsageModel::as_ref(app);
-        if let Some(ambient_trial_widget) =
-            self.render_ambient_agent_trial_widget(ai_model, appearance, app)
-        {
-            content.add_child(ambient_trial_widget);
-        }
         if let Some(balance) = self.render_balance_section(appearance, app) {
             content.add_child(balance);
         }
@@ -1530,9 +1347,9 @@ impl BillingAndUsagePageV2View {
             workspaces.current_workspace(),
             workspaces.team_for_view_handle(&self.self_handle, app),
         ) {
-            let workspace_bonus_credits = ai_model.total_workspace_bonus_credits_remaining(ws.uid);
-            let is_payg_zero = ws.billing_metadata.is_enterprise_pay_as_you_go_enabled()
-                && workspace_bonus_credits == 0;
+            // LOCAL FORK: bonus credit balances lived on the agent's usage model, so the
+            // remaining balance is always zero here.
+            let is_payg_zero = ws.billing_metadata.is_enterprise_pay_as_you_go_enabled();
 
             if !is_payg_zero {
                 let current_user_is_admin = {
@@ -1735,7 +1552,6 @@ impl BillingAndUsagePageV2View {
             TeamUpdateManager::handle(ctx)
                 .update(ctx, |mgr, ctx| mgr.refresh_workspace_metadata(ctx)),
         );
-        AIRequestUsageModel::handle(ctx).update(ctx, |m, ctx| m.refresh_request_usage_async(ctx));
         self.usage_history
             .model
             .update(ctx, |m, ctx| m.refresh_usage_history_async(ctx));
@@ -1853,8 +1669,6 @@ impl TypedActionView for BillingAndUsagePageV2View {
                     TeamUpdateManager::handle(ctx)
                         .update(ctx, |mgr, ctx| mgr.refresh_workspace_metadata(ctx)),
                 );
-                AIRequestUsageModel::handle(ctx)
-                    .update(ctx, |m, ctx| m.refresh_request_usage_async(ctx));
             }
             BillingAndUsagePageAction::SelectTab(tab) => {
                 if self.selected_tab != *tab {

@@ -10,7 +10,6 @@ use ::ai::index::full_source_code_embedding::manager::{
 use ::ai::index::full_source_code_embedding::{
     ContentHash, FragmentMetadata as LocalFragmentMetadata, NodeHash,
 };
-use ::ai::project_context::model::{ProjectContextModel, ProjectContextModelEvent};
 use remote_server::proto::OpenBufferSuccess;
 use repo_metadata::repositories::{DetectedRepositories, RepoDetectionSource};
 use repo_metadata::{RepoMetadataEvent, RepoMetadataModel, RepositoryIdentifier};
@@ -38,29 +37,27 @@ use super::proto::{
     CodebaseIndexLimits, CodebaseIndexStatus, CodebaseIndexStatusUpdated,
     CodebaseIndexStatusesSnapshot, CodebaseResyncMode, DeleteFile, DeleteFileResponse,
     DeleteFileSuccess, DiscardFilesError, DiscardFilesResponse, DiscardFilesSuccess,
-    DropCodebaseIndex, ErrorCode, ErrorResponse, FailedFileRead, FileContextProto,
+    DropCodebaseIndex, ErrorCode, ErrorResponse,
     FileOperationError, FragmentMetadata as ProtoFragmentMetadata,
     FragmentMetadataLookupError as ProtoFragmentMetadataLookupError,
     FragmentMetadataLookupErrorCode, GetBranchesError, GetBranchesResponse, GetBranchesSuccess,
     GetDiffStateResponse, GetFragmentMetadataFromHash, GetFragmentMetadataFromHashResponse,
-    GetFragmentMetadataFromHashSuccess, GitCommitChainMode, GitCommitChainRequest,
+    GetFragmentMetadataFromHashSuccess, GitCommitChainRequest,
     GitCommitChainResponse, GitCommitChainSuccess, GitCreatePrRequest, GitCreatePrResponse,
-    GitGenerateCommitMessageRequest, GitGenerateCommitMessageResponse,
     GitGetCommittedBranchFilesRequest, GitGetCommittedBranchFilesResponse,
     GitGetCommittedBranchFilesSuccess, GitHubPrInfoPush, GitHubRepositoryInfoPush, GitOpDelta,
-    GitOpError, GitPushRequest, GitPushResponse, GitStatusPush, HomeSkillMetadata, IndexCodebase,
+    GitOpError, GitPushRequest, GitPushResponse, GitStatusPush, IndexCodebase,
     Initialize, InitializeResponse, MissingFragmentMetadata, NavigatedToDirectory,
-    NavigatedToDirectoryResponse, OpenBuffer, OpenBufferResponse, ReadFileContextResponse,
-    RemoteAgentContextSnapshot, RemoteContextFileProto, RemoteSkillProto, ResolveConflict,
+    NavigatedToDirectoryResponse, OpenBuffer, OpenBufferResponse, ResolveConflict,
     ResolveConflictResponse, ResolveConflictSuccess, ResyncCodebase, RipgrepSearchRequest,
     RunCommandError, RunCommandErrorCode, RunCommandRequest, RunCommandResponse, RunCommandSuccess,
     SaveBuffer, SaveBufferResponse, SaveBufferSuccess, ServerMessage, SessionBootstrapped,
     TextEdit, UpdateGitHubPrInfo, UpdateGitHubRepoInfo, UpdateGitStatus, UploadHandoffSnapshot,
     WriteFile, WriteFileResponse, WriteFileSuccess, client_message, delete_file_response,
     discard_files_response, get_diff_state_response, get_fragment_metadata_from_hash_response,
-    git_commit_chain_response, git_create_pr_response, git_generate_commit_message_response,
+    git_commit_chain_response, git_create_pr_response,
     git_get_committed_branch_files_response, git_push_response, host_scoped_request, notification,
-    remote_skill_proto, resolve_conflict_response, run_command_response, save_buffer_response,
+    resolve_conflict_response, run_command_response, save_buffer_response,
     server_message, session_scoped_request, write_file_response,
 };
 use super::server_buffer_tracker::{PendingBufferRequestKind, ServerBufferTracker};
@@ -87,26 +84,13 @@ use super::protocol::RequestId;
 use crate::auth::auth_state::{AuthState, AuthStateProvider};
 use crate::code_review::git_actions;
 use crate::features::FeatureFlag;
-use crate::server::server_api::ServerApiProvider;
 use crate::terminal::model::session::command_executor::{
     ExecuteCommandOptions, LocalCommandExecutor,
 };
 use crate::util::git;
 
-/// Resolves the global bundled resources directory populated by the install
-/// script (see [`remote_server::setup::remote_server_bundled_resources_dir`]),
-/// expanding the shell-form `~/` prefix against this process's home directory.
-///
-/// This deliberately does not use `warp_core::paths::bundled_resources_dir`,
-/// whose macOS behavior resolves resources inside an app bundle. The global
-/// location is version-independent: the last install wins, and slight skew
-/// against this daemon's version is accepted.
-fn daemon_bundled_resources_dir() -> Option<PathBuf> {
-    let dir = remote_server::setup::remote_server_bundled_resources_dir();
-    let suffix = dir.strip_prefix("~/")?;
-    let dir = dirs::home_dir()?.join(suffix);
-    dir.is_dir().then_some(dir)
-}
+// LOCAL FORK: fn daemon_bundled_resources_dir removed with the agent; it only
+// located the bundled skill catalog.
 
 /// Outcome of dispatching a request-style `ClientMessage`.
 ///
@@ -248,12 +232,8 @@ pub struct ServerModel {
     /// Returned in every `InitializeResponse` so clients can deduplicate
     /// host-scoped models.
     host_id: String,
-    /// Bundled skill source entries detected and rendered on the daemon.
-    bundled_skills: Vec<RemoteSkillProto>,
-    /// Latest revisioned full replacement of all daemon-host Agent Mode context.
-    remote_agent_context_snapshot: RemoteAgentContextSnapshot,
-    /// Connections that have already received the current snapshot revision.
-    remote_agent_context_snapshot_sent: HashSet<ConnectionId>,
+    // LOCAL FORK: the daemon-host Agent Mode context snapshot and its
+    // bundled skill catalog went with the agent.
     /// Per-session command executors created from `SessionBootstrapped` notifications.
     executors: HashMap<SessionId, Arc<LocalCommandExecutor>>,
     /// Tracks in-flight file write/delete operations and handles cleanup.
@@ -304,17 +284,12 @@ impl ServerModel {
             std::process::id(),
             host_id
         );
-        let bundled_skills = Vec::new();
-        let remote_agent_context_snapshot = remote_agent_context_snapshot(1, &bundled_skills, ctx);
         let mut model = Self {
             connection_senders: HashMap::new(),
             snapshot_sent_roots_by_connection: HashMap::new(),
             grace_timer_cancel: None,
             in_progress: HashMap::new(),
             host_id,
-            bundled_skills,
-            remote_agent_context_snapshot,
-            remote_agent_context_snapshot_sent: HashSet::new(),
             executors: HashMap::new(),
             pending_file_ops: PendingFileOps::new(),
             auth_state: AuthStateProvider::as_ref(ctx).get().clone(),
@@ -643,17 +618,7 @@ impl ServerModel {
                 }
             });
         }
-        // LOCAL FORK: agent event handler removed with its event type.
-        {
-            let project_context = ProjectContextModel::handle(ctx);
-            ctx.subscribe_to_model(&project_context, |me, _, event, ctx| match event {
-                ProjectContextModelEvent::GlobalRulesChanged(_) => {
-                    me.refresh_remote_agent_context_snapshot(ctx);
-                }
-                ProjectContextModelEvent::PathIndexed
-                | ProjectContextModelEvent::KnownRulesChanged(_) => {}
-            });
-        }
+        // LOCAL FORK: agent event handlers removed with their event types.
         // Subscribe to diff state manager events — convert domain dispatches
         // to proto messages and send them to connected clients.
         {
@@ -662,29 +627,7 @@ impl ServerModel {
                 me.handle_diff_state_update(dispatch);
             });
         }
-        // Parse the bundled skill catalog from the global install location.
-        // Parsing never blocks the initialize handshake: connections that
-        // initialize before parsing completes receive the catalog via the
-        // completion broadcast instead. Deliberately not feature-flag gated:
-        // the flag controls exposure on the client (catalog storage and
-        // skill selection), where the connecting user's flag state actually
-        // lives — a headless daemon only sees its own channel defaults.
-        if let Some(resources_dir) = daemon_bundled_resources_dir() {
-            ctx.spawn(
-                BundledSkill::detect_in_resources_dir(resources_dir),
-                |me, catalog, ctx| {
-                    let skills = bundled_skill_snapshot_protos(&catalog);
-                    log::info!("Daemon parsed {} bundled skills", skills.len());
-                    me.bundled_skills = skills;
-                    me.refresh_remote_agent_context_snapshot(ctx);
-                },
-            );
-        } else {
-            log::info!(
-                "Daemon found no global bundled resources directory; \
-                 bundled skills unavailable on this host"
-            );
-        }
+        // LOCAL FORK: bundled skill catalog parsing removed with the agent.
         // Start the grace timer immediately so the daemon exits if no proxy
         // connects within GRACE_PERIOD. In practice the spawning proxy connects
         // within milliseconds, so the risk of premature shutdown is negligible;
@@ -695,31 +638,8 @@ impl ServerModel {
     }
 
 
-    fn broadcast_remote_agent_context_snapshot(&mut self) {
-        self.send_server_message(
-            None,
-            None,
-            server_message::Message::RemoteAgentContextSnapshot(
-                self.remote_agent_context_snapshot.clone(),
-            ),
-        );
-        self.remote_agent_context_snapshot_sent
-            .extend(self.connection_senders.keys().copied());
-    }
-
-    fn send_remote_agent_context_snapshot_to_connection(&mut self, conn_id: ConnectionId) {
-        if self.remote_agent_context_snapshot_sent.contains(&conn_id) {
-            return;
-        }
-        self.send_server_message(
-            Some(conn_id),
-            None,
-            server_message::Message::RemoteAgentContextSnapshot(
-                self.remote_agent_context_snapshot.clone(),
-            ),
-        );
-        self.remote_agent_context_snapshot_sent.insert(conn_id);
-    }
+    // LOCAL FORK: the remote agent context snapshot broadcast helpers were
+    // removed with the agent.
 
     /// Called when a proxy connects.  Inserts `conn_tx` into the connection
     /// map so `send_server_message` can route responses to this proxy, and
@@ -748,7 +668,6 @@ impl ServerModel {
     /// and starts the grace timer if no connections remain.
     pub fn deregister_connection(&mut self, conn_id: ConnectionId, ctx: &mut ModelContext<Self>) {
         self.snapshot_sent_roots_by_connection.remove(&conn_id);
-        self.remote_agent_context_snapshot_sent.remove(&conn_id);
         // Guard against double-deregister (reader and writer tasks both call
         // this on connection close; the second call must be a safe no-op).
         if self.connection_senders.remove(&conn_id).is_none() {
@@ -842,9 +761,6 @@ impl ServerModel {
                     Some(host_scoped_request::Message::DeleteFile(m)) => {
                         self.handle_delete_file(m, &request_id, conn_id, ctx)
                     }
-                    Some(host_scoped_request::Message::ReadFileContext(m)) => {
-                        self.handle_read_file_context(m, &request_id, conn_id, ctx)
-                    }
                     Some(host_scoped_request::Message::SaveBuffer(m)) => {
                         self.handle_save_buffer(m, &request_id, conn_id, ctx)
                     }
@@ -881,8 +797,15 @@ impl ServerModel {
                     Some(host_scoped_request::Message::GitCreatePr(m)) => {
                         self.handle_create_pr(m, &request_id, conn_id, ctx)
                     }
-                    Some(host_scoped_request::Message::GitGenerateCommitMessage(m)) => {
-                        self.handle_generate_git_commit_message(m, &request_id, conn_id, ctx)
+                    // LOCAL FORK: agent-only host-scoped requests. The proto
+                    // variants stay for wire compatibility, so the arms must
+                    // remain, but the daemon no longer serves them.
+                    Some(host_scoped_request::Message::ReadFileContext(_))
+                    | Some(host_scoped_request::Message::GitGenerateCommitMessage(_)) => {
+                        HandlerOutcome::Sync(server_message::Message::Error(ErrorResponse {
+                            code: ErrorCode::InvalidRequest.into(),
+                            message: "request was removed with the agent".to_string(),
+                        }))
                     }
                     Some(host_scoped_request::Message::GitGetCommittedBranchFiles(m)) => {
                         self.handle_get_committed_branch_files(m, &request_id, conn_id, ctx)
@@ -1590,10 +1513,6 @@ impl ServerModel {
             }
         }
 
-        // Enqueued on the same channel as the response below, so the client
-        // buffers it as a push event during the handshake.
-        self.send_remote_agent_context_snapshot_to_connection(conn_id);
-
         let server_version = ChannelState::app_version().unwrap_or("").to_string();
         HandlerOutcome::Sync(server_message::Message::InitializeResponse(
             InitializeResponse {
@@ -2289,66 +2208,7 @@ impl ServerModel {
         HandlerOutcome::Async(None)
     }
 
-    /// Handles `ReadFileContext` by spawning an async batch file read on the
-    /// background executor. Returns `HandlerOutcome::Async` with the spawned
-    /// handle so the request can be cancelled via `Abort`.
-    fn handle_read_file_context(
-        &mut self,
-        msg: super::proto::ReadFileContextRequest,
-        request_id: &RequestId,
-        conn_id: ConnectionId,
-        ctx: &mut ModelContext<Self>,
-    ) -> HandlerOutcome {
-        log::info!(
-            "Handling ReadFileContext ({} files, request_id={request_id})",
-            msg.files.len()
-        );
-
-        let max_file_bytes = msg.max_file_bytes.map(|b| b as usize);
-        let max_batch_bytes = msg.max_batch_bytes.map(|b| b as usize);
-        let file_locations: Vec<FileLocations> = msg
-            .files
-            .into_iter()
-            .map(|f| FileLocations {
-                name: f.path,
-            })
-            .collect();
-        let request_id_for_response = request_id.clone();
-
-        let handle = self.spawn_request_handler(
-            request_id.clone(),
-            async move {
-                read_local_file_context(
-                    &file_locations,
-                    None,
-                    max_file_bytes,
-                    max_batch_bytes,
-                )
-                .await
-            },
-            move |me, result: anyhow::Result<ReadFileContextResult>, _ctx| {
-                let response = match result {
-                    Err(err) => ReadFileContextResponse {
-                        file_contexts: vec![],
-                        failed_files: vec![FailedFileRead {
-                            path: String::new(),
-                            error: Some(FileOperationError {
-                                message: format!("{err:#}"),
-                            }),
-                        }],
-                    },
-                };
-                me.send_server_message(
-                    Some(conn_id),
-                    Some(&request_id_for_response),
-                    server_message::Message::ReadFileContextResponse(response),
-                );
-            },
-            ctx,
-        );
-
-        HandlerOutcome::Async(Some(handle))
-    }
+    // LOCAL FORK: fn handle_read_file_context removed with the agent.
 
     /// Handles `OpenBuffer` by opening the file via `GlobalBufferModel`.
     /// The response is sent asynchronously when `BufferLoaded` fires.
@@ -3041,13 +2901,9 @@ impl ServerModel {
         let message = msg.message;
         let include_unstaged = msg.include_unstaged;
         let branch = msg.branch;
-        // The create-PR stage AI-generates the title/body only when the client
-        // asked for it. Capture the client on the main thread (ctx isn't
-        // available inside the spawned future) and only for the PR mode, so
-        // commit-only / commit-and-push never touch the AI path.
-        let ai_client = (matches!(mode, GitCommitChainMode::CommitAndCreatePr)
-            && msg.autogenerate_pr_content)
-            .then(|| ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client());
+        // LOCAL FORK: the create-PR stage used to AI-generate the title/body
+        // when `msg.autogenerate_pr_content` was set. `gh pr create --fill` is
+        // now the only source, so the flag is ignored.
         let chain_mode = CommitChainMode::from(mode);
         let path_future = Self::interactive_path_future(ctx);
         let request_id_for_response = request_id.clone();
@@ -3071,7 +2927,6 @@ impl ServerModel {
                     &message,
                     include_unstaged,
                     &branch,
-                    ai_client.as_deref(),
                     path_env,
                 )
                 .await
@@ -3186,14 +3041,8 @@ impl ServerModel {
             msg.repo_path
         );
         let branch = msg.branch;
-        // Generate the PR title/body via AI only when the client asked for it
-        // and didn't already supply them. Reuses the same helper the local
-        // dialog uses, so local and remote PRs are produced identically
-        // (AI-with-`--fill`-fallback). The daemon's `ServerApiProvider` is
-        // authenticated with the user's forwarded bearer token.
-        let ai_client = msg
-            .autogenerate_content
-            .then(|| ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client());
+        // LOCAL FORK: `msg.autogenerate_content` used to select AI-generated
+        // title/body. `gh pr create --fill` is now the only source.
         let path_future = Self::interactive_path_future(ctx);
         let request_id_for_response = request_id.clone();
         let handle = self.spawn_request_handler(
@@ -3205,8 +3054,7 @@ impl ServerModel {
                         "another git operation is in progress (merge, rebase, cherry-pick, or a lock file is present)"
                     );
                 }
-                git_actions::create_pr(&repo_path, &branch, ai_client.as_deref(), path_env.as_deref())
-                    .await
+                git_actions::create_pr(&repo_path, &branch, path_env.as_deref()).await
             },
             move |me, result, _ctx| {
                 let message = match result {
@@ -3282,65 +3130,7 @@ impl ServerModel {
         HandlerOutcome::Async(Some(handle))
     }
 
-    /// Handles `GitGenerateCommitMessageRequest` — computes the working-tree
-    /// diff locally, then calls the Warp server's code-review content endpoint
-    /// via the daemon's authenticated `AIClient` and returns the generated
-    /// message.
-    fn handle_generate_git_commit_message(
-        &mut self,
-        msg: GitGenerateCommitMessageRequest,
-        request_id: &RequestId,
-        conn_id: ConnectionId,
-        ctx: &mut ModelContext<Self>,
-    ) -> HandlerOutcome {
-        let repo_path = match requested_repo_path(&msg.repo_path) {
-            Ok(p) => p,
-            Err(e) => return invalid_request_response(e),
-        };
-        log::info!(
-            "Handling GenerateCommitMessage repo={} (request_id={request_id})",
-            msg.repo_path
-        );
-        let include_unstaged = msg.include_unstaged;
-        let branch_name = msg.branch_name;
-        let ai_client = ServerApiProvider::handle(ctx).as_ref(ctx).get_ai_client();
-        let request_id_for_response = request_id.clone();
-        let handle = self.spawn_request_handler(
-            request_id.clone(),
-            async move {
-                git_actions::generate_commit_message(
-                    &repo_path,
-                    &branch_name,
-                    include_unstaged,
-                    ai_client.as_ref(),
-                )
-                .await
-            },
-            move |me, result, _ctx| {
-                let message = match result {
-                    Ok(message) => server_message::Message::GitGenerateCommitMessageResponse(
-                        GitGenerateCommitMessageResponse {
-                            result: Some(git_generate_commit_message_response::Result::Message(
-                                message,
-                            )),
-                        },
-                    ),
-                    Err(e) => server_message::Message::GitGenerateCommitMessageResponse(
-                        GitGenerateCommitMessageResponse {
-                            result: Some(git_generate_commit_message_response::Result::Error(
-                                GitOpError {
-                                    message: format!("{e:#}"),
-                                },
-                            )),
-                        },
-                    ),
-                };
-                me.send_server_message(Some(conn_id), Some(&request_id_for_response), message);
-            },
-            ctx,
-        );
-        HandlerOutcome::Async(Some(handle))
-    }
+    // LOCAL FORK: fn handle_generate_git_commit_message removed with the agent.
 
     /// Subscribes the daemon to per-repo local git status updates. On first
     /// creation it wires model events to broadcast a `GitStatusPush`. No-op if
@@ -3709,52 +3499,7 @@ fn fragment_metadata_to_proto(
     }
 }
 
-/// Converts a [`ReadFileContextResult`] into its protobuf equivalent.
-fn file_context_result_to_proto(result: ReadFileContextResult) -> ReadFileContextResponse {
-
-    let file_contexts = result
-        .file_contexts
-        .into_iter()
-        .map(|fc| {
-            let content = match fc.content {
-                AnyFileContent::StringContent(text) => {
-                    super::proto::file_context_proto::Content::TextContent(text)
-                }
-                AnyFileContent::BinaryContent(bytes) => {
-                    super::proto::file_context_proto::Content::BinaryContent(bytes)
-                }
-            };
-            let last_modified_epoch_millis = fc
-                .last_modified
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_millis() as u64);
-            FileContextProto {
-                file_name: fc.file_name,
-                content: Some(content),
-                line_range_start: fc.line_range.as_ref().map(|r| r.start as u32),
-                line_range_end: fc.line_range.as_ref().map(|r| r.end as u32),
-                last_modified_epoch_millis,
-                line_count: fc.line_count as u32,
-            }
-        })
-        .collect();
-
-    let failed_files = result
-        .failed_files
-        .into_iter()
-        .map(|failed_file| FailedFileRead {
-            path: failed_file.path,
-            error: Some(FileOperationError {
-                message: failed_file.message,
-            }),
-        })
-        .collect();
-
-    ReadFileContextResponse {
-        file_contexts,
-        failed_files,
-    }
-}
+// LOCAL FORK: fn file_context_result_to_proto removed with the agent.
 
 #[cfg(test)]
 #[path = "server_model_tests.rs"]

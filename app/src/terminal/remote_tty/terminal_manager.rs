@@ -127,7 +127,7 @@ impl TerminalManager {
                 colors,
                 model_event_sender.clone(),
                 prompt_type,
-                initial_input_config,
+                None, // LOCAL FORK: the agent supplied the initial input config
                 None, // conversation_restoration - not used for remote
                 None, // inactive_pty_reads_rx
                 false,

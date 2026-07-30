@@ -636,34 +636,10 @@ impl DisplayChipMenu {
         }
     }
 
-    fn environment_sidecar_data(&self, app: &AppContext) -> Option<EnvironmentSidecarData> {
-        if !self.should_show_environment_sidecar() {
-            return None;
-        }
-
-        let item = self.filtered_items.get(self.selected_index)?.item.clone();
-        let sync_id = Self::parse_sync_id_lossy(&item.action_data());
-        let env = CloudAmbientAgentEnvironment::get_by_id(&sync_id, app)?;
-
-        let repo_names = env
-            .model()
-            .string_model
-            .github_repos
-            .iter()
-            .map(|repo| repo.repo.clone())
-            .collect::<Vec<_>>();
-        let repos_text = if repo_names.is_empty() {
-            "(none)".to_string()
-        } else {
-            repo_names.join(", ")
-        };
-
-        Some(EnvironmentSidecarData {
-            name: env.model().string_model.display_name(),
-            id: env.id.to_string(),
-            image: env.model().string_model.base_image_display(),
-            repos_text,
-        })
+    fn environment_sidecar_data(&self, _app: &AppContext) -> Option<EnvironmentSidecarData> {
+        // LOCAL FORK: cloud agent environments no longer exist, so the sidecar
+        // never has anything to describe.
+        None
     }
 
     fn environment_sidecar_anchor_id(&self) -> Option<String> {

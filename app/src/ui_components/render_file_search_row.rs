@@ -28,6 +28,21 @@ use crate::search::ItemHighlightState;
 
 pub const MAX_COMBINED_LENGTH: usize = 55;
 
+/// Truncates `s` to at most `new_len` bytes, backing up to the nearest char boundary so
+/// the result stays valid UTF-8.
+///
+/// LOCAL FORK: inlined from `search::ai_context_menu`, which came out with the agent.
+fn safe_truncate(s: &mut String, new_len: usize) {
+    if new_len >= s.len() {
+        return;
+    }
+    let mut safe_len = new_len;
+    while safe_len > 0 && !s.is_char_boundary(safe_len) {
+        safe_len -= 1;
+    }
+    s.truncate(safe_len);
+}
+
 pub struct FileSearchRowOptions<'a> {
     pub match_result: Option<&'a FuzzyMatchResult>,
     pub highlight_state: ItemHighlightState,

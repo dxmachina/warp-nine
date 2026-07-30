@@ -75,7 +75,6 @@ pub struct RichContentItem {
     pub content_type: Option<RichContentType>,
     pub view_id: EntityId,
     pub last_laid_out_height: BlockHeight,
-    /// The conversation ID of the active agent view when this rich content was created, if any.
     pub should_hide: bool,
 }
 
@@ -89,32 +88,19 @@ impl RichContentItem {
             content_type,
             view_id,
             last_laid_out_height: BlockHeight::from(1.0),
-            agent_view_conversation_id,
             should_hide,
         }
     }
 
     #[cfg(test)]
-    pub fn new_for_test(
-        content_type: Option<RichContentType>,
-        view_id: EntityId,
-        agent_view_conversation_id: Option<AIConversationId>,
-    ) -> Self {
-        Self::new(content_type, view_id, agent_view_conversation_id, false)
+    pub fn new_for_test(content_type: Option<RichContentType>, view_id: EntityId) -> Self {
+        Self::new(content_type, view_id, false)
     }
 
-    pub fn should_hide_for_transcript_scope(&self, transcript_scope: &TranscriptScope) -> bool {
-        if !FeatureFlag::AgentView.is_enabled() {
-            return false;
-        }
-
-        match transcript_scope {
-            TranscriptScope::Unfiltered => false,
-            TranscriptScope::Terminal => self.agent_view_conversation_id.is_some(),
-            TranscriptScope::Conversation(conversation_id) => {
-                Some(*conversation_id) != self.agent_view_conversation_id
-            }
-        }
+    pub fn should_hide_for_transcript_scope(&self, _transcript_scope: &TranscriptScope) -> bool {
+        // LOCAL FORK: rich content is no longer scoped to an agent conversation, so
+        // it is never hidden by transcript scope.
+        false
     }
 }
 
@@ -592,7 +578,7 @@ impl BlockList {
             obfuscate_secrets,
             is_ai_ugc_telemetry_enabled,
         );
-        block_list.initialize(restored_blocks);
+        block_list.initialize();
         block_list
     }
 
@@ -672,38 +658,9 @@ impl BlockList {
         }
     }
 
-    /// Must be called before the model is used. Even if no blocks are to be restored,
-    /// this is necessary in the BlockList lifecycle.
-    fn initialize(&mut self, restored_blocks: Option<&[SerializedBlockListItem]>) {
-        if let Some(restored_blocks) = restored_blocks {
-            self.is_restored_session = true;
-
-            let mut processor = Processor::new();
-
-            self.restored_session_ts = restored_blocks.last().and_then(|item| match item {
-                SerializedBlockListItem::Command { block } => block.completed_ts,
-            });
-
-            for block in restored_blocks {
-                match block {
-                    SerializedBlockListItem::Command { block } => {
-                        // For session-restoration, we only want to restore blocks
-                        // that were completed.
-                        if block.start_ts.is_some() && block.completed_ts.is_some() {
-                            self.restore_block(
-                                block,
-                                BootstrapStage::RestoreBlocks,
-                                &mut processor,
-                            );
-                        } else {
-                            log::warn!(
-                                "Tried to restore a block that was either not started or not completed"
-                            );
-                        }
-                    }
-                }
-            }
-        }
+    /// Must be called before the model is used, as part of the BlockList lifecycle.
+    fn initialize(&mut self) {
+        // LOCAL FORK: restoring a serialized block list was an agent-only path.
         self.create_warp_input_block();
     }
 
@@ -1372,9 +1329,6 @@ impl BlockList {
                 }
                 block.unhide();
                 block.set_is_oz_environment_startup_command(false);
-                if let Some(conversation_id) = conversation_id {
-                    block.add_attached_conversation_id(conversation_id);
-                }
             }
         }
         self.update_blocks_and_sumtree(None, None, |_| {}, |_| {});
@@ -1610,22 +1564,7 @@ impl BlockList {
 
 
 
-    /// Removes the conversation association from the given blocks, making them disappear from that conversation's agent view.
-    /// Returns a Vec of (block_id, visibility) for blocks that were modified.
-    pub fn remove_pending_context_assocation_for_blocks<'a>(
-        &mut self,
-        block_ids: impl Iterator<Item = &'a BlockId>,
-    ) -> Vec<(BlockId, AgentViewVisibility)> {
-        let mut modified_blocks = Vec::new();
-        for block_id in block_ids {
-            if let Some(block) = self.mut_block_from_id(block_id)
-                && block.remove_pending_conversation_id(conversation_id)
-            {
-                modified_blocks.push((block_id.clone(), block.agent_view_visibility().clone()));
-            }
-        }
-        modified_blocks
-    }
+    // LOCAL FORK: fn remove_pending_context_assocation_for_blocks removed with the agent.
 
 
     /// Update the height of an active block in the block heights SumTree. In general,
@@ -2020,7 +1959,6 @@ impl BlockList {
                     BlockHeightItem::RichContent(RichContentItem {
                         content_type,
                         view_id,
-                        agent_view_conversation_id,
                         last_laid_out_height,
                         ..
                     }) => {
@@ -2028,7 +1966,6 @@ impl BlockList {
                             content_type: *content_type,
                             view_id: *view_id,
                             last_laid_out_height: *last_laid_out_height,
-                            agent_view_conversation_id: *agent_view_conversation_id,
                             should_hide: false,
                         }
                         .should_hide_for_transcript_scope(transcript_scope);
@@ -2041,7 +1978,6 @@ impl BlockList {
                             content_type: *content_type,
                             view_id: *view_id,
                             last_laid_out_height: updated_height,
-                            agent_view_conversation_id: *agent_view_conversation_id,
                             should_hide,
                         }));
                     }

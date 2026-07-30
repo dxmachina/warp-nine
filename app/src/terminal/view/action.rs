@@ -209,9 +209,9 @@ pub enum TerminalAction {
         position: Vector2F,
     },
     InputContextMenuItem(InputContextMenuAction),
-    /// Open the menu on the specified [`crate::ai::blocklist::AIBlock`] that lists the blocks that
-    /// were attached to the query in the specified [`crate::ai::blocklist::AIAgentExchange`] which
-    /// is part of the specified [`crate::ai::blocklist::AIConversation`].
+    /// Open the menu on the specified `AIBlock` that lists the blocks that were
+    /// attached to the query in the specified `AIAgentExchange` which is part of
+    /// the specified `AIConversation`.
     OpenAIBlockAttachedBlocksMenu {
         ai_block_view_id: EntityId,
     },
@@ -662,9 +662,6 @@ impl fmt::Debug for TerminalAction {
             WriteCodebaseIndex => write!(f, "PersistCodebaseIndex"),
             ToggleAutoexecuteMode => write!(f, "ToggleAutoexecuteMode"),
             ToggleQueueNextPrompt => write!(f, "ToggleQueueNextPrompt"),
-            CodebaseIndexSpeedbumpBanner(action) => {
-                write!(f, "CodebaseIndexSpeedbumpBanner({action:?})")
-            }
             AgentModeSetupSpeedbumpBanner(action) => {
                 write!(f, "AgentModeSetupSpeedbumpBanner({action:?})")
             }

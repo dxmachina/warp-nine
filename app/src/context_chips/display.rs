@@ -97,35 +97,17 @@ impl PromptDisplay {
     ) -> Self {
         ctx.observe(&prompt, |me, _, ctx| me.handle_prompt_change(ctx));
 
-        // Subscribe to AI input model changes to trigger re-render when input mode changes
-        ctx.subscribe_to_model(&ai_input_model, |_me, _model, event, ctx| {
-            match event {
-                BlocklistAIInputEvent::InputTypeChanged { .. }
-                | BlocklistAIInputEvent::LockChanged { .. } => {
-                    // Trigger re-render to update chip visibility based on new input mode
-                    ctx.notify();
-                }
-            }
-        });
-
-        // LOCAL FORK: a BlocklistAIHistoryModel subscription refreshed the todo-list
-        // chip here. Both the model and the chip are agent surfaces and are gone.
-
-        ctx.subscribe_to_model(&agent_view_controller, |_, _, _, ctx| {
-            ctx.notify();
-        });
+        // LOCAL FORK: subscriptions to the AI input model, the AI history model and the
+        // agent view controller refreshed agent-only chips. All three are gone.
 
         Self {
             prompt,
             display_chips: vec![],
-            ai_input_model,
-            ai_context_model,
             terminal_view_id,
             menu_positioning_provider,
             session_context,
             current_repo_path,
             model_events,
-            agent_view_controller,
             is_shared_session_viewer,
         }
     }
@@ -191,16 +173,12 @@ impl PromptDisplay {
                     chip_result.clone(),
                     next_chip_kind,
                     DisplayChipConfig {
-                        ai_input_model: self.ai_input_model.clone(),
-                        ai_context_model: self.ai_context_model.clone(),
                         terminal_view_id: self.terminal_view_id,
                         menu_positioning_provider: self.menu_positioning_provider.clone(),
                         session_context: self.session_context.clone(),
                         current_repo_path: self.current_repo_path.clone(),
                         model_events: self.model_events.clone(),
                         is_shared_session_viewer,
-                        agent_view_controller: self.agent_view_controller.clone(),
-                        ambient_agent_view_model: None,
                     },
                 );
                 chip.maybe_set_git_line_changes_info(git_line_changes_info.clone());

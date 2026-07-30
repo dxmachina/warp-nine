@@ -41,12 +41,7 @@ impl InlineSkillSelectorView {
         ctx: &mut ViewContext<Self>,
     ) -> Self {
         let data_source = ctx.add_model(|ctx| {
-            SkillSelectorDataSource::new(
-                active_session,
-                terminal_view_id,
-                ambient_agent_view_model,
-                ctx,
-            )
+            SkillSelectorDataSource::new(active_session, terminal_view_id, ctx)
         });
 
         let mixer = ctx.add_model(|_| {
@@ -60,7 +55,6 @@ impl InlineSkillSelectorView {
                 mixer.clone(),
                 positioner.clone(),
                 &suggestions_mode_model,
-                agent_view_controller,
                 ctx,
             )
         });

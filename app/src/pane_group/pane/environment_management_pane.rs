@@ -17,12 +17,9 @@ pub struct EnvironmentManagementPane {
 
 impl EnvironmentManagementPane {
     pub fn new(ctx: &mut ViewContext<PaneGroup>) -> Self {
-        // Create the EnvironmentsPageView
-        let environments_page_view = ctx.add_typed_action_view(|ctx| {
-            let mut view = EnvironmentsPageView::new(ctx);
-            view.set_github_auth_redirect_target(GithubAuthRedirectTarget::FocusCloudMode, ctx);
-            view
-        });
+        // LOCAL FORK: the GitHub auth redirect target was an ambient agent concept
+        // and went with the agent, so the page keeps its default target.
+        let environments_page_view = ctx.add_typed_action_view(EnvironmentsPageView::new);
 
         Self::from_view(environments_page_view, ctx)
     }

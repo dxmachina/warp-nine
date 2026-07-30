@@ -186,27 +186,8 @@ pub(super) fn parse_tab_config_dir_entry(
     )
 }
 
-/// Parses a `DirEntry` as a single custom model router (one router per YAML file).
-/// Returns `None` for non-config files, otherwise the parsed router or a
-/// [`ModelConfigError`] describing the read/parse/validation failure.
-pub(super) fn parse_model_config_dir_entry(
-    item: &DirEntry,
-) -> Option<Result<CustomModelRouter, ModelConfigError>> {
-    let file_name = get_file_name(item)?;
-    if !is_config_file(&file_name) {
-        return None;
-    }
-    let make_error = |message: String| ModelConfigError {
-        file_name: file_name.clone(),
-        file_path: item.path().into(),
-        error_message: message,
-    };
-    let contents = match fs::read_to_string(item.path()) {
-        Ok(contents) => contents,
-        Err(e) => return Some(Err(make_error(e.to_string()))),
-    };
-    Some(parse_model_config_yaml(&contents, Some(item.path())).map_err(make_error))
-}
+// LOCAL FORK: fn parse_model_config_dir_entry removed with the agent; custom
+// model routers only ever configured the agent's LLM selection.
 
 /// Runs the given function on each `DirEntry` within the `Path`. If the path is not a directory,
 /// an empty `Vector` is returned. It works recursively, covering directories within a given path.

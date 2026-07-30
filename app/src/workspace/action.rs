@@ -613,9 +613,7 @@ pub enum WorkspaceAction {
     /// conversation isn't handoff-able (no synced server token, empty, or no
     /// active conversation at all).
     OpenLocalToCloudHandoffPane {
-        #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
-        launch: Option<crate::ai::blocklist::handoff::PendingCloudLaunch>,
-        #[cfg(not(all(feature = "local_fs", not(target_family = "wasm"))))]
+        // LOCAL FORK: PendingCloudLaunch payload removed with the agent.
         launch: Option<()>,
         environment_id: Option<crate::server::ids::SyncId>,
     },

@@ -63,6 +63,9 @@ use crate::workspaces::workspace::{BillingMetadata, CustomerType, Workspace};
 use crate::{WorkspaceAction, send_telemetry_from_ctx};
 
 const HEADER_FONT_SIZE: f32 = 16.;
+/// LOCAL FORK: the per-account refresh cadence was reported by the removed
+/// request usage model. Every plan the server hands out refreshes monthly.
+const REQUEST_LIMIT_REFRESH_DURATION: &str = "monthly";
 const OVERAGE_USAGE_LINK_TEXT: &str = "View details on overage usage";
 const OVERAGE_TOGGLE_ADMIN_HEADER: &str = "Enable premium model usage overages";
 const OVERAGE_TOGGLE_USER_HEADER_ENABLED: &str = "Premium model usage overages are enabled";
@@ -250,10 +253,6 @@ impl BillingAndUsagePageView {
         let team_update_manager = TeamUpdateManager::handle(ctx);
         ctx.subscribe_to_model(&team_update_manager, |_, _handle, _, ctx| {
             ctx.notify();
-        });
-
-        ctx.subscribe_to_model(&AIRequestUsageModel::handle(ctx), |_, _, _, ctx| {
-            ctx.notify()
         });
 
         ctx.subscribe_to_model(&PricingInfoModel::handle(ctx), |me, _handle, event, ctx| {
@@ -456,9 +455,6 @@ impl BillingAndUsagePageView {
                     ToastFlavor::Success,
                     ctx,
                 );
-                AIRequestUsageModel::handle(ctx).update(ctx, |ai_request_usage_model, ctx| {
-                    ai_request_usage_model.refresh_request_usage_async(ctx)
-                });
             }
             UserWorkspacesEvent::PurchaseAddonCreditsRejected(err) => {
                 self.purchase_addon_credits_loading = false;
@@ -705,10 +701,6 @@ impl BillingAndUsagePageView {
                 .update(ctx, |manager, ctx| manager.refresh_workspace_metadata(ctx)),
         );
 
-        AIRequestUsageModel::handle(ctx).update(ctx, |ai_request_usage_model, ctx| {
-            ai_request_usage_model.refresh_request_usage_async(ctx)
-        });
-
         self.usage_history_model
             .update(ctx, |m, ctx| m.refresh_usage_history_async(ctx));
 
@@ -880,10 +872,6 @@ impl TypedActionView for BillingAndUsagePageView {
                     TeamUpdateManager::handle(ctx)
                         .update(ctx, |manager, ctx| manager.refresh_workspace_metadata(ctx)),
                 );
-
-                AIRequestUsageModel::handle(ctx).update(ctx, |ai_request_usage_model, ctx| {
-                    ai_request_usage_model.refresh_request_usage_async(ctx)
-                });
             }
             BillingAndUsagePageAction::ChangeUsageSort { key, order } => {
                 self.current_sort_key = Some(*key);
@@ -2250,11 +2238,6 @@ impl BillingAndUsagePageView {
 
 impl BillingAndUsagePageView {
     fn render_page_body(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
-        let ai_request_usage_model = AIRequestUsageModel::as_ref(app);
-        let formatted_next_refresh_time = ai_request_usage_model
-            .next_refresh_time_local()
-            .format("%b %d at %-I:%M %p")
-            .to_string();
         let workspace_is_delinquent_due_to_payment_issue = UserWorkspaces::as_ref(app)
             .current_workspace_billing_metadata()
             .map(BillingMetadata::is_delinquent_due_to_payment_issue)
@@ -2292,8 +2275,6 @@ impl BillingAndUsagePageView {
             let usage_content = self.render_usage_content(
                 appearance,
                 app,
-                ai_request_usage_model,
-                &formatted_next_refresh_time,
                 workspace_is_delinquent_due_to_payment_issue,
                 &prorated_mouse_states,
             );
@@ -2571,7 +2552,6 @@ impl BillingAndUsagePageView {
         &self,
         appearance: &Appearance,
         app: &AppContext,
-        formatted_next_refresh_time: &str,
         workspace_is_delinquent_due_to_payment_issue: bool,
         prorated_request_limits_info_mouse_states: &[MouseStateHandle],
     ) -> Box<dyn Element> {
@@ -2592,22 +2572,10 @@ impl BillingAndUsagePageView {
         let has_admin_permissions =
             team.is_some_and(|team| team.has_admin_permissions(&current_user_email));
 
+        // LOCAL FORK: the "Resets <date>" label came from the removed request
+        // usage model, which owned the refresh cycle.
         let mut usage_header_right_side = Flex::row()
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
-            .with_child(
-                appearance
-                    .ui_builder()
-                    .paragraph(format!("Resets {formatted_next_refresh_time}"))
-                    .with_style(UiComponentStyles {
-                        font_color: Some(blended_colors::text_sub(
-                            appearance.theme(),
-                            appearance.theme().surface_1(),
-                        )),
-                        ..Default::default()
-                    })
-                    .build()
-                    .finish(),
-            )
             .with_child(
                 Container::new(
                     icon_button(
@@ -2670,16 +2638,10 @@ impl BillingAndUsagePageView {
             );
         }
 
-        // Render the ambient agent trial widget if the user has ambient-only credits.
-        if let Some(ambient_trial_widget) =
-            self.render_ambient_agent_trial_widget(ai_request_usage_model, appearance, app)
-        {
-            usage.add_child(ambient_trial_widget);
-        }
-
         if let (Some(workspace), Some(team)) = (workspace, team) {
-            let bonus_credit_balance =
-                ai_request_usage_model.total_workspace_bonus_credits_remaining(workspace.uid);
+            // LOCAL FORK: bonus grant balances were cached by the removed request
+            // usage model; there is no local source for them any more.
+            let bonus_credit_balance = 0;
 
             // Hide addon credits panel for Enterprise PAYG users when they have 0 credits.
             let is_enterprise_payg_with_zero_credits = workspace
@@ -2753,19 +2715,11 @@ impl BillingAndUsagePageView {
                 .iter()
                 .map(|m| m.usage_info.requests_used_since_last_refresh as usize)
                 .sum();
-            let is_unlimited = ai_request_usage_model.is_unlimited();
-
-            let team_divisor = if is_unlimited {
-                Some(Divisor::Unlimited)
-            } else {
-                None
-            };
-
             usage.add_child(self.render_ai_usage_limit_row(
                 "Team total".to_string(),
                 team_total_used,
-                team_divisor,
-                ai_request_usage_model.refresh_duration_to_string(),
+                None,
+                REQUEST_LIMIT_REFRESH_DURATION.to_string(),
                 workspace_is_delinquent_due_to_payment_issue,
                 appearance,
                 None,
@@ -2808,7 +2762,7 @@ impl BillingAndUsagePageView {
                         } else {
                             Some(Divisor::Limit(member.usage_info.request_limit as usize))
                         },
-                        ai_request_usage_model.refresh_duration_to_string(),
+                        REQUEST_LIMIT_REFRESH_DURATION.to_string(),
                         workspace_is_delinquent_due_to_payment_issue,
                         appearance,
                         Some(ProratedRequestLimitsInfo {
@@ -2835,13 +2789,9 @@ impl BillingAndUsagePageView {
 
             let row = self.render_ai_usage_limit_row(
                 display_name.clone(),
-                ai_request_usage_model.requests_used(),
-                if ai_request_usage_model.is_unlimited() {
-                    Some(Divisor::Unlimited)
-                } else {
-                    Some(Divisor::Limit(ai_request_usage_model.request_limit()))
-                },
-                ai_request_usage_model.refresh_duration_to_string(),
+                0,
+                None,
+                REQUEST_LIMIT_REFRESH_DURATION.to_string(),
                 workspace_is_delinquent_due_to_payment_issue,
                 appearance,
                 user_workspace_member.map(|member| ProratedRequestLimitsInfo {
@@ -2850,11 +2800,7 @@ impl BillingAndUsagePageView {
                     is_current_user: true,
                 }),
             );
-            user_information.push(UserSortingCriteria::new(
-                display_name,
-                ai_request_usage_model.requests_used(),
-                row,
-            ));
+            user_information.push(UserSortingCriteria::new(display_name, 0, row));
         }
 
         // Apply sort according to current_sort_key/current_sort_order via shared helper

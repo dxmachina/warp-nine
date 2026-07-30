@@ -491,12 +491,7 @@ impl TeamUpdateManager {
                     });
                 }
 
-                if let Some(feature_model_choices) = user_workspaces_access.feature_model_choices {
-                    LLMPreferences::handle(ctx).update(ctx, |llm_preferences, ctx| {
-                        llm_preferences
-                            .update_feature_model_choices(feature_model_choices.try_into(), ctx);
-                    });
-                }
+                // LOCAL FORK: per-feature LLM model choices went with the agent.
 
                 // Update sqlite
                 self.save_to_db([ModelEvent::UpsertWorkspaces { workspaces }]);

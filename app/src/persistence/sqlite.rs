@@ -85,9 +85,6 @@ use crate::cloud_object::{CloudObject, ObjectIdType};
 use crate::code::editor_management::CodeSource;
 use crate::drive::OpenWarpDriveObjectSettings;
 use crate::notebooks::NotebookId;
-use crate::persistence::block_list::{
-    process_ai_queries_for_uparrow_prompt, read_recent_ai_queries,
-};
 use crate::persistence::model::{
     CODE_REVIEW_PANE_KIND, GET_STARTED_PANE_KIND, NewPersistedObjectAction, NewTeamSettings,
     ProjectRules, UserProfile,
@@ -743,9 +740,8 @@ fn handle_model_event(event: ModelEvent, connection: &mut SqliteConnection) -> a
         ModelEvent::SaveExperiments { experiments } => {
             save_experiments(connection, experiments).context("error saving experiments")
         }
-        ModelEvent::UpsertAIQuery { query } => {
-            upsert_ai_query(connection, query).context("error upserting AI query")
-        }
+        // LOCAL FORK: AI queries are no longer persisted.
+        ModelEvent::UpsertAIQuery { .. } => Ok(()),
         ModelEvent::DeleteAIConversation { conversation_id } => {
             delete_ai_conversation(connection, &conversation_id)
                 .context("error deleting AI conversation")
@@ -801,9 +797,8 @@ fn handle_model_event(event: ModelEvent, connection: &mut SqliteConnection) -> a
             suggestion_type,
         } => remove_ignored_suggestion(connection, suggestion, suggestion_type)
             .context("error removing ignored suggestion"),
-        ModelEvent::UpsertMCPServerInstallation {
-            mcp_server_installation,
-        } => upsert_mcp_server_installation(connection, mcp_server_installation),
+        // LOCAL FORK: MCP server installations are no longer persisted.
+        ModelEvent::UpsertMCPServerInstallation { .. } => Ok(()),
         ModelEvent::DeleteMCPServerInstallations { installation_uuids } => {
             delete_mcp_server_installations(connection, installation_uuids)
         }
@@ -2119,32 +2114,19 @@ fn read_node(conn: &mut SqliteConnection, node: model::PaneNode) -> Result<PaneN
                     let shell_launch_data: Option<ShellLaunchData> = terminal_pane
                         .shell_launch_data
                         .and_then(|shell_str| serde_json::from_str(&shell_str).ok());
-                    let input_config = terminal_pane
-                        .input_config
-                        .and_then(|config_str| serde_json::from_str(&config_str).ok());
                     let active_profile_id = terminal_pane
                         .active_profile_id
                         .and_then(|profile_str| serde_json::from_str(&profile_str).ok());
-                    // Don't provide a fallback here - let the higher-level code with AppContext handle it
-
-                    let conversation_ids_to_restore =
-                        parse_conversation_ids(&terminal_pane.conversation_ids);
-
-                    let active_conversation_id = terminal_pane
-                        .active_conversation_id
-                        .and_then(|id_str| AIConversationId::try_from(id_str).ok());
-
+                    // LOCAL FORK: the pane's conversation ids and AI input config were
+                    // agent state; they are no longer restored.
                     LeafContents::Terminal(TerminalPaneSnapshot {
                         uuid: terminal_pane.uuid,
                         cwd: terminal_pane.cwd,
                         is_active: terminal_pane.is_active,
                         is_read_only: false,
                         shell_launch_data,
-                        input_config,
                         llm_model_override: terminal_pane.llm_model_override,
                         active_profile_id,
-                        conversation_ids_to_restore,
-                        active_conversation_id,
                     })
                 }
                 NOTEBOOK_PANE_KIND => {
@@ -2306,14 +2288,8 @@ fn read_node(conn: &mut SqliteConnection, node: model::PaneNode) -> Result<PaneN
                         .select(model::AmbientAgentPane::as_select())
                         .first(conn)?;
 
-                    let task_id = pane
-                        .task_id
-                        .and_then(|id_str| id_str.parse::<AmbientAgentTaskId>().ok());
-
-                    LeafContents::AmbientAgent(AmbientAgentPaneSnapshot {
-                        uuid: pane.uuid,
-                        task_id,
-                    })
+                    // LOCAL FORK: the ambient agent task id went with the agent.
+                    LeafContents::AmbientAgent(AmbientAgentPaneSnapshot { uuid: pane.uuid })
                 }
                 other => bail!("Unrecognized pane kind: {other}"),
             };
@@ -2602,15 +2578,13 @@ fn read_sqlite_data(
             )
             .collect();
 
-        let restored_blocks = get_all_restored_blocks(conn)?;
-
         // Load active MCP servers from database
         let running_mcp_servers = load_active_mcp_servers(conn)?;
 
+        // LOCAL FORK: restored block lists were agent transcript state.
         Some(AppState {
             windows: saved_windows,
             active_window_index,
-            block_lists: Arc::new(restored_blocks),
             running_mcp_servers,
         })
     } else {
@@ -2772,17 +2746,8 @@ fn read_sqlite_data(
 
     let time_of_next_force_object_refresh = read_time_of_next_force_object_refresh(conn)?;
 
-    // Seed up-arrow prompt history and (optionally) NLD prompt-history matching from a single
-    // SQLite read, deriving both from the same in-memory query vector instead of reading twice.
-    // TODO: Once up-arrow prompt history supports pagination, drop the 100-row up-arrow cap and
-    // serve both up-arrow and NLD matching from one consolidated query list.
-    let recent_ai_queries = read_recent_ai_queries(conn)?;
-    let nld_prompts = if FeatureFlag::NldPromptHistoryMatch.is_enabled() {
-        process_ai_queries_for_nld_history_match(&recent_ai_queries)
-    } else {
-        Vec::new()
-    };
-    let ai_queries = process_ai_queries_for_uparrow_prompt(recent_ai_queries);
+    // LOCAL FORK: prompt history came from the agent's AI query table, which is gone.
+    let nld_prompts = Vec::new();
 
     let codebase_indices = get_all_codebase_index_metadata(conn)?;
     let workspace_language_servers = get_all_workspace_language_servers_by_workspace(conn)?;
@@ -2793,7 +2758,6 @@ fn read_sqlite_data(
     let projects = get_all_projects(conn)?;
     let project_rules = get_all_project_rules(conn)?;
     let ignored_suggestions = get_all_ignored_suggestions(conn)?;
-    let mcp_server_installations = get_all_mcp_server_installations(conn)?;
     let mcp_servers_to_restore = get_mcp_servers_to_restore(conn)?;
 
     Ok(PersistedData {
@@ -2806,7 +2770,6 @@ fn read_sqlite_data(
         time_of_next_force_object_refresh,
         object_actions,
         experiments: server_experiments,
-        ai_queries,
         nld_prompts,
         codebase_indices,
         workspace_language_servers,
@@ -2814,7 +2777,6 @@ fn read_sqlite_data(
         projects,
         project_rules,
         ignored_suggestions,
-        mcp_server_installations,
         mcp_servers_to_restore,
         conversation_summary_backfills,
     })

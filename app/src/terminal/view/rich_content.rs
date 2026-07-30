@@ -60,12 +60,7 @@ pub struct RichContent {
 impl RichContent {
     /// Create a new `RichContent` using a ViewHandle. The RichContent type will continue to own
     /// the ViewHandle for its lifetime, ensuring that the underlying View remains active.
-    ///
-    /// `ai_conversation_id` should be the active agent view conversation ID if this content is
-    /// being created within an agent view, or `None` if created in terminal mode.
-    pub fn new<V: View>(
-        handle: ViewHandle<V>,
-    ) -> Self {
+    pub fn new<V: View>(handle: ViewHandle<V>) -> Self {
         let view_id = handle.id();
         // By `move`ing the handle into the closure, the closure will own the handle and keep it
         // alive for the duration. This also allows us to generate any number of necessary
@@ -76,7 +71,6 @@ impl RichContent {
             view_id,
             element_builder,
             metadata: None,
-            agent_view_conversation_id,
         }
     }
 
@@ -316,7 +310,7 @@ impl TerminalView {
             }
         }
 
-        let mut rich_content = RichContent::new(handle, agent_view_conversation_id);
+        let mut rich_content = RichContent::new(handle);
         if let Some(metadata) = metadata {
             rich_content = rich_content.with_metadata(metadata);
         }

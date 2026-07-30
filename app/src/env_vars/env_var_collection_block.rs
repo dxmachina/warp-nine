@@ -28,9 +28,20 @@ use crate::ui_components::blended_colors;
 use crate::view_components::action_button::{
     ButtonSize, KeystrokeSource, NakedTheme, PrimaryTheme,
 };
+use crate::ui_components::inline_action::inline_action_header::{
+    ExpandedConfig, HeaderConfig, INLINE_ACTION_HORIZONTAL_PADDING, InteractionMode,
+};
+use crate::ui_components::inline_action::inline_action_icons;
+use crate::ui_components::inline_action::status_icons::{yellow_running_icon, yellow_stop_icon};
 use crate::view_components::compactible_action_button::{
     CompactibleActionButton, RenderCompactibleActionButton, SMALL_SIZE_SWITCH_THRESHOLD,
 };
+
+// LOCAL FORK: these two lived in the agent block's view_impl, which was not
+// rescued. Values are kept verbatim so the block still lines up with the
+// surrounding terminal content.
+const CONTENT_HORIZONTAL_PADDING: f32 = 20.;
+const CONTENT_ITEM_VERTICAL_MARGIN: f32 = 16.;
 
 /// The vertical padding applied to the env var collection block's content body.
 /// For horizontal padding, use [`INLINE_ACTION_HORIZONTAL_PADDING`] for consistency.

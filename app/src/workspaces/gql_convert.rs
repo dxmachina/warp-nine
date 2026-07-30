@@ -304,32 +304,7 @@ impl From<GqlUgcCollectionEnablementSetting> for UgcCollectionEnablementSetting 
     }
 }
 
-impl From<&gql_usage::ConversationUsage> for ConversationUsageInfo {
-    fn from(gql: &gql_usage::ConversationUsage) -> Self {
-        let persistence::model::ConversationUsageMetadata {
-            credits_spent,
-            platform_credits_spent,
-            token_usage: models,
-            tool_usage_metadata: tool,
-            context_window_usage,
-            context_window_segments,
-            ..
-        } = (&gql.usage_metadata).into();
-        ConversationUsageInfo {
-            credits_spent,
-            platform_credits_spent,
-            credits_spent_for_last_block: None,
-            tool_calls: tool.total_tool_calls(),
-            models,
-            context_window_usage,
-            context_window_segments,
-            files_changed: tool.apply_file_diff_stats.files_changed,
-            lines_added: tool.apply_file_diff_stats.lines_added,
-            lines_removed: tool.apply_file_diff_stats.lines_removed,
-            commands_executed: tool.run_command_stats.commands_executed,
-        }
-    }
-}
+// LOCAL FORK: the ConversationUsage conversion went away with the agent.
 
 impl From<GqlAdminEnablementSetting> for AdminEnablementSetting {
     fn from(gql_admin_enablement_setting: GqlAdminEnablementSetting) -> AdminEnablementSetting {
@@ -662,21 +637,7 @@ impl From<GqlDelinquencyStatus> for DelinquencyStatus {
     }
 }
 
-impl BonusGrant {
-    pub fn from_gql_bonus_grant(bonus_grant: GqlBonusGrant, scope: BonusGrantScope) -> Self {
-        Self {
-            created_at: bonus_grant.created_at.utc(),
-            cost_cents: bonus_grant.cost_cents,
-            expiration: bonus_grant.expiration.map(|exp| exp.utc()),
-            grant_type: bonus_grant.grant_type,
-            reason: bonus_grant.reason,
-            user_facing_message: bonus_grant.user_facing_message,
-            request_credits_granted: bonus_grant.request_credits_granted,
-            request_credits_remaining: bonus_grant.request_credits_remaining,
-            scope,
-        }
-    }
-}
+// LOCAL FORK: fn BonusGrant::from_gql_bonus_grant removed with the agent.
 
 impl From<GqlBillingMetadata> for BillingMetadata {
     fn from(gql_billing_metadata: GqlBillingMetadata) -> BillingMetadata {
@@ -762,23 +723,7 @@ impl ToPathBufs for Vec<String> {
         self.into_iter().map(PathBuf::from).collect()
     }
 }
-impl From<warp_graphql::workspace::LlmModelHost> for crate::ai::llms::LLMModelHost {
-    fn from(gql_host: warp_graphql::workspace::LlmModelHost) -> Self {
-        use warp_graphql::workspace::LlmModelHost as GqlLlmModelHost;
-        match gql_host {
-            GqlLlmModelHost::DirectApi => Self::DirectApi,
-            GqlLlmModelHost::AwsBedrock => Self::AwsBedrock,
-            GqlLlmModelHost::CustomEndpoint => Self::CustomEndpoint,
-            GqlLlmModelHost::GeminiEnterprise => Self::GeminiEnterprise,
-            GqlLlmModelHost::Other(value) => {
-                log::warn!(
-                    "Unknown LlmModelHost '{value}'. Make sure to update client GraphQL types!"
-                );
-                Self::Unknown
-            }
-        }
-    }
-}
+// LOCAL FORK: the LLMModelHost conversion went away with the agent.
 
 impl From<warp_graphql::workspace::LlmHostSettings> for super::workspace::LlmHostSettings {
     fn from(gql_settings: warp_graphql::workspace::LlmHostSettings) -> Self {
@@ -796,22 +741,9 @@ impl From<warp_graphql::workspace::LlmHostSettings> for super::workspace::LlmHos
 
 impl From<warp_graphql::workspace::LlmSettings> for LlmSettings {
     fn from(gql_settings: warp_graphql::workspace::LlmSettings) -> Self {
-        let mut host_configs = std::collections::HashMap::new();
-        for entry in gql_settings.host_configs {
-            let host: crate::ai::llms::LLMModelHost = entry.host.into();
-            if host_configs
-                .insert(host.clone(), entry.settings.into())
-                .is_some()
-            {
-                log::warn!(
-                    "Duplicate LLMModelHost entry for {:?}, using latest value",
-                    host
-                );
-            }
-        }
+        // LOCAL FORK: per-host LLM configs were keyed by an agent type.
         Self {
             enabled: gql_settings.enabled,
-            host_configs,
         }
     }
 }
@@ -880,23 +812,12 @@ impl From<GqlWorkspaceSettings> for WorkspaceSettings {
             },
             is_invite_link_enabled: gql_workspace_settings.is_invite_link_enabled,
             is_discoverable: gql_workspace_settings.is_discoverable,
+            // LOCAL FORK: the per-action permission settings went away with the agent.
             ai_autonomy_settings: AiAutonomySettings {
-                apply_code_diffs_setting: gql_workspace_settings
-                    .ai_autonomy_settings
-                    .apply_code_diffs_setting
-                    .and_then(convert_gql_ai_autonomy_value_to_action_permission),
-                read_files_setting: gql_workspace_settings
-                    .ai_autonomy_settings
-                    .read_files_setting
-                    .and_then(convert_gql_ai_autonomy_value_to_action_permission),
                 read_files_allowlist: gql_workspace_settings
                     .ai_autonomy_settings
                     .read_files_allowlist
                     .map(|allowlist| allowlist.to_path_bufs()),
-                execute_commands_setting: gql_workspace_settings
-                    .ai_autonomy_settings
-                    .execute_commands_setting
-                    .and_then(convert_gql_ai_autonomy_value_to_action_permission),
                 execute_commands_allowlist: gql_workspace_settings
                     .ai_autonomy_settings
                     .execute_commands_allowlist
@@ -905,14 +826,6 @@ impl From<GqlWorkspaceSettings> for WorkspaceSettings {
                     .ai_autonomy_settings
                     .execute_commands_denylist
                     .map(|denylist| denylist.to_predicates()),
-                write_to_pty_setting: gql_workspace_settings
-                    .ai_autonomy_settings
-                    .write_to_pty_setting
-                    .and_then(convert_gql_write_to_pty_autonomy_value_to_write_to_pty_permission),
-                computer_use_setting: gql_workspace_settings
-                    .ai_autonomy_settings
-                    .computer_use_setting
-                    .and_then(convert_gql_computer_use_autonomy_value_to_computer_use_permission),
             },
             usage_based_pricing_settings: UsageBasedPricingSettings {
                 enabled: gql_workspace_settings.usage_based_pricing_settings.enabled,

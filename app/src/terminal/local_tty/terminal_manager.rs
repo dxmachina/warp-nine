@@ -216,7 +216,6 @@ impl<S> TerminalManager<S> {
             startup_directory,
             env_vars,
             is_shared_session_creator,
-            all_restored_blocks,
             user_default_shell_unsupported_banner_model_handle,
             initial_size,
             model_event_sender,
@@ -255,7 +254,6 @@ impl<S> TerminalManager<S> {
             startup_directory,
             env_vars,
             is_shared_session_creator,
-            all_restored_blocks,
             user_default_shell_unsupported_banner_model_handle,
             initial_size,
             model_event_sender,
@@ -321,17 +319,9 @@ impl<S> TerminalManager<S> {
         });
         let wsl_name_or_shell_starter = ShellStarter::init(preferred_shell.clone());
 
-        // Create the terminal model with all restored blocks
-        log::info!(
-            "Creating terminal model with {} restored blocks",
-            all_restored_blocks
-                .as_ref()
-                .map(|blocks| blocks.len())
-                .unwrap_or(0)
-        );
+        // LOCAL FORK: restored blocks came from agent conversation restoration.
         let model = terminal_manager::create_terminal_model(
             startup_directory.clone(),
-            all_restored_blocks,
             initial_size,
             channel_event_proxy.clone(),
             ShellLaunchState::DeterminingShell {

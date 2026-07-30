@@ -149,6 +149,9 @@ const LINEAR_SCROLLING: ScrollingAcceleration = ScrollingAcceleration::Polynomia
 const BLOCK_HOVER_BUTTON_HEIGHT: f32 = 28.;
 
 const TAG_AGENT_FOR_ASSISTANCE_TEXT: &str = "Tag agent for assistance";
+// LOCAL FORK: these labels used to come from the agent's view_util module.
+const ATTACH_AS_AGENT_CONTEXT_TEXT: &str = "Attach as agent context";
+const ASK_AI_ASSISTANT_TEXT: &str = "Ask Warp AI";
 
 const SAVE_AS_WORKFLOW_TEXT: &str = "Save as Workflow";
 const SAVE_AS_WORKFLOW_SECRETS_TEXT: &str = "Blocks containing secrets cannot be saved.";
@@ -1139,12 +1142,11 @@ impl BlockListElement {
                     UIIcon::Icon::Paperclip
                         .to_warpui_icon(icon_color.into())
                         .finish()
-                } else if FeatureFlag::AgentMode.is_enabled() {
+                } else {
+                    // LOCAL FORK: the ai-assistant SVG shipped with the agent.
                     UIIcon::Icon::Stars
                         .to_warpui_icon(icon_color.into())
                         .finish()
-                } else {
-                    Icon::new(AI_ASSISTANT_SVG_PATH, icon_color).finish()
                 })
                 .with_height(16.)
                 .with_width(16.)
@@ -1166,12 +1168,13 @@ impl BlockListElement {
                 } else {
                     (
                         Some(TerminalAction::AskAIAssistant { block_index }),
-                        *ATTACH_AS_AGENT_MODE_CONTEXT_TEXT,
+                        ATTACH_AS_AGENT_CONTEXT_TEXT,
                     )
                 }
             } else {
                 (
                     Some(TerminalAction::AskAIAssistant { block_index }),
+                    ASK_AI_ASSISTANT_TEXT,
                 )
             };
 
@@ -2715,7 +2718,16 @@ impl BlockListElement {
                             )
                             .into()
                     } else if block.is_agent_in_control() {
-                        ai_brand_color(&block_grid_params.grid_render_params.warp_theme)
+                        // LOCAL FORK: inlined ai_brand_color, which lived in the agent module.
+                        AnsiColorIdentifier::Magenta
+                            .to_ansi_color(
+                                &block_grid_params
+                                    .grid_render_params
+                                    .warp_theme
+                                    .terminal_colors()
+                                    .normal,
+                            )
+                            .into()
                     } else {
                         block_grid_params
                             .grid_render_params

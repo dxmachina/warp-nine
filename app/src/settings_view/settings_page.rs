@@ -134,15 +134,8 @@ impl SettingsPageViewHandle {
             Scripting(view_handle) => ChildView::new(view_handle).finish(),
             CloudEnvironments(view_handle) => ChildView::new(view_handle).finish(),
             BillingAndUsage(view_handle) => ChildView::new(view_handle).finish(),
-            MCPServers(view_handle) => ChildView::new(view_handle).finish(),
             WarpDrive(view_handle) => ChildView::new(view_handle).finish(),
         }
-    }
-}
-
-impl From<ViewHandle<MCPServersSettingsPageView>> for SettingsPageViewHandle {
-    fn from(view_handle: ViewHandle<MCPServersSettingsPageView>) -> Self {
-        SettingsPageViewHandle::MCPServers(view_handle)
     }
 }
 

@@ -1,12 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use ai::index::full_source_code_embedding::NodeHash;
 use remote_server::codebase_index_proto::{RemoteCodebaseIndexState, RemoteCodebaseIndexStatus};
+use warp_core::features::FeatureFlag;
 use warp_core::{HostId, SessionId};
 use warp_util::remote_path::RemotePath;
 use warp_util::standardized_path::StandardizedPath;
-use warpui::{Entity, ModelContext, SingletonEntity};
+use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
 use super::manager::{
     RemoteCodebaseIndexStatusWithPath, RemoteCodebaseIndexUpdateOperation, RemoteServerManager,
@@ -15,8 +16,21 @@ use super::manager::{
 use crate::server::telemetry::{
     RemoteCodebaseAutoIndexTrigger, RemoteCodebaseIndexStatusTelemetrySource,
 };
+use crate::settings::CodeSettings;
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
 use crate::{TelemetryEvent, send_telemetry_from_ctx};
+
+// LOCAL FORK: these gates lived in the deleted `crate::ai::codebase_auto_indexing`
+// module. Remote codebase indexing outlives the agent, so they are inlined here.
+fn should_use_codebase_indexing(ctx: &AppContext) -> bool {
+    FeatureFlag::FullSourceCodeEmbedding.is_enabled()
+        && FeatureFlag::RemoteCodebaseIndexing.is_enabled()
+        && UserWorkspaces::as_ref(ctx).is_codebase_context_enabled(ctx)
+}
+
+fn should_auto_index_codebase(ctx: &AppContext) -> bool {
+    should_use_codebase_indexing(ctx) && *CodeSettings::as_ref(ctx).auto_indexing_enabled
+}
 
 #[derive(Clone, Debug)]
 pub struct RemoteCodebaseSearchContext {
@@ -216,60 +230,9 @@ impl RemoteCodebaseIndexModel {
         statuses_moved
     }
 
-    pub fn active_repo_availability(
-        &self,
-        explicit_repo_path: Option<&str>,
-    ) -> RemoteCodebaseSearchAvailability {
-        let Some(host_id) = session_context.host_id() else {
-            return RemoteCodebaseSearchAvailability::NoConnectedHost;
-        };
-
-        self.availability_for_remote(
-            host_id,
-            session_context.current_working_directory().as_deref(),
-            explicit_repo_path,
-        )
-    }
-
-    pub fn active_repo_path(
-        &self,
-        explicit_repo_path: Option<&str>,
-    ) -> Option<String> {
-        self.active_repo_availability(session_context, explicit_repo_path)
-            .repo_path()
-            .map(ToOwned::to_owned)
-    }
-
-    pub fn request_active_repo_index(
-        &self,
-        explicit_repo_path: Option<&str>,
-        ctx: &mut ModelContext<Self>,
-    ) -> bool {
-        if !should_use_codebase_indexing(CodebaseAutoIndexingSurface::Remote, ctx) {
-            return false;
-        }
-        let Some(host_id) = session_context.host_id() else {
-            return false;
-        };
-        let Some(remote_path) = self.resolve_remote_repo_path(
-            host_id,
-            session_context.current_working_directory().as_deref(),
-            explicit_repo_path,
-        ) else {
-            return false;
-        };
-
-        RemoteServerManager::handle(ctx).update(ctx, |manager, ctx| {
-            manager.ensure_codebase_indexed(
-                remote_path,
-                RemoteCodebaseIndexUpdateOperation::IndexNewRepo {
-                    is_auto_index: false,
-                },
-                ctx,
-            );
-        });
-        true
-    }
+    // LOCAL FORK: fns active_repo_availability, active_repo_path and
+    // request_active_repo_index removed with the agent. They resolved the repo
+    // from the agent's session context, which no longer exists.
 
     pub fn codebases_for_agent_context(&self, host_id: &HostId) -> Vec<RemoteCodebaseContextEntry> {
         let host_label = self.host_label_for_host(host_id);
@@ -297,7 +260,7 @@ impl RemoteCodebaseIndexModel {
     }
 
     pub fn request_index(&self, remote_path: RemotePath, ctx: &mut ModelContext<Self>) {
-        if !should_use_codebase_indexing(CodebaseAutoIndexingSurface::Remote, ctx) {
+        if !should_use_codebase_indexing(ctx) {
             return;
         }
         RemoteServerManager::handle(ctx).update(ctx, |manager, ctx| {
@@ -312,7 +275,7 @@ impl RemoteCodebaseIndexModel {
     }
 
     pub fn resync_index(&self, remote_path: RemotePath, ctx: &mut ModelContext<Self>) {
-        if !should_use_codebase_indexing(CodebaseAutoIndexingSurface::Remote, ctx) {
+        if !should_use_codebase_indexing(ctx) {
             return;
         }
         RemoteServerManager::handle(ctx).update(ctx, |manager, ctx| {
@@ -350,7 +313,7 @@ impl RemoteCodebaseIndexModel {
     ) {
         match event {
             RemoteServerManagerEvent::CodebaseIndexStatusesSnapshot { host_id, statuses } => {
-                if !should_use_codebase_indexing(CodebaseAutoIndexingSurface::Remote, ctx) {
+                if !should_use_codebase_indexing(ctx) {
                     return;
                 }
                 let (changed, telemetry_updates) =
@@ -373,7 +336,7 @@ impl RemoteCodebaseIndexModel {
                 mutation_kind,
                 session_id: _,
             } => {
-                if !should_use_codebase_indexing(CodebaseAutoIndexingSurface::Remote, ctx) {
+                if !should_use_codebase_indexing(ctx) {
                     return;
                 }
                 if let Some(update) =
@@ -395,7 +358,7 @@ impl RemoteCodebaseIndexModel {
             } => {
                 self.record_navigated_directory(*session_id, remote_path, *is_git);
                 if *is_git
-                    && should_auto_index_codebase(CodebaseAutoIndexingSurface::Remote, ctx)
+                    && should_auto_index_codebase(ctx)
                     && self.should_request_auto_index_for_navigated_git_repo(remote_path)
                 {
                     // Mirrors local auto-indexing: remote navigation silently requests indexing
@@ -471,7 +434,7 @@ impl RemoteCodebaseIndexModel {
     }
 
     fn handle_codebase_context_enablement_changed(&mut self, ctx: &mut ModelContext<Self>) {
-        if !should_use_codebase_indexing(CodebaseAutoIndexingSurface::Remote, ctx) {
+        if !should_use_codebase_indexing(ctx) {
             let remote_paths = self.clear_remote_codebase_indexing_state();
             if !remote_paths.is_empty() {
                 ctx.emit(RemoteCodebaseIndexModelEvent::SettingsEntriesChanged);
@@ -486,7 +449,7 @@ impl RemoteCodebaseIndexModel {
 
         let remote_paths = self.active_git_repo_paths_needing_auto_index();
         if remote_paths.is_empty()
-            || !should_auto_index_codebase(CodebaseAutoIndexingSurface::Remote, ctx)
+            || !should_auto_index_codebase(ctx)
         {
             return;
         }
@@ -533,10 +496,17 @@ impl RemoteCodebaseIndexModel {
     }
 
     fn active_git_repo_paths_needing_auto_index(&self) -> Vec<RemotePath> {
-        auto_index_candidate_roots(
-            self.active_git_repos_by_session.values().cloned(),
-            |remote_path| self.should_request_auto_index_for_navigated_git_repo(remote_path),
-        )
+        // LOCAL FORK: inlined `auto_index_candidate_roots`, which lived in the
+        // deleted `crate::ai::codebase_auto_indexing` module.
+        let mut seen = HashSet::new();
+        self.active_git_repos_by_session
+            .values()
+            .cloned()
+            .filter(|remote_path| {
+                seen.insert(remote_path.clone())
+                    && self.should_request_auto_index_for_navigated_git_repo(remote_path)
+            })
+            .collect()
     }
 
     fn apply_statuses_snapshot(

@@ -7,6 +7,7 @@ use warp_core::features::FeatureFlag;
 use warpui::keymap::BindingId;
 use warpui::{AppContext, Entity, ModelContext, ModelHandle, SingletonEntity};
 
+use super::warp_drive;
 use crate::drive::settings::WarpDriveSettings;
 use crate::search::QueryFilter;
 use crate::search::action::CommandBindingDataSource;
@@ -24,6 +25,7 @@ use crate::session_management::SessionSource;
 pub struct DataSourceStore {
     actions_data_source: ModelHandle<CommandBindingDataSource>,
     sessions_data_source: ModelHandle<navigation::DataSource>,
+    warp_drive_data_source: ModelHandle<warp_drive::DataSource>,
     launch_config_data_source: ModelHandle<launch_config::DataSource>,
     new_session_data_source: Option<ModelHandle<NewSessionDataSource>>,
     repo_data_source: ModelHandle<RepoDataSource>,
@@ -50,9 +52,6 @@ impl DataSourceStore {
             && cfg!(feature = "local_tty"))
         .then_some(ctx.add_model(|ctx| NewSessionDataSource::new(binding_source, ctx)));
 
-        let all_conversation_data_source: ModelHandle<conversations::DataSource> =
-            ctx.add_model(|_| conversations::DataSource::new());
-
         let repo_data_source = ctx.add_model(|_| RepoDataSource::new());
 
         Self {
@@ -61,7 +60,6 @@ impl DataSourceStore {
             warp_drive_data_source,
             launch_config_data_source,
             new_session_data_source,
-            all_conversation_data_source,
             repo_data_source,
             tabs_data_source: None,
         }
@@ -135,14 +133,6 @@ impl DataSourceStore {
                         run_when_unfiltered: true,
                     },
                     ctx,
-                );
-            }
-
-            // Add conversation search if AI is enabled
-            if AISettings::as_ref(ctx).is_any_ai_enabled(ctx) {
-                mixer.add_sync_source(
-                    self.all_conversation_data_source.clone(),
-                    HashSet::from([QueryFilter::Conversations]),
                 );
             }
 
@@ -280,7 +270,8 @@ impl DataSourceStore {
                 // For now, return None as projects aren't expected in the regular command palette.
                 None
             }
-            ItemSummary::Conversation { id } => conversations::DataSource::query_result(id, app),
+            // LOCAL FORK: conversation search came out with the agent.
+            ItemSummary::Conversation { .. } => None,
 
             ItemSummary::NewConversation => {
                 // The new conversation item should not show up in the recent command list,

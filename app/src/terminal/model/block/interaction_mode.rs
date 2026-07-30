@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use warp_terminal::model::Point;
 use warp_terminal::model::grid::Dimensions;
 
@@ -63,9 +62,16 @@ impl Block {
         }
     }
 
-    /// Returns `true` if an agent is monitoring/interacting with this command.
+    /// LOCAL FORK: monitoring was tracked by `LongRunningCommandControlState`,
+    /// which went with the agent. Nothing monitors a command now.
     pub fn is_agent_monitoring(&self) -> bool {
-        self.is_active_and_long_running() && self.long_running_control_state().is_some()
+        false
+    }
+
+    /// LOCAL FORK: control was tracked by `LongRunningCommandControlState`,
+    /// which went with the agent. Nothing can take control now.
+    pub fn is_agent_in_control(&self) -> bool {
+        false
     }
 
     /// Returns `true` if the agent is either in control or has been tagged in by the user.
@@ -73,50 +79,19 @@ impl Block {
         self.is_agent_in_control() || self.is_agent_tagged_in()
     }
 
-
-
-
-    /// Returns `true` if the agent is actively driving this command.
-    ///
-    /// This is broader than `is_agent_in_control`: it also covers the window between
-    /// when the agent writes an agent-requested command to the PTY (synchronous) and
-    /// when the CLI subagent is later spawned and `long_running_control_state` is set
-    /// (asynchronous, via `BlocklistAIHistoryEvent::CreatedSubtask`). Returns `false`
-    /// once the user takes over, even for agent-initiated commands.
+    /// LOCAL FORK: driving required either agent control or an agent-requested
+    /// command action, both of which went with the agent.
     pub fn is_agent_driving_command(&self) -> bool {
-        if self.is_agent_in_control() {
-            return true;
-        }
-        // Agent-initiated command where the CLI subagent hasn't formally taken control yet.
-        self.interaction_mode
-            .agent_interaction_metadata()
-            .is_some_and(|metadata| {
-                metadata.requested_command_action_id().is_some()
-                    && metadata.long_running_control_state().is_none()
-            })
+        false
     }
 
+    /// LOCAL FORK: there is no control state left to hand back, so teardown
+    /// paths have nothing to do. Kept as a no-op for the call sites.
+    pub fn set_user_control_for_teardown(&mut self) {}
 
-
-
-    /// Hands control to the user with a non-resuming `Stop`. Used by teardown paths (rewind,
-    /// stop) where the conversation has been cancelled and must not resume when the command
-    /// completes.
-    pub fn set_user_control_for_teardown(&mut self) {
-        if let InteractionMode::Agent(metadata) = &mut self.interaction_mode
-            && let Some(state) = &mut metadata.long_running_control_state
-        {
-            *state = LongRunningCommandControlState::User {
-            };
-        }
-    }
-
-    /// Returns `true` if agent responses should be hidden in the UI.
+    /// LOCAL FORK: response hiding was driven by the agent's control state.
     pub fn should_hide_responses(&self) -> bool {
-        self.is_active_and_long_running()
-            && self
-                .long_running_control_state()
-                .is_some_and(LongRunningCommandControlState::should_hide_responses)
+        false
     }
 
     /// Returns the `agent_interaction_metadata` associated with this block, if any.
@@ -125,21 +100,12 @@ impl Block {
     }
 
 
-    pub fn requested_command_action_id(&self) -> Option<&AIAgentActionId> {
-        match &self.interaction_mode {
-            InteractionMode::Agent(metadata) => metadata.requested_command_action_id(),
-            _ => None,
-        }
-    }
+    // LOCAL FORK: fns requested_command_action_id and long_running_control_state
+    // removed with the agent; both returned agent-owned types.
 
-    /// Returns `true` if this block is associated with a command requested by an agent.
+    /// LOCAL FORK: requested commands came from agent actions, which are gone.
     pub fn is_agent_requested_command(&self) -> bool {
-        self.requested_command_action_id().is_some()
-    }
-
-    /// Returns the `long_running_control_state` associated with this block, if any.
-    pub fn long_running_control_state(&self) -> Option<&LongRunningCommandControlState> {
-        self.interaction_mode.long_running_control_state()
+        false
     }
 
     pub fn has_agent_written_to_block(&self) -> bool {
@@ -174,16 +140,8 @@ impl Block {
         self.interaction_mode = InteractionMode::from_serialized_ai_metadata(serialized_metadata);
     }
 
-    pub fn take_over_control_for_user(
-        &mut self,
-    ) -> Result<(), UpdateInteractionModeError> {
-        self.interaction_mode.take_over_for_user(reason)
-    }
-
-    pub fn handoff_control_to_agent(&mut self) -> Result<(), UpdateInteractionModeError> {
-        self.interaction_mode.handoff_to_agent()
-    }
-
+    // LOCAL FORK: fns take_over_control_for_user and handoff_control_to_agent
+    // removed with the agent; there is no control to transfer.
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -258,13 +216,6 @@ impl InteractionMode {
         }
     }
 
-    pub fn long_running_control_state(&self) -> Option<&LongRunningCommandControlState> {
-        match self {
-            Self::Agent(metadata) => metadata.long_running_control_state.as_ref(),
-            _ => None,
-        }
-    }
-
     pub fn is_agent_tagged_in(&self) -> bool {
         matches!(
             self,
@@ -280,28 +231,7 @@ impl InteractionMode {
         }
     }
 
-    fn take_over_for_user(
-        &mut self,
-    ) -> Result<(), UpdateInteractionModeError> {
-        let Self::Agent(AgentInteractionMetadata {
-            long_running_control_state,
-            ..
-        }) = self
-        else {
-            return Err(UpdateInteractionModeError::InvalidTakeOver);
-        };
-
-        if !long_running_control_state
-            .as_ref()
-            .is_some_and(|state| state.is_agent_in_control())
-        {
-            return Err(UpdateInteractionModeError::InvalidTakeOver);
-        }
-
-        *long_running_control_state = Some(LongRunningCommandControlState::User { reason });
-        Ok(())
-    }
-
+    // LOCAL FORK: fn take_over_for_user removed with the agent.
 }
 
 impl Default for InteractionMode {
@@ -313,17 +243,11 @@ impl Default for InteractionMode {
 }
 
 /// Blocklist AI metadata associated with this block.
+///
+/// LOCAL FORK: the action, conversation, subagent-task and long-running-control
+/// fields went with the agent; only the two block-local flags are left.
 #[derive(Debug, Clone)]
 pub struct AgentInteractionMetadata {
-    /// The ID of the `AIAgentAction` associated with this block's requested command execution.
-    /// This is optional because not all AI-related blocks are associated with a requested command.
-
-    /// The ID of the conversation to which this action belongs.
-
-    /// The task ID for the CLI subagent interaction with this block if any.
-
-    /// State governing user/agent interaction with the command in this block.
-
     /// `true` if the agent has previously written to this block.
     has_agent_written_to_block: bool,
 
@@ -339,41 +263,20 @@ impl AgentInteractionMetadata {
         should_hide_block: bool,
     ) -> Self {
         AgentInteractionMetadata {
-            requested_command_action_id,
-            conversation_id,
-            subagent_task_id,
-            long_running_control_state,
             has_agent_written_to_block,
             should_hide_block,
         }
     }
 
     /// Convenience constructor for the common "hidden by default" case used for requested commands.
-    pub fn new_hidden(
-    ) -> Self {
-        Self::new(
-            conversation_id,
-            None,
-            None,
-            false,
-            true,
-        )
+    pub fn new_hidden() -> Self {
+        Self::new(false, true)
     }
 
-    pub fn requested_command_action_id(&self) -> Option<&AIAgentActionId> {
-        self.requested_command_action_id.as_ref()
-    }
-
-
-
+    /// LOCAL FORK: control was tracked by `LongRunningCommandControlState`,
+    /// which went with the agent.
     pub fn is_agent_in_control(&self) -> bool {
-        self.long_running_control_state
-            .as_ref()
-            .is_some_and(|state| state.is_agent_in_control())
-    }
-
-    pub fn long_running_control_state(&self) -> Option<&LongRunningCommandControlState> {
-        self.long_running_control_state.as_ref()
+        false
     }
 
     pub fn has_agent_written_to_block(&self) -> bool {

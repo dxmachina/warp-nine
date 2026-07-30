@@ -40,7 +40,6 @@ impl MockTerminalManager {
 
         let model = super::terminal_manager::create_terminal_model(
             None,
-            restored_blocks,
             initial_size,
             channel_event_proxy,
             shell_state,
@@ -71,9 +70,9 @@ impl MockTerminalManager {
                 None,
                 prompt_type,
                 None,
-                // We use conversation restoration to load a view-only cloud conversation
-                // into the web view.
-                conversation_restoration,
+                // LOCAL FORK: conversation restoration loaded a view-only cloud
+                // conversation, which came out with the agent.
+                None,
                 None, // inactive_pty_reads_rx
                 false,
                 ctx,
@@ -112,15 +111,10 @@ impl TerminalManager for MockTerminalManager {
     fn on_view_detached(
         &self,
         _detach_type: crate::pane_group::pane::DetachType,
-        app: &mut AppContext,
+        _app: &mut AppContext,
     ) {
-        // If this is a conversation transcript viewer, unregister the ambient session.
-        if self.model.lock().is_conversation_transcript_viewer() {
-            let terminal_view_id = self.view.id();
-            ActiveAgentViewsModel::handle(app).update(app, |model, ctx| {
-                model.unregister_ambient_session(terminal_view_id, ctx);
-            });
-        }
+        // LOCAL FORK: this only unregistered the ambient agent session for a conversation
+        // transcript viewer.
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

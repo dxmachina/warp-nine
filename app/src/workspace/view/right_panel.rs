@@ -473,10 +473,7 @@ impl RightPanelView {
             me.handle_working_directories_event(event, ctx)
         });
 
-        // Recompute terminal availability when CLI agent sessions start or end.
-        ctx.subscribe_to_model(&CLIAgentSessionsModel::handle(ctx), |me, _, _, ctx| {
-            me.recompute_terminal_availability(ctx);
-        });
+        // LOCAL FORK: the CLI agent session subscription went with the agent.
 
         // Recompute terminal availability when AI is toggled on or off, so the
         // send button and tooltip update immediately.
@@ -1263,11 +1260,13 @@ impl RightPanelView {
                         me.handle_action(&RightPanelAction::ToggleMaximize, ctx);
                     }
                 }
-                CodeReviewViewEvent::SubmitReviewComments {
-                    comments,
-                    repo_path,
-                } => {
-                    Self::route_review_comments(me, &code_review, comments.clone(), repo_path, ctx);
+                // LOCAL FORK: review comments were handed to the agent (CLI
+                // rich input or an inline agent review), so there is nowhere to
+                // route them; the submission always fails.
+                CodeReviewViewEvent::SubmitReviewComments { .. } => {
+                    code_review.update(ctx, |view, ctx| {
+                        view.handle_review_submission_result(ReviewSubmissionResult::Error, ctx);
+                    });
                 }
                 #[cfg(feature = "local_fs")]
                 CodeReviewViewEvent::OpenFileWithTarget {
@@ -1304,82 +1303,7 @@ impl RightPanelView {
         Some(code_review_view)
     }
 
-    /// Routes review comments to the best available terminal.
-    /// Tries the preferred terminal first, then falls back to other terminals
-    /// in the same repo working directory.
-    fn route_review_comments(
-        &mut self,
-        code_review_view: &ViewHandle<CodeReviewView>,
-        repo_path: &LocalOrRemotePath,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let Some(pane_group) = &self.active_pane_group else {
-            code_review_view.update(ctx, |view, ctx| {
-                view.handle_review_submission_result(ReviewSubmissionResult::Error, ctx);
-            });
-            return;
-        };
-
-        let ai_enabled = AISettings::as_ref(ctx).is_any_ai_enabled(ctx);
-        let chosen = self.find_review_terminal(pane_group, repo_path, ai_enabled, ctx);
-
-        let Some(terminal_view) = chosen else {
-            log::warn!("No available terminal found for submitting review comments");
-            code_review_view.update(ctx, |view, ctx| {
-                view.handle_review_submission_result(ReviewSubmissionResult::Error, ctx);
-            });
-            return;
-        };
-
-        let comment_count = comments.comments.len();
-        let file_count = comments
-            .comments
-            .iter()
-            .filter_map(|c| {
-                c.target
-                    .absolute_file_path()
-                    .map(LocalOrRemotePath::display_path)
-            })
-            .collect::<std::collections::HashSet<_>>()
-            .len();
-
-        let active_cli_agent = terminal_view.read(ctx, |t, ctx| t.active_cli_agent(ctx));
-
-        let (result, destination) = if active_cli_agent.is_some() {
-            let r = terminal_view.update(ctx, |terminal, ctx| {
-                terminal.send_review_to_cli_agent_or_rich_input(&comments, ctx)
-            });
-            let dest = if terminal_view.read(ctx, |t, ctx| t.is_cli_agent_rich_input_open(ctx)) {
-                CodeReviewContextDestination::RichInput
-            } else {
-                CodeReviewContextDestination::Pty
-            };
-            (r, dest)
-        } else {
-            let r = terminal_view.update(ctx, |terminal, ctx| {
-                terminal.send_inline_review(comments, ctx)
-            });
-            (r, CodeReviewContextDestination::AgentReview)
-        };
-
-        if let Err(err) = &result {
-            report_error!(err);
-        }
-
-        let submission_result = if result.is_ok() {
-            ReviewSubmissionResult::Success {
-                comment_count,
-                file_count,
-                destination,
-            }
-        } else {
-            ReviewSubmissionResult::Error
-        };
-
-        code_review_view.update(ctx, |view, ctx| {
-            view.handle_review_submission_result(submission_result, ctx);
-        });
-    }
+    // LOCAL FORK: fn route_review_comments removed with the agent.
 
     fn format_optional_path(path: Option<&Path>) -> String {
         path.map(|path| path.display().to_string())

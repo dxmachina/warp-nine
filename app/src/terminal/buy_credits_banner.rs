@@ -72,14 +72,7 @@ impl BuyCreditsBanner {
             }
         });
 
-        ctx.subscribe_to_model(
-            &AIRequestUsageModel::handle(ctx),
-            |_me, _handle, event, ctx| {
-                if let AIRequestUsageModelEvent::RequestUsageUpdated = event {
-                    ctx.notify();
-                }
-            },
-        );
+        // LOCAL FORK: the AI request-usage subscription went with the agent.
 
         ctx.subscribe_to_model(&UserWorkspaces::handle(ctx), |me, _handle, event, ctx| {
             me.handle_workspaces_event(event, ctx);
@@ -164,9 +157,6 @@ impl BuyCreditsBanner {
                 );
 
                 self.should_display_banner = false;
-                AIRequestUsageModel::handle(ctx).update(ctx, |ai_request_usage_model, ctx| {
-                    ai_request_usage_model.dismiss_buy_credits_banner(ctx);
-                });
 
                 // Experiment-specific behavior:
                 // - Banner toggle flow: optionally enable auto-reload immediately.
@@ -205,10 +195,6 @@ impl BuyCreditsBanner {
 
                 if err.downcast_ref::<BudgetExceededError>().is_some() {
                     self.should_display_banner = true;
-                } else {
-                    AIRequestUsageModel::handle(ctx).update(ctx, |ai_request_usage_model, ctx| {
-                        ai_request_usage_model.dismiss_buy_credits_banner(ctx);
-                    });
                 }
                 ctx.notify();
             }
@@ -825,27 +811,11 @@ impl View for BuyCreditsBanner {
         "BuyCreditsBanner"
     }
 
-    fn render(&self, app: &AppContext) -> Box<dyn Element> {
-        let appearance = Appearance::as_ref(app);
-        let ai_request_usage = AIRequestUsageModel::as_ref(app);
-
-        // Override with spend limit error if set (from failed purchase attempt)
-        let display_state = if self.should_display_banner {
-        } else {
-            ai_request_usage.compute_buy_addon_credits_banner_display_state(app)
-        };
-
-        match display_state {
-            BuyCreditsBannerDisplayState::Hidden => {
-                Container::new(warpui::elements::Empty::new().finish()).finish()
-            }
-            BuyCreditsBannerDisplayState::OutOfCredits => {
-                self.render_out_of_credits(appearance, app)
-            }
-            BuyCreditsBannerDisplayState::MonthlyLimitReached => {
-                self.render_auto_reload_blocked(appearance, app)
-            }
-        }
+    fn render(&self, _app: &AppContext) -> Box<dyn Element> {
+        // LOCAL FORK: the banner sold agent request credits, and its display
+        // state came from AIRequestUsageModel. Nothing computes a visible state
+        // now, so it always renders empty.
+        Container::new(warpui::elements::Empty::new().finish()).finish()
     }
 }
 
@@ -882,17 +852,11 @@ impl warpui::TypedActionView for BuyCreditsBanner {
                 );
 
                 self.should_display_banner = false;
-                AIRequestUsageModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.dismiss_buy_credits_banner(ctx);
-                });
                 ctx.notify();
             }
             Action::ManageBilling => {
                 ctx.emit(BuyCreditsBannerEvent::OpenBillingAndUsage);
                 self.should_display_banner = false;
-                AIRequestUsageModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.dismiss_buy_credits_banner(ctx);
-                });
                 ctx.notify();
             }
             Action::PurchaseAddonCredits { team_uid } => {

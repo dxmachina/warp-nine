@@ -740,12 +740,8 @@ pub fn render_own_usage_solo_row(
     app: &AppContext,
 ) -> Box<dyn Element> {
     let (viewer_uid, display_name) = viewer_identity(app);
-    let model = AIRequestUsageModel::as_ref(app);
-    let row = MemberUsageRow::for_viewer_from_total(
-        viewer_uid,
-        display_name,
-        model.requests_used() as i64,
-    );
+    // LOCAL FORK: AI request usage is no longer tracked locally, so report zero.
+    let row = MemberUsageRow::for_viewer_from_total(viewer_uid, display_name, 0);
     render_member_row_list(std::slice::from_ref(&row), mouse_states, appearance)
 }
 

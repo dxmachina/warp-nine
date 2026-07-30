@@ -100,18 +100,16 @@ pub fn should_render_prompt_on_same_line(
     }
 }
 
-/// Returns `true` if the shell or AI prompt should be rendered using the editors
+/// Returns `true` if the shell prompt should be rendered using the editors
 /// `EditorDecoratorElements` API.
-///
-/// The AI prompt is unconditionally rendered above the input.
 pub fn should_render_prompt_using_editor_decorator_elements(
     is_universal_developer_input: bool,
     model: &TerminalModel,
     app: &AppContext,
 ) -> bool {
+    // LOCAL FORK: the AI input never claims the prompt line anymore, so this is
+    // purely a same-line question now.
     should_render_prompt_on_same_line(is_universal_developer_input, model, app)
-        && (!ai_input_model.as_ref(app).is_ai_input_enabled()
-            || FeatureFlag::AgentView.is_enabled())
 }
 
 pub(in crate::terminal) struct PromptAndPadding {
@@ -203,7 +201,6 @@ impl PromptRenderHelper {
             prompt_selection_state_handle,
             prompt_parent_view_id: parent_view_id,
             input_render_state_model_handle,
-            ai_input_model,
         }
     }
 

@@ -217,86 +217,14 @@ impl WarpifySuccessBlock {
         ctx.notify();
     }
 
-    /// If there is an output grid to display, render it.
+    /// LOCAL FORK: the snippet was rendered by the agent's runnable-code-snippet
+    /// element, which went with the agent, so there is nothing to draw.
     pub fn render_output_grid(
         &self,
-        app: &AppContext,
-        appearance: &Appearance,
+        _app: &AppContext,
+        _appearance: &Appearance,
     ) -> Option<Box<dyn Element>> {
-        let theme = appearance.theme();
-        let auto_warpify_snippet = self.auto_warpify_snippet.as_ref()?;
-
-        if auto_warpify_snippet.output_grid.is_empty() {
-            return None;
-        }
-
-        let shell_language = ProgrammingLanguage::Shell(auto_warpify_snippet.shell_type);
-        let runnable_command = render_runnable_code_snippet(
-            &auto_warpify_snippet.output_grid,
-            if auto_warpify_snippet.can_write_to_rc {
-                Some(&shell_language)
-            } else {
-                None
-            },
-            Some(Box::new({
-                move |code_snippet, ctx| {
-                    ctx.dispatch_typed_action(WorkspaceAction::RunCommand(
-                        code_snippet.to_string(),
-                    ));
-
-                    ctx.dispatch_typed_action(WarpifySuccessBlockAction::ClearAutoWarpifySnippet);
-                }
-            })),
-            Some(Box::new({
-                move |code_snippet, ctx| {
-                    ctx.dispatch_typed_action(WorkspaceAction::CopyTextToClipboard(code_snippet));
-                }
-            })),
-            Some(auto_warpify_snippet.code_snippet_handles.clone()),
-            app,
-        );
-
-        let semantic_selection = SemanticSelection::as_ref(app);
-        let selected_text = auto_warpify_snippet.selected_text.clone();
-
-        // TODO(Simon): Implement full selection and copying functionality for the WarpifySuccessBlock.
-        // Look to the `EnvVarCollectionBlock` for the existing implementation paradigm. We don't
-        // yet have a robust way of ensuring that every aspect of text selection is implemented
-        // properly, so be extra careful not to miss any details!
-        let output_grid = SelectableArea::new(
-            auto_warpify_snippet.selection_handle.clone(),
-            move |selection_args, _, _| {
-                *selected_text.write() = selection_args.selection;
-            },
-            runnable_command,
-        )
-        .with_word_boundaries_policy(semantic_selection.word_boundary_policy())
-        .with_smart_select_fn(semantic_selection.smart_select_fn())
-        .finish();
-
-        let output_grid = Flex::column()
-            .with_child(
-                Container::new(
-                    Text::new(
-                        auto_warpify_snippet.description.clone(),
-                        appearance.monospace_font_family(),
-                        appearance.monospace_font_size(),
-                    )
-                    .with_color(blended_colors::text_main(theme, theme.background()))
-                    .finish(),
-                )
-                .with_horizontal_margin(HORIZONTAL_TEXT_MARGIN)
-                .with_margin_bottom(VERTICAL_TEXT_MARGIN)
-                .finish(),
-            )
-            .with_child(
-                Container::new(output_grid)
-                    .with_horizontal_margin(HORIZONTAL_TEXT_MARGIN)
-                    .with_margin_bottom(VERTICAL_TEXT_MARGIN)
-                    .finish(),
-            )
-            .finish();
-        Some(output_grid)
+        None
     }
 }
 

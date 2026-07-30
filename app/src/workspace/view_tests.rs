@@ -54,7 +54,7 @@ use crate::pane_group::{Direction, PaneGroupAction, PaneId};
 use crate::pricing::PricingInfoModel;
 #[cfg(not(target_family = "wasm"))]
 use crate::remote_server::codebase_index_model::RemoteCodebaseIndexModel;
-use crate::resource_center::Tip;
+use crate::tips::Tip;
 use crate::server::cloud_objects::listener::Listener;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::experiments::ServerExperiments;

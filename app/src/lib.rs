@@ -127,7 +127,7 @@ pub mod integration_testing;
 pub mod keyboard;
 pub mod launch_configs;
 pub mod pane_group;
-pub mod resource_center;
+// LOCAL FORK: `resource_center` (the "Warp Essentials" panel) deleted.
 pub mod root_view;
 pub mod search;
 pub mod settings;

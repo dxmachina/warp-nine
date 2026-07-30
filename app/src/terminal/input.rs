@@ -242,7 +242,7 @@ use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::persistence::{database_file_path_for_current_scope, establish_ro_connection};
 use crate::prefix::longest_common_prefix;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
-use crate::resource_center::{
+use crate::tips::{
     Tip, TipAction, TipHint, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
 };
 use crate::search::QueryFilter;

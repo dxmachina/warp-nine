@@ -17,7 +17,7 @@ use warpui::{
 
 use super::WELCOME_TIP_FEATURE_LENGTH;
 use crate::appearance::Appearance;
-use crate::resource_center::{Tip, TipAction, TipsCompleted};
+use crate::tips::{Tip, TipAction, TipsCompleted};
 use crate::themes::theme::{Blend, Fill};
 use crate::util::bindings::trigger_to_keystroke;
 

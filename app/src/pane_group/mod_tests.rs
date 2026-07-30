@@ -72,7 +72,7 @@ use crate::notebooks::editor::keys::NotebookKeybindings;
 use crate::notebooks::manager::NotebookManager;
 use crate::notebooks::notebook::NotebookView;
 use crate::pricing::PricingInfoModel;
-use crate::resource_center::TipsCompleted;
+use crate::tips::TipsCompleted;
 use crate::search::files::model::FileSearchModel;
 use crate::server::cloud_objects::listener::Listener;
 use crate::server::cloud_objects::update_manager::UpdateManager;

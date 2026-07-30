@@ -337,7 +337,7 @@ use crate::projects::ProjectManagementModel;
 use crate::remote_server::manager::{
     RemoteServerInitPhase, RemoteServerManager, RemoteServerManagerEvent,
 };
-use crate::resource_center::{
+use crate::tips::{
     Tip, TipHint, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
 };
 use crate::search::slash_command_menu::static_commands::commands;

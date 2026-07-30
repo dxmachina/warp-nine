@@ -2,7 +2,12 @@ use serde::{Deserialize, Serialize};
 use warpui::AppContext;
 use warpui::keymap::Keystroke;
 
+pub mod tip_state;
 pub mod tip_view;
+pub use tip_state::{
+    Tip, TipAction, TipHint, TipsCompleted, complete_tips_and_write_to_user_defaults,
+    mark_feature_used_and_write_to_user_defaults, skip_tips_and_write_to_user_defaults,
+};
 pub use tip_view::{TipsEvent, TipsView};
 
 use crate::util::bindings::trigger_to_keystroke;

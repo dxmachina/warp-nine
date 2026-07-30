@@ -28,7 +28,7 @@ use crate::editor::{
     TextOptions,
 };
 use crate::referral_theme_status::ReferralThemeStatus;
-use crate::resource_center::{
+use crate::tips::{
     Tip, TipAction, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
 };
 use crate::send_telemetry_from_ctx;

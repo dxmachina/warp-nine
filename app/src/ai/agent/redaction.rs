@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::super::blocklist::block::secret_redaction::{
+use crate::terminal::model::secret_detection::{
     SECRET_REDACTION_REPLACEMENT_CHARACTER, find_secrets_in_text,
 };
 use crate::ai::agent::{

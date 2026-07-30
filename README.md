@@ -1,132 +1,208 @@
-# warp-nine
+# WarpNine
 
-A personal fork of [Warp](https://github.com/warpdotdev/warp) that strips out the
-account system, the built-in coding agent, and the cloud backend — leaving the
+A personal fork of [Warp](https://github.com/warpdotdev/warp) with the account
+system, the built-in coding agent, and the cloud backend taken out — leaving the
 terminal.
+
+**857 MB → 100 MB**, Apple Silicon only, no sign-in, no telemetry.
 
 Maintained by Sebastian Katz. Not affiliated with or endorsed by Warp Dev, Inc.
 
-## Why
+## What this is
 
-Warp is a genuinely good terminal wrapped in things I don't want:
+A terminal. Warp's actual terminal — blocks, the block list, themes, Warpify
+shell integration, local completions, workflows, keybindings, the settings you'd
+expect — with the surrounding product removed.
 
-1. **Forced sign-in.** The stock client gates startup behind a Warp account.
-2. **The agent.** An entire coding-agent product compiled into the terminal.
-3. **Size.** The shipped `Warp.app` is **857 MB**. For a terminal.
+## What this isn't
 
-That last number turns out to be mostly self-inflicted. Measured against the
-stock `/Applications/Warp.app`:
-
-| Component | Size |
-|---|---|
-| `Contents/MacOS/stable` | 840 MB |
-| — x86_64 slice | 426 MB |
-| — arm64 slice | 414 MB |
-| Frameworks (Sentry) | 32 MB |
-| Helpers (pprof) | 12 MB |
-| Resources | 6.5 MB |
-| PlugIns (DockTile, fat) | 4.4 MB |
-
-Half the binary is an Intel slice that does nothing on Apple Silicon, and
-another 90 MB is a symbol table kept for crash-report symbolication.
+- **Not a supported build.** Ad-hoc signed, not notarized. macOS will gate first
+  launch.
+- **Not upstream-compatible.** Whole subsystems are deleted. Rebasing on upstream
+  gets harder over time; that's the deliberate trade.
+- **Not a smaller Warp with the features still there.** Sign-in, the agent, Warp
+  Drive, cloud sessions, settings sync, notifications, and the onboarding /
+  changelog panel are gone, not hidden.
+- **Not cross-platform.** macOS arm64 only. The Linux and Windows paths are
+  untouched but unexercised.
+- **Not a security or privacy audit.** Telemetry and crash reporting are hard-off
+  and that was verified in the logs, but this is one person's fork, not a review.
 
 ## Current state
 
-**857 MB → 281 MB**, verified running.
-
-| | Stock | This fork |
+| | Stock Warp | WarpNine |
 |---|---|---|
-| App bundle | 857 MB | **281 MB** |
-| Main binary | 840 MB (fat) | 292 MB (arm64) |
-| `__LINKEDIT` (symbols) | 90 MB | 3.5 MB |
+| App bundle | 857 MB | **100 MB** |
 | Architectures | x86_64 + arm64 | arm64 only |
+| `__text` (code) | 126 MB | 54 MB |
+| `__const` (data) | 167 MB | 42 MB |
+| Unwinding tables | 25 MB | 0.3 MB |
+| `__LINKEDIT` (symbols) | ~75 MB | 1.4 MB |
 | Login wall | yes | no |
-| Telemetry on startup | yes | no |
+| Telemetry | yes | no |
+| Dock tile plugin | 4.4 MB, universal | removed |
 
-The remaining 292 MB is `__text` 111 MB + `__const` 148 MB — that's the agent
-and cloud code, and it only shrinks by deleting it. That work is in progress;
-see [`EXCISION_MANIFEST.md`](EXCISION_MANIFEST.md).
+Verified running: launches to a shell, and `--version` reports a real build
+stamp.
 
-### Done
+## Where the size actually was
 
-- **Apple-Silicon-only builds.** `script/macos/bundle` defaults to arm64;
-  `--universal` opts back in.
-- **Symbols stripped.** `[profile.release]` uses `debug = 0` + `strip = "symbols"`
-  instead of upstream's `debug = 1`.
-- **No login, no onboarding.** The startup gate in `root_view.rs` branched
-  between a login wall, the agent onboarding flow, and the terminal. It now
-  always boots to the terminal.
-- **No telemetry.** Hard-off in `settings/privacy.rs`. Upstream's
+This is the part worth writing down, because the intuitive answer is wrong and
+this fork spent a long time chasing it.
+
+**The agent is not why Warp is big.** Measured by attributing symbol sizes in the
+stock binary to their source modules, the entire agent tree — `warp::ai` plus the
+`ai`, `rmcp`, `candle`, `tantivy`, `computer_use`, `input_classifier` and
+`tokenizers` crates — comes to roughly **22 MB** of a 395 MB arm64 slice.
+
+What actually cost the megabytes, in order:
+
+| Lever | Saved | Change |
+|---|---|---|
+| No x86_64 slice | 426 MB | one default flipped |
+| `debug = 0` + `strip = "symbols"` | ~90 MB | upstream keeps line tables for Sentry |
+| Dropped 34 tree-sitter grammars | 51 MB | `arborium` features; nothing in the terminal used them |
+| `opt-level = "s"` | 26 MB | release defaults to `3`, which optimizes for *speed* and inflates code |
+| Excluded onboarding imagery | 47 MB | `rust-embed` was inlining 57 MB of PNGs, uncompressed |
+| `panic = "abort"` | 25 MB | removes `__eh_frame` / `__gcc_except_tab` |
+| Dropped the ONNX classifier | 17.5 MB | `bert_tiny_v3.onnx`, embedded to route shell-vs-agent input |
+| Dropped 663 PowerShell specs | 5 MB | dead weight on macOS |
+
+Two findings inside that table are worth calling out:
+
+**41 MB of the binary was onboarding screenshots.** `crates/warp_assets` embeds
+`app/assets/async` verbatim with no compression. The WASM and headless-CLI builds
+already excluded that folder; nobody had done it for the GUI build. The images are
+reachable only from the login wall and three agent launch modals — all dead code
+in this fork.
+
+**The grammars weren't for the terminal.** All 38 `arborium` languages existed for
+Warp's code *editor* and the agent's codebase indexer. The terminal's own input
+highlighting lives in `terminal/input/decorations.rs` and uses the completer's
+shell tokenizer, not tree-sitter.
+
+### A note on Warp's feature flags
+
+Worth recording because it's counterintuitive: **Warp's cargo features are
+runtime flags, not compile gates.** `app/src/features.rs` maps them onto
+`FeatureFlag::set_enabled()` booleans, and `agent_mode` appears as a
+`#[cfg(feature = ...)]` gate exactly once in the whole tree.
+
+So turning a feature off usually hides UI while still compiling every line of it.
+An earlier version of this README concluded from that "there is no configuration
+that makes this smaller — only deletion does." **That was wrong**, and the table
+above is the refutation: build-profile and asset-embedding changes account for
+most of the reduction, and none of them delete a line of application code.
+
+Deletion is still the only thing that removes the *agent*. It just isn't the
+thing that removes the *megabytes*.
+
+## What's removed
+
+- **Sign-in and onboarding.** `root_view.rs` branched between a login wall, the
+  agent onboarding flow, and the terminal. It now always boots to the terminal.
+  The Keychain read at startup is gone too — it raised an OS prompt on every
+  freshly signed build.
+- **Telemetry and crash reporting.** Hard-off in `settings/privacy.rs`. Upstream's
   `should_disable_telemetry()` could be overridden by a force flag or the
   `AgentModeAnalytics` experiment; both are ignored here.
-- **Agent UI removed** from the settings sidebar and the menu bar.
+- **The agent UI**: settings pages, menu-bar entries, toasts, the tab-bar account
+  menu, and the agent notification inbox.
+- **Warp Essentials** (`app/src/resource_center`, 3.4K LOC) — the onboarding-tips,
+  changelog and Docs/Slack/Feedback panel, along with every route into it.
+- **The dock tile plugin.** It only swapped the Dock icon among alternates, cost
+  4.4 MB, shipped universal regardless of target arch, and wrote a fresh
+  `/tmp/warp_docktile_<timestamp>.log` on every init.
+- **Referral and changelog menu items**, including one that rendered as
+  `<NO DESCRIPTION>` because its label lookup no longer resolved.
 
-### In progress
+## What's kept
 
-Deleting the code itself: `app/src/ai` (261K LOC), `app/src/auth`,
-`app/src/drive`, and the `ai` / `warp_server_auth` / `warp_server_client` /
-`firebase` / `cloud_object_*` / `input_classifier` crates. The last of those
-embeds three ONNX models (~51 MB) via `rust-embed`.
+Terminal and blocks, themes, Warpify, local completions (496 command specs),
+workflows, keybindings, settings, the code editor (unhighlighted — see grammars
+above), and secret detection in terminal output.
 
-## A note on Warp's feature flags
+## Still in progress
 
-Worth recording, because it's counterintuitive and it determines what is
-actually possible here: **Warp's cargo features are runtime flags, not compile
-gates.** `app/src/features.rs` maps them onto `FeatureFlag::set_enabled()`
-booleans, and `agent_mode` appears as a `#[cfg(feature = ...)]` gate exactly
-once in the whole tree.
+Deleting the agent *code*: `app/src/ai` (~220K LOC) plus the `ai`, `mcp`,
+`computer_use` and `input_classifier` crates. Worth ~22 MB and a great deal of
+mechanical work — `terminal/` and `ai/blocklist/` import each other, so there is
+no small first step. See [`EXCISION_MANIFEST.md`](EXCISION_MANIFEST.md) for the
+measured cascade analysis.
 
-So turning features off hides UI but compiles every line of it into the binary.
-There is no configuration that makes this smaller. Only deletion does.
+`script/fork_separability` exists to predict those cascades. Treat its
+name-frequency signal with suspicion — it over-reports badly on generic
+identifiers, and once predicted a 24-file cascade for a type with zero external
+users.
 
 ## Building
 
-Requires the pinned toolchain from `rust-toolchain.toml` (1.92.0) — Homebrew's
-Rust will not do, since it ignores the pin.
+Requires the pinned toolchain from `rust-toolchain.toml` (1.92.0). Homebrew's
+Rust will not do — it ignores the pin.
 
 ```bash
 rustup toolchain install 1.92.0
 cargo install cargo-bundle --git=https://github.com/burtonageo/cargo-bundle \
   --rev ae4c76e92c08774bf54ff077b1c52e3d1cd6c16d
+cargo install --locked cargo-about@0.8.4   # see below
 
 export PATH="$HOME/.cargo/bin:$PATH"
-./script/run --release --dont-open
+./script/macos/bundle --channel oss
 ```
 
-Output: `target/release/bundle/osx/WarpOss.app`.
+Output: `target/aarch64-apple-darwin/release-lto/bundle/osx/WarpNine.app`
 
-Verify it is single-architecture:
+`cargo-about` matters more than it looks. It generates `THIRD_PARTY_LICENSES.txt`,
+and that step runs *before* code signing. When it was missing, the bundle script
+aborted there and never signed — leaving a bundle whose executable carried the
+linker's ad-hoc signature while its resources were unsealed, which macOS treats
+as corrupt rather than merely unsigned. `prepare_bundled_resources` now warns and
+continues instead of aborting, and local builds get an ad-hoc signature.
+
+Verify the result:
 
 ```bash
-lipo -info target/release/bundle/osx/WarpOss.app/Contents/MacOS/warp-oss
+codesign --verify --strict target/aarch64-apple-darwin/release-lto/bundle/osx/WarpNine.app
+lipo -info target/aarch64-apple-darwin/release-lto/bundle/osx/WarpNine.app/Contents/MacOS/warp-nine
 # Non-fat file: ... is architecture: arm64
 ```
 
-`./script/bootstrap` also works but installs a large amount of tooling
-(Docker, gcloud, PowerShell, Sentry CLI) that this fork does not need.
+Builds are slow: `lto = "fat"` with `codegen-units = 1` makes LLVM optimize the
+whole program as one largely single-threaded unit. Tens of minutes is normal.
+Switch `[profile.release-lto]` to `lto = "thin"` for faster iteration.
 
-macOS only. The Linux and Windows build paths are untouched but unexercised.
+`./script/bootstrap` also works but installs a lot of tooling (Docker, gcloud,
+PowerShell, Sentry CLI) this fork doesn't need.
 
-## Tracking upstream
+## Repository layout
 
 ```
 origin    https://github.com/dxmachina/warp-nine.git
 upstream  https://github.com/warpdotdev/warp.git
 ```
 
-`master` mirrors upstream; the fork lives on `local/slim-arm64-no-cloud`.
+| Branch | Purpose |
+|---|---|
+| `main` | the fork |
+| `master` | mirrors upstream, for rebasing |
+| `local/deagent-terminal-ui` | in-progress agent excision; **does not compile** |
 
 ```bash
 git fetch upstream && git rebase upstream/master
 ```
 
-Expect this to get harder as deletion proceeds — that is the trade being made
-deliberately, in exchange for a binary that doesn't contain a coding agent.
-
 ## License
 
 Unchanged from upstream: [AGPL v3](LICENSE-AGPL), except the `warpui` and
-`warpui_core` crates, which are [MIT](LICENSE-MIT).
+`warpui_core` crates, which are [MIT](LICENSE-MIT). Upstream's copyright notices
+are preserved in the bundle metadata and the About page, with this fork credited
+alongside them.
+
+`crates/warp_command_signatures` and `crates/warp_completion_metadata` are
+vendored from [warpdotdev/command-signatures](https://github.com/warpdotdev/command-signatures)
+at `29cd61c3`, with the PowerShell spec set removed. `rust-embed`'s `folder` and
+`exclude` attributes are compile-time literals, so excluding a subtree isn't
+possible from outside the crate.
 
 For upstream's own documentation, see
 [warpdotdev/warp](https://github.com/warpdotdev/warp).

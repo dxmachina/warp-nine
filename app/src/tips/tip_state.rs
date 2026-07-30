@@ -1,27 +1,24 @@
+// LOCAL FORK: the tip state model, moved here from `resource_center/mod.rs`.
+//
+// These types are the onboarding-tip *state*: which tips a user has seen, and the
+// helpers that persist that to user defaults. They lived alongside the Warp
+// Essentials panel because that panel rendered them, but they outlive it --
+// `TipsCompleted` is threaded through `TerminalViewResources`, and 14 files
+// outside the deleted module reference these types.
+//
+// The panel's own rendering data (FeatureItem, ContentItem, Section and the
+// *SectionData structs) had no users outside `resource_center` and went with it.
+
 use std::collections::HashSet;
 
-use chrono::{DateTime, FixedOffset};
+use serde::{Deserialize, Serialize};
 use settings::Setting as _;
 use warp_errors::report_if_error;
-
-use crate::terminal::general_settings::GeneralSettings;
-use crate::util::bindings::trigger_to_keystroke;
-
-mod main_page;
-pub mod utils;
-pub use main_page::{ResourceCenterMainEvent, ResourceCenterMainView};
-mod keybindings_page;
-pub use keybindings_page::KeybindingsView;
-mod section_views;
-pub use section_views::{ChangelogSectionView, ContentSectionView, FeatureSectionView};
-pub mod sections;
-mod view;
-use serde::{Deserialize, Serialize};
-pub use view::{ResourceCenterAction, ResourceCenterEvent, ResourceCenterPage, ResourceCenterView};
 use warpui::keymap::Keystroke;
 use warpui::{AppContext, Entity, SingletonEntity};
 
-use self::section_views::feature_section::FeatureSection;
+use crate::terminal::general_settings::GeneralSettings;
+use crate::util::bindings::trigger_to_keystroke;
 
 #[derive(
     Clone,
@@ -126,84 +123,6 @@ impl TipAction {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-
-// Section item that dispatches an action within the app
-pub struct FeatureItem {
-    pub title: &'static str,
-    pub description: &'static str,
-    pub feature: Tip,
-    pub editable_binding_name: Option<&'static str>,
-    pub shortcut: Option<Keystroke>,
-}
-
-impl FeatureItem {
-    pub fn new(
-        title: &'static str,
-        description: &'static str,
-        feature: Tip,
-        ctx: &mut AppContext,
-    ) -> Self {
-        let editable_binding_name;
-        let shortcut;
-
-        match feature {
-            Tip::Hint(_) => {
-                editable_binding_name = None;
-                shortcut = None;
-            }
-            Tip::Action(tip) => {
-                editable_binding_name = Some(tip.editable_binding_name());
-                shortcut = tip.keyboard_shortcut(ctx);
-            }
-        }
-
-        Self {
-            title,
-            description,
-            feature,
-            editable_binding_name,
-            shortcut,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-// Section item that links to an external URL
-pub struct ContentItem {
-    pub title: &'static str,
-    pub description: &'static str,
-    pub url: &'static str,
-    pub button_label: &'static str,
-}
-
-pub enum Section {
-    Feature(FeatureSectionData),
-    Content(ContentSectionData),
-    Changelog(),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FeatureSectionData {
-    pub section_name: FeatureSection,
-    pub items: Vec<FeatureItem>,
-}
-
-#[derive(Clone)]
-pub struct ContentSectionData {
-    pub section_name: FeatureSection,
-    pub items: Vec<ContentItem>,
-}
-
-#[derive(Clone)]
-pub struct ChangelogSectionData {
-    pub section_name: FeatureSection,
-    pub date: DateTime<FixedOffset>,
-    pub new_features_markdown: String,
-    pub improvements_markdown: String,
-    pub coming_soon_markdown: String,
-}
-
 #[derive(Default)]
 pub struct TipsCompleted {
     pub features_used: HashSet<Tip>,
@@ -213,21 +132,6 @@ pub struct TipsCompleted {
 
 impl Entity for TipsCompleted {
     type Event = ();
-}
-
-impl FeatureSectionData {
-    pub fn is_section_completed(&self, tips_completed: &TipsCompleted) -> bool {
-        self.items
-            .iter()
-            .all(|item| tips_completed.features_used.contains(&item.feature))
-    }
-
-    pub fn tips_completed_count(&self, tips_completed: &TipsCompleted) -> usize {
-        self.items
-            .iter()
-            .filter(|item| tips_completed.features_used.contains(&item.feature))
-            .count()
-    }
 }
 
 /// Marks the welcome tip as used, writes their current state to a cloud synced preference.

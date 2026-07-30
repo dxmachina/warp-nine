@@ -145,13 +145,8 @@ fn make_new_app_menu(ctx: &AppContext) -> Menu {
         ctx,
     )];
 
-    if !FeatureFlag::AvatarInTabBar.is_enabled() {
-        menu_items.push(updateable_custom_item_without_checkmark(
-            CustomAction::ToggleResourceCenter,
-            ctx,
-        ))
-    }
-
+    // LOCAL FORK: "Toggle Resource Center" removed. Upstream adds it here when the
+    // tab-bar avatar is disabled, as the fallback route to Warp Essentials.
     // LOCAL FORK: `ReferAFriend` removed. It rendered as `<NO DESCRIPTION>`
     // because its label is looked up from the keybinding description table and
     // this fork no longer registers one -- it was a referral/growth feature tied

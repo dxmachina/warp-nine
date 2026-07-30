@@ -5,7 +5,7 @@ use warpui::{Entity, ModelHandle, SingletonEntity};
 use crate::banner::BannerState;
 use crate::persistence::ModelEvent;
 use crate::referral_theme_status::ReferralThemeStatus;
-use crate::resource_center::TipsCompleted;
+use crate::tips::TipsCompleted;
 use crate::settings::SettingsFileError;
 
 /// Interfaces that allow us to interact with global resources owned by the main

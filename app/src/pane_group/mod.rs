@@ -102,7 +102,7 @@ use crate::pane_group::pane::terminal_pane::{
 };
 use crate::persistence::ModelEvent;
 use crate::quit_warning::UnsavedStateSummary;
-use crate::resource_center::{
+use crate::tips::{
     Tip, TipAction, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
 };
 #[cfg(target_family = "wasm")]

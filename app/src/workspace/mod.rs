@@ -1212,16 +1212,8 @@ pub fn init(app: &mut AppContext) {
     .with_group(bindings::BindingGroup::Settings.as_str())
     .with_context_predicate(id!("Workspace") & !id!("IsAnonymousUser"))]);
 
-    if !FeatureFlag::AvatarInTabBar.is_enabled() {
-        app.register_editable_bindings([EditableBinding::new(
-            "workspace:toggle_resource_center",
-            "Toggle resource center",
-            WorkspaceAction::ToggleResourceCenter,
-        )
-        .with_group(bindings::BindingGroup::Navigation.as_str())
-        .with_context_predicate(id!("Workspace"))
-        .with_custom_action(CustomAction::ToggleResourceCenter)]);
-    }
+    // LOCAL FORK: no `toggle_resource_center` binding -- the panel it opened is
+    // gone, so the keybinding would otherwise be the one remaining way in.
 
     if cfg!(not(target_family = "wasm")) {
         app.register_editable_bindings([EditableBinding::new(

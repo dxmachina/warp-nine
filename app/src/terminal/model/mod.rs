@@ -31,6 +31,7 @@ pub mod index;
 pub mod iterm_image;
 pub mod kitty;
 pub(in crate::terminal) mod lifecycle;
+pub mod secret_detection;
 pub mod secrets;
 pub mod selection;
 pub mod session;

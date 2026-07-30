@@ -7,7 +7,7 @@ use crate::ai::agent::conversation::AIConversationId;
 use crate::ai::blocklist::AIBlock;
 use crate::ai::blocklist::agent_view::AgentViewEntryOrigin;
 use crate::ai::blocklist::block::PendingUserQueryBlock;
-use crate::ai::blocklist::telemetry_banner::TelemetryBanner;
+use crate::terminal::telemetry_banner::TelemetryBanner;
 use crate::env_vars::env_var_collection_block::EnvVarCollectionBlock;
 use crate::terminal::TerminalView;
 use crate::terminal::block_list_viewport::ScrollPositionUpdate;

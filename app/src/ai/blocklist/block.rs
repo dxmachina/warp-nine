@@ -82,7 +82,7 @@ use super::inline_action::requested_command_attribution::is_command_copied_from_
 use super::permissions::is_agent_mode_autonomy_allowed;
 use super::suggested_agent_mode_workflow_modal::SuggestedAgentModeWorkflowAndId;
 use super::suggested_rule_modal::SuggestedRuleAndId;
-use super::telemetry_banner::should_collect_ai_ugc_telemetry;
+use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
 use super::{
     BlocklistAIActionModel, BlocklistAIController, BlocklistAIHistoryEvent,
     BlocklistAIHistoryModel, BlocklistAIPermissions, ResponseStreamId,

@@ -11,7 +11,7 @@ use warp_graphql::mutations::update_user_settings::UpdateUserSettingsInput;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity, UpdateModel};
 
 use super::cloud_preferences_syncer::CloudPreferencesSyncer;
-use crate::ai::blocklist::telemetry_banner::should_collect_ai_ugc_telemetry;
+use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_state::AuthState;
 use crate::cloud_object::model::persistence::CloudModel;

@@ -248,7 +248,7 @@ use crate::ai::blocklist::orchestration_topology::OrchestrationNavigationDirecti
 use crate::ai::blocklist::suggested_agent_mode_workflow_modal::SuggestedAgentModeWorkflowAndId;
 use crate::ai::blocklist::suggested_rule_modal::SuggestedRuleAndId;
 use crate::ai::blocklist::summarization_cancel_dialog::SummarizationCancelDialog;
-use crate::ai::blocklist::telemetry_banner::{TelemetryBanner, should_collect_ai_ugc_telemetry};
+use crate::terminal::telemetry_banner::{TelemetryBanner, should_collect_ai_ugc_telemetry};
 use crate::ai::blocklist::usage::conversation_usage_view::{
     ConversationUsageInfo, ConversationUsageView, TimingInfo,
 };

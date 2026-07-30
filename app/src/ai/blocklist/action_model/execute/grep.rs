@@ -22,7 +22,7 @@ use crate::ai::agent::{
     GrepResult, ServerOutputId,
 };
 use crate::ai::blocklist::BlocklistAIPermissions;
-use crate::ai::blocklist::telemetry_banner::should_collect_ai_ugc_telemetry;
+use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
 use crate::ai::paths::{host_native_absolute_path, shell_native_absolute_path};
 use crate::terminal::ShellLaunchData;
 use crate::terminal::model::session::active_session::ActiveSession;

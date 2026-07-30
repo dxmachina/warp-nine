@@ -99,7 +99,7 @@ use super::ConversationSelectionHandle;
 use super::context_model::BlocklistAIContextModel;
 use super::history_model::BlocklistAIHistoryModel;
 use super::input_mode_policy::{InputModePolicyHandle, PolicyConfigUpdate};
-use super::telemetry_banner::should_collect_ai_ugc_telemetry;
+use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
 use crate::input_classifier::InputClassifierModel;
 use crate::settings::{AISettings, AISettingsChangedEvent, InputBoxType, InputSettings};
 use crate::terminal::cli_agent_sessions::{

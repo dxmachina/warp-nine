@@ -170,7 +170,7 @@ use crate::ai::blocklist::handoff::{
     HandoffLaunchAttachments, PendingCloudLaunch, suggest_handoff_environment,
 };
 use crate::ai::blocklist::prompt::prompt_alert::{PromptAlertEvent, PromptAlertView};
-use crate::ai::blocklist::telemetry_banner::should_collect_ai_ugc_telemetry;
+use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
 use crate::ai::blocklist::{
     AttachmentType, BLOCK_CONTEXT_ATTACHMENT_REGEX, BlocklistAIActionModel,
     BlocklistAIContextEvent, BlocklistAIContextModel, BlocklistAIController,

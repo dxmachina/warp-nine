@@ -30,7 +30,7 @@ use warpui::{
 };
 
 use crate::GlobalResourceHandlesProvider;
-use crate::ai::blocklist::secret_redaction::find_secrets_in_text;
+use crate::terminal::model::secret_detection::find_secrets_in_text;
 use crate::ai::mcp::parsing::{ParsedTemplatableMCPServerResult, prettify_json, resolve_json};
 use crate::ai::mcp::templatable::CloudTemplatableMCPServer;
 use crate::ai::mcp::{

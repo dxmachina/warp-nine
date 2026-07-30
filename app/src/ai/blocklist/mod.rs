@@ -32,7 +32,6 @@ pub(crate) mod telemetry;
 pub mod usage;
 
 pub(crate) mod codebase_index_speedbump_banner;
-pub(crate) mod telemetry_banner;
 pub(crate) mod view_util;
 
 // Consumed by `tui_export` for the `warp_tui` frontend.

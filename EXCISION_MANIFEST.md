@@ -6,6 +6,60 @@ Working notes for stripping login, agents, and cloud from the Warp OSS checkout
 (`warp/`, upstream `warpdotdev/warp` @ `3fdb2dec6`), targeting an
 Apple-Silicon-only local build.
 
+## Correction (2026-07-30): the agent was not the size problem
+
+This document was written assuming the agent and cloud code were why the binary
+is large, and much of what follows is planning for that deletion. The assumption
+was wrong, and the numbers below are the refutation. The plan is still valid as a
+*de-agenting* plan. It is not the way to make the binary small.
+
+Measured by attributing symbol sizes in the stock arm64 slice to source modules:
+
+| Bucket | Size |
+|---|---|
+| `warp::ai` module | 11.8 MB |
+| `rmcp`, `candle`, `ai`, `tantivy`, `input_classifier`, `computer_use`, `tokenizers` | 10.0 MB |
+| **entire agent subsystem** | **~22 MB of a 395 MB slice** |
+
+What actually accounted for the reduction, none of which deletes application
+code:
+
+| Lever | Saved |
+|---|---|
+| No x86_64 slice | 426 MB |
+| `debug = 0` + `strip = "symbols"` | ~90 MB |
+| Dropped 34 tree-sitter grammars (`arborium` features) | 51 MB |
+| Excluded onboarding imagery from `rust-embed` | 47 MB |
+| `opt-level = "s"` (release defaults to `3`) | 26 MB |
+| `panic = "abort"` | 25 MB |
+| Dropped `nld_classifier_v3` (`bert_tiny_v3.onnx`) | 17.5 MB |
+| Dropped 663 PowerShell completion specs | 5 MB |
+
+Result: 857 MB → 100 MB without finishing the agent excision.
+
+Two specifics worth carrying forward:
+
+- **41 MB of the binary was onboarding PNGs.** `crates/warp_assets` embeds
+  `app/assets/async` verbatim with no compression. WASM and the headless CLI
+  already excluded that folder; the GUI build never did.
+- **The 38 tree-sitter grammars served the code editor and the agent's codebase
+  indexer, not the terminal.** Terminal input highlighting is in
+  `terminal/input/decorations.rs` and uses the completer's shell tokenizer.
+
+Also note the earlier claim in this repo that "Warp's features are runtime flags,
+so no configuration makes the binary smaller, only deletion does." The first half
+is true. The conclusion is false: build-profile and asset-embedding changes did
+most of the work.
+
+## On `script/fork_separability`
+
+The tool's foreign-`impl` signal is sound and caught real traps. Its
+name-frequency signal is not: it predicted a 24-file cascade for
+`resource_center::ContentItem`, which had **zero** external users, because it was
+matching a common word rather than a resolved symbol. Actual cascade when the
+module was deleted: 40 errors, 27 of them missing imports in a file that had just
+been extracted. Treat high counts on generic identifiers as unverified.
+
 ## Measured baseline (stock `/Applications/Warp.app`, 857 MB)
 
 | Component | Size |

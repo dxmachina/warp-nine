@@ -114,10 +114,16 @@ above), secret detection in terminal output.
 
 ## In progress
 
-Deleting the agent code: `app/src/ai` (~220K LOC) plus the `ai`, `mcp`,
-`computer_use`, `input_classifier` crates. Worth ~22 MB and a lot of mechanical
-work. `terminal/` and `ai/blocklist/` import each other, so there's no small first
-step. See [`EXCISION_MANIFEST.md`](EXCISION_MANIFEST.md).
+The agent UI is gone but the agent code still compiles in: `app/src/ai` (~220K
+LOC) plus the `ai`, `mcp`, `computer_use`, `input_classifier` crates. That is the
+remaining gap between what this fork claims and what it ships. A terminal that
+advertises no agent should not carry an agent's inference stack, model clients,
+and tool-call plumbing in its address space.
+
+Worth ~22 MB, mostly mechanical. `terminal/` and `ai/blocklist/` import each
+other, so there is no small first step. An earlier attempt split it into six
+phases and proved they were not independent; `app/src/ai` has to come out
+wholesale. See [`EXCISION_MANIFEST.md`](EXCISION_MANIFEST.md).
 
 `script/fork_separability` predicts those cascades. Distrust its name-frequency
 signal: it over-reports on generic identifiers, and once predicted a 24-file
@@ -160,6 +166,13 @@ Builds are slow. `lto = "fat"` with `codegen-units = 1` makes LLVM optimize the
 whole program as one largely single-threaded unit. Tens of minutes is normal. Use
 `lto = "thin"` in `[profile.release-lto]` for faster iteration.
 
+`target/` gets large. Two reasons, both addressed. Upstream generates the settings
+schema without `--target`, so that helper binary lands in a separate artifact tree
+and drags a second full copy of every dependency with it; the bundle script now
+passes the triple through. Separately, cargo never garbage-collects superseded
+artifacts, and each rebuild of the `warp` lib crate leaves a ~600 MB `.rlib`
+behind. Delete all but the newest when it gets out of hand, or use `cargo-sweep`.
+
 `./script/bootstrap` works but installs tooling this fork doesn't need (Docker,
 gcloud, PowerShell, Sentry CLI).
 
@@ -174,7 +187,6 @@ upstream  https://github.com/warpdotdev/warp.git
 |---|---|
 | `main` | the fork |
 | `master` | mirrors upstream, for rebasing |
-| `local/deagent-terminal-ui` | agent excision WIP, **does not compile** |
 
 ```bash
 git fetch upstream && git rebase upstream/master

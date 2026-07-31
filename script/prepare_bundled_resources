@@ -102,7 +102,11 @@ ADDITIONAL_LICENSES=(
     "Roboto Font|SIL Open Font License|app/assets/bundled/fonts/roboto/LICENSE.txt"
     "bash-preexec|MIT|app/assets/bundled/bootstrap/bash-preexec-LICENSE.md"
     "Claude API Skill|Apache-2.0|resources/bundled/skills/claude-api/LICENSE.txt"
-    "rudder-sdk-rust|MIT|app/src/server/telemetry/LICENSE-RUDDER-SDK-RUST.txt"
+    # LOCAL FORK: the `rudder-sdk-rust` entry went with the Rudderstack telemetry
+    # pipeline. Its licence file lived beside the vendored code at
+    # `app/src/server/telemetry/LICENSE-RUDDER-SDK-RUST.txt` and was deleted with it,
+    # which made this loop's missing-file check abort the bundle before codesigning.
+    # Nothing SDK-derived ships any more, so the attribution goes rather than the check.
     "Windows Terminal|MIT|app/assets/windows/LICENSE-WINDOWS-TERMINAL"
     "GitHub Desktop|MIT|app/src/code_review/GITHUB-DESKTOP-LICENSE"
 )

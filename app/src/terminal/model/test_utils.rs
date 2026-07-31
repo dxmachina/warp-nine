@@ -196,7 +196,6 @@ impl<'a> TestBlockListBuilder<'a> {
             self.honor_ps1,
             false, /* is_inverted */
             ObfuscateSecrets::No,
-            false, /* is_telemetry_enabled */
         );
         // This is usually done by the terminal manager after constructing the blocklist,
         // but we have tests assuming the separator exists.
@@ -281,7 +280,6 @@ impl TestBlockBuilder {
             self.block_index,
             self.honor_ps1,
             ObfuscateSecrets::No,
-            false, /* is_telemetry_enabled */
         )
     }
 }

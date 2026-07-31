@@ -79,9 +79,6 @@ pub mod ssh;
 pub mod terminal_manager;
 mod terminal_size_element;
 pub mod view;
-// LOCAL FORK: rescued from `ai/blocklist/telemetry_banner.rs` — the telemetry
-// opt-in banner is not agent UI and must outlive the agent tree.
-pub mod telemetry_banner;
 pub mod warpify;
 mod waterfall_gap_element;
 mod writeable_pty;

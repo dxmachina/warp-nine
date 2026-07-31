@@ -20,7 +20,6 @@ use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::auth::MockAuthClient;
 use crate::server::server_api::auth::{AuthClient, SyncedUserSettings};
 use crate::terminal::safe_mode_settings::SafeModeSettings;
-use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
 use crate::workspaces::workspace::EnterpriseSecretRegex;
 
 pub trait RegexDisplayInfo {
@@ -492,10 +491,10 @@ impl PrivacySettings {
             is_telemetry_enabled: self.is_telemetry_enabled,
             is_crash_reporting_enabled: self.is_crash_reporting_enabled,
             is_telemetry_force_enabled: self.is_telemetry_force_enabled,
-            should_collect_ai_ugc_telemetry: should_collect_ai_ugc_telemetry(
-                app,
-                self.is_telemetry_enabled,
-            ),
+            // LOCAL FORK: the AI-UGC collection gate went with telemetry. It was the last
+            // caller of `should_collect_ai_ugc_telemetry`, which read a workspace admin
+            // setting and two feature flags; the accessor below already returns `false`.
+            should_collect_ai_ugc_telemetry: false,
         }
     }
 

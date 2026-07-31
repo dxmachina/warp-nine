@@ -1,5 +1,6 @@
 mod data_source;
-mod model_spec_scores;
+// LOCAL FORK: `model_spec_scores` (341 lines) scored LLM specs to rank models in the
+// agent's model picker. Its only reference repo-wide was this `mod` line.
 mod view;
 
 pub use data_source::{

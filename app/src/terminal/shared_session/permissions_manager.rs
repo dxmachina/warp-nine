@@ -1,7 +1,7 @@
 use session_sharing_protocol::common::{Guest, PendingGuest, Role, SessionId, TeamAclData};
 use warpui::{Entity, ModelContext, SingletonEntity};
 
-use crate::drive::sharing::SharingAccessLevel;
+use crate::sharing::SharingAccessLevel;
 pub struct SessionPermissionsManager {}
 
 impl SessionPermissionsManager {

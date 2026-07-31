@@ -35,11 +35,6 @@ use warpui::{
 
 use super::DriveSortOrder;
 use super::cloud_object_naming_dialog::CloudObjectNamingDialog;
-use super::drive_helpers::{
-    has_feature_gated_anonymous_user_reached_env_var_limit,
-    has_feature_gated_anonymous_user_reached_notebook_limit,
-    has_feature_gated_anonymous_user_reached_workflow_limit,
-};
 use super::empty_trash_confirmation_dialog::{
     EmptyTrashConfirmationDialog, EmptyTrashConfirmationEvent,
 };
@@ -49,8 +44,6 @@ use super::items::ai_fact_collection::WarpDriveAIFactCollection;
 use super::items::item::{ItemStates, WarpDriveRow, tools_panel_menu_direction};
 use super::items::mcp_server_collection::WarpDriveMCPServerCollection;
 use super::settings::WarpDriveSettings;
-use super::sharing::dialog::{SharingDialog, SharingDialogEvent};
-use super::sharing::{ContentEditability, ShareableObject};
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::{AuthManager, LoginGatedFeature};
@@ -59,6 +52,11 @@ use crate::auth::auth_view_modal::AuthViewVariant;
 use crate::banner::BannerState;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::{CloudViewModel, CloudViewModelEvent, UpdateTimestamp};
+use crate::cloud_object::object_limits::{
+    has_feature_gated_anonymous_user_reached_env_var_limit,
+    has_feature_gated_anonymous_user_reached_notebook_limit,
+    has_feature_gated_anonymous_user_reached_workflow_limit,
+};
 use crate::cloud_object::{
     CloudObject, CloudObjectEventEntrypoint, CloudObjectLocation, CloudObjectSyncStatus,
     GenericStringObjectFormat, JsonObjectType, NumInFlightRequests, ObjectType, Space,
@@ -82,6 +80,8 @@ use crate::settings::SharedObjectLimitBannerSettings;
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
 };
+use crate::sharing::dialog::{SharingDialog, SharingDialogEvent};
+use crate::sharing::{ContentEditability, ShareableObject};
 use crate::ui_components::blended_colors;
 use crate::ui_components::buttons::{highlight, icon_button};
 use crate::ui_components::icons::{ICON_DIMENSIONS, Icon};

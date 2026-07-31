@@ -6,7 +6,7 @@ use warpui::{AppContext, Element, SingletonEntity};
 use crate::appearance::Appearance;
 use crate::cloud_object::CloudObject;
 use crate::cloud_object::DriveObjectType;
-use crate::drive::cloud_object_styling::warp_drive_icon_color;
+use crate::cloud_object::styling::warp_drive_icon_color;
 use crate::search::command_palette::mixer::CommandPaletteItemAction;
 use crate::search::command_palette::render_util::render_search_item_icon;
 use crate::search::command_palette::styles::SEARCH_ITEM_TEXT_PADDING;

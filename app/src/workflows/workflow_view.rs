@@ -42,13 +42,12 @@ use crate::auth::auth_state::AuthState;
 use crate::auth::{AuthStateProvider, UserUid};
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::CloudViewModel;
+use crate::cloud_object::object_limits::has_feature_gated_anonymous_user_reached_workflow_limit;
+use crate::cloud_object::styling::warp_drive_icon_color;
 use crate::cloud_object::{
     CloudObject, CloudObjectEventEntrypoint, ObjectType, Owner, Revision, Space,
 };
 use crate::cloud_object::{CloudObjectTypeAndId, DriveObjectType, OpenWarpDriveObjectSettings};
-use crate::drive::cloud_object_styling::warp_drive_icon_color;
-use crate::drive::drive_helpers::has_feature_gated_anonymous_user_reached_workflow_limit;
-use crate::drive::sharing::{ContentEditability, ShareableObject, SharingAccessLevel};
 use crate::editor::{
     EditorOptions, EditorView, EnterAction, EnterSettings, Event as EditorEvent, InteractionState,
     PlainTextEditorViewAction as EditorAction, PropagateAndNoOpNavigationKeys,
@@ -70,6 +69,7 @@ use crate::server::telemetry::{
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
 };
+use crate::sharing::{ContentEditability, ShareableObject, SharingAccessLevel};
 use crate::terminal::model::secret_detection::find_secrets_in_text;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
 use crate::ui_components::buttons::{accent_icon_button, icon_button};

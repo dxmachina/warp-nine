@@ -32,7 +32,6 @@ use crate::cloud_object::{
     ServerWorkflowEnum, Space, UpdateCloudObjectResult,
 };
 use crate::drive::folders::{CloudFolder, CloudFolderModel, FolderId};
-use crate::drive::sharing::{SharingAccessLevel, Subject, UserKind};
 use crate::notebooks::{CloudNotebook, CloudNotebookModel, NotebookId};
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::listener::ObjectUpdateMessage;
@@ -48,6 +47,7 @@ use crate::server::ids::{
 };
 use crate::server::sync_queue::SyncQueue;
 use crate::settings::{CloudPreferenceModel, Preference};
+use crate::sharing::{SharingAccessLevel, Subject, UserKind};
 use crate::workflows::workflow::{Argument, ArgumentType, Workflow};
 use crate::workflows::workflow_enum::{
     CloudWorkflowEnum, CloudWorkflowEnumModel, EnumVariants, WorkflowEnum,

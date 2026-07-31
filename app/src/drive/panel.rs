@@ -10,15 +10,15 @@ use warpui::{
     ViewHandle,
 };
 
-use super::drive_helpers::{
-    has_feature_gated_anonymous_user_reached_env_var_limit,
-    has_feature_gated_anonymous_user_reached_notebook_limit,
-    has_feature_gated_anonymous_user_reached_workflow_limit,
-};
 use super::index::{DriveIndex, DriveIndexAction, DriveIndexEvent};
 use super::items::WarpDriveItemId;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::model::view::CloudViewModel;
+use crate::cloud_object::object_limits::{
+    has_feature_gated_anonymous_user_reached_env_var_limit,
+    has_feature_gated_anonymous_user_reached_notebook_limit,
+    has_feature_gated_anonymous_user_reached_workflow_limit,
+};
 use crate::cloud_object::{CloudObjectTypeAndId, DriveObjectType};
 use crate::cloud_object::{GenericStringObjectFormat, JsonObjectType, Owner, Space};
 use crate::env_vars::CloudEnvVarCollection;
@@ -284,9 +284,12 @@ impl DrivePanel {
             #[cfg(feature = "local_fs")]
             DriveIndexEvent::ExportObject(cloud_object_type_and_id) => {
                 let window_id = ctx.window_id();
-                super::export::ExportManager::handle(ctx).update(ctx, |export_manager, ctx| {
-                    export_manager.export(window_id, &[*cloud_object_type_and_id], ctx);
-                });
+                crate::cloud_object::export::ExportManager::handle(ctx).update(
+                    ctx,
+                    |export_manager, ctx| {
+                        export_manager.export(window_id, &[*cloud_object_type_and_id], ctx);
+                    },
+                );
             }
             #[cfg(not(feature = "local_fs"))]
             DriveIndexEvent::ExportObject(_cloud_object_type_and_id) => {

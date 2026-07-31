@@ -36,8 +36,17 @@ use crate::workflows::{CloudWorkflow, WorkflowSource};
 use crate::workspaces::user_profiles::UserProfiles;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
+// LOCAL FORK: all three were lifted out of `app/src/drive/`, none of them Drive.
+// `export` writes a workflow to YAML and a notebook to Markdown, with four consumers
+// including the `workspace:export_all_warp_drive_objects` binding, none of them the panel.
+// `object_limits` (was `drive_helpers`) holds anonymous-user object quotas.
+// `styling` keys icon colour off the object kind for tab icons and search results across
+// eleven files.
+pub mod export;
+pub mod object_limits;
 pub mod object_type;
 pub mod open_object;
+pub mod styling;
 // LOCAL FORK: `crate::drive::` used to be the import path for all four of these. The first is
 // defined in the `cloud_objects` crate and was only ever re-exported through Drive; the other
 // three were lifted out of `drive/mod.rs`. Re-exported here so the ~40 consumers name the object

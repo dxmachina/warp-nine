@@ -1,15 +1,11 @@
 mod cloud_object_naming_dialog;
-pub mod cloud_object_styling;
-pub mod drive_helpers;
 pub mod empty_trash_confirmation_dialog;
-pub mod export;
 pub mod folders;
 pub mod import;
 pub(crate) mod index;
 pub mod items;
 pub mod panel;
 pub mod settings;
-pub mod sharing;
 
 use std::cmp::Ordering;
 use std::fmt;

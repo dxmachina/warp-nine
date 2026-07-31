@@ -218,16 +218,25 @@ fn test_free_ai_removal_modal_decision_matrix() {
     }
 }
 
+// LOCAL FORK: this was `feature_intro_triggers_for_unseen_feature`, and it asserted
+// that triggering marks the feature seen up front "whether or not it is shown on the
+// current channel". That was right while the registry had entries. Every registered
+// intro announced an agent feature, so `FEATURE_INTROS` is now `&[]`
+// (`view/feature_intro_modal/view.rs:75`) and `check_and_trigger_feature_intro_modal`
+// returns at its `let Some(id) = next_id else` without marking anything.
+//
+// The machinery is intact and `FeatureIntroId` still has variants, so rather than
+// delete the coverage this now pins the empty-registry contract: triggering is a
+// no-op, not a panic and not a spurious modal. If an intro is ever registered again,
+// restore the original assertions from `git show main:` on this file.
 #[test]
-fn feature_intro_triggers_for_unseen_feature() {
+fn feature_intro_trigger_is_a_no_op_with_empty_registry() {
     App::test((), |mut app| async move {
         initialize_app_for_terminal_view(&mut app);
         let terminal = add_window_with_terminal(&mut app, None);
 
         terminal.update(&mut app, |_, ctx| {
             let key = FeatureIntroId::CustomModelRouter.as_key();
-            let window_id = ctx.window_id();
-            let active_window = ctx.windows().active_window();
 
             OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
                 assert!(!AISettings::as_ref(ctx).is_feature_intro_seen(key));
@@ -235,32 +244,11 @@ fn feature_intro_triggers_for_unseen_feature() {
                 // on_active_window_changed has assigned a target window.
                 model.target_window_id = None;
 
-                let shown = model.check_and_trigger_feature_intro_modal(ctx);
+                assert!(!model.check_and_trigger_feature_intro_modal(ctx));
+                assert!(!AISettings::as_ref(ctx).is_feature_intro_seen(key));
+                assert_eq!(model.active_feature_intro, None);
 
-                // The feature is marked seen up front, whether or not it is shown on
-                // the current channel.
-                assert!(AISettings::as_ref(ctx).is_feature_intro_seen(key));
-                if shown {
-                    assert_eq!(
-                        model.active_feature_intro,
-                        Some(FeatureIntroId::CustomModelRouter)
-                    );
-                    // Prefer binding to the focused window immediately. If the
-                    // window manager has not yet reported an active window, the
-                    // intro stays pending until `update_target_window_id`.
-                    if active_window.is_some() {
-                        assert_eq!(model.target_window_id, Some(window_id));
-                        assert_eq!(
-                            model.active_feature_intro(),
-                            Some(FeatureIntroId::CustomModelRouter)
-                        );
-                    } else {
-                        assert_eq!(model.target_window_id, None);
-                        assert_eq!(model.active_feature_intro(), None);
-                    }
-                }
-
-                // It is shown at most once: a second check is a no-op.
+                // Still a no-op on a second call.
                 assert!(!model.check_and_trigger_feature_intro_modal(ctx));
             });
         });

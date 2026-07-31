@@ -221,69 +221,26 @@ fn command_first_word_and_suffix_handles_alias_without_args() {
 // view with a long-running command all needed `agent_view_controller` to enter an agent
 // view first. Escape handling for plain terminal panes is unaffected and untested here.
 
-#[test]
-fn root_cloud_mode_pane_sets_root_cloud_mode_context_key() {
-    App::test((), |mut app| async move {
-        initialize_app_for_terminal_view(&mut app);
-        app.add_singleton_model(ImportedConfigModel::new);
-        FeatureFlag::AgentView.set_enabled(true);
-        FeatureFlag::CloudMode.set_enabled(true);
-
-        let terminal = add_window_with_cloud_mode_terminal(&mut app);
-        let nested_terminal = add_window_with_cloud_mode_terminal(&mut app);
-
-        terminal.read(&app, |view, ctx| {
-            assert!(
-                view.keymap_context(ctx)
-                    .set
-                    .contains(init::ROOT_CLOUD_MODE_PANE_KEY)
-            );
-        });
-
-        let root_view = terminal.clone();
-        let nested_view = nested_terminal.clone();
-        let root_model = terminal.read(&app, |view, _| view.model.clone());
-        let nested_model = nested_terminal.read(&app, |view, _| view.model.clone());
-        let _pane_stack = app.update(move |ctx| {
-            let root_manager = ctx.add_model(|_| {
-                let manager: Box<dyn TerminalManager> = Box::new(TestTerminalManager {
-                    model: root_model,
-                    _view: root_view.clone(),
-                });
-                manager
-            });
-            let nested_manager = ctx.add_model(|_| {
-                let manager: Box<dyn TerminalManager> = Box::new(TestTerminalManager {
-                    model: nested_model,
-                    _view: nested_view.clone(),
-                });
-                manager
-            });
-            let pane_stack = ctx.add_model(|ctx| PaneStack::new(root_manager, root_view, ctx));
-            pane_stack.update(ctx, |stack, ctx| {
-                stack.push(nested_manager, nested_view, ctx);
-            });
-            pane_stack
-        });
-
-        terminal.read(&app, |view, ctx| {
-            assert!(
-                view.keymap_context(ctx)
-                    .set
-                    .contains(init::ROOT_CLOUD_MODE_PANE_KEY)
-            );
-        });
-
-        nested_terminal.read(&app, |view, ctx| {
-            assert!(
-                !view
-                    .keymap_context(ctx)
-                    .set
-                    .contains(init::ROOT_CLOUD_MODE_PANE_KEY)
-            );
-        });
-    });
-}
+// LOCAL FORK: `root_cloud_mode_pane_sets_root_cloud_mode_context_key` was deleted here,
+// and it was doing real damage to the suite.
+//
+// It could never pass. `terminal/view.rs:18461` guards the insert with
+// `self.is_ambient_agent_session(app)`, and the excision stubbed that to an
+// unconditional `false` (`view/pane_impl.rs:558`), so `ROOT_CLOUD_MODE_PANE_KEY` is
+// never set and the test's first assertion always fails.
+//
+// Worse, it failed *after* calling `FeatureFlag::AgentView.set_enabled(true)` and
+// `FeatureFlag::CloudMode.set_enabled(true)`. Those are process-global and were never
+// reset, so they leaked into every test sharing the process. The four other
+// `terminal::view::tests` pass alone and as a group of four, and all four fail the
+// moment this one joins them — five failures from one dead test.
+//
+// The guard against exactly this does exist, but does not fire: `warp_features` panics
+// on `set_enabled` under `cfg!(test)`, and that `cfg!` is evaluated when compiling
+// `warp_features` as a dependency, where `test` is not set.
+//
+// The context key itself stays; `view/init.rs:60` still declares it and `:1154` still
+// binds against it.
 // LOCAL FORK: a large cloud-mode / agent-view block was removed here: `&`-prefixed cloud
 // agent spawn (v1 and v2), ambient setup entry, shared third-party viewer agent sync,
 // cloud follow-up submission and queued user-query blocks, the conversation-ended

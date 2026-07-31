@@ -26,6 +26,20 @@ mod mac {
         set_locale_environment();
 
         // Switch to home directory.
+        //
+        // LOCAL FORK: gated out of test builds. The current directory is process-global,
+        // and `workspace/view.rs` calls `platform::init()` while constructing a workspace,
+        // so any test that builds one moved every *other* test in the process to `$HOME`.
+        // Tests that resolve a relative path then failed depending only on execution order:
+        // `util::path::tests::test_resolve_command` (`../script/run`) and both
+        // `notebooks::file::tests` (`../README.md`), all of which pass in isolation.
+        //
+        // This is upstream behavior, identical on `main`, not excision damage. It is the
+        // same class of bug as the feature-flag leak that `terminal::view_tests` had, and
+        // unlike that one `cfg(test)` works here: `platform.rs` is compiled as part of the
+        // `warp` crate's own test target, whereas `warp_features` is a dependency where
+        // `cfg!(test)` is never set.
+        #[cfg(not(test))]
         env::set_current_dir(dirs::home_dir().unwrap()).unwrap();
 
         Ok(())

@@ -756,7 +756,12 @@ fn snapshot_round_trip_3_deep_nesting() {
         parsed.panes[1].children,
         Some(vec!["p3".to_string(), "p4".to_string()])
     );
-    assert_eq!(parsed.panes[2].pane_type, Some(TabConfigPaneType::Agent));
+    // LOCAL FORK: this asserted `Agent`. The excision rewrote the pane above from
+    // `make_agent_leaf` to `make_terminal_leaf` and left the assertion behind, so the
+    // test has been failing on a stale expectation rather than a real round-trip bug.
+    // `TabConfigPaneType::Agent` itself stays: it is a persisted pane kind and must
+    // still deserialize from pre-excision session files.
+    assert_eq!(parsed.panes[2].pane_type, Some(TabConfigPaneType::Terminal));
     assert_eq!(parsed.panes[3].pane_type, Some(TabConfigPaneType::Cloud));
     assert_eq!(parsed.panes[4].pane_type, Some(TabConfigPaneType::Terminal));
 }

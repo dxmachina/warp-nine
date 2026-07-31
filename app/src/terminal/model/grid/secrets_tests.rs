@@ -30,8 +30,28 @@ fn empty_blockgrid(
     )
 }
 
+// LOCAL FORK: these tests mutate `SECRETS_REGEX`, a process-global
+// `lazy_static! { Mutex<Arc<SecretsRegex>> }` in `terminal::model::secrets`, via
+// `set_user_and_enterprise_secret_regexes`. libtest runs tests concurrently, so any two
+// of them racing left one asserting against the other's regex set. That failed roughly
+// 10% of the time at 16 threads and 80% at 8, and predates the agent excision.
+//
+// Unlike the `APP_VERSION` leak fixed alongside this, the global cannot be made
+// `thread_local!`: production genuinely shares it across threads, with
+// `terminal/secret_regex_updater.rs` writing while grid handlers read. The state under
+// test IS the global, so serialising the tests that touch it is the honest fix rather
+// than a workaround. Every test below takes this lock for its whole body.
+static SECRETS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Serialises access to the process-global secret regexes. Ignores lock poisoning, so
+/// one failing test reports its own assertion rather than cascading into the others.
+fn lock_secrets() -> std::sync::MutexGuard<'static, ()> {
+    SECRETS_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[test]
 fn test_secret_redacted_after_byte_processing() {
+    let _secrets_guard = lock_secrets();
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new("ABCD").expect("Should be able to construct regex")],
         std::iter::empty(), // No enterprise secrets
@@ -66,6 +86,7 @@ fn test_secret_redacted_after_byte_processing() {
 
 #[test]
 fn test_secret_redacted_after_multibyte_prefix() {
+    let _secrets_guard = lock_secrets();
     let secret = "AAAAC3NzaC1lZDI1NTE5AAAAIThisIsNotARealKeyItIsJustForTestingWarpRedact";
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new("AAAAC3NzaC1lZDI1NTE5[A-Za-z0-9+/=]{20,}")
@@ -101,6 +122,7 @@ fn test_secret_redacted_after_multibyte_prefix() {
 
 #[test]
 fn test_secret_with_word_boundaries_redacted_after_multibyte_prefix() {
+    let _secrets_guard = lock_secrets();
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new(r"\bTOKEN123\b").expect("Should be able to construct regex")],
         std::iter::empty(), // No enterprise secrets
@@ -133,6 +155,7 @@ fn test_secret_with_word_boundaries_redacted_after_multibyte_prefix() {
 
 #[test]
 fn test_secret_redacted_after_multiple_byte_processing() {
+    let _secrets_guard = lock_secrets();
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new("ABCD").expect("Should be able to construct regex")],
         std::iter::empty(), // No enterprise secrets
@@ -173,6 +196,7 @@ fn test_secret_redacted_after_multiple_byte_processing() {
 
 #[test]
 fn test_secret_redaction_unobfuscated_secret_remains_after_byte_processing() -> anyhow::Result<()> {
+    let _secrets_guard = lock_secrets();
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new("ABCD").expect("Should be able to construct regex")],
         std::iter::empty(), // No enterprise secrets
@@ -231,6 +255,7 @@ fn test_secret_redaction_unobfuscated_secret_remains_after_byte_processing() -> 
 
 #[test]
 fn test_secret_redaction_secret_remains_after_resize() {
+    let _secrets_guard = lock_secrets();
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new("ABCD").expect("Should be able to construct regex")],
         std::iter::empty(), // No enterprise secrets
@@ -268,6 +293,7 @@ fn test_secret_redaction_secret_remains_after_resize() {
 
 #[test]
 fn test_bytes_processed_for_secrets_after_turning_redaction() {
+    let _secrets_guard = lock_secrets();
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new("abcd").expect("Should be able to construct regex")],
         std::iter::empty(), // No enterprise secrets
@@ -299,6 +325,7 @@ fn test_bytes_processed_for_secrets_after_turning_redaction() {
 
 #[test]
 fn test_bytes_processed_for_secrets_after_turning_redaction_on() {
+    let _secrets_guard = lock_secrets();
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new("abcd").expect("Should be able to construct regex")],
         std::iter::empty(), // No enterprise secrets
@@ -325,6 +352,7 @@ fn test_bytes_processed_for_secrets_after_turning_redaction_on() {
 
 #[test]
 fn test_bytes_processed_for_secrets_after_turning_redaction_off_then_on() {
+    let _secrets_guard = lock_secrets();
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new("abcd").expect("Should be able to construct regex")],
         std::iter::empty(), // No enterprise secrets
@@ -360,6 +388,7 @@ fn test_bytes_processed_for_secrets_after_turning_redaction_off_then_on() {
 
 #[test]
 fn test_bytes_processed_for_secrets_after_turning_redaction_on_then_off() {
+    let _secrets_guard = lock_secrets();
     crate::terminal::model::secrets::set_user_and_enterprise_secret_regexes(
         [&Regex::new("abcd").expect("Should be able to construct regex")],
         std::iter::empty(), // No enterprise secrets

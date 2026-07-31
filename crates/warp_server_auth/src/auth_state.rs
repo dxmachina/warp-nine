@@ -2,12 +2,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::anyhow;
-use chrono::{DateTime, Duration, Utc};
 use parking_lot::RwLock;
 use uuid::Uuid;
 use warp_core::channel::{Channel, ChannelState};
 use warp_errors::report_error;
-use warp_graphql::object_permissions::OwnerType;
 use warpui_core::{AppContext, Entity, SingletonEntity};
 
 use super::anonymous_id::get_or_create_anonymous_id;
@@ -20,7 +18,13 @@ use super::user::{
 };
 use super::{API_KEY_PREFIX, UserUid};
 
-const ANONYMOUS_USER_NOTIFICATION_BLOCK_TIMER: Duration = Duration::days(7);
+// LOCAL FORK: eight `AuthState` accessors went, all with zero call sites anywhere
+// in the workspace (app, crates, tests, integration): `anonymous_user_type`,
+// `anonymous_user_renotification_block_expired` (and its 7-day timer constant),
+// `api_key_owner_type`, `global_skills`, `is_api_key_authenticated`,
+// `is_service_account`, `principal_type`, and `new_anonymous_for_test` on both
+// `AuthState` and `AuthStateProvider`. The underlying `User` fields stay, because
+// `PersistedUser` serializes them and dropping a field changes the on-disk shape.
 
 /// Describes what persistence action to take based on the current auth state.
 pub enum PersistAction {
@@ -94,20 +98,6 @@ impl AuthState {
             anonymous_id: Uuid::new_v4(),
             needs_reauth: AtomicBool::new(false),
             credentials: RwLock::new(None),
-        }
-    }
-
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn new_anonymous_for_test() -> Self {
-        use super::user::AnonymousUserType;
-        Self {
-            user: RwLock::new(Some(User {
-                anonymous_user_type: Some(AnonymousUserType::NativeClientAnonymousUserFeatureGated),
-                ..User::test()
-            })),
-            anonymous_id: Uuid::new_v4(),
-            needs_reauth: AtomicBool::new(false),
-            credentials: RwLock::new(Some(Self::test_credentials())),
         }
     }
 
@@ -433,16 +423,6 @@ impl AuthState {
         self.user.read().as_ref().map(|user| user.needs_sso_link)
     }
 
-    /// Returns the anonymous user type.
-    /// Note that a `Some()` value here does NOT mean the user is still anonymous;
-    /// they might have since signed up, but we keep their anonymous user type around.
-    pub fn anonymous_user_type(&self) -> Option<AnonymousUserType> {
-        self.user
-            .read()
-            .as_ref()
-            .and_then(|user| user.anonymous_user_type())
-    }
-
     /// Returns the personal object limits the user has.
     /// Currently, only anonymous users have limits.
     pub fn personal_object_limits(&self) -> Option<PersonalObjectLimits> {
@@ -483,62 +463,16 @@ impl AuthState {
         !prev_needs_reauth && new_needs_reauth
     }
 
-    /// Returns whether or not the renotification block to encourage anonymous users to sign up
-    /// has expired.
-    pub fn anonymous_user_renotification_block_expired(
-        &self,
-        last_time_opt: Option<String>,
-    ) -> bool {
-        self.is_anonymous_user_feature_gated().unwrap_or_default()
-            && last_time_opt
-                .and_then(|last_time_string| last_time_string.parse::<DateTime<Utc>>().ok())
-                .is_none_or(|last_time| {
-                    Utc::now() - ANONYMOUS_USER_NOTIFICATION_BLOCK_TIMER >= last_time
-                })
-    }
-
     /// Returns whether or not the user is on a work domain.
     /// This calculation is done on the server, using a list of
     pub fn is_on_work_domain(&self) -> Option<bool> {
         self.user.read().as_ref().map(|user| user.is_on_work_domain)
     }
 
-    /// Returns whether the current user is authenticated via API key.
-    pub fn is_api_key_authenticated(&self) -> bool {
-        matches!(
-            self.credentials.read().as_ref(),
-            Some(Credentials::ApiKey { .. })
-        )
-    }
-
     /// Returns the API key if using API key authentication.
     pub fn api_key(&self) -> Option<String> {
         let credentials = self.credentials.read();
         credentials.as_ref()?.as_api_key().map(|s| s.to_owned())
-    }
-
-    /// Returns the type of principal (user or service account).
-    pub fn principal_type(&self) -> Option<PrincipalType> {
-        self.user.read().as_ref().map(|user| user.principal_type)
-    }
-
-    /// Returns whether the authenticated principal is a service account.
-    pub fn is_service_account(&self) -> bool {
-        matches!(self.principal_type(), Some(PrincipalType::ServiceAccount))
-    }
-
-    /// Returns the cached global skill specs for the current user.
-    pub fn global_skills(&self) -> Vec<String> {
-        self.user
-            .read()
-            .as_ref()
-            .map(|user| user.global_skills.clone())
-            .unwrap_or_default()
-    }
-
-    /// Returns the owner type of the currently-authenticated API key.
-    pub fn api_key_owner_type(&self) -> Option<OwnerType> {
-        self.credentials.read().as_ref()?.api_key_owner_type()
     }
 }
 
@@ -574,13 +508,6 @@ impl AuthStateProvider {
     pub fn new_logged_out_for_test() -> Self {
         Self {
             auth_state: Arc::new(AuthState::new_logged_out_for_test()),
-        }
-    }
-
-    #[cfg(any(test, feature = "test-util"))]
-    pub fn new_anonymous_for_test() -> Self {
-        Self {
-            auth_state: Arc::new(AuthState::new_anonymous_for_test()),
         }
     }
 

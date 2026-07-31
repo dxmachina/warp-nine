@@ -1,7 +1,6 @@
 //! Module containing utilities to query the currently running antivirus / EDR software on the
 //! user's machine.
 
-mod telemetry;
 #[cfg(windows)]
 mod windows;
 

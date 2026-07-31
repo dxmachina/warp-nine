@@ -36,7 +36,6 @@ use serde::{Deserialize, Serialize};
 use team::TeamClient;
 use url::Url;
 use warp_core::context_flag::ContextFlag;
-use warp_core::telemetry::TelemetryEvent;
 use warp_errors::{AnyhowErrorExt, ErrorExt, register_error, report_error};
 use warp_managed_secrets::client::ManagedSecretsClient;
 use warp_server_client::auth::{AuthClientImpl, AuthEvent, EXPERIMENT_ID_HEADER};
@@ -52,7 +51,6 @@ use workspace::WorkspaceClient;
 use super::experiments::{ServerExperiment, ServerExperiments};
 use crate::auth::auth_manager::AuthManager;
 use crate::auth::auth_state::AuthState;
-use crate::server::telemetry::TelemetryApi;
 use crate::settings::PrivacySettingsSnapshot;
 use crate::{ChannelState, settings_view};
 
@@ -295,8 +293,6 @@ pub enum TranscribeError {
 /// with disparate types of calls, and allows you to mock methods in tests.
 pub struct ServerApi {
     base_client: Arc<BaseClient>,
-    // TODO(jeff): Make `TelemetryApi` another type of client, and move it off `ServerApi`.
-    telemetry_api: TelemetryApi,
     last_server_time: Arc<Mutex<Option<ServerTime>>>,
 }
 
@@ -312,10 +308,9 @@ impl ServerApi {
             client.set_iap_token_provider(state.clone());
             state as Arc<dyn http_client::iap::IapTokenProvider>
         });
-        let mut telemetry_api = TelemetryApi::new();
         if ContextFlag::NetworkLogConsole.is_enabled() {
             NetworkLogModel::handle(ctx).update(ctx, |model, model_ctx| {
-                model.install_on_clients([&mut client, &mut telemetry_api.client], model_ctx);
+                model.install_on_clients([&mut client], model_ctx);
             });
         }
         Self::new_with_parts(
@@ -323,7 +318,6 @@ impl ServerApi {
             auth_state,
             event_sender,
             iap_token_provider,
-            telemetry_api,
         )
     }
 
@@ -332,7 +326,6 @@ impl ServerApi {
         auth_state: Arc<AuthState>,
         event_sender: async_channel::Sender<AuthEvent>,
         iap_token_provider: Option<Arc<dyn http_client::iap::IapTokenProvider>>,
-        telemetry_api: TelemetryApi,
     ) -> Self {
         let graphql_routing = GraphqlRoutingConfig {
             #[cfg(feature = "agent_mode_evals")]
@@ -354,7 +347,6 @@ impl ServerApi {
 
         Self {
             base_client,
-            telemetry_api,
             last_server_time: Arc::new(Mutex::new(None)),
         }
     }
@@ -365,7 +357,7 @@ impl ServerApi {
         let auth_state = Arc::new(AuthState::new_for_test());
         let client = Arc::new(http_client::Client::new_for_test());
 
-        Self::new_with_parts(client, auth_state, tx, None, TelemetryApi::new())
+        Self::new_with_parts(client, auth_state, tx, None)
     }
 
     #[cfg(all(test, feature = "skip_login"))]
@@ -382,7 +374,6 @@ impl ServerApi {
             auth_state,
             event_sender,
             None,
-            TelemetryApi::new(),
         )
     }
 
@@ -568,21 +559,6 @@ impl ServerApi {
         }
     }
 
-    /// Synchronously sends a [`TelemetryEvent`] to the Rudderstack API. Prefer not to call this
-    /// directly, use the macros defined in crate::server::telemetry::macros. If telemetry is
-    /// disabled, this is a no-op.
-    pub async fn send_telemetry_event(
-        &self,
-        event: impl TelemetryEvent,
-        settings_snapshot: PrivacySettingsSnapshot,
-    ) -> Result<()> {
-        let user_id = self.user_id();
-        let anonymous_id = self.anonymous_id();
-        self.telemetry_api
-            .send_telemetry_event(user_id, anonymous_id, event, settings_snapshot)
-            .await
-    }
-
     pub async fn send_agent_tip_shown_analytics_event(&self, tip: String) -> Result<()> {
         let auth_token = self
             .get_or_refresh_access_token()
@@ -616,44 +592,6 @@ impl ServerApi {
             self.observe_iap_challenge(&response);
             Err(Self::error_from_response(response).await)
         }
-    }
-
-    /// Drains all queued [`TelemetryEvent`]s into Rudderstack requests containing the corresponding
-    /// batch of events. Events are queued using the [`send_telemetry_from_ctx`] or
-    /// [`send_telemetry_from_app_ctx`] macros. If telemetry is disabled for the user, this flushes
-    /// the UI framework event queue and does nothing with them (no request is made).
-    ///
-    /// Returns the number of events that were flushed.
-    pub async fn flush_telemetry_events(
-        &self,
-        settings_snapshot: PrivacySettingsSnapshot,
-    ) -> Result<usize> {
-        self.telemetry_api.flush_events(settings_snapshot).await
-    }
-
-    /// Sends a batched Rudder request containing events written to the file at `path`. This is a
-    /// no-op if telemetry is disabled.
-    pub async fn flush_persisted_events_to_rudder(
-        &self,
-        path: &Path,
-        settings_snapshot: PrivacySettingsSnapshot,
-    ) -> Result<()> {
-        self.telemetry_api
-            .flush_persisted_events_to_rudder(path, settings_snapshot)
-            .await
-    }
-
-    /// Writes all queued [`TelemetryEvent`]s to a file, limiting the number of written
-    /// events to `max_events`. Events are queued using the [`send_telemetry_from_ctx`] or
-    /// [`send_telemetry_from_app_ctx`] macros. If telemetry is disabled, no events are written to
-    /// disk.
-    pub fn persist_telemetry_events(
-        &self,
-        max_event_count: usize,
-        settings_snapshot: PrivacySettingsSnapshot,
-    ) -> Result<()> {
-        self.telemetry_api
-            .flush_and_persist_events(max_event_count, settings_snapshot)
     }
 
     // LOCAL FORK: fns get_relevant_files, generate_am_query_suggestions,

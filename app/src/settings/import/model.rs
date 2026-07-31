@@ -6,13 +6,9 @@ use strum_macros::{EnumDiscriminants, EnumIter};
 use warp_core::features::FeatureFlag;
 use warpui::{Entity, ModelContext, SingletonEntity};
 
-#[cfg(target_os = "macos")]
-use super::config::HotkeyError;
 use super::config::{SettingType, ThemeType};
 use crate::interval_timer::IntervalTimer;
 use crate::settings::import::config::{Config, ConfigError};
-#[cfg(target_os = "macos")]
-use crate::{TelemetryEvent, send_telemetry_from_ctx};
 
 #[derive(Clone, Copy, Debug, EnumDiscriminants, Eq, Hash, PartialEq)]
 #[strum_discriminants(derive(EnumIter, Hash, Serialize))]
@@ -79,34 +75,12 @@ impl ImportedConfigModel {
         self.started
     }
 
-    #[cfg(target_os = "macos")]
-    fn maybe_send_multiple_hotkeys_telemetry_event(
-        &self,
-        terminal_type: &TerminalType,
-        configs: &Result<Vec<Config>, ConfigError>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        if let TerminalType::ITerm = terminal_type
-            && let Ok(configs) = configs
-            && configs.iter().any(|config| {
-                matches!(
-                    config.hotkey_mode.setting,
-                    Err(HotkeyError::MultipleHotkeys)
-                )
-            })
-        {
-            send_telemetry_from_ctx!(TelemetryEvent::ITermMultipleHotkeys, ctx);
-        }
-    }
-
     pub fn write_parse_results(
         &mut self,
         terminal_type: TerminalType,
         (configs, _timer): (Result<Vec<Config>, ConfigError>, IntervalTimer),
         ctx: &mut ModelContext<Self>,
     ) {
-        #[cfg(target_os = "macos")]
-        self.maybe_send_multiple_hotkeys_telemetry_event(&terminal_type, &configs, ctx);
         self.parsed_terminals.insert(terminal_type, configs);
         ctx.emit(CompletedParseEvent {
             terminal: terminal_type,

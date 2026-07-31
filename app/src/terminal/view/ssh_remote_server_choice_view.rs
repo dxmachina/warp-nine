@@ -30,16 +30,15 @@ use warpui::{
     ViewHandle,
 };
 
-use crate::server::telemetry::TelemetryEvent;
 use crate::terminal::model::session::SessionId;
 use crate::terminal::warpify::settings::{SshExtensionInstallMode, WarpifySettings};
 use crate::ui_components::blended_colors;
 // LOCAL FORK: was `ai::blocklist::block::keyboard_navigable_buttons`; the widget
 // has no agent dependencies and was rescued into `ui_components`.
+use crate::Appearance;
 use crate::ui_components::keyboard_navigable_buttons::{
     KeyboardNavigableButtons, rich_navigation_button,
 };
-use crate::{Appearance, send_telemetry_from_ctx};
 
 const PROMPT_BORDER_RADIUS: f32 = 8.;
 
@@ -297,12 +296,6 @@ impl TypedActionView for SshRemoteServerChoiceView {
                             );
                         }
                     });
-                    send_telemetry_from_ctx!(
-                        TelemetryEvent::SetSshExtensionInstallMode {
-                            mode: mode.display_name(),
-                        },
-                        ctx
-                    );
                 }
                 ctx.emit(SshRemoteServerChoiceViewEvent::Install);
             }
@@ -316,23 +309,11 @@ impl TypedActionView for SshRemoteServerChoiceView {
                             );
                         }
                     });
-                    send_telemetry_from_ctx!(
-                        TelemetryEvent::SetSshExtensionInstallMode {
-                            mode: mode.display_name(),
-                        },
-                        ctx
-                    );
                 }
                 ctx.emit(SshRemoteServerChoiceViewEvent::Skip);
             }
             SshRemoteServerChoiceViewAction::ToggleDoNotAskAgain => {
                 self.do_not_ask_again = !self.do_not_ask_again;
-                send_telemetry_from_ctx!(
-                    TelemetryEvent::SshRemoteServerChoiceDoNotAskAgainToggled {
-                        checked: self.do_not_ask_again,
-                    },
-                    ctx
-                );
                 ctx.notify();
             }
             SshRemoteServerChoiceViewAction::OpenWarpifySettings => {

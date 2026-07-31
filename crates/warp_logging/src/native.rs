@@ -8,7 +8,6 @@ use anyhow::Result;
 use chrono::Local;
 use log::LevelFilter;
 use warp_core::channel::ChannelState;
-use warp_core::features::FeatureFlag;
 use warp_errors::report_error;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
@@ -185,11 +184,7 @@ pub async fn rotate_log_files() {
         report_error!(err.context("Failed to rotate log files"));
     }
 
-    if FeatureFlag::SendTelemetryToFile.is_enabled()
-        && let Err(err) = rotate_files(&ChannelState::telemetry_file_name(), max_rotation).await
-    {
-        report_error!(err.context("Failed to rotate telemetry files"));
-    }
+    // LOCAL FORK: rotation of the telemetry log file went with telemetry.
 }
 
 pub async fn rotate_files(channel_file_name: &str, max_rotation: usize) -> Result<()> {

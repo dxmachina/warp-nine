@@ -66,10 +66,6 @@ use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
 use crate::server::cloud_objects::update_manager::{FetchSingleObjectOption, UpdateManager};
 use crate::server::ids::{ClientId, ServerId, SyncId};
-use crate::server::telemetry::{
-    CloudObjectTelemetryMetadata, NotebookActionEvent, NotebookTelemetryMetadata,
-    TelemetryCloudObjectType, TelemetryEvent,
-};
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
 };
@@ -89,7 +85,7 @@ use crate::view_components::{DismissibleToast, ToastType};
 use crate::workflows::{WorkflowSource, WorkflowType};
 use crate::workspace::ToastStack;
 use crate::workspaces::user_workspaces::UserWorkspaces;
-use crate::{cmd_or_ctrl_shift, safe_info, send_telemetry_from_ctx};
+use crate::{cmd_or_ctrl_shift, safe_info};
 
 mod details_bar;
 
@@ -686,7 +682,6 @@ impl NotebookView {
                     });
                 log::info!("Explicitly grabbing edit access, stealing from active editor");
                 self.grab_edit_access(false, ctx);
-                self.send_telemetry_action(NotebookTelemetryAction::GrabEditingBaton, ctx);
             }
         }
         ctx.notify();
@@ -869,14 +864,6 @@ impl NotebookView {
             let delta = content.len().abs_diff(self.last_content_length);
             self.last_content_length = content.len();
             self.send_edit_telemetry = false;
-
-            send_telemetry_from_ctx!(
-                TelemetryEvent::EditNotebook {
-                    metadata: self.telemetry_metadata(ctx),
-                    meaningful_change: delta > MEANINGFUL_EDIT_THRESHOLD
-                },
-                ctx
-            );
         }
 
         // Schedule another check. If we stop editing in the meantime, either the mode check above
@@ -966,37 +953,19 @@ impl NotebookView {
             EditorViewEvent::EditWorkflow(workflow_id) => {
                 ctx.emit(NotebookEvent::EditWorkflow(*workflow_id))
             }
-            EditorViewEvent::OpenedBlockInsertionMenu(source) => self.send_telemetry_action(
-                NotebookTelemetryAction::OpenBlockInsertionMenu { source: *source },
-                ctx,
-            ),
-            EditorViewEvent::OpenedEmbeddedObjectSearch => {
-                self.send_telemetry_action(NotebookTelemetryAction::OpenEmbeddedObjectSearch, ctx)
-            }
-            EditorViewEvent::OpenedFindBar => {
-                self.send_telemetry_action(NotebookTelemetryAction::OpenFindBar, ctx)
-            }
-            EditorViewEvent::InsertedEmbeddedObject(info) => self
-                .send_telemetry_action(NotebookTelemetryAction::InsertEmbeddedObject(*info), ctx),
-            EditorViewEvent::CopiedBlock { block, entrypoint } => self.send_telemetry_action(
-                NotebookTelemetryAction::CopyBlock {
-                    block: *block,
-                    entrypoint: *entrypoint,
-                },
-                ctx,
-            ),
-            EditorViewEvent::NavigatedCommands => {
-                self.send_telemetry_action(NotebookTelemetryAction::CommandKeyboardNavigation, ctx)
-            }
-            EditorViewEvent::ChangedSelectionMode(mode) => self.send_telemetry_action(
-                NotebookTelemetryAction::ChangeSelectionMode { mode: *mode },
-                ctx,
-            ),
             EditorViewEvent::OpenFile { .. } => {
                 // We don't support opening files from the notebook view.
                 // File paths rely on a Session to be present, and this is only set from the AI document view today.
             }
-            EditorViewEvent::CmdEnter
+            // LOCAL FORK: these arms only emitted NotebookAction telemetry.
+            EditorViewEvent::OpenedBlockInsertionMenu(_)
+            | EditorViewEvent::OpenedEmbeddedObjectSearch
+            | EditorViewEvent::OpenedFindBar
+            | EditorViewEvent::InsertedEmbeddedObject(_)
+            | EditorViewEvent::CopiedBlock { .. }
+            | EditorViewEvent::NavigatedCommands
+            | EditorViewEvent::ChangedSelectionMode(_)
+            | EditorViewEvent::CmdEnter
             | EditorViewEvent::EscapePressed
             | EditorViewEvent::TextSelectionChanged => (),
         }
@@ -1046,50 +1015,8 @@ impl NotebookView {
         self.notebook_id(ctx)?.into_server().map(Into::into)
     }
 
-    /// The current notebook metadata for telemetry.
-    fn telemetry_metadata(&self, ctx: &ViewContext<Self>) -> NotebookTelemetryMetadata {
-        let active_notebook_data = self.active_notebook_data.as_ref(ctx);
-        let owner = active_notebook_data.owner(ctx);
-        let space = active_notebook_data.space(ctx);
-        NotebookTelemetryMetadata::new(
-            self.server_id(ctx),
-            owner.and_then(Into::into),
-            owner.map_or(NotebookLocation::PersonalCloud, Into::into),
-            space.map(Into::into),
-        )
-    }
-
-    fn open_telemetry_metadata(&self, ctx: &ViewContext<Self>) -> NotebookTelemetryMetadata {
-        self.telemetry_metadata(ctx).with_markdown_table_count(
-            self.input
-                .as_ref(ctx)
-                .model()
-                .as_ref(ctx)
-                .markdown_table_count(ctx),
-        )
-    }
-
-    #[cfg_attr(not(target_family = "wasm"), allow(dead_code))]
-    fn generic_telemetry_metadata(&self, ctx: &ViewContext<Self>) -> CloudObjectTelemetryMetadata {
-        let notebook_data = self.active_notebook_data.as_ref(ctx);
-        CloudObjectTelemetryMetadata {
-            object_type: TelemetryCloudObjectType::Notebook,
-            object_uid: notebook_data.id().and_then(SyncId::into_server),
-            space: notebook_data.space(ctx).map(Into::into),
-            team_uid: notebook_data.owner(ctx).and_then(Into::into),
-        }
-    }
-
-    /// Send a [`NotebookTelemetryAction`] telemetry event.
-    fn send_telemetry_action(&self, action: NotebookTelemetryAction, ctx: &mut ViewContext<Self>) {
-        send_telemetry_from_ctx!(
-            TelemetryEvent::NotebookAction(NotebookActionEvent {
-                action,
-                metadata: self.telemetry_metadata(ctx)
-            }),
-            ctx
-        );
-    }
+    // LOCAL FORK: fns telemetry_metadata, open_telemetry_metadata and
+    // generic_telemetry_metadata went with telemetry.
 
     /// Puts the nodebook into edit mode and focuses the editor. The caller is responsible for
     /// checking that the notebook is editable.
@@ -1607,11 +1534,6 @@ impl NotebookView {
             // owner-based.
             editor.set_space(notebook.space(ctx), ctx);
         });
-
-        send_telemetry_from_ctx!(
-            TelemetryEvent::OpenNotebook(self.open_telemetry_metadata(ctx)),
-            ctx
-        );
 
         // Once we've received metadata from the server, check if we can eagerly edit the notebook.
         let has_metadata = UpdateManager::as_ref(ctx).initial_load_complete();
@@ -2269,9 +2191,6 @@ impl TypedActionView for NotebookView {
                 ctx.emit(NotebookEvent::Pane(PaneEvent::FocusActiveSession))
             }
             NotebookAction::ContextMenu(action) => {
-                if matches!(action, ContextMenuAction::Open(_)) {
-                    self.send_telemetry_action(NotebookTelemetryAction::OpenContextMenu, ctx);
-                }
                 self.context_menu.handle_action(action, ctx);
             }
             NotebookAction::Duplicate => self.duplicate_object(ctx),
@@ -2280,10 +2199,6 @@ impl TypedActionView for NotebookView {
             NotebookAction::CopyToPersonal => self.copy_to_personal(ctx),
             NotebookAction::CopyToClipboard => self.copy_notebook_contents_to_clipboard(ctx),
             NotebookAction::CopyLink(link) => {
-                send_telemetry_from_ctx!(
-                    TelemetryEvent::ObjectLinkCopied { link: link.clone() },
-                    ctx
-                );
                 ctx.clipboard()
                     .write(ClipboardContent::plain_text(link.to_owned()));
 
@@ -2302,12 +2217,6 @@ impl TypedActionView for NotebookView {
             } => self.move_to_team_owner(*cloud_object_type_and_id, *new_space, ctx),
             #[cfg(target_family = "wasm")]
             NotebookAction::OpenLinkOnDesktop(url) => {
-                send_telemetry_from_ctx!(
-                    TelemetryEvent::WebCloudObjectOpenedOnDesktop {
-                        object_metadata: self.generic_telemetry_metadata(ctx)
-                    },
-                    ctx
-                );
                 open_url_on_desktop(url);
             }
             #[cfg(not(target_family = "wasm"))]

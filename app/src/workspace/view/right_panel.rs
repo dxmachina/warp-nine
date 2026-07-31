@@ -34,7 +34,6 @@ use crate::code_review::code_review_view::{
     CodeReviewViewEvent, ReviewActionTargetProvider, render_file_navigation_button,
 };
 use crate::code_review::diff_state::DiffStateModel;
-use crate::code_review::telemetry_event::CodeReviewContextDestination;
 use crate::pane_group::pane::view::header::PANE_HEADER_HEIGHT;
 use crate::pane_group::pane::view::header::components::HEADER_EDGE_PADDING;
 use crate::pane_group::{
@@ -71,7 +70,6 @@ pub enum ReviewSubmissionResult {
     Success {
         comment_count: usize,
         file_count: usize,
-        destination: CodeReviewContextDestination,
     },
     Error,
 }

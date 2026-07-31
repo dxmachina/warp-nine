@@ -77,7 +77,7 @@ use crate::quit_warning::UnsavedStateSummary;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ObjectUid, SyncId};
 use crate::server::server_api::{ServerApi, ServerApiProvider};
-use crate::server::telemetry::{AnonymousUserSignupEntrypoint, PaletteSource, TelemetryEvent};
+use crate::server::telemetry::{AnonymousUserSignupEntrypoint, PaletteSource};
 use crate::session_management::SessionNavigationData;
 use crate::settings::PaneSettings;
 use crate::settings_view::SettingsSection;
@@ -114,6 +114,7 @@ use crate::terminal::{
 // `cfg_if!` in `create_terminal_view`, which compiles when neither `remote_tty`
 // nor `local_tty` is on. A native build reports the import unused; deleting it
 // would break that branch, so it is gated rather than removed.
+use crate::cmd_or_ctrl_shift;
 #[cfg(not(any(feature = "remote_tty", feature = "local_tty")))]
 use crate::terminal::MockTerminalManager;
 use crate::tips::{Tip, TipAction, TipsCompleted, mark_feature_used_and_write_to_user_defaults};
@@ -128,7 +129,6 @@ use crate::workflows::workflow::Workflow;
 use crate::workflows::{WorkflowSelectionSource, WorkflowSource, WorkflowType};
 use crate::workspace::tab_group::TabGroupId;
 use crate::workspace::{self, CommandSearchOptions, PaneViewLocator, TabBarLocation};
-use crate::{cmd_or_ctrl_shift, send_telemetry_from_ctx};
 
 pub mod focus_state;
 pub mod pane;
@@ -143,7 +143,6 @@ mod tests;
 pub use pane::code_pane::CodePane;
 // LOCAL FORK: CustomRouterEditorPane removed with the agent.
 pub use pane::env_var_collection_pane::EnvVarCollectionPane;
-pub use pane::environment_management_pane::EnvironmentManagementPane;
 pub use pane::file_pane::FilePane;
 pub use pane::network_log_pane::NetworkLogPane;
 pub use pane::notebook_pane::NotebookPane;
@@ -615,7 +614,6 @@ pub enum Event {
         initial_content: Option<String>,
     },
     OpenAddRulePane,
-    OpenEnvironmentManagementPane,
     OpenFilesPalette {
         source: PaletteSource,
     },
@@ -1671,13 +1669,6 @@ impl PaneGroup {
                     Ok((PaneData::new(pane_id), focus))
                 }
             }
-            LeafContents::EnvironmentManagement(_) => {
-                // Environment management panes are not restored from persistence.
-                // They are opened on-demand via workspace actions.
-                Err(anyhow::anyhow!(
-                    "Environment management panes are not restored"
-                ))
-            }
         };
 
         if let (Ok((pane_data, _)), Some(title)) = (&result, custom_vertical_tabs_title.as_deref())
@@ -2148,8 +2139,6 @@ impl PaneGroup {
                 }
                 ctx.emit(Event::OpenSettings(SettingsSection::Teams));
                 ctx.notify();
-
-                send_telemetry_from_ctx!(TelemetryEvent::SharedSessionModalUpgradePressed, ctx);
             }
         }
     }
@@ -2381,12 +2370,6 @@ impl PaneGroup {
                     RoleChangeCloseSource::SharerGrant,
                     ctx,
                 );
-                send_telemetry_from_ctx!(
-                    TelemetryEvent::SharerCancelledGrantRole {
-                        role: Role::Executor
-                    },
-                    ctx
-                );
             }
             RoleChangeModalEvent::GrantRole {
                 terminal_pane_id,
@@ -2403,7 +2386,6 @@ impl PaneGroup {
                             "Failed to set should_confirm_shared_session_edit_access setting to false"
                         ));
                     }
-                    send_telemetry_from_ctx!(TelemetryEvent::SharerGrantModalDontShowAgain, ctx);
                 }
 
                 let Some(terminal_view) = self.terminal_view_from_pane_id(*terminal_pane_id, ctx)
@@ -4823,10 +4805,7 @@ impl PaneGroup {
         focus_new_pane: bool,
         ctx: &mut ViewContext<Self>,
     ) -> Option<PaneId> {
-        if self.pane_count() == 1 {
-            // Only sending telemetry event the first time a user enters split pane in a session.
-            send_telemetry_from_ctx!(TelemetryEvent::SplitPane, ctx);
-        }
+        if self.pane_count() == 1 {}
 
         self.tips_completed.update(ctx, |tips_completed, ctx| {
             mark_feature_used_and_write_to_user_defaults(
@@ -5646,15 +5625,9 @@ impl View for PaneGroup {
                         .environment_setup_mode_selector_handle()
                         .cloned()
                 })
-                .or_else(|| {
-                    self.downcast_pane_by_id::<EnvironmentManagementPane>(pane_id)
-                        .and_then(|emp| {
-                            emp.environments_page_view(app)
-                                .as_ref(app)
-                                .environment_setup_mode_selector_handle()
-                                .cloned()
-                        })
-                });
+                // LOCAL FORK: the EnvironmentManagementPane fallback went with the
+                // environments settings page. Terminal panes still own this selector.
+                ;
             if let Some(handle) = selector_handle {
                 stack.add_child(ChildView::new(&handle).finish());
             }

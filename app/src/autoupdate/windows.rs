@@ -15,7 +15,6 @@ use warp_core::channel::{Channel, ChannelState};
 use warpui::AppContext;
 
 use super::{DownloadReady, release_assets_directory_url};
-use crate::server::telemetry::TelemetryEvent;
 use crate::util::windows::install_dir;
 
 lazy_static! {
@@ -80,51 +79,10 @@ fn autoupdate_log_file() -> Result<PathBuf> {
     warp_logging::log_directory().map(|dir| dir.join(UPDATE_LOG_FILENAME))
 }
 
-fn parse_exit_code_after_marker(contents_lowercase: &[u8], failed_marker: &[u8]) -> Option<i32> {
-    const EXIT_CODE_MARKER: &[u8] = b"exit code: ";
-
-    let failed_pos = memchr::memmem::find(contents_lowercase, failed_marker)?;
-    let after_failed = &contents_lowercase[failed_pos..];
-    let marker_pos = memchr::memmem::find(after_failed, EXIT_CODE_MARKER)?;
-    let after_marker = &after_failed[marker_pos + EXIT_CODE_MARKER.len()..];
-    let sign_len = if after_marker.first() == Some(&b'-') {
-        1
-    } else {
-        0
-    };
-    let digit_len = after_marker[sign_len..]
-        .iter()
-        .take_while(|b| b.is_ascii_digit())
-        .count();
-    if digit_len == 0 {
-        return None;
-    }
-    std::str::from_utf8(&after_marker[..sign_len + digit_len])
-        .ok()?
-        .parse()
-        .ok()
-}
-
-/// Parses the taskkill exit code from an Inno Setup log containing a
-/// "force-kill failed for" line. Returns `None` if no such line is found or
-/// the exit code cannot be parsed.
-fn parse_forcekill_exit_code(contents_lowercase: &[u8]) -> Option<i32> {
-    const FAILED_MARKER: &[u8] = b"force-kill failed for";
-    parse_exit_code_after_marker(contents_lowercase, FAILED_MARKER)
-}
-
-/// Parses the PowerShell exit code from an Inno Setup log containing a
-/// "minidump-server cleanup failed" line. Returns `None` if no such line is
-/// found or the exit code cannot be parsed.
-fn parse_minidump_cleanup_exit_code(contents_lowercase: &[u8]) -> Option<i32> {
-    const FAILED_MARKER: &[u8] = b"minidump-server cleanup failed";
-    parse_exit_code_after_marker(contents_lowercase, FAILED_MARKER)
-}
-
 /// Checks the autoupdate log file from a previous update attempt.
-/// Sends telemetry for specific known issues, and sends a Sentry event if errors are found.
+/// Sends a Sentry event if errors are found.
 /// The log file is renamed after processing to avoid duplicate reports on subsequent launches.
-pub(super) fn check_and_report_update_errors(ctx: &mut AppContext) {
+pub(super) fn check_and_report_update_errors(_ctx: &mut AppContext) {
     let log_path = match autoupdate_log_file() {
         Ok(path) => path,
         Err(e) => {
@@ -147,56 +105,12 @@ pub(super) fn check_and_report_update_errors(ctx: &mut AppContext) {
         }
     };
 
+    // LOCAL FORK: the known-issue detectors (unable-to-close, file-in-use, mutex
+    // timeout, force-kill exit code, minidump-cleanup exit code) and their two
+    // log parsers existed only to emit telemetry events. Sentry reporting below
+    // is unaffected.
+    #[cfg(feature = "crash_reporting")]
     let contents_lowercase = contents.to_ascii_lowercase();
-
-    let has_unable_to_close = memchr::memmem::find(
-        &contents_lowercase,
-        b"setup was unable to automatically close all applications",
-    )
-    .is_some();
-    if has_unable_to_close {
-        crate::send_telemetry_sync_from_app_ctx!(
-            TelemetryEvent::AutoupdateUnableToCloseApplications,
-            ctx
-        );
-    }
-
-    let has_file_in_use = memchr::memmem::find(
-        &contents_lowercase,
-        b"the process cannot access the file because it is being used by another process",
-    )
-    .is_some();
-    if has_file_in_use {
-        crate::send_telemetry_sync_from_app_ctx!(TelemetryEvent::AutoupdateFileInUse, ctx);
-    }
-
-    // Fired when the mutex polling loop timed out and a force-kill was attempted.
-    let has_mutex_timeout =
-        memchr::memmem::find(&contents_lowercase, b"warp mutex still held after timeout").is_some();
-    if has_mutex_timeout {
-        crate::send_telemetry_sync_from_app_ctx!(TelemetryEvent::AutoupdateMutexTimeout, ctx);
-    }
-
-    // Fired when taskkill returned non-zero after the mutex timeout.
-    // Exit code 128 means "no matching process found" — the process was already
-    // gone when taskkill ran — so suppress that harmless race condition.
-    if let Some(exit_code) = parse_forcekill_exit_code(&contents_lowercase)
-        && exit_code != 128
-    {
-        crate::send_telemetry_sync_from_app_ctx!(
-            TelemetryEvent::AutoupdateForcekillFailed { exit_code },
-            ctx
-        );
-    }
-
-    // Fired when the PowerShell cleanup of the orphaned minidump server process
-    // returned a non-zero exit code.
-    if let Some(exit_code) = parse_minidump_cleanup_exit_code(&contents_lowercase) {
-        crate::send_telemetry_sync_from_app_ctx!(
-            TelemetryEvent::AutoupdateMinidumpCleanupFailed { exit_code },
-            ctx
-        );
-    }
 
     #[cfg(feature = "crash_reporting")]
     {
@@ -320,7 +234,3 @@ fn app_name_prefix(channel: Channel) -> &'static str {
         Channel::Oss => "warp-nine",
     }
 }
-
-#[cfg(test)]
-#[path = "windows_tests.rs"]
-mod tests;

@@ -10,8 +10,6 @@ use warpui::ui_components::switch::SwitchStateHandle;
 use warpui::{Element, Entity, SingletonEntity, TypedActionView, View, ViewContext, ViewHandle};
 
 use crate::appearance::Appearance;
-use crate::send_telemetry_from_ctx;
-use crate::server::telemetry::TelemetryEvent;
 use crate::settings_view::settings_page::{
     AdditionalInfo, LocalOnlyIconState, ToggleState, render_body_item, render_dropdown_item,
 };
@@ -184,14 +182,6 @@ impl ExternalEditorView {
         EditorSettings::handle(ctx).update(ctx, |settings, ctx| {
             report_if_error!(settings.open_file_editor.set_value(*editor, ctx));
         });
-
-        send_telemetry_from_ctx!(
-            TelemetryEvent::FeaturesPageAction {
-                action: "SetEditor".to_string(),
-                value: format!("{editor:?}")
-            },
-            ctx
-        );
     }
 
     fn set_code_panels_editor(&mut self, editor: &EditorChoice, ctx: &mut ViewContext<Self>) {
@@ -202,14 +192,6 @@ impl ExternalEditorView {
                     .set_value(*editor, ctx)
             );
         });
-
-        send_telemetry_from_ctx!(
-            TelemetryEvent::FeaturesPageAction {
-                action: "SetCodePanelsEditor".to_string(),
-                value: format!("{editor:?}")
-            },
-            ctx
-        );
     }
 
     // Handles [`ExternalEditorAction::SetLayout`] by updating the external editor layout settings.
@@ -217,14 +199,6 @@ impl ExternalEditorView {
         EditorSettings::handle(ctx).update(ctx, |settings, ctx| {
             report_if_error!(settings.open_file_layout.set_value(*layout, ctx));
         });
-
-        send_telemetry_from_ctx!(
-            TelemetryEvent::FeaturesPageAction {
-                action: "SetLayout".to_string(),
-                value: format!("{layout:?}")
-            },
-            ctx
-        );
     }
 
     /// Handles [`ExternalEditorAction::TogglePreferMarkdownViewer`]
@@ -235,14 +209,6 @@ impl ExternalEditorView {
             report_if_error!(new_value);
             new_value.unwrap_or(PreferMarkdownViewer::default_value())
         });
-
-        send_telemetry_from_ctx!(
-            TelemetryEvent::FeaturesPageAction {
-                action: "TogglePreferMarkdownViewer".to_string(),
-                value: new_value.to_string()
-            },
-            ctx
-        );
     }
 
     /// Handles [`ExternalEditorAction::TogglePreferTabbedEditorView`] by updating the tabbed file viewer preference.
@@ -254,14 +220,6 @@ impl ExternalEditorView {
             report_if_error!(new_value);
             new_value.unwrap_or(PreferTabbedEditorView::default_value())
         });
-
-        send_telemetry_from_ctx!(
-            TelemetryEvent::FeaturesPageAction {
-                action: "ToggleTabbedEditorView".to_string(),
-                value: new_value.to_string()
-            },
-            ctx
-        );
     }
 }
 

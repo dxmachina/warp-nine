@@ -19,7 +19,7 @@ use session_sharing_protocol::common::{
     LinkAccessLevelUpdateResponse, ParticipantId, ParticipantList, ParticipantPresenceUpdate,
     RemoveGuestResponse, Role, RoleRequestId, RoleRequestResponse, Selection, SelectionUpdate,
     ServerConversationToken, SessionId, TeamAccessLevelUpdateResponse, TeamAclData,
-    TelemetryContext, UniversalDeveloperInputContext, UniversalDeveloperInputContextUpdate,
+    UniversalDeveloperInputContext, UniversalDeveloperInputContextUpdate,
     UpdatePendingUserRoleResponse, UserID, WindowSize, WriteToPtyFailureReason,
     WriteToPtyRequestId, WriteToPtySeqNo,
 };
@@ -41,7 +41,6 @@ use crate::auth::{AuthStateProvider, UserUid};
 use crate::editor::{CrdtOperation, ReplicaId};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::auth::AuthClient;
-use crate::server::telemetry::telemetry_context;
 use crate::terminal::event_listener::ChannelEventListener;
 use crate::terminal::model::block::BlockId;
 use crate::terminal::shared_session::shared_handlers::RemoteUpdateGuard;
@@ -402,7 +401,8 @@ impl Network {
                         user_id,
                         last_received_event_no: None,
                         latest_block_id: None,
-                        telemetry_context: Some(TelemetryContext(telemetry_context().as_value())),
+                        // LOCAL FORK: the shared-session telemetry context went with telemetry.
+                        telemetry_context: None,
                         feature_support: FeatureSupport {
                             supports_agent_view: FeatureFlag::AgentView.is_enabled(),
                             supports_full_role: true,
@@ -485,7 +485,8 @@ impl Network {
                         user_id,
                         last_received_event_no,
                         latest_block_id: Some(latest_block_id.into()),
-                        telemetry_context: Some(TelemetryContext(telemetry_context().as_value())),
+                        // LOCAL FORK: the shared-session telemetry context went with telemetry.
+                        telemetry_context: None,
                         feature_support: FeatureSupport {
                             supports_agent_view: FeatureFlag::AgentView.is_enabled(),
                             supports_full_role: true,

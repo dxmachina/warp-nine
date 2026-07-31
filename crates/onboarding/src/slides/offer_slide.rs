@@ -1,5 +1,4 @@
 use ui_components::{Component as _, Options as _, button};
-use warp_core::send_telemetry_from_ctx;
 use warp_core::ui::appearance::Appearance;
 use warp_core::ui::icons::Icon;
 use warp_core::ui::theme::Fill;
@@ -24,7 +23,6 @@ use super::OnboardingSlide;
 use super::upgrade_auth_prompt::render_upgrade_auth_prompt_bar;
 use crate::model::OnboardingStateModel;
 use crate::slides::{layout, slide_content};
-use crate::telemetry::OnboardingEvent;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OfferVariant {
@@ -428,22 +426,10 @@ impl OfferSlide {
         )
     }
 
-    fn send_action(&self, variant: OfferVariant, action: &str, ctx: &mut ViewContext<Self>) {
-        send_telemetry_from_ctx!(
-            OnboardingEvent::OnboardingAction {
-                slide_name: variant.slide_name().to_string(),
-                action: action.to_string(),
-                account_class: Some(variant.account_class().to_string()),
-            },
-            ctx
-        );
-    }
-
     fn request_upgrade(&mut self, ctx: &mut ViewContext<Self>) {
-        let Some(variant) = self.variant(ctx) else {
+        if self.variant(ctx).is_none() {
             return;
-        };
-        self.send_action(variant, variant.primary_action(), ctx);
+        }
         self.show_auth_prompt_bar = true;
         self.onboarding_state.update(ctx, |model, ctx| {
             model.request_upgrade(ctx);
@@ -455,7 +441,6 @@ impl OfferSlide {
         let Some(variant) = self.variant(ctx) else {
             return;
         };
-        self.send_action(variant, "set_up_later", ctx);
         ctx.emit(OfferSlideEvent::SetUpLaterSelected { variant });
     }
 

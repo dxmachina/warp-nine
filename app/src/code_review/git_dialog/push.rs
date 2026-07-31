@@ -8,7 +8,6 @@
 
 use std::collections::HashMap;
 
-use warp_core::send_telemetry_from_ctx;
 use warp_core::ui::appearance::Appearance;
 use warp_errors::report_error;
 use warpui::ViewContext;
@@ -23,9 +22,6 @@ use crate::code::editor::{add_color, remove_color};
 use crate::code_review::git_dialog::{
     GitDialog, GitDialogAction, GitDialogEvent, GitDialogMode, render_branch_section,
     render_chevron_icon, render_file_list, show_toast, user_facing_git_error,
-};
-use crate::code_review::telemetry_event::{
-    CodeReviewTelemetryEvent, GitDialogStatus, GitOperationKind,
 };
 use crate::ui_components::icons::Icon;
 use crate::util::git::Commit;
@@ -117,10 +113,6 @@ pub(super) fn finish_push(
     result: anyhow::Result<()>,
     ctx: &mut ViewContext<GitDialog>,
 ) {
-    let (status, error) = match &result {
-        Ok(_) => (GitDialogStatus::Succeeded, None),
-        Err(err) => (GitDialogStatus::Failed, Some(err.to_string())),
-    };
     match result {
         Ok(_) => {
             let toast_msg = if publish {
@@ -135,19 +127,6 @@ pub(super) fn finish_push(
             show_toast(user_facing_git_error(&e.to_string()), ctx);
         }
     }
-    send_telemetry_from_ctx!(
-        CodeReviewTelemetryEvent::GitDialogCompleted {
-            is_local: Some(!me.repo_location().is_remote()),
-            operation: if publish {
-                GitOperationKind::Publish
-            } else {
-                GitOperationKind::Push
-            },
-            status,
-            error,
-        },
-        ctx
-    );
     ctx.emit(GitDialogEvent::Completed);
 }
 

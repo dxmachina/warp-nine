@@ -4,7 +4,6 @@ use voice_input::{
     StartListeningError, VoiceInput, VoiceInputLifecycle, VoiceInputLifecycleState,
     VoiceSessionResult,
 };
-use warp_core::send_telemetry_from_ctx;
 use warp_core::ui::theme::AnsiColorIdentifier;
 use warp_core::ui::theme::color::internal_colors;
 use warp_errors::report_error;
@@ -19,7 +18,6 @@ use super::{EditorAction, EditorView, VoiceTranscriber, VoiceTranscriptionOption
 use crate::appearance::Appearance;
 use crate::editor::EditorElement;
 use crate::server::server_api::TranscribeError;
-use crate::server::telemetry::TelemetryEvent;
 use crate::themes::theme::Fill;
 use crate::ui_components::buttons::{icon_button, icon_button_with_color};
 use crate::ui_components::icons;
@@ -308,14 +306,6 @@ impl EditorView {
                         .is_universal_developer_input_enabled(ctx);
                     // LOCAL FORK: the reported input mode went with the agent, along with
                     // the AI/terminal mode distinction it described.
-                    send_telemetry_from_ctx!(
-                        TelemetryEvent::VoiceInputUsed {
-                            action: "start".to_string(),
-                            session_duration_ms: None,
-                            is_udi_enabled,
-                        },
-                        ctx
-                    );
 
                     if matches!(*source, voice_input::VoiceInputToggledFrom::Button) {
                         // If the user hasn't explicitly interacted with voice yet, show first-time toast.
@@ -428,15 +418,6 @@ impl EditorView {
                 wav_base64,
                 session_duration_ms,
             } => {
-                send_telemetry_from_ctx!(
-                    TelemetryEvent::VoiceInputUsed {
-                        action: "stop".to_string(),
-                        session_duration_ms: Some(session_duration_ms),
-                        is_udi_enabled,
-                    },
-                    ctx
-                );
-
                 // Start transcription
                 let voice_transcriber = VoiceTranscriber::handle(ctx).as_ref(ctx);
                 if let Some(transcriber) = voice_transcriber.transcriber() {
@@ -465,15 +446,6 @@ impl EditorView {
                 session_duration_ms,
             } => {
                 log::info!("Aborted listening for voice input");
-
-                send_telemetry_from_ctx!(
-                    TelemetryEvent::VoiceInputUsed {
-                        action: "cancel".to_string(),
-                        session_duration_ms,
-                        is_udi_enabled,
-                    },
-                    ctx
-                );
 
                 if state.lifecycle.fail() {
                     self.set_voice_input_state(state, ctx);

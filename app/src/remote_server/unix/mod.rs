@@ -21,7 +21,6 @@ use warpui::SingletonEntity;
 use warpui::r#async::executor;
 
 use super::server_model::{ConnectionId, ServerModel};
-use crate::{TelemetryEvent, send_telemetry_from_app_ctx};
 
 /// Run the `remote-server-daemon` subcommand.
 ///
@@ -88,10 +87,6 @@ pub(crate) fn launch_daemon(identity_key: &str, ctx: &mut warpui::AppContext) {
             timer.mark_interval_end("DAEMON_SOCKET_BOUND");
             timer.compute_stats()
         });
-    send_telemetry_from_app_ctx!(
-        TelemetryEvent::RemoteServerDaemonStartup { timing_data },
-        ctx
-    );
 
     let _ = std::fs::write(&pid_path, std::process::id().to_string());
 

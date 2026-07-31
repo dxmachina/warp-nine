@@ -25,7 +25,6 @@ use crate::ui_components::blended_colors;
 use crate::ui_components::icons::Icon;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::CustomerType;
-use crate::{TelemetryEvent, send_telemetry_from_ctx};
 
 const MODAL_WIDTH: f32 = 360.;
 const MODAL_HEIGHT: f32 = 532.;
@@ -425,15 +424,10 @@ impl TypedActionView for CloudAgentCapacityModal {
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
             CloudAgentCapacityModalAction::Close => {
-                send_telemetry_from_ctx!(TelemetryEvent::CloudAgentCapacityModalDismissed, ctx);
                 ctx.emit(CloudAgentCapacityModalEvent::Close);
             }
             CloudAgentCapacityModalAction::Upgrade => {
                 if let Some(upgrade_url) = self.cta_url(ctx) {
-                    send_telemetry_from_ctx!(
-                        TelemetryEvent::CloudAgentCapacityModalUpgradeClicked,
-                        ctx
-                    );
                     ctx.open_url(&upgrade_url);
                     ctx.emit(CloudAgentCapacityModalEvent::Close);
                 }

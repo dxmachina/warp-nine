@@ -126,11 +126,6 @@ impl<P: BackingView> PaneHeader<P> {
             }
         };
 
-        if dialog_opened {
-            self.sharing_dialog()
-                .update(ctx, |dialog, ctx| dialog.report_open(source, ctx));
-        }
-
         ctx.notify();
     }
 
@@ -151,9 +146,6 @@ impl<P: BackingView> PaneHeader<P> {
         ctx.focus(&self.shared_content.sharing_dialog);
         self.sharing_dialog().update(ctx, |dialog, ctx| {
             dialog.show_qr_code(ctx);
-            if dialog_was_closed {
-                dialog.report_open(source, ctx);
-            }
         });
         ctx.notify();
     }

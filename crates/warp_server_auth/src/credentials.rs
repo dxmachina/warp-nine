@@ -57,17 +57,9 @@ impl Credentials {
         }
     }
 
-    /// Returns the owner type if this is an API key credential.
-    pub fn api_key_owner_type(&self) -> Option<OwnerType> {
-        match self {
-            Credentials::ApiKey { owner_type, .. } => *owner_type,
-            Credentials::Firebase(_) => None,
-            Credentials::Bearer(_) => None,
-            Credentials::SessionCookie => None,
-            #[cfg(any(test, feature = "integration_tests", feature = "skip_login"))]
-            Credentials::Test => None,
-        }
-    }
+    // LOCAL FORK: `api_key_owner_type` went with `AuthState::api_key_owner_type`,
+    // its only caller. The `ApiKey::owner_type` field stays; it is still written by
+    // `AuthClientImpl::fetch_user`.
 
     /// Returns the Firebase refresh token if this is a Firebase credential.
     pub fn refresh_token(&self) -> Option<&str> {

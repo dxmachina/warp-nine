@@ -41,10 +41,7 @@ use crate::terminal::shared_session::manager::Manager as SharedSessionManager;
 #[cfg(target_family = "wasm")]
 use crate::uri::browser_url_handler::{parse_current_url, update_browser_url};
 use crate::workspaces::team_tester::TeamTesterStatus;
-use crate::{
-    GlobalResourceHandlesProvider, TelemetryEvent, persistence, send_telemetry_from_ctx,
-    send_telemetry_sync_from_ctx,
-};
+use crate::{GlobalResourceHandlesProvider, persistence};
 
 #[derive(Debug)]
 pub enum AuthManagerEvent {
@@ -79,10 +76,11 @@ type URLConstructorCallback = Box<dyn FnOnce(Option<&str>) -> String>;
 // Warp CLI signing in on a machine without the app installed, and only
 // `authorize_device` drove it. Removed with it:
 // `ReceivedDeviceAuthorizationCode`, DEVICE_CODE_REQUEST_TIMEOUT/ATTEMPTS,
-// `request_device_code_with_timeout`, `on_device_code_received`. The
-// `AuthClient::request_device_code`/`exchange_device_access_token` methods and
-// `UserAuthenticationError::DeviceCodeRequestTimedOut` live in
-// `crates/warp_server_client` and are untouched.
+// `request_device_code_with_timeout`, `on_device_code_received`. The transport
+// half in `crates/warp_server_client` has since gone too: the `AuthClient`
+// methods, `AuthSession`'s OAuth client, and the crate's `oauth2` dependency.
+// Only `UserAuthenticationError::DeviceCodeRequestTimedOut` remains, because
+// `app/src/root_view.rs` still matches on it.
 
 /// AuthManager is a singleton model which manages the currently logged-in user's state.
 /// If you need to access the state, use `AuthStateProvider`.
@@ -184,7 +182,6 @@ impl AuthManager {
                 ctx.emit(AuthManagerEvent::LoginOverrideDetected(auth_payload));
                 return;
             }
-            send_telemetry_from_ctx!(TelemetryEvent::AnonymousUserLinkedFromBrowser, ctx);
         }
 
         let _ = ctx.spawn(
@@ -378,40 +375,12 @@ impl AuthManager {
                     });
                 }
 
+                // LOCAL FORK: this block recorded an identify + login event and flushed the
+                // telemetry queue synchronously so a login could not be lost on quit. All that
+                // is gone; `notify_login` is the only side effect left and it still runs.
                 let server_api = self.server_api.clone();
-                let user_id = self.auth_state.user_id().unwrap_or_default();
-                let anonymous_id = self.auth_state.anonymous_id();
                 let _ = ctx.spawn(
-                    // Synchronously add the identify and login event to the telemetry event queue and
-                    // then flush the queue to ensure the events get to Rudderstack. We need to do this
-                    // one-off because the login event happens only once for the user and we don't want
-                    // to drop the event if the user quits the app before the next flush of the queue.
-                    // TODO(alokedesai): Investigate a more robust way of handling events
-                    // that don't get flushed to Rudderstack outside of this event specifically.
                     async move {
-                        warpui::telemetry::record_identify_user_event(
-                            user_id.as_string(),
-                            anonymous_id.clone(),
-                            warpui::time::get_current_time(),
-                        );
-                        warpui::telemetry::record_event(
-                            Some(user_id.as_string()),
-                            anonymous_id,
-                            TelemetryEvent::Login.name().into(),
-                            TelemetryEvent::Login.payload(),
-                            TelemetryEvent::Login.contains_ugc(),
-                            warpui::time::get_current_time(),
-                        );
-
-                        // Note that this snapshot might get overwritten to disabled after the server fetch.
-                        // However, it is still fine to flush to Rudderstack here as the login event is low-risk
-                        // and it is better to err on the side of over-reporting than under-reporting.
-                        if let Err(e) = server_api
-                            .flush_telemetry_events(privacy_settings_snapshot)
-                            .await
-                        {
-                            log::info!("Failed to flush events from Telemetry queue: {e}");
-                        }
                         server_api.notify_login().await;
                     },
                     |_, _, _| {},
@@ -421,12 +390,7 @@ impl AuthManager {
                 ctx.spawn(
                     async { warp_isolation_platform::detect() },
                     |_, platform, ctx| {
-                        if let Some(platform) = platform {
-                            send_telemetry_from_ctx!(
-                                TelemetryEvent::DetectedIsolationPlatform { platform },
-                                ctx
-                            );
-                        }
+                        if let Some(platform) = platform {}
                     },
                 );
 
@@ -502,7 +466,6 @@ impl AuthManager {
         let became_true = self.auth_state.set_needs_reauth(needs_reauth);
 
         if became_true {
-            send_telemetry_from_ctx!(TelemetryEvent::NeedsReauth, ctx);
             ctx.emit(AuthManagerEvent::NeedsReauth);
         }
     }
@@ -576,17 +539,12 @@ impl AuthManager {
         ctx: &mut ModelContext<Self>,
     ) {
         if self.auth_state.is_anonymous_or_logged_out() {
-            send_telemetry_from_ctx!(
-                TelemetryEvent::AnonymousUserAttemptLoginGatedFeature { feature },
-                ctx
-            );
             ctx.emit(AuthManagerEvent::AttemptedLoginGatedFeature { auth_view_variant });
         };
     }
 
     pub fn anonymous_user_hit_drive_object_limit(&self, ctx: &mut ModelContext<Self>) {
         if self.auth_state.is_anonymous_or_logged_out() {
-            send_telemetry_from_ctx!(TelemetryEvent::AnonymousUserHitCloudObjectLimit, ctx);
             ctx.emit(AuthManagerEvent::AttemptedLoginGatedFeature {
                 auth_view_variant: AuthViewVariant::HitDriveObjectLimitCloseable,
             });
@@ -608,10 +566,6 @@ impl AuthManager {
                     Ok(custom_token) => {
                         // Send synchronously since this is an important event in the sign up funnel and we
                         // don't want to lose events if the user quits before the event queue is flushed.
-                        send_telemetry_sync_from_ctx!(
-                            TelemetryEvent::InitiateAnonymousUserSignup { entrypoint },
-                            ctx
-                        );
                         let login_options_url = me.login_options_url(&custom_token);
                         if cfg!(target_family = "wasm") {
                             #[cfg(target_family = "wasm")]

@@ -4,7 +4,6 @@
 
 use std::path::Path;
 
-use warp_core::send_telemetry_from_ctx;
 use warp_core::ui::appearance::Appearance;
 use warp_errors::report_error;
 use warpui::elements::{
@@ -20,9 +19,6 @@ use crate::code_review::git_dialog::pr::show_pr_created_toast;
 use crate::code_review::git_dialog::{
     GitDialog, GitDialogAction, GitDialogEvent, GitDialogMode, render_branch_section,
     render_file_changes_box, should_send_git_ops_ai_request, show_toast, user_facing_git_error,
-};
-use crate::code_review::telemetry_event::{
-    CodeReviewTelemetryEvent, GitDialogStatus, GitOperationKind,
 };
 use crate::editor::{
     EditorOptions, EditorView, Event as EditorEvent, InteractionState,
@@ -405,15 +401,6 @@ pub(super) fn finish_commit_chain(
     result: Result<Option<PrInfo>, String>,
     ctx: &mut ViewContext<GitDialog>,
 ) {
-    let operation = match intent {
-        CommitChainMode::CommitOnly => GitOperationKind::CommitOnly,
-        CommitChainMode::CommitAndPush => GitOperationKind::CommitAndPush,
-        CommitChainMode::CommitAndCreatePr => GitOperationKind::CommitAndCreatePr,
-    };
-    let (status, error) = match &result {
-        Ok(_) => (GitDialogStatus::Succeeded, None),
-        Err(err) => (GitDialogStatus::Failed, Some(err.clone())),
-    };
     match &result {
         Ok(Some(pr)) => show_pr_created_toast(pr, ctx),
         Ok(None) => {
@@ -429,15 +416,6 @@ pub(super) fn finish_commit_chain(
             show_toast(user_facing_git_error(err), ctx);
         }
     }
-    send_telemetry_from_ctx!(
-        CodeReviewTelemetryEvent::GitDialogCompleted {
-            is_local: Some(!me.repo_location().is_remote()),
-            operation,
-            status,
-            error,
-        },
-        ctx
-    );
     ctx.emit(GitDialogEvent::Completed);
 }
 

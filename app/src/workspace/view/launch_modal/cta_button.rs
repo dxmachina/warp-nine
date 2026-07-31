@@ -3,17 +3,16 @@ use std::rc::Rc;
 use warpui::ViewContext;
 
 use super::Slide;
-use crate::server::telemetry::TelemetryEvent;
 
 /// A callback function for custom CTA button actions.
 type CustomCallback<S> = Rc<dyn Fn(&mut ViewContext<super::LaunchModal<S>>)>;
 
+// LOCAL FORK: the `telemetry_event` field and `with_telemetry` builder went with
+// telemetry. Nothing set the field: every constructor left it `None`.
 #[derive(Clone)]
 pub struct CTAButton<S: Slide> {
     pub label: String,
     pub action: CTAButtonAction<S>,
-    #[allow(dead_code)]
-    pub telemetry_event: Option<TelemetryEvent>,
 }
 
 impl<S: Slide> CTAButton<S> {
@@ -22,7 +21,6 @@ impl<S: Slide> CTAButton<S> {
         Self {
             label: label.into(),
             action: CTAButtonAction::NextSlide(next),
-            telemetry_event: None,
         }
     }
 
@@ -30,7 +28,6 @@ impl<S: Slide> CTAButton<S> {
         Self {
             label: label.into(),
             action: CTAButtonAction::Close,
-            telemetry_event: None,
         }
     }
 
@@ -39,7 +36,6 @@ impl<S: Slide> CTAButton<S> {
         Self {
             label: label.into(),
             action: CTAButtonAction::OpenUrl(url.into()),
-            telemetry_event: None,
         }
     }
 
@@ -50,14 +46,7 @@ impl<S: Slide> CTAButton<S> {
         Self {
             label: label.into(),
             action: CTAButtonAction::Custom(Rc::new(callback)),
-            telemetry_event: None,
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn with_telemetry(mut self, event: TelemetryEvent) -> Self {
-        self.telemetry_event = Some(event);
-        self
     }
 }
 

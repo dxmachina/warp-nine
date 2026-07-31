@@ -501,8 +501,8 @@ pub enum WorkspaceAction {
     DismissWaylandCrashRecoveryBannerAndOpenLink,
     OpenAIFactCollection,
     OpenMCPServerCollection,
-    /// Open the Environment Management pane in Create mode.
-    OpenEnvironmentManagementPane,
+    // LOCAL FORK: `OpenEnvironmentManagementPane` went with the cloud Environments
+    // settings page, which was the pane's only backing view.
     FocusTerminalViewInWorkspace {
         terminal_view_id: EntityId,
     },
@@ -560,9 +560,9 @@ pub enum WorkspaceAction {
         /// Where to open the forked conversation.
         destination: ForkedConversationDestination,
     },
-    /// Show the environment creation modal during `&` handoff compose when no
-    /// environments exist.
-    ShowHandoffEnvironmentCreationModal,
+    // LOCAL FORK: `ShowHandoffEnvironmentCreationModal` went with the cloud environment
+    // creation modal. Nothing emitted the input event that reached it: its `&` handoff
+    // compose entry point had already gone with the agent.
     ShowCloudModeV2EnvironmentCreationModal,
     /// Summarize the active AI conversation in the focused pane.
     SummarizeAIConversation {
@@ -1044,7 +1044,6 @@ impl WorkspaceAction {
             | TabConfigSidecarEditConfig { .. }
             | TabConfigSidecarRemoveConfig { .. }
             | OpenSettingsFile
-            | ShowHandoffEnvironmentCreationModal
             | ShowCloudModeV2EnvironmentCreationModal
             | OpenNetworkLogPane => false,
             #[cfg(debug_assertions)]
@@ -1080,7 +1079,6 @@ impl WorkspaceAction {
             FileRenamed { .. } => false, // File rename doesn't change workspace state
             #[cfg(feature = "local_fs")]
             FileDeleted { .. } => false, // File deletion doesn't change workspace state
-            OpenEnvironmentManagementPane => false,
             #[cfg(target_os = "linux")]
             DismissWaylandCrashRecoveryBannerAndOpenLink => false,
             #[cfg(target_family = "wasm")]

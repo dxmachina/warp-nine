@@ -1,4 +1,3 @@
-use warp_core::send_telemetry_from_ctx;
 use warpui_core::{Entity, ModelContext};
 
 use crate::OnboardingIntention;
@@ -6,7 +5,6 @@ use crate::slides::{
     AgentAutonomy, AgentDevelopmentSettings, OfferVariant, OnboardingModelInfo,
     ProjectOnboardingSettings,
 };
-use crate::telemetry::OnboardingEvent;
 
 /// UI customization settings chosen during the "Customize your UI" onboarding slide.
 #[derive(Clone, Debug)]
@@ -332,13 +330,6 @@ impl OnboardingStateModel {
         if self.ai_setup_choice == choice {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "ai_setup".to_string(),
-                value: choice.to_string(),
-            },
-            ctx
-        );
         self.ai_setup_choice = choice;
         self.agent_settings.disable_oz = matches!(choice, AiSetupChoice::ThirdParty);
         ctx.notify();
@@ -352,13 +343,6 @@ impl OnboardingStateModel {
         if self.ai_access_choice == choice {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "ai_access".to_string(),
-                value: choice.to_string(),
-            },
-            ctx
-        );
         self.ai_access_choice = choice;
         ctx.notify();
     }
@@ -374,7 +358,6 @@ impl OnboardingStateModel {
         source: NoAiConfirmationSource,
         ctx: &mut ModelContext<Self>,
     ) {
-        send_telemetry_from_ctx!(OnboardingEvent::NoAiConfirmationShown, ctx);
         self.no_ai_confirmation = Some(source);
         ctx.emit(OnboardingStateEvent::NoAiConfirmationChanged);
         ctx.notify();
@@ -383,7 +366,6 @@ impl OnboardingStateModel {
     /// "I don't want AI": commit to the terminal-only path (AI features off) and
     /// continue the flow there, so declining AI never dead-ends onboarding.
     pub(crate) fn confirm_no_ai(&mut self, ctx: &mut ModelContext<Self>) {
-        send_telemetry_from_ctx!(OnboardingEvent::NoAiConfirmed, ctx);
         self.no_ai_confirmation = None;
         self.set_intention(OnboardingIntention::Terminal, ctx);
         self.set_step(OnboardingStep::Customize, ctx);
@@ -393,7 +375,6 @@ impl OnboardingStateModel {
     /// intention slide's "Just use the terminal", which is an explicit request
     /// for AI, so route onto the AI path.
     pub(crate) fn cancel_no_ai(&mut self, ctx: &mut ModelContext<Self>) {
-        send_telemetry_from_ctx!(OnboardingEvent::NoAiConfirmationCancelled, ctx);
         match self.no_ai_confirmation.take() {
             Some(NoAiConfirmationSource::Intention) => {
                 self.set_intention(OnboardingIntention::AgentDrivenDevelopment, ctx);
@@ -422,25 +403,11 @@ impl OnboardingStateModel {
         if self.ui_customization.use_vertical_tabs == value {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "tab_styling".to_string(),
-                value: if value { "vertical" } else { "horizontal" }.to_string(),
-            },
-            ctx
-        );
         self.ui_customization.use_vertical_tabs = value;
         ctx.notify();
     }
 
     pub(crate) fn set_tools_panel_enabled(&mut self, enabled: bool, ctx: &mut ModelContext<Self>) {
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "tools_panel".to_string(),
-                value: if enabled { "enabled" } else { "disabled" }.to_string(),
-            },
-            ctx
-        );
         self.ui_customization.show_conversation_history = enabled;
         self.ui_customization.show_project_explorer = enabled;
         self.ui_customization.show_global_search = enabled;
@@ -455,13 +422,6 @@ impl OnboardingStateModel {
         if self.ui_customization.show_conversation_history == value {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "conversation_history".to_string(),
-                value: value.to_string(),
-            },
-            ctx
-        );
         self.ui_customization.show_conversation_history = value;
         ctx.notify();
     }
@@ -470,13 +430,6 @@ impl OnboardingStateModel {
         if self.ui_customization.show_project_explorer == value {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "project_explorer".to_string(),
-                value: value.to_string(),
-            },
-            ctx
-        );
         self.ui_customization.show_project_explorer = value;
         ctx.notify();
     }
@@ -485,13 +438,6 @@ impl OnboardingStateModel {
         if self.ui_customization.show_global_search == value {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "global_search".to_string(),
-                value: value.to_string(),
-            },
-            ctx
-        );
         self.ui_customization.show_global_search = value;
         ctx.notify();
     }
@@ -504,13 +450,6 @@ impl OnboardingStateModel {
         if self.agent_settings.cli_agent_toolbar_enabled == value {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "cli_agent_toolbar".to_string(),
-                value: if value { "enabled" } else { "disabled" }.to_string(),
-            },
-            ctx
-        );
         self.agent_settings.cli_agent_toolbar_enabled = value;
         ctx.notify();
     }
@@ -523,13 +462,6 @@ impl OnboardingStateModel {
         if self.agent_settings.show_agent_notifications == value {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "show_agent_notifications".to_string(),
-                value: if value { "enabled" } else { "disabled" }.to_string(),
-            },
-            ctx
-        );
         self.agent_settings.show_agent_notifications = value;
         ctx.notify();
     }
@@ -542,13 +474,6 @@ impl OnboardingStateModel {
         if self.ui_customization.show_code_review_button == value {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "code_review".to_string(),
-                value: if value { "enabled" } else { "disabled" }.to_string(),
-            },
-            ctx
-        );
         self.ui_customization.show_code_review_button = value;
         ctx.notify();
     }
@@ -557,13 +482,6 @@ impl OnboardingStateModel {
         if self.agent_settings.disable_oz == value {
             return;
         }
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "disable_oz".to_string(),
-                value: value.to_string(),
-            },
-            ctx
-        );
         self.agent_settings.disable_oz = value;
         ctx.notify();
     }
@@ -588,14 +506,6 @@ impl OnboardingStateModel {
         if self.intention == intention {
             return;
         }
-
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "intention".to_string(),
-                value: intention.to_string(),
-            },
-            ctx
-        );
 
         self.intention = intention;
         // Reset UI customization to defaults for the new intention.
@@ -632,14 +542,6 @@ impl OnboardingStateModel {
         if self.agent_settings.selected_model_id == model_id {
             return;
         }
-
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "model".to_string(),
-                value: model_id.to_string(),
-            },
-            ctx
-        );
 
         self.agent_settings.selected_model_id = model_id;
         ctx.notify();
@@ -697,14 +599,6 @@ impl OnboardingStateModel {
             return;
         }
 
-        send_telemetry_from_ctx!(
-            OnboardingEvent::SettingChanged {
-                setting: "autonomy".to_string(),
-                value: autonomy.to_string(),
-            },
-            ctx
-        );
-
         self.agent_settings.autonomy = Some(autonomy);
         ctx.notify();
     }
@@ -714,9 +608,7 @@ impl OnboardingStateModel {
         path: Option<String>,
         ctx: &mut ModelContext<Self>,
     ) {
-        if path.is_some() {
-            send_telemetry_from_ctx!(OnboardingEvent::FolderSelected, ctx);
-        }
+        if path.is_some() {}
         self.project_settings = ProjectOnboardingSettings::from_path(path);
         ctx.notify();
     }
@@ -731,13 +623,6 @@ impl OnboardingStateModel {
         } = &mut self.project_settings
         {
             let new_value = !*initialize_projects_automatically;
-            send_telemetry_from_ctx!(
-                OnboardingEvent::SettingChanged {
-                    setting: "initialize_project".to_string(),
-                    value: new_value.to_string(),
-                },
-                ctx
-            );
             *initialize_projects_automatically = new_value;
             ctx.notify();
         }
@@ -745,16 +630,6 @@ impl OnboardingStateModel {
 
     fn send_completion_telemetry(&self, ctx: &mut ModelContext<Self>) {
         if warp_core::features::FeatureFlag::AccountFirstOnboarding.is_enabled() {
-            send_telemetry_from_ctx!(
-                OnboardingEvent::OnboardingSlidesCompleted {
-                    intention: "account_first".to_string(),
-                    model: None,
-                    autonomy: None,
-                    has_project_path: false,
-                    ai_access: None,
-                },
-                ctx
-            );
             return;
         }
         let (intention, model, autonomy, ai_access) = match &self.intention {
@@ -770,17 +645,6 @@ impl OnboardingStateModel {
         let has_project_path = matches!(
             self.project_settings,
             ProjectOnboardingSettings::Project { .. }
-        );
-
-        send_telemetry_from_ctx!(
-            OnboardingEvent::OnboardingSlidesCompleted {
-                intention,
-                model,
-                autonomy,
-                has_project_path,
-                ai_access,
-            },
-            ctx
         );
     }
 
@@ -861,7 +725,6 @@ impl OnboardingStateModel {
             if account_first {
                 self.send_account_first_action("back", ctx);
             }
-            send_telemetry_from_ctx!(OnboardingEvent::SlideNavigatedBack, ctx);
             self.set_step(prev, ctx);
         }
     }
@@ -878,9 +741,7 @@ impl OnboardingStateModel {
         } else {
             matches!(self.step, OnboardingStep::Project)
         };
-        if !is_last_step {
-            send_telemetry_from_ctx!(OnboardingEvent::SlideNavigatedNext, ctx);
-        }
+        if !is_last_step {}
 
         if account_first {
             if !matches!(
@@ -978,89 +839,20 @@ impl OnboardingStateModel {
 
         let account_first = warp_core::features::FeatureFlag::AccountFirstOnboarding.is_enabled();
         match step {
-            OnboardingStep::Intro => {
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: if account_first { "welcome" } else { "intro" }.to_string(),
-                    },
-                    ctx
-                );
-            }
+            OnboardingStep::Intro => {}
             OnboardingStep::PostAuthOffer => {
                 let variant = self
                     .offer_variant
                     .expect("offer variant is selected before entering the post-auth offer");
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: variant.slide_name().to_string(),
-                    },
-                    ctx
-                );
             }
-            OnboardingStep::ThemePicker => {
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: "theme_picker".to_string(),
-                    },
-                    ctx
-                );
-            }
-            OnboardingStep::Intention => {
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: "intention".to_string(),
-                    },
-                    ctx
-                );
-            }
-            OnboardingStep::AiSetup => {
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: "ai_setup".to_string(),
-                    },
-                    ctx
-                );
-            }
-            OnboardingStep::AiAccess => {
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: "ai_access".to_string(),
-                    },
-                    ctx
-                );
-            }
-            OnboardingStep::Customize => {
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: "customize".to_string(),
-                    },
-                    ctx
-                );
-            }
-            OnboardingStep::Agent => {
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: "agent".to_string(),
-                    },
-                    ctx
-                );
-            }
-            OnboardingStep::ThirdParty => {
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: "third_party".to_string(),
-                    },
-                    ctx
-                );
-            }
-            OnboardingStep::Project => {
-                send_telemetry_from_ctx!(
-                    OnboardingEvent::SlideViewed {
-                        slide_name: "project".to_string(),
-                    },
-                    ctx
-                );
-            }
+            OnboardingStep::ThemePicker => {}
+            OnboardingStep::Intention => {}
+            OnboardingStep::AiSetup => {}
+            OnboardingStep::AiAccess => {}
+            OnboardingStep::Customize => {}
+            OnboardingStep::Agent => {}
+            OnboardingStep::ThirdParty => {}
+            OnboardingStep::Project => {}
         }
 
         ctx.emit(OnboardingStateEvent::SelectedSlideChanged);
@@ -1152,14 +944,6 @@ impl OnboardingStateModel {
                 .expect("offer variant is selected before entering the post-auth offer")
                 .slide_name(),
         };
-        send_telemetry_from_ctx!(
-            OnboardingEvent::OnboardingAction {
-                slide_name: slide_name.to_string(),
-                action: action.to_string(),
-                account_class: None,
-            },
-            ctx
-        );
     }
 }
 

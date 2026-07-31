@@ -17,6 +17,7 @@ use warpui::{
     AppContext, Element, Entity, SingletonEntity, TypedActionView, View, ViewContext, ViewHandle,
 };
 
+use crate::Appearance;
 use crate::appearance::AppearanceEvent;
 use crate::chip_configurator::{ChipConfigurator, ChipConfiguratorAction, ChipConfiguratorLayout};
 use crate::context_chips::prompt::{Prompt, PromptConfiguration, PromptSelection};
@@ -24,7 +25,6 @@ use crate::context_chips::renderer::Renderer as ContextChipRenderer;
 use crate::context_chips::{
     ChipAvailability, ChipRuntimeCapabilities, ContextChipKind, available_chips,
 };
-use crate::server::telemetry::{PromptChoice, TelemetryEvent};
 use crate::settings::{FontSettings, WarpPromptSeparator};
 use crate::terminal::SizeInfo;
 use crate::terminal::blockgrid_element::BlockGridElement;
@@ -32,7 +32,6 @@ use crate::terminal::model::ObfuscateSecrets;
 use crate::terminal::model::blockgrid::BlockGrid;
 use crate::terminal::session_settings::SessionSettings;
 use crate::view_components::{Dropdown, DropdownItem};
-use crate::{Appearance, send_telemetry_from_ctx};
 
 const MODAL_WIDTH: f32 = 700.;
 const BORDER_WIDTH: f32 = 1.;
@@ -345,18 +344,6 @@ impl EditorModal {
                         .iter()
                         .filter_map(|r| r.chip_kind().cloned());
 
-                    let session_settings = SessionSettings::as_ref(ctx);
-                    let current_same_line_prompt_enabled =
-                        session_settings.saved_prompt.same_line_prompt_enabled();
-                    if self.same_line_prompt_enabled != current_same_line_prompt_enabled {
-                        send_telemetry_from_ctx!(
-                            TelemetryEvent::ToggleSameLinePrompt {
-                                enabled: self.same_line_prompt_enabled,
-                            },
-                            ctx
-                        );
-                    }
-
                     // Updating the `Prompt` handles turning off PS1.
                     Prompt::handle(ctx).update(ctx, |prompt, ctx| {
                         report_if_error!(prompt.update(
@@ -368,26 +355,6 @@ impl EditorModal {
                     });
                 }
             }
-
-            let prompt_info = match self.prompt_type {
-                PromptType::PS1 => PromptChoice::PS1,
-                PromptType::WarpDefault => PromptChoice::Default,
-                PromptType::Warp => PromptChoice::Custom {
-                    builtin_chips: self
-                        .chip_configurator
-                        .used_chips
-                        .iter()
-                        .filter_map(|r| r.chip_kind().and_then(|k| k.telemetry_name()))
-                        .collect_vec(),
-                },
-            };
-            send_telemetry_from_ctx!(
-                TelemetryEvent::PromptEdited {
-                    prompt: prompt_info,
-                    entrypoint: "prompt_editor".to_string()
-                },
-                ctx
-            );
         }
     }
 

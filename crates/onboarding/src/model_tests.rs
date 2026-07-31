@@ -1,5 +1,4 @@
 use warp_core::features::FeatureFlag;
-use warp_core::telemetry::testing::MockTelemetryContextProvider;
 use warpui_core::{App, ModelHandle};
 
 use crate::OnboardingIntention;
@@ -10,7 +9,6 @@ use crate::model::{
 use crate::slides::OfferVariant;
 
 fn add_test_model(app: &mut App) -> ModelHandle<OnboardingStateModel> {
-    app.update(MockTelemetryContextProvider::register);
     add_model(app)
 }
 
@@ -75,7 +73,6 @@ fn post_auth_offer_is_unclassified_until_selected_and_does_not_switch() {
 fn post_auth_offer_supports_back_to_theme_and_no_direct_next() {
     let _account_first = FeatureFlag::AccountFirstOnboarding.override_enabled(true);
     App::test((), |mut app| async move {
-        app.update(MockTelemetryContextProvider::register);
         for variant in [OfferVariant::HeadStart, OfferVariant::ChooseHowToStart] {
             let model = add_model(&mut app);
             model.update(&mut app, |model, ctx| {

@@ -1,5 +1,3 @@
-pub mod telemetry;
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -11,7 +9,6 @@ use pathfinder_geometry::rect::RectF;
 use pathfinder_geometry::vector::{Vector2F, vec2f};
 use settings::Setting as _;
 use warp_core::context_flag::ContextFlag;
-use warp_core::telemetry::TelemetryEvent as _;
 use warp_core::ui::Icon as WarpIcon;
 use warp_core::ui::color::blend::Blend;
 use warp_core::ui::theme::color::internal_colors;
@@ -35,6 +32,7 @@ use warpui::ui_components::text_input::TextInput;
 use warpui::{AppContext, EntityId, SingletonEntity, ViewHandle, WindowId};
 
 use super::{render_group_member_icon_collage, select_unique_pane_kinds};
+use crate::FeatureFlag;
 use crate::appearance::Appearance;
 use crate::cloud_object::DriveObjectType;
 use crate::cloud_object::styling::warp_drive_icon_color;
@@ -65,14 +63,10 @@ use crate::workspace::tab_settings::{
     TabSettings, VerticalTabsCompactSubtitle, VerticalTabsDisplayGranularity,
     VerticalTabsPrimaryInfo, VerticalTabsTabItemMode, VerticalTabsViewMode,
 };
-use crate::workspace::view::vertical_tabs::telemetry::{
-    VerticalTabsChipEntrypoint, VerticalTabsTelemetryEvent,
-};
 use crate::workspace::{
     PaneViewLocator, TabBarLocation, TabContextMenuAnchor, VerticalTabsPaneContextMenuTarget,
     VerticalTabsPaneDropTargetData, Workspace,
 };
-use crate::{FeatureFlag, send_telemetry_from_app_ctx};
 
 const PANEL_WIDTH: f32 = 248.;
 const MIN_PANEL_WIDTH: f32 = 200.;
@@ -3275,8 +3269,8 @@ fn resolve_icon_with_status_variant(
                 icon_color: sub_text,
             },
         },
-        // Settings and environment management use the foreground color per design spec
-        TypedPane::Settings | TypedPane::EnvironmentManagement => IconWithStatusVariant::Neutral {
+        // Settings uses the foreground color per design spec
+        TypedPane::Settings => IconWithStatusVariant::Neutral {
             icon: typed.icon(),
             icon_color: main_text,
         },
@@ -3440,7 +3434,8 @@ enum TypedPane<'a> {
     Workflow { is_ai_prompt: bool },
     Settings,
     EnvVarCollection,
-    EnvironmentManagement,
+    // LOCAL FORK: `EnvironmentManagement` went with the cloud Environments settings page,
+    // which was the only backing view for that pane kind.
     Other,
 }
 
@@ -3464,7 +3459,6 @@ impl TypedPane<'_> {
             },
             TypedPane::Settings => SummaryPaneKind::Settings,
             TypedPane::EnvVarCollection => SummaryPaneKind::EnvVarCollection,
-            TypedPane::EnvironmentManagement => SummaryPaneKind::EnvironmentManagement,
             TypedPane::Other => SummaryPaneKind::Other,
         }
     }
@@ -3486,7 +3480,6 @@ impl TypedPane<'_> {
             TypedPane::Workflow { .. } => "Workflow",
             TypedPane::Settings => "Settings",
             TypedPane::EnvVarCollection => "Environment Variables",
-            TypedPane::EnvironmentManagement => "Environments",
             TypedPane::Other => "Other",
         }
     }
@@ -3504,7 +3497,6 @@ impl TypedPane<'_> {
             | TypedPane::Workflow { .. }
             | TypedPane::Settings
             | TypedPane::EnvVarCollection
-            | TypedPane::EnvironmentManagement
             | TypedPane::Other => None,
         }
     }
@@ -3520,7 +3512,7 @@ impl TypedPane<'_> {
             TypedPane::Workflow {
                 is_ai_prompt: false,
             } => WarpIcon::Workflow,
-            TypedPane::Settings | TypedPane::EnvironmentManagement => WarpIcon::Gear,
+            TypedPane::Settings => WarpIcon::Gear,
             TypedPane::EnvVarCollection => WarpIcon::EnvVarCollection,
             TypedPane::Other => WarpIcon::File,
         }
@@ -3660,7 +3652,6 @@ fn build_vertical_tabs_summary_data(
             | TypedPane::Workflow { .. }
             | TypedPane::Settings
             | TypedPane::EnvVarCollection
-            | TypedPane::EnvironmentManagement
             | TypedPane::Other => {
                 push_normalized_unique_summary_label(
                     &mut primary_labels,
@@ -3791,7 +3782,6 @@ impl<'a> PaneProps<'a> {
             | TypedPane::Workflow { .. }
             | TypedPane::Settings
             | TypedPane::EnvVarCollection
-            | TypedPane::EnvironmentManagement
             | TypedPane::Other => {
                 non_terminal_search_text_fragments(self.generated_or_tab_title(), &self.subtitle)
             }
@@ -4096,9 +4086,9 @@ impl PaneGroup {
             }
             IPaneType::Settings => TypedPane::Settings,
             IPaneType::EnvVarCollection => TypedPane::EnvVarCollection,
-            IPaneType::EnvironmentManagement => TypedPane::EnvironmentManagement,
             // LOCAL FORK: the CodeDiff / AIFact / AIDocument / ExecutionProfileEditor /
-            // CustomRouterEditor pane types were removed with the agent.
+            // CustomRouterEditor pane types were removed with the agent, and
+            // EnvironmentManagement with the cloud Environments settings page.
             IPaneType::GetStarted | IPaneType::NetworkLog | IPaneType::DeferredPlaceholder => {
                 TypedPane::Other
             }
@@ -4273,7 +4263,6 @@ fn render_terminal_row_content(
             props.pane_group_id,
             props.pane_id,
             metadata_left,
-            chip_entrypoint_for_granularity(props.display_granularity),
             &props.badge_mouse_states,
             appearance,
             app,
@@ -4282,15 +4271,6 @@ fn render_terminal_row_content(
         .finish(),
     );
     content.finish()
-}
-
-fn chip_entrypoint_for_granularity(
-    granularity: VerticalTabsDisplayGranularity,
-) -> VerticalTabsChipEntrypoint {
-    match granularity {
-        VerticalTabsDisplayGranularity::Panes => VerticalTabsChipEntrypoint::Pane,
-        VerticalTabsDisplayGranularity::Tabs => VerticalTabsChipEntrypoint::Tab,
-    }
 }
 
 fn branch_label_display(git_branch: Option<&str>, fallback: &str) -> (String, bool) {
@@ -4613,7 +4593,6 @@ fn render_summary_tab_item(
     }
 
     // Branch region. Each branch line gets the existing 4px top margin from APP-3875.
-    let pr_chip_entrypoint = chip_entrypoint_for_granularity(props.display_granularity);
     for (idx, branch_entry) in summary
         .branch_entries
         .iter()
@@ -4624,7 +4603,6 @@ fn render_summary_tab_item(
             Container::new(render_summary_branch_line(
                 branch_entry,
                 pr_badge_mouse_states.get(idx).cloned(),
-                pr_chip_entrypoint,
                 appearance,
             ))
             .with_margin_top(REGION_GAP)
@@ -4897,7 +4875,6 @@ fn summary_pane_kind_icon(
 fn render_summary_branch_line(
     entry: &VerticalTabsSummaryBranchEntry,
     pr_badge_mouse_state: Option<MouseStateHandle>,
-    pr_chip_entrypoint: VerticalTabsChipEntrypoint,
     appearance: &Appearance,
 ) -> Box<dyn Element> {
     let theme = appearance.theme();
@@ -4936,7 +4913,6 @@ fn render_summary_branch_line(
             right_badges.add_child(render_terminal_pull_request_badge(
                 pull_request_label.clone(),
                 pull_request_url.clone(),
-                pr_chip_entrypoint,
                 mouse_state,
                 appearance,
             ));
@@ -5057,7 +5033,6 @@ fn render_terminal_metadata_line(
     pane_group_id: EntityId,
     pane_id: PaneId,
     left_content: MetadataLeftContent,
-    row_entrypoint: VerticalTabsChipEntrypoint,
     badge_mouse_states: &PaneRowBadgeMouseStates,
     appearance: &Appearance,
     app: &AppContext,
@@ -5099,7 +5074,6 @@ fn render_terminal_metadata_line(
         terminal_view,
         pane_group_id,
         pane_id,
-        row_entrypoint,
         badge_mouse_states,
         appearance,
         app,
@@ -5117,7 +5091,6 @@ fn render_terminal_right_badges(
     terminal_view: &TerminalView,
     pane_group_id: EntityId,
     pane_id: PaneId,
-    entrypoint: VerticalTabsChipEntrypoint,
     badge_mouse_states: &PaneRowBadgeMouseStates,
     appearance: &Appearance,
     app: &AppContext,
@@ -5138,7 +5111,6 @@ fn render_terminal_right_badges(
             &git_line_changes,
             pane_group_id,
             pane_id,
-            entrypoint,
             badge_mouse_states.diff_stats.clone(),
             appearance,
         ));
@@ -5150,7 +5122,6 @@ fn render_terminal_right_badges(
         right_badges.add_child(render_terminal_pull_request_badge(
             label,
             pull_request_url,
-            entrypoint,
             badge_mouse_states.pull_request.clone(),
             appearance,
         ));
@@ -5164,7 +5135,6 @@ fn render_terminal_diff_stats_badge(
     git_line_changes: &GitLineChanges,
     pane_group_id: EntityId,
     pane_id: PaneId,
-    entrypoint: VerticalTabsChipEntrypoint,
     mouse_state: MouseStateHandle,
     appearance: &Appearance,
 ) -> Box<dyn Element> {
@@ -5182,10 +5152,6 @@ fn render_terminal_diff_stats_badge(
         )
     })
     .on_click(move |ctx, app, _| {
-        send_telemetry_from_app_ctx!(
-            VerticalTabsTelemetryEvent::DiffStatsChipClicked { entrypoint },
-            app
-        );
         let locator = PaneViewLocator {
             pane_group_id,
             pane_id,
@@ -5200,7 +5166,6 @@ fn render_terminal_diff_stats_badge(
 fn render_terminal_pull_request_badge(
     label: String,
     url: String,
-    entrypoint: VerticalTabsChipEntrypoint,
     mouse_state: MouseStateHandle,
     appearance: &Appearance,
 ) -> Box<dyn Element> {
@@ -5215,10 +5180,6 @@ fn render_terminal_pull_request_badge(
         render_badge_container(render_pull_request_badge_content(&label, appearance), bg)
     })
     .on_click(move |ctx, app, _| {
-        send_telemetry_from_app_ctx!(
-            VerticalTabsTelemetryEvent::PrChipClicked { entrypoint },
-            app
-        );
         ctx.dispatch_typed_action(WorkspaceAction::OpenLink(url.clone()));
     })
     .with_cursor(Cursor::PointingHand)
@@ -6552,7 +6513,6 @@ fn render_terminal_detail_section(
             &git_line_changes,
             props.pane_group_id,
             props.pane_id,
-            VerticalTabsChipEntrypoint::DetailsSidecar,
             props.badge_mouse_states.diff_stats.clone(),
             appearance,
         ));
@@ -6562,7 +6522,6 @@ fn render_terminal_detail_section(
         right_badges.add_child(render_terminal_pull_request_badge(
             terminal_pull_request_badge_label(&pull_request_url),
             pull_request_url,
-            VerticalTabsChipEntrypoint::DetailsSidecar,
             props.badge_mouse_states.pull_request.clone(),
             appearance,
         ));
@@ -6702,7 +6661,6 @@ fn typed_pane_warp_drive_object_type(typed: &TypedPane<'_>) -> Option<DriveObjec
         | TypedPane::Code(_)
         | TypedPane::File
         | TypedPane::Settings
-        | TypedPane::EnvironmentManagement
         | TypedPane::Other => None,
     }
 }
@@ -6723,10 +6681,7 @@ fn render_detail_section(
         TypedPane::Notebook { .. } | TypedPane::Workflow { .. } | TypedPane::EnvVarCollection => {
             render_warp_drive_object_detail_section(props, appearance, app)
         }
-        TypedPane::File
-        | TypedPane::Settings
-        | TypedPane::EnvironmentManagement
-        | TypedPane::Other => Empty::new().finish(),
+        TypedPane::File | TypedPane::Settings | TypedPane::Other => Empty::new().finish(),
     }
 }
 pub(super) struct DetailSidecarOverlay {

@@ -12,20 +12,18 @@ pub use data_source::*;
 pub use mixer::{SlashCommandMixer, build_slash_command_mixer, slash_command_query};
 pub use view::{CloseReason, InlineSlashCommandView, SlashCommandsEvent};
 use warp_core::features::FeatureFlag;
-use warp_core::send_telemetry_from_ctx;
 use warp_core::ui::theme::AnsiColorIdentifier;
 #[cfg(feature = "local_fs")]
 use warp_util::path::{CleanPathResult, LineAndColumnArg};
 use warpui::{AppContext, SingletonEntity, ViewContext};
 
-use crate::TelemetryEvent;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::code_review::telemetry_event::CodeReviewPaneEntrypoint;
 use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
 use crate::search::slash_command_menu::static_commands::{Availability, SlashCommandKind};
 use crate::search::slash_command_menu::{SlashCommandId, StaticCommand};
 use crate::server::ids::SyncId;
-use crate::server::telemetry::{AgentModeAutoDetectionSettingOrigin, SlashCommandAcceptedDetails};
+use crate::server::telemetry::PaletteSource;
 use crate::settings::AISettings;
 use crate::skills::SkillReference;
 use crate::tab::SelectedTabColor;
@@ -98,51 +96,9 @@ pub fn should_close_slash_command_menu_for_exact_match(
     result_count < 2 || argument_started
 }
 
-/// Records a static slash command accepted from either the GUI or TUI surface.
-pub fn record_static_slash_command_accepted(
-    command_name: &str,
-    is_in_agent_view: bool,
-    ctx: &mut AppContext,
-) {
-    send_telemetry_from_ctx!(
-        TelemetryEvent::SlashCommandAccepted {
-            command_details: SlashCommandAcceptedDetails::StaticCommand {
-                command_name: command_name.to_owned(),
-            },
-            is_in_agent_view,
-        },
-        ctx
-    );
-}
-
-/// Records an input auto-detection setting toggle triggered from a TUI slash
-/// command (`/natural-language-detection`).
-///
-/// Mirrors the `SettingsPage` and `Banner` origins used by the GUI toggle paths,
-/// but reports the toggle as originating from a TUI slash command.
-pub fn record_autodetection_toggle_from_slash_command(
-    is_autodetection_enabled: bool,
-    ctx: &mut AppContext,
-) {
-    send_telemetry_from_ctx!(
-        TelemetryEvent::AgentModeToggleAutoDetectionSetting {
-            is_autodetection_enabled,
-            origin: AgentModeAutoDetectionSettingOrigin::SlashCommand,
-        },
-        ctx
-    );
-}
-
-/// Records a saved prompt accepted from either the GUI or TUI slash menu.
-pub fn record_saved_prompt_accepted(is_in_agent_view: bool, ctx: &mut AppContext) {
-    send_telemetry_from_ctx!(
-        TelemetryEvent::SlashCommandAccepted {
-            command_details: SlashCommandAcceptedDetails::SavedPrompt,
-            is_in_agent_view,
-        },
-        ctx
-    );
-}
+// LOCAL FORK: record_static_slash_command_accepted,
+// record_autodetection_toggle_from_slash_command and record_saved_prompt_accepted
+// were telemetry-only recorders and went with telemetry.
 
 pub fn saved_prompt_text_for_id(id: &SyncId, ctx: &AppContext) -> Option<String> {
     let workflow = CloudModel::as_ref(ctx).get_workflow(id)?;
@@ -374,9 +330,6 @@ impl Input {
                     log::warn!("Tried to execute workflow for id {id:?} but it does not exist");
                     return;
                 };
-                // LOCAL FORK: there is no agent view to be in.
-                record_saved_prompt_accepted(/*is_in_agent_view*/ false, ctx);
-
                 self.show_workflows_info_box_on_workflow_selection(
                     WorkflowType::Cloud(Box::new(workflow)),
                     WorkflowSource::WarpAI,
@@ -611,8 +564,6 @@ impl Input {
                         }
                     }
                     _ => {
-                        use crate::server::telemetry::PaletteSource;
-
                         ctx.emit(Event::OpenFilesPalette {
                             source: PaletteSource::Keybinding,
                         });
@@ -752,8 +703,7 @@ impl Input {
         }
 
         // LOCAL FORK: auto-entering the agent view for `auto_enter_ai_mode` commands went
-        // with the agent, and there is no agent view to report being in.
-        record_static_slash_command_accepted(command.name, /*is_in_agent_view*/ false, ctx);
+        // with the agent.
         true
     }
 

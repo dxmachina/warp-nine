@@ -11,12 +11,8 @@ use super::manager::{
     RemoteCodebaseIndexStatusWithPath, RemoteCodebaseIndexUpdateOperation, RemoteServerManager,
     RemoteServerManagerEvent,
 };
-use crate::server::telemetry::{
-    RemoteCodebaseAutoIndexTrigger, RemoteCodebaseIndexStatusTelemetrySource,
-};
 use crate::settings::CodeSettings;
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
-use crate::{TelemetryEvent, send_telemetry_from_ctx};
 
 // LOCAL FORK: these gates lived in the deleted `crate::ai::codebase_auto_indexing`
 // module. Remote codebase indexing outlives the agent, so they are inlined here.
@@ -122,38 +118,6 @@ pub struct RemoteCodebaseIndexSettingsEntry {
     pub remote_path: RemotePath,
     pub status: RemoteCodebaseIndexStatus,
     pub host_label: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct RemoteCodebaseIndexStatusTelemetryUpdate {
-    state: RemoteCodebaseIndexState,
-    previous_state: Option<RemoteCodebaseIndexState>,
-    has_root_hash: bool,
-    has_failure_message: bool,
-    progress_completed: Option<u64>,
-    progress_total: Option<u64>,
-}
-
-impl RemoteCodebaseIndexStatusTelemetryUpdate {
-    fn new(
-        status: &RemoteCodebaseIndexStatus,
-        previous_state: Option<RemoteCodebaseIndexState>,
-    ) -> Self {
-        Self {
-            state: status.state,
-            previous_state,
-            has_root_hash: status
-                .root_hash
-                .as_deref()
-                .is_some_and(|root_hash| !root_hash.is_empty()),
-            has_failure_message: status
-                .failure_message
-                .as_deref()
-                .is_some_and(|message| !message.is_empty()),
-            progress_completed: status.progress_completed,
-            progress_total: status.progress_total,
-        }
-    }
 }
 
 impl RemoteCodebaseIndexModel {
@@ -317,17 +281,7 @@ impl RemoteCodebaseIndexModel {
                 if !should_use_codebase_indexing(ctx) {
                     return;
                 }
-                let (changed, telemetry_updates) =
-                    self.apply_statuses_snapshot_with_telemetry(host_id, statuses);
-                for update in telemetry_updates {
-                    emit_status_changed_telemetry(
-                        update,
-                        None,
-                        RemoteCodebaseIndexStatusTelemetrySource::Snapshot,
-                        ctx,
-                    );
-                }
-                if changed {
+                if self.apply_statuses_snapshot(host_id, statuses) {
                     ctx.emit(RemoteCodebaseIndexModelEvent::SettingsEntriesChanged);
                 }
             }
@@ -340,15 +294,7 @@ impl RemoteCodebaseIndexModel {
                 if !should_use_codebase_indexing(ctx) {
                     return;
                 }
-                if let Some(update) =
-                    self.apply_status_update_with_telemetry(remote_path.clone(), status.clone())
-                {
-                    let source = if mutation_kind.is_some() {
-                        RemoteCodebaseIndexStatusTelemetrySource::MutationResponse
-                    } else {
-                        RemoteCodebaseIndexStatusTelemetrySource::PushUpdate
-                    };
-                    emit_status_changed_telemetry(update, *mutation_kind, source, ctx);
+                if self.apply_status_update(remote_path.clone(), status.clone()) {
                     ctx.emit(RemoteCodebaseIndexModelEvent::SettingsEntriesChanged);
                 }
             }
@@ -365,11 +311,6 @@ impl RemoteCodebaseIndexModel {
                     // Mirrors local auto-indexing: remote navigation silently requests indexing
                     // only when the shared auto-index setting allows it.
                     let remote_path = remote_path.clone();
-                    emit_auto_index_requested_telemetry(
-                        RemoteCodebaseAutoIndexTrigger::NavigatedToGitRepo,
-                        1,
-                        ctx,
-                    );
                     RemoteServerManager::handle(ctx).update(ctx, |manager, ctx| {
                         manager.ensure_codebase_indexed(
                             remote_path,
@@ -453,12 +394,6 @@ impl RemoteCodebaseIndexModel {
             return;
         }
 
-        emit_auto_index_requested_telemetry(
-            RemoteCodebaseAutoIndexTrigger::CodebaseContextEnablementChanged,
-            remote_paths.len(),
-            ctx,
-        );
-
         for remote_path in remote_paths {
             RemoteServerManager::handle(ctx).update(ctx, |manager, ctx| {
                 manager.ensure_codebase_indexed(
@@ -513,15 +448,6 @@ impl RemoteCodebaseIndexModel {
         host_id: &HostId,
         statuses: &[RemoteCodebaseIndexStatusWithPath],
     ) -> bool {
-        self.apply_statuses_snapshot_with_telemetry(host_id, statuses)
-            .0
-    }
-
-    fn apply_statuses_snapshot_with_telemetry(
-        &mut self,
-        host_id: &HostId,
-        statuses: &[RemoteCodebaseIndexStatusWithPath],
-    ) -> (bool, Vec<RemoteCodebaseIndexStatusTelemetryUpdate>) {
         let status_count = statuses.len();
         log::info!(
             "[Remote codebase indexing] Client received bootstrap codebase index statuses snapshot: host_id={host_id} status_count={status_count}"
@@ -563,7 +489,7 @@ impl RemoteCodebaseIndexModel {
                 .filter(|(key, _)| key.host == host_label)
                 .all(|(key, status)| incoming_statuses.get(key) == Some(status));
         if snapshot_is_unchanged {
-            return (false, vec![]);
+            return false;
         }
         let previous_statuses = self
             .statuses
@@ -572,24 +498,16 @@ impl RemoteCodebaseIndexModel {
             .map(|(key, status)| (key.clone(), status.clone()))
             .collect::<HashMap<_, _>>();
         self.statuses.retain(|key, _| key.host != host_label);
-        let mut telemetry_updates = vec![];
         for (key, status) in incoming_statuses {
             if previous_statuses.get(&key) == Some(&status) {
                 self.statuses.insert(key, status);
                 continue;
             }
-            let previous_state = previous_statuses
-                .get(&key)
-                .map(|previous_status| previous_status.state);
             let remote_path = RemotePath::new(host_id.clone(), key.path.clone());
             self.log_status_update(&remote_path, &status);
-            self.statuses.insert(key, status.clone());
-            telemetry_updates.push(RemoteCodebaseIndexStatusTelemetryUpdate::new(
-                &status,
-                previous_state,
-            ));
+            self.statuses.insert(key, status);
         }
-        (true, telemetry_updates)
+        true
     }
 
     fn apply_status_update(
@@ -597,29 +515,13 @@ impl RemoteCodebaseIndexModel {
         remote_path: RemotePath,
         status: RemoteCodebaseIndexStatus,
     ) -> bool {
-        self.apply_status_update_with_telemetry(remote_path, status)
-            .is_some()
-    }
-
-    fn apply_status_update_with_telemetry(
-        &mut self,
-        remote_path: RemotePath,
-        status: RemoteCodebaseIndexStatus,
-    ) -> Option<RemoteCodebaseIndexStatusTelemetryUpdate> {
         let key = self.status_key_for_remote_path(&remote_path);
         if self.statuses.get(&key) == Some(&status) {
-            return None;
+            return false;
         }
-        let previous_state = self
-            .statuses
-            .get(&key)
-            .map(|previous_status| previous_status.state);
         self.log_status_update(&remote_path, &status);
-        self.statuses.insert(key, status.clone());
-        Some(RemoteCodebaseIndexStatusTelemetryUpdate::new(
-            &status,
-            previous_state,
-        ))
+        self.statuses.insert(key, status);
+        true
     }
 
     fn log_status_update(&self, remote_path: &RemotePath, status: &RemoteCodebaseIndexStatus) {
@@ -909,47 +811,8 @@ fn search_availability_for_status(
         },
     }
 }
-fn emit_status_changed_telemetry(
-    update: RemoteCodebaseIndexStatusTelemetryUpdate,
-    mutation_kind: Option<RemoteCodebaseIndexUpdateOperation>,
-    source: RemoteCodebaseIndexStatusTelemetrySource,
-    ctx: &mut ModelContext<RemoteCodebaseIndexModel>,
-) {
-    send_telemetry_from_ctx!(
-        TelemetryEvent::RemoteCodebaseIndexStatusChanged {
-            state: update.state,
-            previous_state: update.previous_state,
-            has_root_hash: update.has_root_hash,
-            has_failure_message: update.has_failure_message,
-            progress_completed: update.progress_completed,
-            progress_total: update.progress_total,
-            mutation_kind,
-            source,
-            remote_os: None,
-            remote_arch: None,
-        },
-        ctx
-    );
-}
-fn emit_auto_index_requested_telemetry(
-    trigger: RemoteCodebaseAutoIndexTrigger,
-    requested_count: usize,
-    ctx: &mut ModelContext<RemoteCodebaseIndexModel>,
-) {
-    if requested_count == 0 {
-        return;
-    }
-
-    send_telemetry_from_ctx!(
-        TelemetryEvent::RemoteCodebaseAutoIndexRequested {
-            trigger,
-            requested_count,
-            remote_os: None,
-            remote_arch: None,
-        },
-        ctx
-    );
-}
+// LOCAL FORK: emit_status_changed_telemetry and emit_auto_index_requested_telemetry,
+// plus the RemoteCodebaseIndexStatusTelemetryUpdate they carried, went with telemetry.
 #[cfg(test)]
 #[path = "codebase_index_model_tests.rs"]
 mod tests;

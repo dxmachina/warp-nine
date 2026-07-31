@@ -22,7 +22,6 @@ use crate::workspaces::workspace::CustomerType;
 /// a modal is currently being shown and automatically triggers the modal when appropriate
 /// conditions are met (e.g., user becomes onboarded).
 pub struct OneTimeModalModel {
-    is_build_plan_migration_modal_open: bool,
     /// Whether the Oz launch modal is currently being shown.
     is_oz_launch_modal_open: bool,
     /// Whether the OpenWarp launch modal is currently being shown.
@@ -35,8 +34,6 @@ pub struct OneTimeModalModel {
     /// modal to close. Mirrors the `Condition` pattern used by
     /// `NetworkStatus::pending_reconnect`.
     auto_handoff_sleep_modal_closed: Condition,
-    /// Whether the free-AI-removal notice modal is currently being shown.
-    is_free_ai_removal_modal_open: bool,
     /// Whether the HOA onboarding flow is currently being shown.
     is_hoa_onboarding_open: bool,
     /// The feature-intro popover currently being shown, if any. Unlike the other
@@ -67,11 +64,9 @@ impl OneTimeModalModel {
                 match event {
                     UserWorkspacesEvent::SunsettedToBuildDataUpdated => {
                         // When sunsetted_to_build_ts is updated, check if we should show the modal
-                        me.check_and_trigger_build_plan_migration_modal(ctx);
                     }
                     UserWorkspacesEvent::TeamsChanged => {
                         me.has_fetched_workspaces = true;
-                        me.maybe_recheck_free_ai_removal_modal(ctx);
                     }
                     _ => {}
                 }
@@ -90,13 +85,11 @@ impl OneTimeModalModel {
         auto_handoff_sleep_modal_closed.set();
 
         Self {
-            is_build_plan_migration_modal_open: false,
             is_oz_launch_modal_open: false,
             is_openwarp_launch_modal_open: false,
             is_orchestration_launch_modal_open: false,
             is_auto_handoff_sleep_modal_open: false,
             auto_handoff_sleep_modal_closed,
-            is_free_ai_removal_modal_open: false,
             is_hoa_onboarding_open: false,
             active_feature_intro: None,
             has_completed_initial_modal_checks: false,
@@ -160,7 +153,6 @@ impl OneTimeModalModel {
         if self.check_and_trigger_hoa_onboarding(ctx) {
             return;
         }
-        self.check_and_trigger_build_plan_migration_modal(ctx);
     }
 
     #[cfg(debug_assertions)]
@@ -274,8 +266,6 @@ impl OneTimeModalModel {
             || self.is_openwarp_launch_modal_open
             || self.is_orchestration_launch_modal_open
             || self.is_auto_handoff_sleep_modal_open
-            || self.is_build_plan_migration_modal_open
-            || self.is_free_ai_removal_modal_open
             || self.is_hoa_onboarding_open)
             && self.target_window_id.is_some()
     }
@@ -390,44 +380,7 @@ impl OneTimeModalModel {
         if self.check_and_trigger_hoa_onboarding(ctx) {
             return;
         }
-
-        self.check_and_trigger_build_plan_migration_modal(ctx);
     }
-
-    /// Returns whether the free-AI-removal notice modal is currently open.
-    pub fn is_free_ai_removal_modal_open(&self) -> bool {
-        self.is_free_ai_removal_modal_open && self.target_window_id.is_some()
-    }
-
-    pub fn mark_free_ai_removal_modal_dismissed(&mut self, ctx: &mut ModelContext<Self>) {
-        self.set_free_ai_removal_modal_open(false, ctx);
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn force_open_free_ai_removal_modal(&mut self, ctx: &mut ModelContext<Self>) {
-        self.set_free_ai_removal_modal_open(true, ctx);
-    }
-
-    fn set_free_ai_removal_modal_open(
-        &mut self,
-        is_open: bool,
-        ctx: &mut ModelContext<Self>,
-    ) -> bool {
-        if self.is_free_ai_removal_modal_open != is_open {
-            self.is_free_ai_removal_modal_open = is_open;
-            ctx.emit(OneTimeModalEvent::VisibilityChanged { is_open });
-            return true;
-        }
-        false
-    }
-
-    /// Re-evaluates the free-AI-removal notice outside the initial startup check, e.g.
-    /// when workspace billing data arrives after startup.
-    ///
-    /// LOCAL FORK: `check_and_trigger_free_ai_removal_modal` went with the agent — it read
-    /// the AI request usage model and the API key manager — so there is nothing left to
-    /// re-evaluate. The modal can still be opened explicitly in debug builds.
-    fn maybe_recheck_free_ai_removal_modal(&mut self, _ctx: &mut ModelContext<Self>) {}
 
     fn set_hoa_onboarding_open(&mut self, is_open: bool, ctx: &mut ModelContext<Self>) -> bool {
         if self.is_hoa_onboarding_open != is_open {
@@ -566,145 +519,6 @@ impl OneTimeModalModel {
             self.set_active_feature_intro(Some(id), ctx);
         }
         should_show
-    }
-
-    pub fn is_build_plan_migration_modal_open(&self) -> bool {
-        self.is_build_plan_migration_modal_open && self.target_window_id.is_some()
-    }
-
-    pub fn mark_build_plan_migration_modal_dismissed(&mut self, ctx: &mut ModelContext<Self>) {
-        self.set_build_plan_migration_modal_open(false, ctx);
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn force_open_build_plan_migration_modal(&mut self, ctx: &mut ModelContext<Self>) {
-        self.set_build_plan_migration_modal_open(true, ctx);
-    }
-
-    fn set_build_plan_migration_modal_open(
-        &mut self,
-        is_open: bool,
-        ctx: &mut ModelContext<Self>,
-    ) -> bool {
-        if self.is_build_plan_migration_modal_open != is_open {
-            self.is_build_plan_migration_modal_open = is_open;
-            ctx.emit(OneTimeModalEvent::VisibilityChanged { is_open });
-            return true;
-        }
-        false
-    }
-
-    fn check_and_trigger_build_plan_migration_modal(
-        &mut self,
-        ctx: &mut ModelContext<Self>,
-    ) -> bool {
-        use crate::workspaces::user_workspaces::UserWorkspaces;
-
-        // Check if already dismissed
-        let general_settings = GeneralSettings::as_ref(ctx);
-        if *general_settings
-            .build_plan_migration_modal_dismissed
-            .value()
-        {
-            return false;
-        }
-
-        // Check if user is authenticated
-        let auth_state = crate::auth::AuthStateProvider::as_ref(ctx).get();
-
-        if auth_state.is_anonymous_or_logged_out() {
-            return false;
-        }
-
-        // Check if current workspace has sunsetted_to_build_ts set
-        let user_workspaces = UserWorkspaces::as_ref(ctx);
-        let Some(target_window_id) = self
-            .target_window_id
-            .or_else(|| ctx.windows().active_window())
-        else {
-            return false;
-        };
-        let Some(current_team) = user_workspaces.team_for_window(target_window_id) else {
-            return false;
-        };
-
-        // Check if user is admin of the team
-        let Some(user_email) = auth_state.user_email() else {
-            return false;
-        };
-
-        if !current_team.has_admin_permissions(&user_email) {
-            return false;
-        }
-
-        // Check if service agreement has sunsetted_to_build_ts set
-        let has_sunsetted_to_build = user_workspaces
-            .current_workspace()
-            .and_then(|workspace| workspace.billing_metadata.service_agreements.first())
-            .is_some_and(|agreement| agreement.sunsetted_to_build_ts.is_some());
-
-        if !has_sunsetted_to_build {
-            return false;
-        }
-
-        // All conditions met, show the modal
-        self.target_window_id = Some(target_window_id);
-        self.set_build_plan_migration_modal_open(true, ctx)
-    }
-}
-
-/// Marks the free-AI-removal notice as seen without showing it.
-pub fn mark_free_ai_removal_notice_seen(app: &mut AppContext) {
-    AISettings::handle(app).update(app, |settings, ctx| {
-        if let Err(e) = settings
-            .did_check_to_trigger_free_ai_removal_modal
-            .set_value(true, ctx)
-        {
-            log::warn!("Failed to mark free AI removal notice as seen: {e}");
-        }
-    });
-}
-
-/// The outcome of evaluating the free-AI-removal notice conditions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FreeAiRemovalModalDecision {
-    /// Show the modal and write the seen marker.
-    Show,
-    /// Write the seen marker without showing the modal.
-    MarkSeenSilently,
-    /// Not enough data to decide; re-evaluate on the next billing/experiments update.
-    Defer,
-}
-
-fn free_ai_removal_modal_decision(
-    customer_type: Option<CustomerType>,
-    is_warp_ai_enabled: bool,
-    has_byok_or_byoe: bool,
-    completed_new_onboarding: bool,
-    has_zero_base_credits: bool,
-    workspaces_fetched: bool,
-) -> FreeAiRemovalModalDecision {
-    if !is_warp_ai_enabled || has_byok_or_byoe || completed_new_onboarding {
-        return FreeAiRemovalModalDecision::MarkSeenSilently;
-    }
-    // Restrict to a Free (or confirmed solo) user; anyone else is paid (silently
-    // marked) or not-yet-known (deferred).
-    match customer_type {
-        Some(CustomerType::Free) => {}
-        // A missing workspace usually means billing data hasn't loaded yet; only treat
-        // it as a solo Free user once a server fetch has confirmed there is none, so a
-        // paid user's modal decision never runs against absent data.
-        None if workspaces_fetched => {}
-        None | Some(CustomerType::Unknown) => return FreeAiRemovalModalDecision::Defer,
-        Some(_) => return FreeAiRemovalModalDecision::MarkSeenSilently,
-    }
-    // Some ICPs still receive base AI credits on the Free plan; don't spook them with
-    // the notice. Only show once the base allowance is gone, and defer (rather than
-    // mark seen) otherwise so it re-evaluates if the allowance later drops to zero.
-    if has_zero_base_credits {
-        FreeAiRemovalModalDecision::Show
-    } else {
-        FreeAiRemovalModalDecision::Defer
     }
 }
 

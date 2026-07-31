@@ -789,9 +789,6 @@ fn handle_terminal_view_event(
             // LOCAL FORK: the AI document panes and the agent profile editor are gone;
             // only the "hide" event still exists on the terminal view.
             Event::HideAIDocumentPanes => {}
-            Event::ShowCloudAgentCapacityModal { variant } => {
-                ctx.emit(pane_group::Event::ShowCloudAgentCapacityModal { variant: *variant });
-            }
             // LOCAL FORK: the child agent orchestration events (RevealChildAgent,
             // SwapPaneToConversation, EnsureSharedSessionViewerChildPane,
             // OpenChildAgentInNewTab, OpenChildAgentInNewPane, StopAgentConversation,

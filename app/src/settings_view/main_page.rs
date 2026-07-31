@@ -111,13 +111,6 @@ pub enum MainPageAction {
     DownloadUpdate,
     CheckForUpdate,
     ToggleSettingsSync,
-    Upgrade {
-        team_uid: Option<ServerId>,
-        user_id: UserUid,
-    },
-    GenerateStripeBillingPortalLink {
-        team_uid: ServerId,
-    },
     OpenUrl(String),
     #[cfg(not(target_family = "wasm"))]
     RefreshIapCredentials,
@@ -172,19 +165,6 @@ impl TypedActionView for MainSettingsPageView {
                         *prefs_settings.settings_sync_enabled
                     });
                 ctx.notify();
-            }
-            MainPageAction::Upgrade { team_uid, user_id } => match team_uid {
-                Some(team_uid) => {
-                    ctx.open_url(&UserWorkspaces::upgrade_link_for_team(*team_uid));
-                }
-                None => {
-                    ctx.open_url(&UserWorkspaces::upgrade_link(*user_id));
-                }
-            },
-            MainPageAction::GenerateStripeBillingPortalLink { team_uid } => {
-                UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
-                    user_workspaces.generate_stripe_billing_portal_link(*team_uid, ctx);
-                });
             }
             MainPageAction::OpenUrl(url) => {
                 ctx.open_url(url);

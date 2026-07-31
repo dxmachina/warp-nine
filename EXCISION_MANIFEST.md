@@ -108,6 +108,67 @@ item models and their argument UI into `workflows/` and `env_vars/` first, then
 delete the cloud sync and sharing layers around them. Do it after the agent, as
 its own pass, and do not bundle the two.
 
+#### Resolved (2026-07-31): the carve-out, measured
+
+Done in five commits, `9f2d91713..942714bb3`: 161 files, 942 insertions, 12,833
+deletions. `app/src/drive` no longer exists. The call for a carve-out was right.
+The predicted destinations were not.
+
+`app/src/drive` was 22,179 lines in 46 files. The split:
+
+| | Lines | Files |
+|---|---|---|
+| Lifted, because it was never Drive | 12,901 | 29 |
+| Deleted, because it was the browser | 9,278 | 17 |
+
+**58% of a directory named `drive/` had nothing to do with Warp Drive.** That is
+the finding worth carrying forward, and it is the same "location is not
+coupling" lesson the agent pass produced, at larger scale. Where it went:
+
+| Lifted to | What it actually was |
+|---|---|
+| `workflows/arguments_ui/` | the `{{arg}}` prompt modal |
+| `sharing/` | the pane-header share button, moved byte-identical |
+| `cloud_object/export` + `import` | workflow↔YAML, notebook↔Markdown |
+| `cloud_object/folders` | the `CloudModelType` impl behind sync and persistence |
+| `cloud_object/styling` | object icon colour, used across eleven files |
+| `cloud_object/object_type` | the kind tag every object icon keys on |
+| `cloud_object/open_object` | already in the pane restore path |
+| `cloud_object/object_limits` | per-plan object quotas |
+| `settings_view/team_action_confirmation_dialog` | delete team, leave team |
+| `settings/warp_drive` | one session-sharing onboarding flag |
+
+The 9,278 deleted lines are the browser proper: `index.rs` at 5,712 lines was
+the single largest file in the directory, plus `panel.rs`, `items/`, the naming
+and empty-trash dialogs, and their tests.
+
+Three specifics the prediction got wrong:
+
+- **`env_vars/` received nothing.** `drive/items/env_var_collection.rs` was
+  deleted, not lifted: it is the Drive *preview and click action* for an EVC,
+  which is browser code. The EVC feature lives in `app/src/env_vars` and needed
+  only `cloud_object` and `sharing`, which came out to the top level anyway.
+- **`import/` was kept**, though nothing above anticipated it. It is the exact
+  inverse of the kept `export`, reads `.yaml` as workflows and `.md` as
+  notebooks, and never touched the panel. Shipping one half of a symmetric pair
+  would have been arbitrary.
+- **`search/command_palette/warp_drive/` survives**, 1,609 lines, and is live.
+  Despite the name it is the command palette's searcher over workflows,
+  notebooks and env-var collections, reached from `command_palette/data_sources`
+  and `terminal/input/prompts`. The naming trap again, in a directory the
+  `crate::drive::` sweep never looked at.
+
+Kept deliberately: the `WarpDriveSettings` type name and its `warp_drive` TOML
+section. That section name is the persisted path, so renaming it would silently
+reset the flag and re-show an onboarding block every existing user has already
+dismissed. That needs a migration, not a rename.
+
+One thing the carve-out got wrong, fixed in `05825b77e`: step 1 lifted
+`drive/workflows/ai_assist.rs` along with the rest of the argument UI without
+reading it. It is the "Autofill" button, which asked Warp's server to generate
+workflow metadata. Lifting a file because its neighbours are worth keeping is
+the same mistake as deleting one because its neighbours are not.
+
 ## The excision compiles (2026-07-30)
 
 `app/src/ai` and its usage sites are gone: 835 files, 292,401 deletions against
@@ -328,12 +389,16 @@ So config alone (arm64-only + strip) ≈ **857 MB → ~348 MB**, no code changes
 
 ### app/src — cloud / account (~37K LOC)
 
-| Module | LOC |
-|---|---|
-| `drive` | 22,851 |
-| `cloud_object` | 6,986 |
-| `auth` | 6,799 |
-| `billing` | 492 |
+| Module | LOC | Status |
+|---|---|---|
+| `drive` | 22,851 | done: 9,278 deleted, 12,901 lifted |
+| `cloud_object` | 6,986 | grew by the lift; see note in the excision order |
+| `auth` | 6,799 | |
+| `billing` | 492 | |
+
+The `drive` figure here counts 22,851 against the 22,179 measured at the carve-out
+commit. The difference is the agent pass, which had already taken ~670 lines out
+of `drive/` before the carve-out started.
 
 ### crates (~61K LOC)
 
@@ -625,11 +690,15 @@ Note `search/ai_context_menu` is the "@" menu and is woven into
          `WorkspaceAction` and its six dispatch sites, two keybindings, an
          overflow-menu item, a resource-center button, and a settings widget.
          Budget similarly for every other page.
-   - [ ] `warp_drive_page` — **not** a settings-page-sized job. Warp Drive is a
-         left-panel subsystem touching `palette.rs`, `app_state.rs`,
-         `root_view.rs`, `util/bindings.rs`, `auth/login_slide.rs`,
-         `resource_center/mod.rs`, and `app/src/drive` (23K LOC). Do it in the
-         cloud pass, not here.
+   - [x] `warp_drive_page` — correctly called as **not** a settings-page-sized
+         job. Warp Drive was a left-panel subsystem touching `palette.rs`,
+         `app_state.rs`, `root_view.rs`, `util/bindings.rs`,
+         `auth/login_slide.rs`, `resource_center/mod.rs`, and `app/src/drive`
+         (22,179 LOC). Done as its own pass; see the carve-out measurements
+         above. The `SettingsSection::WarpDrive` variant stays, because
+         `settings_panes.current_page` persists it as a string; only its
+         `FromStr` arm is gone, so a saved "Warp Drive" now falls back to the
+         default page.
    - [x] `ai_page` — 14,005 lines across 31 files. Deleting it orphaned five
          modals that only it constructed (`custom_inference_modal`,
          `execution_profile_view`, `custom_router_view`,
@@ -644,17 +713,25 @@ Note `search/ai_context_menu` is the "@" menu and is woven into
      | `code_page` | 3,012 | 24 / 3 |
      | `environments_page` | 2,095 | 44 / 8 |
      | `mcp_servers_page` | 589 | 23 / 7 |
-     | `warp_drive_page` | 282 | 15 / 2 |
+     | ~~`warp_drive_page`~~ | ~~282~~ | done |
 
      Measure the cascade before picking the next one — `ai_page` was the
      largest file but among the cheapest to remove, and `environments_page` is
      the opposite (16 of its 44 sites are in
      `pane_group/pane/environment_management_pane.rs`).
-2. Terminal/pane/workspace integration points (410 external `ai::` refs).
-3. `app/src/ai` + `crates/ai` + agent crates.
-4. Cloud: drive, cloud_object, graphql.
-5. Auth: `app/src/auth`, `warp_server_auth`, `warp_server_client`, `firebase`.
-6. Telemetry + crash reporting.
+2. [x] Terminal/pane/workspace integration points (410 external `ai::` refs).
+3. [x] `app/src/ai` + `crates/ai` + agent crates.
+4. Cloud: [x] drive, [ ] `cloud_object`, [ ] graphql. `cloud_object` did not go
+   with the Drive browser and should not: it is the object model behind
+   workflows, notebooks and env-var collections, all kept, and it absorbed the
+   export, import, folders and styling code lifted out of `drive/`. What can
+   still go is the sync and server-push half, not the model.
+5. [ ] Auth: `app/src/auth`, `warp_server_auth`, `warp_server_client`,
+   `firebase`. Note that `AuthState` is already fail-closed by construction:
+   the fork removed the secure-storage read, and nothing else sets both a user
+   and credentials, so `is_anonymous_or_logged_out()` is permanently true. Every
+   `Availability::AI_ENABLED` surface is gated off through that one predicate.
+6. [ ] Telemetry + crash reporting.
 
 ## Build config changes already applied
 

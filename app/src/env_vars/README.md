@@ -14,7 +14,9 @@ Context: EVCs are built on GenericStringObjects (GSOs). Consequently, there isn'
 
 We defined `CloudEnvVarCollection` in `mod.rs`, which implements the `GenericCloudObjectType` trait. This is a mostly boilerplate implementation specifying properties such as EVCs should render in Warp Drive, be linkable/exportable, etc.
 
-The implementation of EVCs as a Warp Drive object is in `app/src/drive/items/env_var_collection.rs`, where code for the Warp Drive preview and click action is located.
+The implementation of EVCs as a Warp Drive object was in `app/src/drive/items/env_var_collection.rs`, where code for the Warp Drive preview and click action was located.
+
+> **LOCAL FORK:** this document is upstream's and describes upstream's architecture. Warp Drive is gone from this build, and `app/src/drive/items/env_var_collection.rs` went with it: it was the Drive browser's preview and click action for an EVC, not the EVC feature. Everything else described below is intact. The sharing and cloud-object code this document refers to under `drive/` now lives at `app/src/sharing/` and `app/src/cloud_object/`.
 
 Code relevant to edit collisions and fetching EVCs from the server is in `app/src/server/server_api.rs` and `app/src/server/cloud_objects/update_manager.rs`. We aimed to maintain a similar liveness property to workflows, meaning a concurrent edit made by another user requires one to check out the other's edit before committing their own.
 

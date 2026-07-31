@@ -247,72 +247,25 @@ pub struct EnvVarTelemetryMetadata {
     pub space: TelemetrySpace,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct MCPServerTelemetryMetadata {
-    pub object_id: GenericStringObjectId,
-    pub name: String,
-    pub transport_type: MCPServerTelemetryTransportType,
-    /// The MCP server string extracted from '@modelcontextprotocol/<...>'.
-    pub mcp_server: Option<String>,
-}
-
-#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
-pub enum MCPTemplateCreationSource {
-    #[serde(rename = "json")]
-    Json,
-    #[serde(rename = "conversion")]
-    Conversion,
-}
-
-#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
-pub enum MCPTemplateInstallationSource {
-    #[serde(rename = "local")]
-    Local,
-    #[serde(rename = "shared")]
-    Shared,
-    #[serde(rename = "gallery")]
-    Gallery,
-}
-
-#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
-pub enum MCPServerModel {
-    #[serde(rename = "legacy")]
-    Legacy,
-    #[serde(rename = "templatable")]
-    Templatable,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub enum MCPServerTelemetryTransportType {
-    CLIServer,
-    ServerSentEvents,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub enum MCPServerTelemetryError {
-    Initialization(String),
-    RequestCancelled,
-    ResponseError(String),
-    SerializationError(String),
-    CapabilityUnsupported(String),
-    InternalError(String),
-    TransportError(String),
-}
-
-// LOCAL FORK: `impl From<rmcp::RmcpError> for MCPServerTelemetryError` was the app's
-// only use of `rmcp`, and it converted MCP client errors into the `MCPServerSpawned`
-// and `MCPToolCallAccepted` telemetry events. Both were emitted only from
+// LOCAL FORK: the six MCP telemetry variants (`MCPServerAdded`, `MCPTemplateCreated`,
+// `MCPTemplateInstalled`, `MCPTemplateShared`, `MCPServerSpawned`, `MCPToolCallAccepted`)
+// and their payload types (`MCPServerTelemetryMetadata`, `MCPTemplateCreationSource`,
+// `MCPTemplateInstallationSource`, `MCPServerModel`, `MCPServerTelemetryTransportType`,
+// `MCPServerTelemetryError`) are gone. They were emitted only from
 // `ai/blocklist/action_model/execute/call_mcp_tool.rs` and
-// `ai/mcp/templatable_manager/native.rs`, which went with the agent.
+// `ai/mcp/templatable_manager/native.rs`, which went with the agent, so nothing could
+// construct them. `MCPServerCollectionPaneOpened` is unrelated and stays: it is still
+// emitted from the settings and Warp Drive entrypoints.
 //
-// Worth recording why this surfaced only now: the app declares plain
-// `rmcp = { version = "1.6" }` with no features. `RmcpError::ClientInitialize` lives
-// behind `rmcp/client`, which `crates/mcp` enabled — so cargo's feature unification
-// was what made this impl compile at all. Deleting that crate took the feature with
-// it. The fix is to drop the dead impl, not to re-add the feature.
-//
-// The six `MCP*` telemetry variants below are likewise unreachable now; they are
-// left for the dead-code sweep so this change stays scoped to the crate deletion.
+// History, from the crate deletion that preceded this: `impl From<rmcp::RmcpError> for
+// MCPServerTelemetryError` was the app's only use of `rmcp`, and dropping it was not
+// obviously safe at the time. The app declares plain `rmcp = { version = "1.6" }` with
+// no features, and `RmcpError::ClientInitialize` lives behind `rmcp/client`, which
+// `crates/mcp` enabled. Cargo's feature unification was what made that impl compile at
+// all, so deleting `crates/mcp` took the feature with it and the impl stopped building.
+// The lesson worth keeping: a dependency that compiles only because some other crate in
+// the graph turns a feature on is load-bearing by accident. The fix in that situation is
+// to drop the dead code, not to re-add the feature.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenedSharingDialogEvent {
@@ -1053,13 +1006,8 @@ pub enum SlashCommandAcceptedDetails {
     SavedPrompt,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AutoReloadModalAction {
-    #[serde(rename = "dismissed")]
-    Dismissed,
-    #[serde(rename = "enabled_auto_reload")]
-    EnabledAutoReload,
-}
+// LOCAL FORK: `AutoReloadModalAction` went with the auto-reload modal, whose only
+// entry point was the deleted buy-credits banner.
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum OutOfCreditsBannerAction {
@@ -2140,26 +2088,6 @@ pub enum TelemetryEvent {
     MCPServerCollectionPaneOpened {
         entrypoint: MCPServerCollectionPaneEntrypoint,
     },
-    MCPServerAdded {
-        metadata: MCPServerTelemetryMetadata,
-    },
-    MCPTemplateCreated {
-        source: MCPTemplateCreationSource,
-        name: String,
-    },
-    MCPTemplateInstalled {
-        source: MCPTemplateInstallationSource,
-    },
-    MCPTemplateShared,
-    MCPServerSpawned {
-        transport_type: MCPServerTelemetryTransportType,
-        error: Option<MCPServerTelemetryError>,
-        server_model: MCPServerModel,
-    },
-    MCPToolCallAccepted {
-        tool_call: String,
-        error: Option<MCPServerTelemetryError>,
-    },
     ShellTerminatedPrematurely {
         shell_type: Option<ShellType>,
         shell_path: Option<String>,
@@ -2299,14 +2227,6 @@ pub enum TelemetryEvent {
         action: OutOfCreditsBannerAction,
         selected_credits: Option<i32>,
         auto_reload_checkbox_enabled: bool,
-        banner_toggle_flag_enabled: bool,
-        post_purchase_modal_flag_enabled: bool,
-    },
-
-    /// User closed the auto-reload modal (either dismissed or enabled auto-reload)
-    AutoReloadModalClosed {
-        action: AutoReloadModalAction,
-        selected_credits: Option<i32>,
         banner_toggle_flag_enabled: bool,
         post_purchase_modal_flag_enabled: bool,
     },
@@ -2485,15 +2405,6 @@ pub enum TelemetryEvent {
     CloudAgentCapacityModalDismissed,
     /// Emitted when the user clicks the upgrade button in the cloud agent capacity modal.
     CloudAgentCapacityModalUpgradeClicked,
-    /// Emitted when a RequestComputerUse action is approved (manually or auto-executed).
-    ComputerUseApproved {
-        server_conversation_id: Option<String>,
-        is_autoexecuted: bool,
-    },
-    /// Emitted when a RequestComputerUse action is cancelled/rejected.
-    ComputerUseCancelled {
-        server_conversation_id: Option<String>,
-    },
     /// Emitted when a warp://linear deeplink is opened.
     LinearIssueLinkOpened,
     /// Emitted when the remote server binary check completes.
@@ -2946,31 +2857,6 @@ impl TelemetryEvent {
             TelemetryEvent::MCPServerCollectionPaneOpened { entrypoint } => {
                 Some(json!({ "entrypoint": entrypoint }))
             }
-            TelemetryEvent::MCPServerAdded { metadata } => Some(json!({
-                "object_id": metadata.object_id,
-                "name": metadata.name,
-                "transport_type": metadata.transport_type,
-                "mcp_server": metadata.mcp_server,
-            })),
-            TelemetryEvent::MCPTemplateCreated { source, name } => Some(json!({
-                "source": source,
-                "name": name,
-            })),
-            TelemetryEvent::MCPTemplateInstalled { source } => Some(json!({
-                "source": source,
-            })),
-            TelemetryEvent::MCPTemplateShared => None,
-            TelemetryEvent::MCPServerSpawned {
-                transport_type,
-                server_model,
-                error,
-            } => Some(
-                json!({"transport_type": transport_type, "server_model": server_model, "error": error}),
-            ),
-            TelemetryEvent::MCPToolCallAccepted { tool_call, error } => Some(json!({
-                "tool_call": tool_call,
-                "error": error,
-            })),
             TelemetryEvent::KnowledgePaneOpened { entrypoint } => {
                 Some(json!({ "entrypoint": entrypoint }))
             }
@@ -4038,17 +3924,6 @@ impl TelemetryEvent {
                 "banner_toggle_flag_enabled": banner_toggle_flag_enabled,
                 "post_purchase_modal_flag_enabled": post_purchase_modal_flag_enabled,
             })),
-            TelemetryEvent::AutoReloadModalClosed {
-                action,
-                selected_credits,
-                banner_toggle_flag_enabled,
-                post_purchase_modal_flag_enabled,
-            } => Some(json!({
-                "action": action,
-                "selected_credits": selected_credits,
-                "banner_toggle_flag_enabled": banner_toggle_flag_enabled,
-                "post_purchase_modal_flag_enabled": post_purchase_modal_flag_enabled,
-            })),
             TelemetryEvent::AutoReloadToggledFromBillingSettings {
                 enabled,
                 banner_toggle_flag_enabled,
@@ -4207,20 +4082,6 @@ impl TelemetryEvent {
             TelemetryEvent::CloudAgentCapacityModalOpened => None,
             TelemetryEvent::CloudAgentCapacityModalDismissed => None,
             TelemetryEvent::CloudAgentCapacityModalUpgradeClicked => None,
-            // LOCAL FORK: the client conversation id and ambient agent task id went
-            // with the agent.
-            TelemetryEvent::ComputerUseApproved {
-                server_conversation_id,
-                is_autoexecuted,
-            } => Some(json!({
-                "server_conversation_id": server_conversation_id,
-                "is_autoexecuted": is_autoexecuted,
-            })),
-            TelemetryEvent::ComputerUseCancelled {
-                server_conversation_id,
-            } => Some(json!({
-                "server_conversation_id": server_conversation_id,
-            })),
             TelemetryEvent::LoginButtonClicked { source }
             | TelemetryEvent::LoginLaterButtonClicked { source }
             | TelemetryEvent::LoginLaterConfirmationButtonClicked { source }
@@ -4567,12 +4428,6 @@ impl TelemetryEvent {
             | TelemetryEvent::AutoexecutedAgentModeRequestedCommand { .. }
             | TelemetryEvent::KnowledgePaneOpened { .. }
             | TelemetryEvent::MCPServerCollectionPaneOpened { .. }
-            | TelemetryEvent::MCPServerAdded { .. }
-            | TelemetryEvent::MCPTemplateCreated { .. }
-            | TelemetryEvent::MCPTemplateInstalled { .. }
-            | TelemetryEvent::MCPTemplateShared
-            | TelemetryEvent::MCPServerSpawned { .. }
-            | TelemetryEvent::MCPToolCallAccepted { .. }
             | TelemetryEvent::ExecutedWarpDrivePrompt { .. }
             | TelemetryEvent::ToggleSshWarpification { .. }
             | TelemetryEvent::SetSshExtensionInstallMode { .. }
@@ -4638,7 +4493,6 @@ impl TelemetryEvent {
             | TelemetryEvent::RecentMenuItemSelected { .. }
             | TelemetryEvent::OpenRepoFolderSubmitted { .. }
             | TelemetryEvent::OutOfCreditsBannerClosed { .. }
-            | TelemetryEvent::AutoReloadModalClosed { .. }
             | TelemetryEvent::AutoReloadToggledFromBillingSettings { .. }
             | TelemetryEvent::QueuedPromptEdited { .. }
             | TelemetryEvent::QueuedPromptDeleted { .. }
@@ -4677,8 +4531,6 @@ impl TelemetryEvent {
             | TelemetryEvent::CloudAgentCapacityModalOpened
             | TelemetryEvent::CloudAgentCapacityModalDismissed
             | TelemetryEvent::CloudAgentCapacityModalUpgradeClicked
-            | TelemetryEvent::ComputerUseApproved { .. }
-            | TelemetryEvent::ComputerUseCancelled { .. }
             | TelemetryEvent::RemoteServerBinaryCheck { .. }
             | TelemetryEvent::RemoteServerInstallation { .. }
             | TelemetryEvent::RemoteServerInitialization { .. }
@@ -4781,13 +4633,15 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::GetStartedSkipToTerminal => EnablementState::Flag(FeatureFlag::GetStartedTab),
             Self::PtyThroughput => EnablementState::Flag(FeatureFlag::RecordPtyThroughput),
             Self::AgentModeCreatedAIBlock => EnablementState::Flag(FeatureFlag::AgentMode),
-            Self::MCPServerCollectionPaneOpened { .. }
-            | Self::MCPServerAdded { .. }
-            | Self::MCPServerSpawned { .. }
-            | Self::MCPToolCallAccepted { .. } => EnablementState::Flag(FeatureFlag::McpServer),
-            Self::MCPTemplateCreated { .. }
-            | Self::MCPTemplateInstalled { .. }
-            | Self::MCPTemplateShared { .. } => EnablementState::Always,
+            // LOCAL FORK: this arm used to cover MCPServerAdded, MCPServerSpawned and
+            // MCPToolCallAccepted as well; those variants are gone. Left on the flag
+            // rather than moved to Always so the event stays gated by the same
+            // FeatureFlag::McpServer as the MCP Servers surface that emits it. The
+            // mcp_server cargo feature is also gone, so that flag is never enabled and
+            // both the surface and this event are off together.
+            Self::MCPServerCollectionPaneOpened { .. } => {
+                EnablementState::Flag(FeatureFlag::McpServer)
+            }
             Self::KnowledgePaneOpened { .. } => EnablementState::Flag(FeatureFlag::AIRules),
             #[cfg(feature = "local_fs")]
             Self::CodePaneOpened { .. } => EnablementState::Always,
@@ -5173,7 +5027,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::RecentMenuItemSelected => EnablementState::Always,
             Self::OpenRepoFolderSubmitted => EnablementState::Always,
             Self::OutOfCreditsBannerClosed => EnablementState::Always,
-            Self::AutoReloadModalClosed => EnablementState::Always,
             Self::AutoReloadToggledFromBillingSettings => EnablementState::Always,
             Self::CLISubagentControlStateChanged { .. }
             | Self::CLISubagentResponsesToggled { .. }
@@ -5213,9 +5066,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             | Self::CloudAgentCapacityModalDismissed
             | Self::CloudAgentCapacityModalUpgradeClicked => {
                 EnablementState::Flag(FeatureFlag::CloudMode)
-            }
-            Self::ComputerUseApproved | Self::ComputerUseCancelled => {
-                EnablementState::Flag(FeatureFlag::AgentModeComputerUse)
             }
             Self::RemoteServerBinaryCheck
             | Self::RemoteServerInstallation
@@ -5298,12 +5148,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
                 "Anonymous User Attempted Login-Gated Feature"
             }
             Self::MCPServerCollectionPaneOpened { .. } => "MCP Server Collection Pane Opened",
-            Self::MCPServerAdded { .. } => "MCP Server Added",
-            Self::MCPTemplateCreated { .. } => "MCP Template Created",
-            Self::MCPTemplateInstalled { .. } => "MCP Template Installed",
-            Self::MCPTemplateShared => "MCP Template Shared",
-            Self::MCPServerSpawned { .. } => "MCP Server Spawned",
-            Self::MCPToolCallAccepted { .. } => "MCP Tool Call Accepted",
             Self::KnowledgePaneOpened { .. } => "Knowledge Pane Opened",
             #[cfg(feature = "local_fs")]
             Self::CodePaneOpened { .. } => "Code Pane Opened",
@@ -5719,7 +5563,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::RecentMenuItemSelected { .. } => "Recent Menu Item Selected",
             Self::OpenRepoFolderSubmitted { .. } => "Open Repo Folder Submitted",
             Self::OutOfCreditsBannerClosed => "revenue.OutOfCreditsBannerClosed",
-            Self::AutoReloadModalClosed => "revenue.AutoReloadModalClosed",
             Self::AutoReloadToggledFromBillingSettings => {
                 "revenue.AutoReloadToggledFromBillingSettings"
             }
@@ -5760,8 +5603,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::CloudAgentCapacityModalUpgradeClicked => {
                 "AmbientAgent.ConcurrencyModal.UpgradeClicked"
             }
-            Self::ComputerUseApproved => "ComputerUse.Approved",
-            Self::ComputerUseCancelled => "ComputerUse.Cancelled",
         }
     }
 
@@ -5811,12 +5652,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             }
             Self::SessionCreation => "Created a tab",
             Self::MCPServerCollectionPaneOpened { .. } => "MCP Server Collection Pane Opened",
-            Self::MCPServerAdded { .. } => "MCP Server Added",
-            Self::MCPTemplateCreated { .. } => "MCP Template Created",
-            Self::MCPTemplateInstalled { .. } => "MCP Template Installed",
-            Self::MCPTemplateShared => "MCP Template Shared",
-            Self::MCPServerSpawned { .. } => "MCP Server Spawned",
-            Self::MCPToolCallAccepted { .. } => "MCP Tool Call Accepted",
             Self::KnowledgePaneOpened { .. } => "Knowledge Pane Opened",
             #[cfg(feature = "local_fs")]
             Self::CodePaneOpened { .. } => "Opened the code editor pane from various sources",
@@ -6493,9 +6328,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::OutOfCreditsBannerClosed => {
                 "User closed the 'Out of credits' banner (dismissed or purchased credits)"
             }
-            Self::AutoReloadModalClosed => {
-                "User closed the auto-reload modal (either dismissed or enabled auto-reload)"
-            }
             Self::AutoReloadToggledFromBillingSettings => {
                 "User toggled auto-reload in Billing & Usage settings"
             }
@@ -6577,10 +6409,6 @@ impl TelemetryEventDesc for TelemetryEventDiscriminants {
             Self::CloudAgentCapacityModalUpgradeClicked => {
                 "User clicked the upgrade button in the cloud agent capacity modal"
             }
-            Self::ComputerUseApproved => {
-                "A RequestComputerUse action was approved (manually or auto-executed)"
-            }
-            Self::ComputerUseCancelled => "A RequestComputerUse action was cancelled/rejected",
             Self::RemoteServerBinaryCheck => {
                 "Remote server binary check completed (found, not found, or error)"
             }

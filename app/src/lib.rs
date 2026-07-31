@@ -1283,13 +1283,13 @@ pub(crate) fn initialize_app(
         time_of_next_force_object_refresh,
         object_actions,
         experiments,
-        nld_prompts,
+        _nld_prompts,
         persisted_workspaces,
         workspace_language_servers,
-        multi_agent_conversations,
+        _multi_agent_conversations,
         persisted_projects,
         persisted_ignored_suggestions,
-        mcp_servers_to_restore,
+        _mcp_servers_to_restore,
         // LOCAL FORK: `ai_queries` and `mcp_server_installations` were dropped from
         // `PersistedData` with the agent.
     ) = sqlite_data

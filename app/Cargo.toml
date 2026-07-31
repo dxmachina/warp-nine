@@ -87,7 +87,6 @@ cloud_objects.workspace = true
 command = { workspace = true }
 command-corrections.workspace = true
 command-signatures-v2 = { workspace = true, optional = true }
-crc.workspace = true
 content_inspector = "0.2.4"
 concat-idents.workspace = true
 csv = "1.3.1"
@@ -152,7 +151,6 @@ memo-map.workspace = true
 mermaid_to_svg.workspace = true
 num-traits.workspace = true
 num_cpus = "1.13.0"
-oauth2.workspace = true
 once_cell.workspace = true
 ordered-float.workspace = true
 os_info = { version = "3.7.0", default-features = false }
@@ -427,7 +425,6 @@ ctor = "0.1.18"
 cloud_object_client = { workspace = true, features = ["test-util"] }
 http_client = { workspace = true, features = ["test-util"] }
 mockall.workspace = true
-mockito.workspace = true
 serial_test = "0.8.0"
 sum_tree = { workspace = true, features = ["test-util"] }
 virtual-fs.workspace = true
@@ -470,8 +467,6 @@ bundled_skills = []
 supergrok = []
 gemini_enterprise = []
 agent_mode = []
-agent_mode_computer_use = []
-background_computer_use = []
 agent_mode_debug = []
 agent_mode_primary_xml = []
 agent_mode_pre_plan_xml = []
@@ -540,7 +535,6 @@ default = [
     "validate_autosuggestions",
     "clear_autosuggestion_on_escape",
     "file_retrieval_tools",
-    "mcp_server",
     "fast_forward_autoexecute_button",
     "image_as_context",
     "command_palette_file_search",
@@ -574,7 +568,6 @@ default = [
     "vim_code_editor",
     "code_launch_modal",
     "allow_ignoring_input_suggestions",
-    "mcp_oauth",
     "expand_edit_to_pane",
     "fallback_model_load_output_messaging",
     "api_key_management",
@@ -595,7 +588,6 @@ default = [
     "code_review_find",
     "async_find",
     "shared_session_long_running_commands",
-    "mcp_grouped_server_context",
     "fork_from_command",
     "context_window_usage_v2",
     "ambient_agents_command_line",
@@ -620,8 +612,6 @@ default = [
     "cloud_mode",
     "cloud_mode_from_local_session",
     "cloud_mode_image_context",
-    "agent_mode_computer_use",
-    "background_computer_use",
     "oz_platform_skills",
     "oz_identity_federation",
     "sync_ambient_plans",
@@ -644,7 +634,6 @@ default = [
     "incremental_auto_reload",
     "active_conversation_requires_interaction",
     "figma_detection",
-    "file_based_mcp",
     "inline_repo_menu",
     "kitty_keyboard_protocol",
     "inline_menu_headers",
@@ -785,7 +774,6 @@ list_skills = []
 # support having a local tty/shell session.  It can be used to conditionally
 # include dependencies that should only exist in such environments.
 local_tty = []
-local_computer_use = []
 local_claude_codex_child_harnesses = []
 # This feature is enabled in build.rs when compiling for platforms which
 # have APIs for interacting with a local filesystem.  It can be used to
@@ -801,9 +789,6 @@ log_expensive_frames_in_sentry = []
 jupyter_notebook_rendering = []
 markdown_tables = []
 markdown_mermaid = []
-mcp_server = []
-mcp_oauth = []
-mcp_debugging_ids = []
 notebook_parameter = []
 oz_changelog_updates = []
 personal_cloud_objects = []
@@ -954,7 +939,6 @@ cloud_runners = []
 cloud_agent_runners = []
 create_environment_slash_command = []
 summarize_conversation_command = []
-mcp_grouped_server_context = []
 web_search_ui = []
 web_fetch_ui = []
 fork_from_command = []
@@ -994,7 +978,6 @@ oz_launch_modal = []
 open_warp_launch_modal = []
 orchestration_launch_modal = []
 new_tab_styling = []
-file_based_mcp = []
 skill_arguments = []
 active_conversation_requires_interaction = []
 incremental_auto_reload = []

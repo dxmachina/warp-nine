@@ -3554,7 +3554,7 @@ impl CodeReviewView {
         }
     }
 
-    fn reposition_comments_in_file(&mut self, diff_mode: &DiffMode, ctx: &mut ViewContext<Self>) {
+    fn reposition_comments_in_file(&mut self, _diff_mode: &DiffMode, ctx: &mut ViewContext<Self>) {
         let Some(model) = &self.active_comment_model else {
             report_error!(anyhow::anyhow!(
                 "Failed to relocate PR comments: CodeReviewView diff state not loaded",

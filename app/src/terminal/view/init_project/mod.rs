@@ -656,7 +656,7 @@ impl InitStepBlock {
     }
 
     fn render_codebase_context(&self, app: &AppContext) -> Box<dyn Element> {
-        let appearance = Appearance::as_ref(app);
+        let _appearance = Appearance::as_ref(app);
         let step = self
             .model
             .as_ref(app)

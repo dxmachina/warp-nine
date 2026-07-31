@@ -2,13 +2,16 @@ pub mod auth;
 pub mod block;
 #[cfg(not(target_family = "wasm"))]
 pub(crate) mod download;
-pub mod factory;
-pub mod harness_support;
+// LOCAL FORK: `factory` went with the agent's Factory harness client. `FactoryClient`
+// had no users left once `get_factory_client` was removed.
+// LOCAL FORK: mods harness_support and presigned_upload removed. They were the agent
+// harness's presigned-upload path; nothing outside those two modules and their own tests
+// referenced them.
 pub mod integrations;
-pub mod managed_mcp;
+// LOCAL FORK: `managed_mcp` went with the MCP client. `ManagedMcpClient` had no users
+// left once `get_managed_mcp_client` was removed.
 pub mod managed_secrets;
 pub mod object;
-pub(crate) mod presigned_upload;
 pub mod referral;
 pub mod team;
 pub mod workspace;
@@ -24,9 +27,7 @@ use auth::AuthClient;
 use block::BlockClient;
 use channel_versions::ChannelVersions;
 use chrono::{DateTime, FixedOffset};
-use factory::FactoryClient;
 use instant::Instant;
-use managed_mcp::ManagedMcpClient;
 use object::ObjectClient;
 use parking_lot::Mutex;
 use referral::ReferralsClient;
@@ -155,36 +156,11 @@ pub enum AIApiError {
     #[error("Failed to deserialize API response.")]
     Deserialization(#[source] DeserializationError),
 
-    #[error("No context found on context search.")]
-    NoContextFound,
-
-    #[error("Failed with status code {0}: {1}")]
-    ErrorStatus(http::StatusCode, String),
-
     #[error(transparent)]
     Other(#[from] anyhow::Error),
-
-    #[error("Got error when streaming {stream_type}: {source:#}")]
-    Stream {
-        stream_type: &'static str,
-        #[source]
-        source: anyhow::Error,
-    },
-
-    /// Synthesized client-side when a response stream ends without a stream-finished
-    /// event: the server always sends one, but the transport can truncate the response
-    /// between chunks, surfacing as a clean EOF.
-    #[error("Response stream ended unexpectedly before completion.")]
-    UnexpectedEof,
-
-    /// Synthesized client-side when a request that uses the connected Grok
-    /// subscription can't be sent because its expired OAuth token failed to
-    /// refresh. Surfaced as a terminal, user-visible error asking the user to
-    /// reconnect, rather than sending a request that would fail authentication.
-    #[error(
-        "Grok subscription token could not be refreshed. Please try reconnecting your subscription."
-    )]
-    GrokSubscriptionTokenRefreshFailed,
+    // LOCAL FORK: variants NoContextFound, ErrorStatus, Stream, UnexpectedEof and
+    // GrokSubscriptionTokenRefreshFailed removed. All five were only ever constructed by
+    // agent request/stream paths that no longer exist.
 }
 
 impl From<http_client::ResponseError> for AIApiError {
@@ -274,65 +250,9 @@ impl AIApiError {
         }
     }
 
-    /// Format a stream error into a human-readable error message. This will read the response
-    /// body if there is one.
-    pub(crate) async fn from_stream_error(
-        stream_type: &'static str,
-        err: reqwest_eventsource::Error,
-    ) -> Self {
-        match err {
-            reqwest_eventsource::Error::InvalidStatusCode(
-                http::StatusCode::TOO_MANY_REQUESTS,
-                res,
-            ) => {
-                let headers = res.headers().clone();
-                let body = res.text().await.ok();
-                Self::error_for_429(&headers, body)
-            }
-            reqwest_eventsource::Error::InvalidStatusCode(status, res) => Self::ErrorStatus(
-                status,
-                res.text()
-                    .await
-                    .unwrap_or_else(|e| format!("(no response body: {e:#})")),
-            ),
-            reqwest_eventsource::Error::Transport(err) => Self::from_transport_error(err),
-            err => AIApiError::Stream {
-                stream_type,
-                // On WASM, `reqwest_eventsource::Error` doesn't implement `Into<anyhow::Error>` or
-                // `Send` because it may contain a `wasm_bindgen` JS value.
-                #[cfg(target_family = "wasm")]
-                source: anyhow!("{err:#?}"),
-                #[cfg(not(target_family = "wasm"))]
-                source: anyhow!(err),
-            },
-        }
-    }
-
-    /// Whether the error is worth an automatic recovery attempt — a fresh request may
-    /// succeed. Gates both retry (pre-actions) and resume (post-actions).
-    pub fn is_recoverable(&self) -> bool {
-        // Don't recover from client errors, except timeouts and rate limits.
-        fn is_recoverable_status(status: http::StatusCode) -> bool {
-            !status.is_client_error()
-                || status == http::StatusCode::REQUEST_TIMEOUT
-                || status == http::StatusCode::TOO_MANY_REQUESTS
-        }
-
-        match self {
-            AIApiError::ErrorStatus(status, _) => is_recoverable_status(*status),
-            AIApiError::Transport(e) => {
-                if let Some(status) = e.status() {
-                    return is_recoverable_status(status);
-                }
-                true
-            }
-            // A failed Grok token refresh is a credential problem the user must
-            // fix by reconnecting, so retrying or resuming won't help.
-            AIApiError::GrokSubscriptionTokenRefreshFailed => false,
-            // By default, attempt recovery on error.
-            _ => true,
-        }
-    }
+    // LOCAL FORK: fn from_stream_error removed with the agent's SSE response streams, and
+    // fn is_recoverable with it: its only caller was the `ErrorStatus` arm of `is_actionable`
+    // below, and that variant was only ever constructed by from_stream_error.
 }
 
 impl ErrorExt for AIApiError {
@@ -344,13 +264,7 @@ impl ErrorExt for AIApiError {
             },
             AIApiError::Transport(error) => error.is_actionable(),
             AIApiError::Other(error) => error.is_actionable(),
-            AIApiError::Stream { source, .. } => source.is_actionable(),
-            AIApiError::ErrorStatus(_, _) => self.is_recoverable(),
-            AIApiError::UnexpectedEof => true,
-            AIApiError::QuotaLimit { .. }
-            | AIApiError::ServerOverloaded
-            | AIApiError::NoContextFound
-            | AIApiError::GrokSubscriptionTokenRefreshFailed => false,
+            AIApiError::QuotaLimit { .. } | AIApiError::ServerOverloaded => false,
         }
     }
 }
@@ -574,44 +488,6 @@ impl ServerApi {
         Ok(self.wrap_eventsource_with_iap_detection(request.eventsource()))
     }
 
-    /// Sends a POST request to a public API endpoint and returns the raw response on success.
-    async fn post_public_api_response<B>(
-        &self,
-        path: &str,
-        body: &B,
-    ) -> Result<http_client::Response>
-    where
-        B: Serialize,
-    {
-        let auth_token = self
-            .get_or_refresh_access_token()
-            .await
-            .context("Failed to get access token for API request")?;
-
-        let url = format!("{}/api/v1/{}", ChannelState::server_root_url(), path);
-
-        let mut request = self.base_client.http_client().post(&url).json(body);
-        if let Some(token) = auth_token.as_bearer_token() {
-            request = request.bearer_auth(token);
-        }
-
-        for (name, value) in self.ambient_agent_headers().await? {
-            request = request.header(name, value);
-        }
-
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("Failed to send API request to {url}"))?;
-
-        if response.status().is_success() {
-            Ok(response)
-        } else {
-            self.observe_iap_challenge(&response);
-            Err(Self::error_from_response(response).await)
-        }
-    }
-
     /// Converts a non-success public API response into the most specific client error available.
     async fn error_from_response(response: http_client::Response) -> anyhow::Error {
         let status = response.status();
@@ -653,146 +529,10 @@ impl ServerApi {
         }
     }
 
-    /// Sends a POST request to a public API endpoint.
-    ///
-    /// # Arguments
-    /// * `path` - Endpoint path relative to `/api/v1` (e.g., "agent/run")
-    /// * `body` - Request body to serialize as JSON
-    async fn post_public_api<B, R>(&self, path: &str, body: &B) -> Result<R>
-    where
-        B: Serialize,
-        R: serde::de::DeserializeOwned,
-    {
-        let response = self.post_public_api_response(path, body).await?;
-        let url = response.url().clone();
-        response
-            .json::<R>()
-            .await
-            .with_context(|| format!("Failed to deserialize response from {url}"))
-    }
-
-    /// Sends a PUT request to a public API endpoint and returns the raw response on success.
-    async fn put_public_api_response<B>(
-        &self,
-        path: &str,
-        body: &B,
-    ) -> Result<http_client::Response>
-    where
-        B: Serialize,
-    {
-        let auth_token = self
-            .get_or_refresh_access_token()
-            .await
-            .context("Failed to get access token for API request")?;
-
-        let url = format!("{}/api/v1/{}", ChannelState::server_root_url(), path);
-
-        let mut request = self.base_client.http_client().put(&url).json(body);
-        if let Some(token) = auth_token.as_bearer_token() {
-            request = request.bearer_auth(token);
-        }
-
-        for (name, value) in self.ambient_agent_headers().await? {
-            request = request.header(name, value);
-        }
-
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("Failed to send API request to {url}"))?;
-
-        if response.status().is_success() {
-            Ok(response)
-        } else {
-            Err(Self::error_from_response(response).await)
-        }
-    }
-
-    /// Sends a PUT request to a public API endpoint.
-    async fn put_public_api<B, R>(&self, path: &str, body: &B) -> Result<R>
-    where
-        B: Serialize,
-        R: serde::de::DeserializeOwned,
-    {
-        let response = self.put_public_api_response(path, body).await?;
-        let url = response.url().clone();
-        response
-            .json::<R>()
-            .await
-            .with_context(|| format!("Failed to deserialize response from {url}"))
-    }
-
-    /// Sends a POST request to a public API endpoint that returns no response body.
-    async fn post_public_api_unit<B>(&self, path: &str, body: &B) -> Result<()>
-    where
-        B: Serialize,
-    {
-        self.post_public_api_response(path, body).await?;
-        Ok(())
-    }
-
-    /// Sends a DELETE request to a public API endpoint that returns no response body.
-    async fn delete_public_api_unit(&self, path: &str) -> Result<()> {
-        let auth_token = self
-            .get_or_refresh_access_token()
-            .await
-            .context("Failed to get access token for API request")?;
-
-        let url = format!("{}/api/v1/{}", ChannelState::server_root_url(), path);
-
-        let mut request = self.base_client.http_client().delete(&url);
-        if let Some(token) = auth_token.as_bearer_token() {
-            request = request.bearer_auth(token);
-        }
-
-        for (name, value) in self.ambient_agent_headers().await? {
-            request = request.header(name, value);
-        }
-
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("Failed to send API request to {url}"))?;
-
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            Err(Self::error_from_response(response).await)
-        }
-    }
-
-    /// Sends a PATCH request to a public API endpoint that returns no response body.
-    async fn patch_public_api_unit<B>(&self, path: &str, body: &B) -> Result<()>
-    where
-        B: Serialize,
-    {
-        let auth_token = self
-            .get_or_refresh_access_token()
-            .await
-            .context("Failed to get access token for API request")?;
-
-        let url = format!("{}/api/v1/{}", ChannelState::server_root_url(), path);
-
-        let mut request = self.base_client.http_client().patch(&url).json(body);
-        if let Some(token) = auth_token.as_bearer_token() {
-            request = request.bearer_auth(token);
-        }
-
-        for (name, value) in self.ambient_agent_headers().await? {
-            request = request.header(name, value);
-        }
-
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("Failed to send API request to {url}"))?;
-
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            Err(Self::error_from_response(response).await)
-        }
-    }
+    // LOCAL FORK: the public-API verb helpers (post_public_api_response, post_public_api,
+    // put_public_api_response, put_public_api, post_public_api_unit, delete_public_api_unit,
+    // patch_public_api_unit) went with the agent run/harness endpoints that were their only
+    // callers. error_from_response above is kept: send_agent_tip_shown_analytics_event uses it.
 
     /// Sends an authenticated empty POST request to /client/login, which signals to the server
     /// that the user is logged in.
@@ -1148,25 +888,15 @@ impl ServerApiProvider {
         self.server_api.clone()
     }
 
-    #[cfg_attr(target_family = "wasm", expect(dead_code))]
-    pub fn get_managed_mcp_client(&self) -> Arc<dyn ManagedMcpClient> {
-        self.server_api.clone()
-    }
-
-    pub fn get_factory_client(&self) -> Arc<dyn FactoryClient> {
-        self.server_api.clone()
-    }
-
     /// Returns the shared HTTP client. This client is wired into network logging
     /// and includes standard Warp request headers.
     pub fn get_http_client(&self) -> Arc<http_client::Client> {
         self.server_api.owned_http_client()
     }
 
-    #[cfg_attr(target_family = "wasm", expect(dead_code))]
-    pub fn get_harness_support_client(&self) -> Arc<dyn harness_support::HarnessSupportClient> {
-        self.server_api.clone()
-    }
+    // LOCAL FORK: fns get_managed_mcp_client, get_factory_client and
+    // get_harness_support_client removed; nothing asked for those clients any more. The
+    // managed_mcp and factory modules are now unreferenced and are whole-file candidates.
 }
 
 impl Entity for ServerApiProvider {

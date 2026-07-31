@@ -168,16 +168,11 @@ fn generate_channel_config_if_needed(target_family: &str, target_os: &str) {
     }
 }
 
-fn get_build_profile_name() -> String {
-    // The profile name is always the 3rd last part of the path (with 1 based indexing).
-    // e.g. /code/core/target/cli/build/my-build-info-9f91ba6f99d7a061/out
-    env::var("OUT_DIR")
-        .expect("OUT_DIR must be set")
-        .split(std::path::MAIN_SEPARATOR)
-        .nth_back(3)
-        .expect("could not get profile name")
-        .to_string()
-}
+// LOCAL FORK: `get_build_profile_name` derived the Cargo profile by counting path
+// components backwards out of `OUT_DIR`. It had no callers. The surviving profile
+// lookup at L85 reads `CARGO_FULL_PROFILE`, which the bundle scripts set explicitly,
+// and is correct for custom profiles like `release-lto` where the path-guessing
+// version was not.
 
 fn add_features(target_family: &str, target_os: &str) {
     if target_family != "wasm" {

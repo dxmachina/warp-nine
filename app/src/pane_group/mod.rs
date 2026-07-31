@@ -449,10 +449,8 @@ pub enum Event {
         pane_id: PaneId,
     },
     OpenSettings(SettingsSection),
-    OpenAutoReloadModal {
-        purchased_credits: i32,
-    },
-    // LOCAL FORK: AskAIAssistant removed with the agent.
+    // LOCAL FORK: AskAIAssistant removed with the agent, OpenAutoReloadModal with the
+    // buy-credits banner.
     /// Pass input sync event up from underlying TerminalViews
     /// to the Workspace to sync throughout the window.
     SyncInput(SyncEvent),

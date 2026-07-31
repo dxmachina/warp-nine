@@ -32,11 +32,11 @@ pub mod block_list_viewport;
 pub mod blockgrid_element;
 mod blockgrid_renderer;
 mod bootstrap;
-mod buy_credits_banner;
 pub mod color;
 mod command_corrections_denylist;
 pub mod dynamic_enum_suggestions;
-pub mod enable_auto_reload_modal;
+// LOCAL FORK: enable_auto_reload_modal went with the buy-credits banner, its only
+// entry point.
 pub mod event;
 pub mod event_listener;
 pub mod find;

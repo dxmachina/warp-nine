@@ -1,7 +1,5 @@
 use crate::settings::AISettings;
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use onboarding::{ProjectOnboardingSettings, SelectedSettings};
 use warp_core::execution_mode::AppExecutionMode;
@@ -136,7 +134,6 @@ impl Workspace {
                         hide_homepage: true,
                         ..Default::default()
                     })),
-                    Arc::new(HashMap::new()),
                     None,
                     ctx,
                 );

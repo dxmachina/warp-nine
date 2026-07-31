@@ -1611,11 +1611,20 @@ fn add_open_setting_pages_as_editable_binding(app: &mut AppContext) {
         )
         .with_group(bindings::BindingGroup::Settings.as_str())
         .with_context_predicate(id!("Workspace")),
+        // LOCAL FORK: this binding had no `.with_enabled()`, unlike its sibling
+        // `workspace:open_mcp_servers` above. `SettingsSection::MCPServers` is not in the
+        // settings nav list, so the page is not browsable, but the palette entry still
+        // opened it. With the `mcp_server` cargo feature removed there is no MCP client
+        // left to run anything the page configures, so the entry is now gated on the same
+        // predicate as its sibling and the two go dark together.
         EditableBinding::new(
             "workspace:show_mcp_servers_settings_page",
             BindingDescription::new("Open Settings: MCP Servers"),
             WorkspaceAction::ShowSettingsPage(SettingsSection::MCPServers),
         )
+        .with_enabled(|| {
+            FeatureFlag::McpServer.is_enabled() && ContextFlag::ShowMCPServers.is_enabled()
+        })
         .with_group(bindings::BindingGroup::Settings.as_str())
         .with_context_predicate(id!("Workspace")),
         EditableBinding::new(

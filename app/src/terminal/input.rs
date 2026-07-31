@@ -4,7 +4,8 @@ mod cli_agent;
 mod cloud_mode_v2_history_menu;
 mod common;
 pub mod decorations;
-pub(crate) mod handoff_compose;
+// LOCAL FORK: `handoff_compose` composed the local-to-cloud agent handoff prompt.
+// Nothing constructed `HandoffComposeState` after the agent went.
 pub mod inline_history;
 pub mod inline_menu;
 pub mod message_bar;
@@ -99,7 +100,6 @@ use warpui::{
 };
 
 use self::decorations::InputBackgroundJobOptions;
-pub use self::handoff_compose::{HandoffComposeState, HandoffComposeStateEvent};
 use super::alias::is_expandable_alias;
 use super::block_list_viewport::InputMode;
 use super::event::{BlockCompletedEvent, BlockType, UserBlockCompleted};
@@ -191,7 +191,6 @@ use crate::skills::SkillReference;
 use crate::suggestions::ignored_suggestions_model::{
     IgnoredSuggestionsModel, IgnoredSuggestionsModelEvent, SuggestionType,
 };
-use crate::terminal::buy_credits_banner::{BuyCreditsBanner, BuyCreditsBannerEvent};
 use crate::terminal::input::buffer_model::InputBufferModel;
 use crate::terminal::input::cloud_mode_v2_history_menu::CloudModeV2HistoryMenuView;
 use crate::terminal::input::inline_history::InlineHistoryMenuView;
@@ -223,7 +222,6 @@ use crate::tips::{
 // LOCAL FORK: AIQueryRouting / resolve_ai_query_routing routed a prompt to a cloud or
 // remote agent; they went with the agent.
 use crate::terminal::view::CodeDiffAction;
-use crate::ui_components::blended_colors;
 use crate::ui_components::icons::Icon;
 use crate::user_config::WarpConfig;
 use crate::util::bindings::{self, CustomAction, keybinding_name_to_normalized_string};
@@ -957,9 +955,7 @@ pub enum Event {
     SubmitCLIAgentInput {
         text: String,
     },
-    OpenAutoReloadModal {
-        purchased_credits: i32,
-    },
+    // LOCAL FORK: OpenAutoReloadModal went with the buy-credits banner, its only emitter.
     AuthSecretDeleteConfirmationDialogToggled {
         is_open: bool,
     },
@@ -1614,7 +1610,6 @@ pub struct Input {
     /// Weak handle to this input view for drop target data
     weak_view_handle: WeakViewHandle<Input>,
 
-    buy_credits_banner: ViewHandle<BuyCreditsBanner>,
     // LOCAL FORK: the agent status bar, the queued-prompts panel, the agent view
     // controller, the agent shortcut overlay, the ambient (cloud) agent state and the
     // ephemeral message model all came out with the agent.
@@ -1704,8 +1699,7 @@ pub fn init(app: &mut AppContext) {
                 & !id!("ProfileModelSelectorOpen")
                 & !id!("PromptChipMenuOpen")
                 // LOCAL FORK: the queued-prompt inline editor context went with the agent.
-                & !id!("AIContextMenuOpen")
-                & !id!("BuyCreditsBannerOpen"),
+                & !id!("AIContextMenuOpen"),
         ),
     ]);
 
@@ -2483,26 +2477,10 @@ impl Input {
         // LOCAL FORK: the AI input-mode lock subscription and the AI request-usage model
         // subscription came out with the agent.
 
-        let buy_credits_banner = ctx.add_typed_action_view(BuyCreditsBanner::new);
-        ctx.subscribe_to_view(&buy_credits_banner, |me, _, event, ctx| match event {
-            BuyCreditsBannerEvent::OpenBillingAndUsage => {
-                ctx.emit(Event::OpenSettings(SettingsSection::BillingAndUsage));
-            }
-            BuyCreditsBannerEvent::RefocusInput => {
-                ctx.focus(&me.editor);
-            }
-            BuyCreditsBannerEvent::OpenAutoReloadModal { purchased_credits } => {
-                ctx.emit(Event::OpenAutoReloadModal {
-                    purchased_credits: *purchased_credits,
-                });
-            }
-            BuyCreditsBannerEvent::ShowAutoReloadError { error_message } => {
-                ctx.emit(Event::ShowToast {
-                    message: error_message.to_string(),
-                    flavor: ToastFlavor::Error,
-                });
-            }
-        });
+        // LOCAL FORK: the buy-credits banner is gone. It sold agent request credits;
+        // its `render` already returned Empty and `maybe_add_buy_credits_banner` had
+        // `should_show_banner = false` hardcoded, so it was dead twice over while still
+        // holding subscriptions to PricingInfoModel and UserWorkspaces.
 
         // LOCAL FORK: the agent status bar and the queued-prompts panel came out with the
         // agent.
@@ -2578,7 +2556,6 @@ impl Input {
             cached_agent_mode_hint_text: None,
             is_editor_empty_on_last_edit: is_editor_empty,
             weak_view_handle: ctx.handle(),
-            buy_credits_banner,
             slash_command_data_source,
             cloud_mode_composer_slash_command_data_source,
             input_contents_before_prompt_chip_command: None,
@@ -9228,13 +9205,7 @@ impl View for Input {
         // LOCAL FORK: the `@` context menu and the inline conversation menu keymap
         // contexts went with the agent.
 
-        if self
-            .buy_credits_banner
-            .as_ref(app)
-            .is_denomination_dropdown_open(app)
-        {
-            ctx.set.insert("BuyCreditsBannerOpen");
-        }
+        // LOCAL FORK: the `BuyCreditsBannerOpen` keymap context went with the banner.
 
         // LOCAL FORK: the queued-prompt inline editor keymap context went with the agent.
         let model_lock = self.model.lock();

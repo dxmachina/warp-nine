@@ -2271,21 +2271,16 @@ impl AISettings {
         self.is_any_ai_enabled(app) && *self.warp_drive_context_enabled
     }
 
-    pub fn is_file_based_mcp_enabled(&self, app: &warpui::AppContext) -> bool {
-        if !FeatureFlag::FileBasedMcp.is_enabled() || !self.is_any_ai_enabled(app) {
-            return false;
-        }
-        // NOTE: we intentionally do not force-enable this in Cloud Mode. Previously
-        // we auto-spawned file-based MCPs in autonomous execution, but that bypassed
-        // the user's explicit opt-in and let any MCP config checked into a repo run
-        // arbitrary commands as part of a cloud agent run. Respecting the toggle
-        // closes that attack surface; cloud agents that need project-scoped MCP
-        // servers should surface an explicit, auditable opt-in. A more robust
-        // solution (e.g. per-environment allowlisting, signed configs) should be
-        // explored in the future.
-        *self.file_based_mcp_enabled
-    }
-
+    // LOCAL FORK: `is_file_based_mcp_enabled` went with the `file_based_mcp` cargo
+    // feature. It had no callers: the one real consumer, `workspace/view.rs`, reads
+    // `file_based_mcp_enabled.value()` directly and never went through the flag. The
+    // `file_based_mcp_enabled` setting itself stays; it is persisted user config.
+    //
+    // Worth carrying forward if that read is ever re-gated: the removed helper
+    // deliberately did not force-enable file-based MCP in Cloud Mode. Auto-spawning
+    // file-based MCPs during autonomous execution bypassed the user's explicit opt-in
+    // and let any MCP config checked into a repo run arbitrary commands as part of a
+    // cloud agent run.
     pub fn is_orchestration_enabled(&self, app: &warpui::AppContext) -> bool {
         self.is_any_ai_enabled(app)
     }

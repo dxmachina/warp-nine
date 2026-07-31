@@ -147,45 +147,6 @@ where
         }
     }
 
-    /// See `Dropdown::set_use_overlay_layer`.
-    pub fn set_use_overlay_layer(&mut self, use_overlay_layer: bool, ctx: &mut ViewContext<Self>) {
-        self.use_overlay_layer = use_overlay_layer;
-        ctx.notify();
-    }
-
-    /// Override the top-bar height.
-    /// so callers (e.g. the orchestrate environment picker) that mix
-    /// `Dropdown` and `FilterableDropdown` in the same row can size them
-    /// identically.
-    pub fn set_top_bar_height(&mut self, height: f32, ctx: &mut ViewContext<Self>) {
-        self.top_bar_height = height;
-        ctx.notify();
-    }
-
-    /// Override the vertical margin applied above and below the dropdown's top
-    /// bar (default [`DROPDOWN_PADDING`]). Set to `0.` when the caller manages
-    /// its own spacing and needs the bar to align flush with sibling inputs.
-    pub fn set_vertical_margin(&mut self, vertical_margin: f32, ctx: &mut ViewContext<Self>) {
-        self.vertical_margin = vertical_margin;
-        ctx.notify();
-    }
-
-    pub fn set_menu_header_text_override<F>(&mut self, formatter: F)
-    where
-        F: Fn(&str) -> String + 'static,
-    {
-        self.menu_header_text_override = Some(Box::new(formatter));
-    }
-
-    /// Sets placeholder text shown (greyed) in the closed top bar when no item
-    /// is selected, and opts the dropdown into allowing an empty selection so
-    /// the placeholder is preserved rather than being replaced by the first
-    /// item after filtering.
-    pub fn set_placeholder(&mut self, placeholder: impl Into<String>, ctx: &mut ViewContext<Self>) {
-        self.placeholder = Some(placeholder.into());
-        ctx.notify();
-    }
-
     pub fn set_footer<F>(&mut self, builder: F, ctx: &mut ViewContext<Self>)
     where
         F: Fn(&AppContext) -> Box<dyn Element> + 'static,
@@ -199,32 +160,8 @@ where
         });
     }
 
-    pub fn clear_footer(&mut self, ctx: &mut ViewContext<Self>) {
-        self.has_pinned_footer = false;
-        self.dropdown.update(ctx, |menu, _| {
-            menu.clear_pinned_footer_builder();
-        });
-    }
-
-    /// Set the main_axis_size behavior for the dropdown header button.
-    ///
-    /// Default is MainAxisSize::Max, set to MainAxisSize::Min if you want to wrap the dropdown to
-    /// the text that's filling it.
-    pub fn set_main_axis_size(
-        &mut self,
-        main_axis_size: MainAxisSize,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.main_axis_size = main_axis_size;
-        ctx.notify();
-    }
-
     pub fn set_style(&mut self, style: UiComponentStyles) {
         self.style_override = Some(style);
-    }
-
-    pub fn set_button_variant(&mut self, button_variant: ButtonVariant) {
-        self.button_variant = button_variant;
     }
 
     pub fn set_orientation(&mut self, orientation: FilterableDropdownOrientation) {
@@ -257,21 +194,6 @@ where
             self.selected_item = None;
             ctx.notify();
         }
-    }
-
-    /// Set items from rich menu items (MenuItem). This preserves the rich menu items for
-    /// filtering and passes the filtered items to the internal dropdown.
-    ///
-    /// Rich menu items already carry erased [`DropdownAction`]s. The dropdown dispatches selected
-    /// item actions through normal action propagation, so callers should ensure each action is
-    /// handled by an appropriate view in the containing view hierarchy.
-    pub fn set_rich_items(
-        &mut self,
-        items: Vec<MenuItem<DropdownAction>>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.items = items;
-        self.set_filtered_items(ctx);
     }
 
     /// The number of items in the dropdown.

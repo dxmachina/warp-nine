@@ -151,8 +151,8 @@ use super::util::{
 use super::{ActiveSession, TabBarDropTargetData, TabBarLocation, WorkspaceRegistry, util};
 use crate::app_state::{
     LeafContents, LeafSnapshot, LeftPanelDisplayedTab, LeftPanelSnapshot, NotebookPaneSnapshot,
-    PaneNodeSnapshot, PaneUuid, RightPanelSnapshot, SettingsPaneSnapshot, TabGroupSnapshot,
-    TabSnapshot, TerminalPaneSnapshot, WindowSnapshot, WorkflowPaneSnapshot,
+    PaneNodeSnapshot, RightPanelSnapshot, SettingsPaneSnapshot, TabGroupSnapshot, TabSnapshot,
+    TerminalPaneSnapshot, WindowSnapshot, WorkflowPaneSnapshot,
 };
 use crate::appearance::{Appearance, AppearanceManager};
 use crate::auth::AuthStateProvider;
@@ -304,9 +304,6 @@ use crate::terminal::available_shells::AvailableShell;
 #[cfg(target_os = "windows")]
 use crate::terminal::available_shells::AvailableShells;
 use crate::terminal::block_list_viewport::InputMode;
-use crate::terminal::enable_auto_reload_modal::{
-    EnableAutoReloadModal, EnableAutoReloadModalEvent,
-};
 use crate::terminal::general_settings::GeneralSettings;
 use crate::terminal::input::{Input, MenuPositioning};
 use crate::terminal::keys_settings::KeysSettings;
@@ -351,7 +348,12 @@ use crate::ui_components::avatar::{Avatar, AvatarContent, StatusElementTypes};
 use crate::ui_components::buttons::{combo_inner_button, icon_button_with_color};
 use crate::ui_components::red_notification_dot::RedNotificationDot;
 use crate::ui_components::window_focus_dimming::WindowFocusDimming;
-use crate::ui_components::{blended_colors, icons};
+// LOCAL FORK: `blended_colors` is used only inside the `#[cfg(target_family = "wasm")]`
+// simplified tab bar below, so a native build reports it unused. Deleting it on that
+// warning would break the wasm build, which nothing here compiles. Gated instead.
+#[cfg(target_family = "wasm")]
+use crate::ui_components::blended_colors;
+use crate::ui_components::icons;
 use crate::undo_close::UndoCloseStack;
 #[cfg(target_family = "wasm")]
 use crate::uri::browser_url_handler::{parse_current_url, update_browser_url};
@@ -478,9 +480,6 @@ const UPDATE_READY_TEXT: &str = "Update Warp";
 
 const TAB_BAR_OVERFLOW_MENU_WIDTH: f32 = 300.;
 
-#[cfg(not(target_family = "wasm"))]
-const RESOURCE_CENTER_WIDTH: f32 = 361.;
-
 // Ratio of terminal : theme chooser when theme chooser is active
 const THEME_CHOOSER_RATIO: f32 = 3.5;
 
@@ -497,7 +496,6 @@ pub(crate) const VERTICAL_TABS_PANEL_POSITION_ID: &str = "workspace_view:vertica
 const TAB_CONTENT_POSITION_ID: &str = "workspace_view:tab_content";
 
 const WELCOME_TIPS_POSITION_ID: &str = "welcome_tips_pill";
-const ELLIPSE_SVG_PATH: &str = "bundled/svg/ellipse.svg";
 
 const VERSION_DEPRECATION_BANNER_TEXT: &str = "Your app is out of date and some features may not work as expected. Please update immediately.";
 
@@ -536,7 +534,6 @@ pub const TOGGLE_COMMAND_PALETTE_KEYBINDING_NAME: &str = "workspace:toggle_comma
 
 const USER_AVATAR_BUTTON_POSITION_ID: &str = "workspace:user_avatar_button";
 const NOTIFICATIONS_MAILBOX_POSITION_ID: &str = "workspace:notifications_mailbox";
-pub(crate) const JUMP_TO_LATEST_TOAST_BINDING_NAME: &str = "workspace:jump_to_latest_toast";
 pub(crate) const TOGGLE_NOTIFICATION_MAILBOX_BINDING_NAME: &str =
     "workspace:toggle_notification_mailbox";
 
@@ -747,9 +744,6 @@ pub enum BannerSeverity {
 /// Visual style for an individual banner action button.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum BannerButtonVariant {
-    /// No fill, no border, just text (and optional icon). Used for the primary
-    /// action in the Figma design (e.g. "Fix with Oz").
-    Naked,
     /// Border-only, no fill (e.g. "Open file").
     Outlined,
 }
@@ -841,11 +835,6 @@ pub struct TransferredTab {
     pub is_right_panel_maximized: bool,
     pub draggable_state: DraggableState,
 }
-#[cfg(not(target_family = "wasm"))]
-struct ThirdPartyLocalContinuationLaunch {
-    command: String,
-}
-
 /// Per-`TabGroupId` hover state for the horizontal tab bar header.
 #[derive(Clone, Default)]
 struct HorizontalTabGroupMouseStates {
@@ -963,7 +952,6 @@ pub struct Workspace {
     /// not re-show it elsewhere.
     feature_intro_tab_pane_group_id: Option<EntityId>,
     auto_handoff_sleep_modal: ViewHandle<AutoHandoffSleepModal>,
-    enable_auto_reload_modal: ViewHandle<EnableAutoReloadModal>,
     build_plan_migration_modal: ViewHandle<BuildPlanMigrationModal>,
     codex_modal: ViewHandle<CodexModal>,
     cloud_agent_capacity_modal: ViewHandle<CloudAgentCapacityModal>,
@@ -2348,16 +2336,6 @@ impl Workspace {
             appearance,
         )
     }
-    fn build_enable_auto_reload_modal(
-        ctx: &mut ViewContext<Self>,
-    ) -> ViewHandle<EnableAutoReloadModal> {
-        let enable_auto_reload_modal = ctx.add_typed_action_view(EnableAutoReloadModal::new);
-        ctx.subscribe_to_view(&enable_auto_reload_modal, move |me, _, event, ctx| {
-            me.handle_enable_auto_reload_modal_event(event, ctx);
-        });
-
-        enable_auto_reload_modal
-    }
 
     /// Subscribe to the [`ServerApiProvider`] model to report status changes.
     fn observe_server_api(ctx: &mut ViewContext<Self>) {
@@ -2655,11 +2633,6 @@ impl Workspace {
         let (settings_pane, theme_chooser_view) =
             Self::build_settings_views(global_resource_handles, tips_completed.clone(), ctx);
 
-        let enable_auto_reload_modal = ctx.add_typed_action_view(EnableAutoReloadModal::new);
-        ctx.subscribe_to_view(&enable_auto_reload_modal, |me, _, event, ctx| {
-            me.handle_enable_auto_reload_modal_event(event, ctx);
-        });
-
         let build_plan_migration_modal = ctx.add_typed_action_view(BuildPlanMigrationModal::new);
         ctx.subscribe_to_view(&build_plan_migration_modal, |me, _, event, ctx| {
             me.handle_build_plan_migration_modal_event(event, ctx);
@@ -2734,8 +2707,6 @@ impl Workspace {
         let new_worktree_modal = Self::build_new_worktree_modal(ctx);
 
         let session_config_modal = Self::build_session_config_modal(ctx);
-
-        let enable_auto_reload_modal = Self::build_enable_auto_reload_modal(ctx);
 
         let close_session_confirmation_dialog = Self::build_close_session_confirmation_dialog(ctx);
         let rewind_confirmation_dialog = Self::build_rewind_confirmation_dialog(ctx);
@@ -3049,7 +3020,6 @@ impl Workspace {
             feature_intro_modal: feature_intro_view,
             feature_intro_tab_pane_group_id: None,
             auto_handoff_sleep_modal: auto_handoff_sleep_view,
-            enable_auto_reload_modal,
             codex_modal,
             cloud_agent_capacity_modal,
             free_ai_removal_modal,
@@ -3261,7 +3231,6 @@ impl Workspace {
             .for_each(|(tab_index, tab_template)| {
                 self.add_tab_with_pane_layout(
                     PanesLayout::Template(tab_template.layout_with_tab_commands()),
-                    Arc::new(HashMap::new()),
                     tab_template.title.clone(),
                     ctx,
                 );
@@ -3335,7 +3304,6 @@ impl Workspace {
                         let custom_title = saved_tab.custom_title.clone();
                         self.add_tab_with_pane_layout(
                             PanesLayout::Snapshot(Box::new(saved_tab.root.clone())),
-                            Arc::new(HashMap::new()),
                             custom_title,
                             ctx,
                         );
@@ -3393,12 +3361,7 @@ impl Workspace {
                 self.check_and_trigger_onboarding(ctx);
             }
             NewWorkspaceSource::Session { options } => {
-                self.add_tab_with_pane_layout(
-                    PanesLayout::SingleTerminal(options),
-                    Arc::new(HashMap::new()),
-                    None,
-                    ctx,
-                );
+                self.add_tab_with_pane_layout(PanesLayout::SingleTerminal(options), None, ctx);
                 self.check_and_trigger_onboarding(ctx);
             }
             NewWorkspaceSource::SharedSessionAsViewer { session_id } => {
@@ -3412,12 +3375,7 @@ impl Workspace {
                 self.configure_empty_workspace(None, None, ctx);
             }
             NewWorkspaceSource::AgentSession { options, .. } => {
-                self.add_tab_with_pane_layout(
-                    PanesLayout::SingleTerminal(options),
-                    Arc::new(HashMap::new()),
-                    None,
-                    ctx,
-                );
+                self.add_tab_with_pane_layout(PanesLayout::SingleTerminal(options), None, ctx);
                 self.check_and_trigger_onboarding(ctx);
             }
             NewWorkspaceSource::AmbientAgent => {
@@ -3445,12 +3403,7 @@ impl Workspace {
                 ..
             } => {
                 self.set_is_tab_drag_preview(is_tab_drag_preview);
-                self.add_tab_with_pane_layout(
-                    Default::default(),
-                    Arc::new(HashMap::new()),
-                    custom_title,
-                    ctx,
-                );
+                self.add_tab_with_pane_layout(Default::default(), custom_title, ctx);
                 if let (Some(color), Some(tab)) = (tab_color, self.tabs.last_mut()) {
                     tab.selected_color = SelectedTabColor::Color(color);
                 }
@@ -3474,12 +3427,7 @@ impl Workspace {
                 ..
             } => {
                 self.set_is_tab_drag_preview(is_tab_drag_preview);
-                self.add_tab_with_pane_layout(
-                    Default::default(),
-                    Arc::new(HashMap::new()),
-                    custom_title,
-                    ctx,
-                );
+                self.add_tab_with_pane_layout(Default::default(), custom_title, ctx);
                 if let (Some(color), Some(tab)) = (tab_color, self.tabs.last_mut()) {
                     tab.selected_color = SelectedTabColor::Color(color);
                 }
@@ -4773,20 +4721,6 @@ impl Workspace {
             .collect::<Vec<_>>()
     }
 
-    pub(crate) fn terminal_view(
-        &self,
-        terminal_view_id: EntityId,
-        app: &AppContext,
-    ) -> Option<ViewHandle<TerminalView>> {
-        self.tabs.iter().find_map(|tab| {
-            tab.pane_group
-                .as_ref(app)
-                .terminal_views(app)
-                .into_iter()
-                .find(|terminal_view| terminal_view.id() == terminal_view_id)
-        })
-    }
-
     /// Focuses the given pane, revealing it first if it is hidden behind a
     /// temporary swap.
     pub fn focus_pane(&mut self, pane_view_locator: PaneViewLocator, ctx: &mut ViewContext<Self>) {
@@ -5102,7 +5036,6 @@ impl Workspace {
                     hide_homepage: true,
                     ..Default::default()
                 })),
-                Arc::new(HashMap::new()),
                 None,
                 ctx,
             );
@@ -5771,12 +5704,7 @@ impl Workspace {
         let tab_color = tab_config.color;
         let (rendered_title, pane_template) =
             crate::tab_configs::render_tab_config(&tab_config, &param_values, worktree_branch_name);
-        self.add_tab_with_pane_layout(
-            PanesLayout::Template(pane_template),
-            Arc::new(HashMap::new()),
-            rendered_title,
-            ctx,
-        );
+        self.add_tab_with_pane_layout(PanesLayout::Template(pane_template), rendered_title, ctx);
         if let Some(tab) = self.tabs.get_mut(self.active_tab_index) {
             // Apply tab color if specified, matching the launch config pattern.
             if let Some(color) = tab_color {
@@ -7258,12 +7186,7 @@ impl Workspace {
                 search_query: search_query.map(|s| s.to_owned()),
             }),
         })));
-        self.add_tab_with_pane_layout(
-            panes_layout,
-            Arc::new(HashMap::new()),
-            Some("Settings".to_owned()),
-            ctx,
-        );
+        self.add_tab_with_pane_layout(panes_layout, Some("Settings".to_owned()), ctx);
     }
 
     /// Open a file from the given session as a notebook pane.
@@ -7351,12 +7274,7 @@ impl Workspace {
 
     fn open_directory_in_new_tab(&mut self, path: PathBuf, ctx: &mut ViewContext<Self>) {
         let options = NewTerminalOptions::default().with_initial_directory(path);
-        self.add_tab_with_pane_layout(
-            PanesLayout::SingleTerminal(Box::new(options)),
-            Arc::new(HashMap::new()),
-            None,
-            ctx,
-        );
+        self.add_tab_with_pane_layout(PanesLayout::SingleTerminal(Box::new(options)), None, ctx);
     }
 
     #[cfg(feature = "local_fs")]
@@ -9624,26 +9542,6 @@ impl Workspace {
         );
     }
 
-    fn handle_enable_auto_reload_modal_event(
-        &mut self,
-        event: &EnableAutoReloadModalEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            EnableAutoReloadModalEvent::Close => {
-                self.current_workspace_state
-                    .is_enable_auto_reload_modal_open = false;
-                ctx.notify();
-            }
-            EnableAutoReloadModalEvent::ShowToast { message, flavor } => {
-                self.toast_stack.update(ctx, |toast_stack, ctx| {
-                    toast_stack
-                        .add_ephemeral_toast(DismissibleToast::new(message.clone(), *flavor), ctx);
-                });
-            }
-        }
-    }
-
     fn handle_welcome_tips_event(&mut self, event: &TipsEvent, ctx: &mut ViewContext<Self>) {
         match event {
             TipsEvent::Close => {
@@ -10903,7 +10801,6 @@ impl Workspace {
                 custom_vertical_tabs_title: None,
                 contents: LeafContents::GetStarted,
             }))),
-            Arc::new(HashMap::new()),
             None,
             ctx,
         );
@@ -11040,7 +10937,6 @@ impl Workspace {
                 hide_homepage,
                 ..Default::default()
             })),
-            Arc::new(HashMap::new()),
             None, /*custom_tab_title*/
             ctx,
         );
@@ -11104,18 +11000,15 @@ impl Workspace {
         }
     }
 
-    /// LOCAL FORK: `block_lists` used to carry serialized agent block lists
-    /// (`SerializedBlockListItem`) into the restored pane group. That type went with
-    /// the agent, so the parameter is now inert; it is kept so the many call sites
-    /// (including ones outside this file) keep compiling.
+    // LOCAL FORK: dropped the inert `block_lists` parameter. It used to carry serialized
+    // agent block lists (`SerializedBlockListItem`) into the restored pane group; that
+    // type went with the agent, and every call site passed an empty map.
     pub fn add_tab_with_pane_layout(
         &mut self,
         panes_layout: PanesLayout,
-        block_lists: Arc<HashMap<PaneUuid, Vec<()>>>,
         custom_tab_title: Option<String>,
         ctx: &mut ViewContext<Self>,
     ) {
-        let _ = block_lists;
         // Remember whether the left panel was open on the current active pane group
         // before creating a new active pane group.
         let left_panel_was_open = if self.tabs.is_empty() {
@@ -11265,7 +11158,7 @@ impl Workspace {
                 settings: settings.clone(),
             }),
         })));
-        self.add_tab_with_pane_layout(panes_layout, Arc::new(HashMap::new()), None, ctx);
+        self.add_tab_with_pane_layout(panes_layout, None, ctx);
     }
 
     fn add_tab_for_cloud_workflow(
@@ -11282,7 +11175,7 @@ impl Workspace {
                 settings: settings.clone(),
             }),
         })));
-        self.add_tab_with_pane_layout(panes_layout, Arc::new(HashMap::new()), None, ctx);
+        self.add_tab_with_pane_layout(panes_layout, None, ctx);
     }
 
     /// Add a tab with a file notebook pane open.
@@ -11298,7 +11191,7 @@ impl Workspace {
                 path: file_path,
             }),
         })));
-        self.add_tab_with_pane_layout(panes_layout, Arc::new(HashMap::new()), None, ctx);
+        self.add_tab_with_pane_layout(panes_layout, None, ctx);
     }
 
     pub fn add_tab_for_assisted_autoupdate<V: View>(
@@ -11307,12 +11200,7 @@ impl Workspace {
         context_block: ViewHandle<V>,
         ctx: &mut ViewContext<Self>,
     ) {
-        self.add_tab_with_pane_layout(
-            Default::default(),
-            Arc::new(HashMap::new()),
-            Some("Install Update".to_owned()),
-            ctx,
-        );
+        self.add_tab_with_pane_layout(Default::default(), Some("Install Update".to_owned()), ctx);
 
         let Some(terminal_view) = self
             .active_tab_pane_group()
@@ -11481,7 +11369,6 @@ impl Workspace {
                 hide_homepage: true,
                 ..Default::default()
             })),
-            Arc::new(HashMap::new()),
             None,
             ctx,
         );
@@ -12757,16 +12644,8 @@ impl Workspace {
             pane_group::Event::OpenSettings(section) => {
                 self.show_settings_with_section(Some(*section), ctx);
             }
-            pane_group::Event::OpenAutoReloadModal { purchased_credits } => {
-                self.current_workspace_state
-                    .is_enable_auto_reload_modal_open = true;
-                self.enable_auto_reload_modal.update(ctx, |modal, ctx| {
-                    modal.set_selected_denomination_by_credits(*purchased_credits, ctx);
-                });
-                ctx.notify();
-            }
             // LOCAL FORK: the CLI agent plugin instructions pane and the AI assistant
-            // panel went with the agent.
+            // panel went with the agent, OpenAutoReloadModal with the buy-credits banner.
             pane_group::Event::SyncInput(input_type) => {
                 self.process_sync_event_for_all_synced_pane_groups(input_type, ctx);
             }
@@ -17912,7 +17791,7 @@ impl Workspace {
         banner_fields
     }
 
-    fn render_settings_error_banner(&self, app: &AppContext) -> Option<WorkspaceBannerFields> {
+    fn render_settings_error_banner(&self, _app: &AppContext) -> Option<WorkspaceBannerFields> {
         if self.settings_error_banner_dismissed {
             return None;
         }
@@ -18224,9 +18103,9 @@ impl Workspace {
         .finish()
     }
 
-    /// Renders a single banner action button using the Figma-spec'd Naked or
-    /// Secondary variants: no fill by default, optional 1px border, text and
-    /// icon tinted with the banner's contrast-safe text color.
+    /// Renders a single banner action button using the Figma-spec'd Secondary
+    /// variant: no fill by default, optional 1px border, text and icon tinted
+    /// with the banner's contrast-safe text color.
     fn render_banner_action_button(
         &self,
         details: WorkspaceBannerButtonDetails,
@@ -19382,7 +19261,6 @@ impl Workspace {
                 hide_homepage: false,
                 ..Default::default()
             })),
-            Arc::new(HashMap::new()),
             Some("Introducing Oz".to_string()),
             ctx,
         );
@@ -19877,15 +19755,11 @@ impl TypedActionView for Workspace {
                 let path = crate::settings::user_preferences_toml_file_path();
                 self.add_tab_for_code_file(path, None, ctx);
             }
-            // LOCAL FORK: local-to-cloud agent handoff, the cloud agent auth-secret modal
-            // and "Fix settings with Oz" were removed with the agent.
-            OpenLocalToCloudHandoffPane { .. } => {}
-            AutoHandoffActiveAgentToCloud { .. } => {}
             ShowHandoffEnvironmentCreationModal => {
                 self.show_handoff_environment_creation_modal(ctx);
             }
+            // LOCAL FORK: cloud-mode environment creation went with the agent.
             ShowCloudModeV2EnvironmentCreationModal => {}
-            OpenCreateAuthSecretModal { .. } => {}
             OpenNetworkLogPane => {
                 self.open_network_log_pane(ctx);
             }
@@ -20418,15 +20292,11 @@ impl TypedActionView for Workspace {
             OpenFilePath { path } => {
                 ctx.open_file_path(path);
             }
-            // LOCAL FORK: agent-mode tabs/panes, the cloud agent setup guide and the AI
+            // LOCAL FORK: agent-mode panes, the cloud agent setup guide and the AI
             // assistant panel were removed with the agent.
-            NewTabInAgentMode { .. } => {}
             NewPaneInAgentMode { .. } => {}
             OpenCloudAgentSetupGuide => {}
             ToggleAIAssistant => {}
-            ClickedAIAssistantIcon => {}
-            ShowAIAssistantWarmWelcome => {}
-            ClickedAIAssistantWarmWelcome => {}
             DragTab {
                 tab_index,
                 tab_position,
@@ -20497,7 +20367,6 @@ impl TypedActionView for Workspace {
                 }
             }
             DismissWorkspaceBanner(banner_type) => self.dismiss_workspace_banner(ctx, banner_type),
-            DismissAIAssistantWarmWelcome => {}
             Crash => {
                 #[cfg(feature = "crash_reporting")]
                 crate::crash_reporting::crash();
@@ -20623,9 +20492,6 @@ impl TypedActionView for Workspace {
             OpenPromptEditor { open_source } => {
                 self.open_prompt_editor(*open_source, ctx);
             }
-            // LOCAL FORK: the agent toolbar editor was removed with the agent.
-            OpenAgentToolbarEditor => {}
-            OpenCLIAgentToolbarEditor => {}
             OpenHeaderToolbarEditor => {
                 self.open_header_toolbar_editor(ctx);
             }
@@ -20739,8 +20605,7 @@ impl TypedActionView for Workspace {
                 self.dismiss_workspace_banner(ctx, &WorkspaceBanner::WaylandCrashRecovery);
                 ctx.open_url("https://docs.warp.dev/terminal/more-features/linux#native-wayland");
             }
-            // LOCAL FORK: "Fix in agent mode" removed with the agent.
-            FixInAgentMode { .. } => {}
+            // LOCAL FORK: the AI fact collection pane went with the agent.
             OpenAIFactCollection => {}
             OpenMCPServerCollection => {
                 self.show_settings_with_section(Some(SettingsSection::MCPServers), ctx);
@@ -20755,10 +20620,6 @@ impl TypedActionView for Workspace {
             OpenEnvironmentManagementPane => {
                 self.open_environment_management_pane(None, EnvironmentsPage::Create, ctx);
             }
-            // LOCAL FORK: AI document panes removed with the agent.
-            ToggleAIDocumentPane { .. } => {}
-            HideAIDocumentPanes => {}
-            OpenAIDocumentPane { .. } => {}
             TabHoverWidthStart { width } => {
                 // Store the fixed width value for the tab to maintain consistent size during hover
                 self.tab_fixed_width = Some(*width);
@@ -20828,17 +20689,10 @@ impl TypedActionView for Workspace {
                 TerminalSessionFallbackBehavior::default(),
                 ctx,
             ),
-            // LOCAL FORK: conversation restore/attach/transcript/fork/summarize removed with the agent.
+            // LOCAL FORK: conversation restore/fork/summarize removed with the agent.
             RestoreOrNavigateToConversation { .. } => {}
-            OpenOrAttachAmbientAgentConversation { .. } => {}
-            OpenConversationTranscriptViewer { .. } => {}
             ForkAIConversation { .. } => {}
-            #[cfg(not(target_family = "wasm"))]
-            ContinueConversationLocally { .. } => {}
-            #[cfg(not(target_family = "wasm"))]
-            ContinueThirdPartyConversationLocally { .. } => {}
             SummarizeAIConversation { .. } => {}
-            InsertForkSlashCommand => {}
             CreatePersonalAIPrompt => {
                 if let Some(personal_drive) = UserWorkspaces::as_ref(ctx).personal_drive(ctx) {
                     let source = WorkflowOpenSource::New {
@@ -21288,11 +21142,6 @@ impl TypedActionView for Workspace {
             // LOCAL FORK: conversation rewind/delete removed with the agent.
             ExecuteRewindAIConversation { .. } => {}
             ExecuteDeleteConversation { .. } => {}
-            // LOCAL FORK: the transcript details panel went with the agent, so nothing
-            // dispatches this any more. The variant is still declared on wasm, and this
-            // match has no catch-all, so keep an explicit no-op arm.
-            #[cfg(target_family = "wasm")]
-            ToggleConversationTranscriptDetailsPanel => {}
             OpenLightbox {
                 images,
                 initial_index,
@@ -22388,13 +22237,6 @@ impl View for Workspace {
                     }
                 }
             }
-        }
-
-        if self
-            .current_workspace_state
-            .is_enable_auto_reload_modal_open
-        {
-            stack.add_child(ChildView::new(&self.enable_auto_reload_modal).finish());
         }
 
         if should_show_modal && one_time_modal_model.is_build_plan_migration_modal_open() {

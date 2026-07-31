@@ -2489,7 +2489,6 @@ fn add_get_started_tab(workspace: &mut Workspace, ctx: &mut ViewContext<Workspac
             custom_vertical_tabs_title: None,
             contents: LeafContents::GetStarted,
         }))),
-        Arc::new(HashMap::<PaneUuid, Vec<()>>::new()),
         None,
         ctx,
     );

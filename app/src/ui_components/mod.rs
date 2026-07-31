@@ -10,7 +10,8 @@ pub(crate) mod color_dot;
 pub(crate) mod dialog;
 pub(crate) mod icon_with_status;
 pub(crate) mod item_highlight;
-pub mod json_tree;
+// LOCAL FORK: `json_tree` (+ `json_tree_tests`) removed. It was the agent's MCP
+// tool-output viewer (spec APP-2527) and had no consumer outside its own tests.
 pub(crate) mod menu_button;
 pub(crate) mod red_notification_dot;
 pub(crate) mod render_file_search_row;

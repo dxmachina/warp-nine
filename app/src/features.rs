@@ -159,10 +159,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::UseTantivySearch,
         #[cfg(feature = "grep_tool")]
         FeatureFlag::GrepTool,
-        #[cfg(feature = "mcp_server")]
-        FeatureFlag::McpServer,
-        #[cfg(feature = "mcp_debugging_ids")]
-        FeatureFlag::McpDebuggingIds,
         #[cfg(feature = "markdown_tables")]
         FeatureFlag::MarkdownTables,
         #[cfg(feature = "jupyter_notebook_rendering")]
@@ -285,10 +281,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::CodeLaunchModal,
         #[cfg(feature = "api_key_management")]
         FeatureFlag::APIKeyManagement,
-        #[cfg(feature = "mcp_oauth")]
-        FeatureFlag::McpOauth,
-        #[cfg(feature = "file_based_mcp")]
-        FeatureFlag::FileBasedMcp,
         #[cfg(feature = "diff_set_as_context")]
         FeatureFlag::DiffSetAsContext,
         #[cfg(feature = "discard_per_file_and_all_changes")]
@@ -307,8 +299,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::CreateEnvironmentSlashCommand,
         #[cfg(feature = "summarize_conversation_command")]
         FeatureFlag::SummarizationConversationCommand,
-        #[cfg(feature = "mcp_grouped_server_context")]
-        FeatureFlag::MCPGroupedServerContext,
         #[cfg(feature = "web_search_ui")]
         FeatureFlag::WebSearchUI,
         #[cfg(feature = "web_fetch_ui")]
@@ -345,12 +335,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::InteractiveConversationManagementView,
         #[cfg(feature = "agent_tips")]
         FeatureFlag::AgentTips,
-        #[cfg(feature = "agent_mode_computer_use")]
-        FeatureFlag::AgentModeComputerUse,
-        #[cfg(feature = "local_computer_use")]
-        FeatureFlag::LocalComputerUse,
-        #[cfg(feature = "background_computer_use")]
-        FeatureFlag::BackgroundComputerUse,
         #[cfg(feature = "local_claude_codex_child_harnesses")]
         FeatureFlag::LocalClaudeCodexChildHarnesses,
         #[cfg(feature = "team_api_keys")]

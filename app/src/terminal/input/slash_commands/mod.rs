@@ -423,7 +423,7 @@ impl Input {
         &mut self,
         command: &StaticCommand,
         argument: Option<&String>,
-        trigger: SlashCommandTrigger,
+        _trigger: SlashCommandTrigger,
         is_queued_prompt: bool,
         ctx: &mut ViewContext<Self>,
     ) -> bool {

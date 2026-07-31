@@ -6,7 +6,6 @@ pub mod auth_view_modal;
 mod auth_view_shared_helpers;
 mod login_error_modal;
 mod login_failure_notification;
-pub mod login_slide;
 pub mod needs_sso_link_view;
 pub mod paste_auth_token_modal;
 mod user_properties;
@@ -54,7 +53,8 @@ pub fn init(app: &mut AppContext) {
     auth_view_modal::init(app);
     auth_view_body::init(app);
     auth_override_warning_body::init(app);
-    login_slide::init(app);
+    // LOCAL FORK: `login_slide::init` went with `auth/login_slide.rs`. The slide
+    // had no construction site left, so its fixed keybindings had nothing to bind to.
     paste_auth_token_modal::init(app);
 }
 

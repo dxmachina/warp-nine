@@ -17,7 +17,6 @@ use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{AppContext, EntityId, SingletonEntity, ViewHandle, WeakViewHandle};
 
 use crate::appearance::Appearance;
-use crate::terminal::buy_credits_banner::BuyCreditsBanner;
 use crate::terminal::input::{Input, InputAction, InputSuggestionsMode, MenuPositioning};
 use crate::terminal::model::TerminalModel;
 use crate::terminal::view::{PADDING_LEFT, TerminalAction};
@@ -467,59 +466,6 @@ fn render_command_token_description(
     .finish()
 }
 
-/// Conditionally adds the "buy credits" banner overlay.
-/// The overlay only is shown if all of the following is true:
-/// - The user is on a team that can purchase addon credits
-/// - The user is out of credits (or at their auto-reload limit)
-/// - The input is focused
-/// - There is not a BYO API key for the current model
-pub(super) fn maybe_add_buy_credits_banner(
-    stack: &mut Stack,
-    buy_credits_banner: &ViewHandle<BuyCreditsBanner>,
-    input_view_handle: &WeakViewHandle<Input>,
-    is_focused: bool,
-    _terminal_view_id: EntityId,
-    is_input_at_top: bool,
-    app: &AppContext,
-) {
-    let can_purchase_addon_credits = UserWorkspaces::as_ref(app)
-        .team_for_view_handle(input_view_handle, app)
-        .and_then(|team| team.billing_metadata.tier.purchase_add_on_credits_policy)
-        .is_some_and(|policy| policy.enabled);
-
-    // Show buy credits banner if billing policy allows purchasing, input is focused,
-    // and either:
-    // 1. OutOfCredits: for users that are not auto-reload enabled
-    // 2. MonthlyLimitReached: Auto-reload enabled and is blocked by monthly limit
-    // LOCAL FORK: the banner state came from AIRequestUsageModel and was gated
-    // on the active model's BYO API key, both of which went with the agent.
-    // With no agent there are no credits to buy, so it never shows.
-    let should_show_banner = false;
-    if can_purchase_addon_credits && is_focused && should_show_banner {
-        add_buy_credits_banner_overlay(stack, buy_credits_banner, is_input_at_top);
-    }
-}
-
-/// Adds buy credits banner overlay to stack
-fn add_buy_credits_banner_overlay(
-    stack: &mut Stack,
-    buy_credits_banner: &ViewHandle<BuyCreditsBanner>,
-    is_input_at_top: bool,
-) {
-    use pathfinder_geometry::vector::vec2f;
-
-    let (parent_anchor, child_anchor, y_offset) = if is_input_at_top {
-        (ParentAnchor::BottomLeft, ChildAnchor::TopLeft, 8.)
-    } else {
-        (ParentAnchor::TopLeft, ChildAnchor::BottomLeft, -8.)
-    };
-    stack.add_positioned_child(
-        ChildView::new(buy_credits_banner).finish(),
-        OffsetPositioning::offset_from_parent(
-            vec2f(0., y_offset),
-            ParentOffsetBounds::Unbounded,
-            parent_anchor,
-            child_anchor,
-        ),
-    );
-}
+// LOCAL FORK: `maybe_add_buy_credits_banner` and `add_buy_credits_banner_overlay`
+// went with the banner itself. The former already had `should_show_banner = false`
+// hardcoded, so the latter was unreachable.

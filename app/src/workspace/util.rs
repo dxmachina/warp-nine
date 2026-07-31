@@ -107,7 +107,6 @@ pub struct WorkspaceState {
     pub is_shared_objects_creation_denied_modal_open: bool,
     pub is_suggested_agent_mode_workflow_modal_open: bool,
     pub is_suggested_rule_modal_open: bool,
-    pub is_enable_auto_reload_modal_open: bool,
     pub is_notification_mailbox_open: bool,
     pub is_agent_management_view_open: bool,
     pub is_codex_modal_open: bool,
@@ -152,7 +151,6 @@ impl WorkspaceState {
             || self.is_shared_objects_creation_denied_modal_open
             || self.is_suggested_rule_modal_open
             || self.is_suggested_agent_mode_workflow_modal_open
-            || self.is_enable_auto_reload_modal_open
             || self.is_codex_modal_open
             || self.is_cloud_agent_capacity_modal_open
             || self.is_prompt_suggestions_unavailable_modal_open
@@ -196,7 +194,6 @@ impl WorkspaceState {
         self.is_require_login_modal_open = false;
         self.is_suggested_rule_modal_open = false;
         self.is_suggested_agent_mode_workflow_modal_open = false;
-        self.is_enable_auto_reload_modal_open = false;
         self.is_codex_modal_open = false;
         self.is_cloud_agent_capacity_modal_open = false;
         self.is_prompt_suggestions_unavailable_modal_open = false;

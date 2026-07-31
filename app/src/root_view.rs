@@ -2,7 +2,6 @@ use crate::settings::{
     AISettings, QuakeModeSettings, apply_account_first_onboarding_settings,
     apply_onboarding_settings,
 };
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
@@ -47,7 +46,6 @@ use crate::auth::auth_override_warning_modal::{
 };
 use crate::auth::auth_state::AuthState;
 use crate::auth::auth_view_modal::{AuthRedirectPayload, AuthView, AuthViewVariant};
-use crate::auth::login_slide::{LoginSlideEvent, LoginSlideView};
 use crate::auth::needs_sso_link_view::NeedsSsoLinkView;
 use crate::auth::paste_auth_token_modal::PasteAuthTokenModalView;
 #[cfg(target_family = "wasm")]
@@ -82,7 +80,7 @@ use crate::terminal::general_settings::GeneralSettings;
 use crate::terminal::keys_settings::KeysSettings;
 use crate::terminal::shell::ShellType;
 use crate::terminal::view::{TerminalAction, cell_size_and_padding};
-use crate::themes::theme::{AnsiColorIdentifier, Blend, Fill, ThemeKind, WarpThemeConfig};
+use crate::themes::theme::{AnsiColorIdentifier, Blend, Fill};
 use crate::uri::OpenSettingsArgs;
 use crate::util::bindings::{self, is_binding_pty_compliant};
 use crate::util::traffic_lights::{TrafficLightData, TrafficLightMouseStates, traffic_light_data};
@@ -1602,13 +1600,6 @@ enum AuthOnboardingTarget {
     Terminal(ViewHandle<Workspace>),
 }
 
-#[derive(Clone)]
-struct AccountFirstLoginContext {
-    login_slide_view: ViewHandle<LoginSlideView>,
-    onboarding_view: ViewHandle<AgentOnboardingView>,
-    target: AuthOnboardingTarget,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AccountFirstCompletion {
     AccountSkipped,
@@ -1685,12 +1676,9 @@ enum AuthOnboardingState {
         onboarding_view: ViewHandle<AgentOnboardingView>,
         target: AuthOnboardingTarget,
     },
-    /// Post-onboarding login slide (full-screen, onboarding-style).
-    LoginSlide {
-        login_slide_view: ViewHandle<LoginSlideView>,
-        onboarding_view: ViewHandle<AgentOnboardingView>,
-        target: AuthOnboardingTarget,
-    },
+    // LOCAL FORK: the post-onboarding `LoginSlide` state went with login. It had
+    // no origin once the app started booting straight into the terminal, and it
+    // owned `auth/login_slide.rs`, which is deleted.
     PostAuthOnboarding {
         onboarding_view: ViewHandle<AgentOnboardingView>,
         target: AuthOnboardingTarget,
@@ -1723,8 +1711,6 @@ pub struct RootView {
     pending_post_auth_onboarding_settings: Option<SelectedSettings>,
     pending_account_first_settings_class: Option<FtueAccountClass>,
     pending_account_first_tutorial_after_settings: bool,
-    pending_account_first_sso_login: Option<AccountFirstLoginContext>,
-    account_first_refresh_in_flight: bool,
     paste_auth_token_modal: Option<ViewHandle<PasteAuthTokenModalView>>,
 }
 
@@ -1806,8 +1792,6 @@ impl RootView {
             pending_post_auth_onboarding_settings: None,
             pending_account_first_settings_class: None,
             pending_account_first_tutorial_after_settings: false,
-            pending_account_first_sso_login: None,
-            account_first_refresh_in_flight: false,
             paste_auth_token_modal: None,
         };
 
@@ -1944,8 +1928,6 @@ impl RootView {
     fn log_out(&mut self, _: &(), ctx: &mut ViewContext<Self>) -> bool {
         self.pending_account_first_settings_class = None;
         self.pending_account_first_tutorial_after_settings = false;
-        self.pending_account_first_sso_login = None;
-        self.account_first_refresh_in_flight = false;
         self.auth_onboarding_state.log_out(ctx);
         ctx.focus_self();
         ctx.notify();
@@ -1957,11 +1939,7 @@ impl RootView {
             view.set_email(email);
         });
 
-        if let Some(context) = &self.pending_account_first_sso_login {
-            self.auth_onboarding_state = AuthOnboardingState::NeedsSsoLink(context.target.clone());
-        } else {
-            self.auth_onboarding_state.show_needs_sso_link_view();
-        }
+        self.auth_onboarding_state.show_needs_sso_link_view();
         ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
         ctx.notify();
         true
@@ -2017,33 +1995,12 @@ impl RootView {
         true
     }
 
-    fn onboarding_theme_kind(theme_name: &str) -> Option<ThemeKind> {
-        WarpThemeConfig::new()
-            .theme_items()
-            .find_map(|(kind, theme)| {
-                (theme.name().as_deref() == Some(theme_name)).then(|| kind.clone())
-            })
-    }
-
-    fn account_first_login_context(&self, ctx: &AppContext) -> Option<AccountFirstLoginContext> {
-        let AuthOnboardingState::LoginSlide {
-            login_slide_view,
-            onboarding_view,
-            target,
-        } = &self.auth_onboarding_state
-        else {
-            return None;
-        };
-        login_slide_view
-            .as_ref(ctx)
-            .is_account_first_onboarding()
-            .then(|| AccountFirstLoginContext {
-                login_slide_view: login_slide_view.clone(),
-                onboarding_view: onboarding_view.clone(),
-                target: target.clone(),
-            })
-    }
-
+    // LOCAL FORK: `account_first_login_context`, `begin_account_first_post_auth_refresh`
+    // and `resolve_account_first_post_auth` went with `AuthOnboardingState::LoginSlide`.
+    // All three keyed off a live login slide view, which no longer exists. The
+    // `PostAuthOnboarding` state they fed is left in place; it is the only remaining
+    // consumer of `complete_account_first`, which `handle_account_first_workspaces_event`
+    // still calls.
     fn account_first_is_paid(ctx: &AppContext) -> bool {
         UserWorkspaces::as_ref(ctx)
             .current_workspace()
@@ -2057,83 +2014,6 @@ impl RootView {
             FtueAccountClass::FreeIcp
         } else {
             FtueAccountClass::FreeStandard
-        }
-    }
-
-    fn begin_account_first_post_auth_refresh(
-        &mut self,
-        context: AccountFirstLoginContext,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if self.account_first_refresh_in_flight {
-            return;
-        }
-        self.auth_onboarding_state = AuthOnboardingState::LoginSlide {
-            login_slide_view: context.login_slide_view,
-            onboarding_view: context.onboarding_view,
-            target: context.target,
-        };
-        self.account_first_refresh_in_flight = true;
-        let workspace_refresh = TeamUpdateManager::handle(ctx)
-            .update(ctx, |manager, ctx| manager.refresh_workspace_metadata(ctx));
-        let _ = ctx.spawn(
-            async move {
-                let _ = workspace_refresh.await;
-                // LOCAL FORK: the AI request-usage refresh went with the agent,
-                // so there is no fresh request limit to report.
-                None::<usize>
-            },
-            |me, fresh_request_limit, ctx| {
-                me.account_first_refresh_in_flight = false;
-                me.resolve_account_first_post_auth(fresh_request_limit, ctx);
-            },
-        );
-        ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
-        self.focus(ctx);
-        ctx.notify();
-    }
-
-    fn resolve_account_first_post_auth(
-        &mut self,
-        fresh_request_limit: Option<usize>,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let Some(context) = self.account_first_login_context(ctx) else {
-            return;
-        };
-        let account_class =
-            Self::account_first_class(Self::account_first_is_paid(ctx), fresh_request_limit);
-        let has_team = UserWorkspaces::as_ref(ctx).has_teams();
-        send_telemetry_from_ctx!(
-            OnboardingEvent::OnboardingAuthCompleted {
-                account_class: account_class.as_str().to_string(),
-                has_team,
-                is_paid: account_class == FtueAccountClass::Paid,
-                team_discovery_outcome: "unknown".to_string(),
-            },
-            ctx
-        );
-
-        match account_class {
-            FtueAccountClass::Paid => {
-                self.complete_account_first(AccountFirstCompletion::PaidTeam, ctx);
-            }
-            FtueAccountClass::FreeIcp | FtueAccountClass::FreeStandard => {
-                let variant = offer_variant_for_account_class(account_class)
-                    .expect("free account classes have an offer");
-                context.onboarding_view.update(ctx, |view, ctx| {
-                    view.show_post_auth_offer(variant, ctx);
-                });
-                self.auth_onboarding_state = AuthOnboardingState::PostAuthOnboarding {
-                    onboarding_view: context.onboarding_view,
-                    target: context.target,
-                    account_class,
-                    upgrade_started: false,
-                };
-                ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
-                self.focus(ctx);
-                ctx.notify();
-            }
         }
     }
 
@@ -2182,11 +2062,6 @@ impl RootView {
         ctx: &mut ViewContext<Self>,
     ) {
         let target = match &self.auth_onboarding_state {
-            AuthOnboardingState::LoginSlide {
-                login_slide_view,
-                target,
-                ..
-            } if login_slide_view.as_ref(ctx).is_account_first_onboarding() => target.clone(),
             AuthOnboardingState::PostAuthOnboarding { target, .. } => target.clone(),
             _ => return,
         };
@@ -2200,7 +2075,6 @@ impl RootView {
         }
 
         let account_class = completion.account_class();
-        self.pending_account_first_sso_login = None;
         let cloud_ready = CloudPreferencesSyncer::as_ref(ctx).has_completed_initial_load();
         let settings_applied = if account_class.is_none() || cloud_ready {
             self.pending_account_first_settings_class = None;
@@ -2234,56 +2108,6 @@ impl RootView {
         self.start_autoupdate_polling(ctx);
         self.focus(ctx);
         ctx.notify();
-    }
-
-    fn handle_login_slide_event(&mut self, event: &LoginSlideEvent, ctx: &mut ViewContext<Self>) {
-        match event {
-            LoginSlideEvent::BackToOnboarding => {
-                let AuthOnboardingState::LoginSlide {
-                    onboarding_view,
-                    target,
-                    ..
-                } = &self.auth_onboarding_state
-                else {
-                    return;
-                };
-                let onboarding_view = onboarding_view.clone();
-                let target = target.clone();
-                self.auth_onboarding_state = AuthOnboardingState::Onboarding {
-                    onboarding_view,
-                    target,
-                };
-                self.pending_tutorial = None;
-                self.pending_post_auth_onboarding_settings = None;
-                self.pending_account_first_settings_class = None;
-                self.pending_account_first_tutorial_after_settings = false;
-                ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
-                self.focus(ctx);
-                ctx.notify();
-            }
-            LoginSlideEvent::LoginLaterConfirmed => {
-                if self.account_first_login_context(ctx).is_some() {
-                    self.complete_account_first(AccountFirstCompletion::AccountSkipped, ctx);
-                    return;
-                }
-                let AuthOnboardingState::LoginSlide { target, .. } = &self.auth_onboarding_state
-                else {
-                    return;
-                };
-                let workspace = target.to_workspace(ctx);
-                // User opted out of login: apply locally (no cloud race).
-                // Skipping leaves the user without an account, so AI is disabled.
-                if let Some(selected_settings) = self.pending_post_auth_onboarding_settings.take() {
-                    apply_onboarding_settings(&selected_settings, false, ctx);
-                }
-                self.auth_onboarding_state = AuthOnboardingState::Terminal(workspace);
-                ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
-                self.start_pending_tutorial(ctx);
-                self.start_autoupdate_polling(ctx);
-                self.focus(ctx);
-                ctx.notify();
-            }
-        }
     }
 
     fn minimize_window(&mut self, _: &(), ctx: &mut ViewContext<Self>) -> bool {
@@ -2376,7 +2200,6 @@ impl RootView {
                         NewTerminalOptions::default()
                             .with_initial_directory_opt(path_if_directory(path).map(Into::into)),
                     )),
-                    Arc::new(HashMap::new()),
                     None,
                     ctx,
                 );
@@ -2529,7 +2352,6 @@ impl RootView {
             handle.update(ctx, |workspace, ctx| {
                 workspace.add_tab_with_pane_layout(
                     PanesLayout::SingleTerminal(Box::default()),
-                    Arc::new(HashMap::new()),
                     None,
                     ctx,
                 );
@@ -2574,7 +2396,6 @@ impl RootView {
         handle.update(ctx, |workspace, ctx| {
             workspace.add_tab_with_pane_layout(
                 PanesLayout::SingleTerminal(Box::default()),
-                Arc::new(HashMap::new()),
                 None,
                 ctx,
             );
@@ -2770,23 +2591,13 @@ impl RootView {
         match event {
             AuthManagerEvent::AuthComplete => {
                 self.paste_auth_token_modal = None;
-                let login_context = self.account_first_login_context(ctx);
-                let resumed_sso_context = if matches!(
+                // LOCAL FORK: the account-first login context came from
+                // `AuthOnboardingState::LoginSlide`, which is gone, so the only
+                // account-first state left to detect is `PostAuthOnboarding`.
+                let account_first_auth = matches!(
                     self.auth_onboarding_state,
-                    AuthOnboardingState::NeedsSsoLink { .. }
-                ) && auth_state.needs_sso_link() == Some(false)
-                {
-                    self.pending_account_first_sso_login.take()
-                } else {
-                    None
-                };
-                let account_first_context = login_context.or(resumed_sso_context);
-                let account_first_auth = account_first_context.is_some()
-                    || self.pending_account_first_sso_login.is_some()
-                    || matches!(
-                        self.auth_onboarding_state,
-                        AuthOnboardingState::PostAuthOnboarding { .. }
-                    );
+                    AuthOnboardingState::PostAuthOnboarding { .. }
+                );
 
                 if !account_first_auth {
                     Self::sync_local_onboarding_to_server(&auth_state, ctx);
@@ -2795,15 +2606,10 @@ impl RootView {
                 // If the user needs SSO after auth is complete, no matter what their current state is,
                 // we need to block their access to the rest of the app.
                 if auth_state.needs_sso_link().unwrap_or(false) {
-                    if let Some(context) = account_first_context.clone() {
-                        self.pending_account_first_sso_login = Some(context);
-                    }
                     self.show_needs_sso_link_view(
                         auth_state.user_email().unwrap_or_default().clone(),
                         ctx,
                     );
-                } else if let Some(context) = account_first_context {
-                    self.begin_account_first_post_auth_refresh(context, ctx);
                 } else if matches!(
                     self.auth_onboarding_state,
                     AuthOnboardingState::PostAuthOnboarding { .. }
@@ -2818,10 +2624,6 @@ impl RootView {
                     self.auth_view.update(ctx, |auth_view, ctx| {
                         auth_view.set_variant(ctx, AuthViewVariant::Initial);
                     });
-                    self.auth_onboarding_state
-                        .complete_auth_and_create_workspace(ctx);
-                    self.start_pending_tutorial(ctx);
-                } else if let AuthOnboardingState::LoginSlide { .. } = &self.auth_onboarding_state {
                     self.auth_onboarding_state
                         .complete_auth_and_create_workspace(ctx);
                     self.start_pending_tutorial(ctx);
@@ -2881,27 +2683,14 @@ impl RootView {
                 UserAuthenticationError::MissingStateParameter => {}
             },
             AuthManagerEvent::SkippedLogin => {
-                if self.account_first_login_context(ctx).is_some() {
-                    self.complete_account_first(AccountFirstCompletion::AccountSkipped, ctx);
-                } else if let AuthOnboardingState::Auth(_)
-                | AuthOnboardingState::ConfirmIncomingAuth(_) =
+                // LOCAL FORK: the account-first and login-slide branches went with
+                // `AuthOnboardingState::LoginSlide`; neither could be reached once the
+                // slide had no origin.
+                if let AuthOnboardingState::Auth(_) | AuthOnboardingState::ConfirmIncomingAuth(_) =
                     &self.auth_onboarding_state
                 {
                     self.auth_onboarding_state
                         .complete_auth_and_create_workspace(ctx);
-                    self.start_pending_tutorial(ctx);
-                } else if let AuthOnboardingState::LoginSlide { target, .. } =
-                    &self.auth_onboarding_state
-                {
-                    let workspace = target.to_workspace(ctx);
-                    if let Some(selected_settings) =
-                        self.pending_post_auth_onboarding_settings.take()
-                    {
-                        // Skipped login → no account → AI disabled.
-                        apply_onboarding_settings(&selected_settings, false, ctx);
-                    }
-                    self.auth_onboarding_state = AuthOnboardingState::Terminal(workspace);
-                    ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
                     self.start_pending_tutorial(ctx);
                 }
                 self.start_autoupdate_polling(ctx);
@@ -3033,11 +2822,6 @@ impl RootView {
             } => {
                 ctx.focus(onboarding_view);
             }
-            AuthOnboardingState::LoginSlide {
-                login_slide_view, ..
-            } => {
-                ctx.focus(login_slide_view);
-            }
             AuthOnboardingState::Terminal(workspace) => {
                 ctx.focus(workspace);
             }
@@ -3114,13 +2898,10 @@ impl RootView {
             }
             return;
         }
-        if self.account_first_login_context(ctx).is_some()
-            || self.pending_account_first_sso_login.is_some()
-            || matches!(
-                self.auth_onboarding_state,
-                AuthOnboardingState::PostAuthOnboarding { .. }
-            )
-        {
+        if matches!(
+            self.auth_onboarding_state,
+            AuthOnboardingState::PostAuthOnboarding { .. }
+        ) {
             return;
         }
         let Some(selected_settings) = self.pending_post_auth_onboarding_settings.take() else {
@@ -3200,15 +2981,6 @@ impl View for RootView {
             // This ensures keystrokes (Enter) are handled by the correct view rather
             // than something hidden like the input editor.
             self.focus(ctx);
-        } else if let AuthOnboardingState::LoginSlide {
-            login_slide_view, ..
-        } = &self.auth_onboarding_state
-        {
-            // Redirect focus unless the auth token editor is visible and should
-            // accept user input.
-            if !login_slide_view.as_ref(ctx).is_auth_token_input_visible() {
-                self.focus(ctx);
-            }
         }
     }
 
@@ -3229,9 +3001,6 @@ impl View for RootView {
             AuthOnboardingState::PostAuthOnboarding {
                 onboarding_view, ..
             } => ChildView::new(onboarding_view).finish(),
-            AuthOnboardingState::LoginSlide {
-                login_slide_view, ..
-            } => ChildView::new(login_slide_view).finish(),
             AuthOnboardingState::Terminal(workspace) => ChildView::new(workspace).finish(),
         };
 
@@ -3365,10 +3134,6 @@ impl AuthOnboardingState {
                 let workspace = args.clone().create_workspace(ctx);
                 *self = AuthOnboardingState::Terminal(workspace);
             }
-            &mut AuthOnboardingState::LoginSlide { ref target, .. } => {
-                let workspace = target.to_workspace(ctx);
-                *self = AuthOnboardingState::Terminal(workspace);
-            }
             _ => {}
         };
         ctx.emit(RootViewEvent::AuthOnboardingStateChanged);
@@ -3401,9 +3166,8 @@ impl AuthOnboardingState {
                 *self = AuthOnboardingState::WebImport(target.clone())
             }
             AuthOnboardingState::Onboarding { .. }
-            | AuthOnboardingState::LoginSlide { .. }
             | AuthOnboardingState::PostAuthOnboarding { .. } => {
-                // For onboarding/login slide, we don't have a workspace yet, so we can't convert to web import
+                // For onboarding, we don't have a workspace yet, so we can't convert to web import
                 // This case shouldn't normally occur
             }
             AuthOnboardingState::Terminal(view) => {
@@ -3436,9 +3200,8 @@ impl AuthOnboardingState {
             }
             AuthOnboardingState::NeedsSsoLink { .. } => (),
             AuthOnboardingState::Onboarding { .. }
-            | AuthOnboardingState::LoginSlide { .. }
             | AuthOnboardingState::PostAuthOnboarding { .. } => {
-                // For onboarding/login slide, we don't have a workspace yet, so we can't convert to SSO link
+                // For onboarding, we don't have a workspace yet, so we can't convert to SSO link
                 // This case shouldn't normally occur
             }
             AuthOnboardingState::Terminal(terminal_view_handle) => {
@@ -3469,9 +3232,8 @@ impl AuthOnboardingState {
                 AuthOnboardingTarget::Terminal(_) => {}
             },
             AuthOnboardingState::Onboarding { .. }
-            | AuthOnboardingState::LoginSlide { .. }
             | AuthOnboardingState::PostAuthOnboarding { .. } => {
-                // No workspace to clean up for onboarding/login slide state
+                // No workspace to clean up for onboarding state
             }
             AuthOnboardingState::Terminal(workspace) => {
                 // Clean up current workspace before resetting.

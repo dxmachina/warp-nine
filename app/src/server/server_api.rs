@@ -14,7 +14,6 @@ pub mod managed_secrets;
 pub mod object;
 pub mod referral;
 pub mod team;
-pub mod workspace;
 
 use std::ops::Deref;
 use std::path::Path;
@@ -46,7 +45,6 @@ use warp_server_client::iap::{IapManager, IapState};
 use warp_server_client::network_logging::NetworkLogModel;
 use warpui::r#async::BoxFuture;
 use warpui::{Entity, ModelContext, SingletonEntity};
-use workspace::WorkspaceClient;
 
 use super::experiments::{ServerExperiment, ServerExperiments};
 use crate::auth::auth_state::AuthState;
@@ -789,10 +787,6 @@ impl ServerApiProvider {
     }
 
     pub fn get_block_client(&self) -> Arc<dyn BlockClient> {
-        self.server_api.clone()
-    }
-
-    pub fn get_workspace_client(&self) -> Arc<dyn WorkspaceClient> {
         self.server_api.clone()
     }
 

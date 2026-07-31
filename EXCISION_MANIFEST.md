@@ -168,12 +168,28 @@ call site should be replaced by exactly what it evaluates to today. It also make
 it dangerous to eyeball, because getting one wrong silently flips a kept feature
 on or off, and 20 of the 29 are booleans where both values look plausible.
 
-The cheaper first move is to gut `UserWorkspaces`'s implementation while keeping
-its surface: delete the network clients, the polling, `gql_convert.rs`, `team.rs`
-and `user_profiles.rs`, and have the accessors return their no-workspace defaults
-directly. That reclaims most of the lines while touching zero call sites, and
-leaves the 29 sites to be simplified afterwards under a compiler that can check
-the result.
+**Correction (2026-07-31, same day):** the plan above said to have the accessors
+return their no-workspace defaults directly. That is wrong, and the reasoning
+behind it was wrong. `current_workspace()` is *not* always `None`.
+`UserWorkspaces::new` seeds itself from `cached_workspaces`, read from the sqlite
+`workspaces` table, and a database written before the excision can still have rows
+there. Anyone upgrading from a build that could log in still has cached workspace
+data, so their accessors return real values.
+
+Hardcoding the no-workspace default would silently change their settings, and at
+least one of those changes is in the unsafe direction:
+`is_enterprise_secret_redaction_enabled` would go from a cached `true` to `false`,
+weakening secret redaction for exactly the users most likely to care.
+
+What was done instead: remove only the code that can *change* workspace data, and
+leave every accessor reading whatever cache exists. Team administration went that
+way (27 methods, 27 events, 516 lines) with no call-site edits at all, because the
+Teams settings page and billing modals were already gone and nothing called it.
+
+The general rule this is an instance of: "the predicate is always X today" is a
+claim about the *current process*, not about the data. Before folding a predicate
+to a constant, check whether persisted state can make it something else on a
+machine that is not this one.
 
 ## Correction (2026-07-30): the agent was not the size problem
 

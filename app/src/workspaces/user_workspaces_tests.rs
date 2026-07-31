@@ -31,17 +31,11 @@ struct CachedResources {
     workspaces: Vec<Workspace>,
 }
 
-fn initialize_app(
-    app: &mut App,
-    resources: CachedResources,
-    team_client: Arc<dyn TeamClient>,
-    workspace_client: Arc<dyn WorkspaceClient>,
-) {
+fn initialize_app(app: &mut App, resources: CachedResources, team_client: Arc<dyn TeamClient>) {
     initialize_app_with_auth(
         app,
         resources,
         team_client,
-        workspace_client,
         AuthStateProvider::new_for_test(),
     );
 }
@@ -50,7 +44,6 @@ fn initialize_app_with_auth(
     app: &mut App,
     resources: CachedResources,
     team_client: Arc<dyn TeamClient>,
-    workspace_client: Arc<dyn WorkspaceClient>,
     auth_state_provider: AuthStateProvider,
 ) {
     // Add the necessary singleton models to the App
@@ -59,14 +52,7 @@ fn initialize_app_with_auth(
     app.add_singleton_model(TeamTesterStatus::new);
     app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(CloudModel::mock);
-    app.add_singleton_model(|ctx| {
-        UserWorkspaces::mock(
-            team_client.clone(),
-            workspace_client.clone(),
-            resources.workspaces,
-            ctx,
-        )
-    });
+    app.add_singleton_model(|ctx| UserWorkspaces::mock(resources.workspaces, ctx));
     app.add_singleton_model(|ctx| TeamUpdateManager::new(team_client.clone(), None, ctx));
     app.add_singleton_model(UpdateManager::mock);
     app.add_singleton_model(PrivacySettings::mock);
@@ -92,14 +78,7 @@ fn initialize_app_with_auth(
 
 fn initialize_window_team_test_app(app: &mut App, workspaces: Vec<Workspace>) {
     app.add_singleton_model(PrivacySettings::mock);
-    app.add_singleton_model(|ctx| {
-        UserWorkspaces::mock(
-            Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
-            workspaces,
-            ctx,
-        )
-    });
+    app.add_singleton_model(|ctx| UserWorkspaces::mock(workspaces, ctx));
 }
 
 #[test]
@@ -184,7 +163,6 @@ fn test_loading_all_spaces_after_switching_from_offline() {
             &mut app,
             CachedResources { workspaces: vec![] },
             Arc::new(team_client),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         // We also ensure that UserWorkspaces stores no teams.
@@ -222,7 +200,6 @@ fn test_codebase_context_enabled_with_no_workspace() {
             &mut app,
             CachedResources { workspaces: vec![] },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         app.read(|ctx| {
@@ -540,7 +517,6 @@ fn test_codebase_context_enabled_by_team_disabled_by_user() {
                 workspaces: vec![workspace],
             },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         app.read(|ctx| {
@@ -570,7 +546,6 @@ fn test_codebase_context_enabled_by_team_and_user() {
                 workspaces: vec![workspace],
             },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         app.read(|ctx| {
@@ -601,7 +576,6 @@ fn test_codebase_context_disabled_by_workspace() {
                 workspaces: vec![workspace],
             },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         app.read(|ctx| {
@@ -631,7 +605,6 @@ fn test_codebase_context_respect_user_setting() {
                 workspaces: vec![workspace],
             },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         app.read(|ctx| {
@@ -706,7 +679,6 @@ fn test_joining_team_moves_objects() {
             &mut app,
             CachedResources { workspaces: vec![] },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
         CloudModel::handle(&app).update(&mut app, |cloud_model, _| {
             cloud_model.add_object(object_id, shared_object);
@@ -746,7 +718,6 @@ fn test_agent_attribution_default_with_no_workspace() {
             &mut app,
             CachedResources { workspaces: vec![] },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         app.read(|ctx| {
@@ -773,7 +744,6 @@ fn test_agent_attribution_forced_on_by_team() {
                 workspaces: vec![workspace],
             },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         app.read(|ctx| {
@@ -800,7 +770,6 @@ fn test_agent_attribution_forced_off_by_team() {
                 workspaces: vec![workspace],
             },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         app.read(|ctx| {
@@ -827,7 +796,6 @@ fn test_agent_attribution_respects_user_setting() {
                 workspaces: vec![workspace],
             },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
 
         app.read(|ctx| {
@@ -894,7 +862,6 @@ fn test_leaving_team_moves_objects() {
                 workspaces: vec![workspace],
             },
             Arc::new(MockTeamClient::new()),
-            Arc::new(MockWorkspaceClient::new()),
         );
         CloudModel::handle(&app).update(&mut app, |cloud_model, _| {
             cloud_model.add_object(object_id, shared_object);

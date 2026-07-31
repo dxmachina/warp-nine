@@ -1,4 +1,3 @@
-use crate::settings::AISettings;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -38,8 +37,6 @@ use super::aliases::WorkflowAliases;
 use super::command_parser::WorkflowCommandDisplayData;
 use super::{CloudWorkflowModel, WorkflowSource, WorkflowType, WorkflowViewMode};
 use crate::appearance::Appearance;
-use crate::auth::auth_state::AuthState;
-use crate::auth::{AuthStateProvider, UserUid};
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::CloudViewModel;
 use crate::cloud_object::object_limits::has_feature_gated_anonymous_user_reached_workflow_limit;
@@ -78,7 +75,7 @@ use crate::ui_components::icons::Icon;
 #[cfg(target_family = "wasm")]
 use crate::uri::web_intent_parser::open_url_on_desktop;
 use crate::util::bindings::CustomAction;
-use crate::view_components::{DismissibleToast, ToastLink, ToastType};
+use crate::view_components::{DismissibleToast, ToastType};
 use crate::workflows::CloudWorkflow;
 use crate::workflows::arguments_ui::arguments::ArgumentsState;
 use crate::workflows::arguments_ui::enum_creation_dialog::{
@@ -89,8 +86,8 @@ use crate::workflows::arguments_ui::workflow_arg_selector::{
 };
 use crate::workflows::arguments_ui::workflow_arg_type_helpers::{self, ArgumentEditorRowIndex};
 use crate::workflows::workflow::{Argument, Workflow};
-use crate::workspace::{ToastStack, WorkspaceAction};
-use crate::{FeatureFlag, UserWorkspaces, send_telemetry_from_ctx};
+use crate::workspace::ToastStack;
+use crate::{FeatureFlag, send_telemetry_from_ctx};
 
 mod alias_argument_selector;
 mod alias_bar;
@@ -157,10 +154,6 @@ const BUTTON_FONT_SIZE: f32 = 14.;
 const BUTTON_BORDER_RADIUS: f32 = 4.;
 const BUTTON_HEIGHT: f32 = 32.;
 
-const AI_ASSIST_BUTTON_SIZE: f32 = 92.;
-const AI_ASSIST_BUTTON_TEXT: &str = "Autofill";
-const AI_ASSIST_LOADING_TEXT: &str = "Loading";
-
 const ALIAS_HELP_TEXT: &str = "Aliases allow you to create short strings to execute workflows. Each alias can have different argument values and environment variables, and aliases are personal to you.";
 
 const RUN_ON_DESKTOP_BUTTON_TEXT: &str = "Run in Warp";
@@ -171,12 +164,6 @@ const KEEP_EDITING_TEXT: &str = "Keep editing";
 const DISCARD_CHANGES_TEXT: &str = "Discard changes";
 const DIALOG_WIDTH: f32 = 460.;
 const MODAL_HORIZONTAL_MARGIN: f32 = 28.;
-
-pub(super) enum AiAssistState {
-    PreRequest,
-    RequestInFlight,
-    Generated,
-}
 
 /// A grouping of various error states the modal can be in. Any of these being
 /// `true` prevents the save button from being clickable.
@@ -216,7 +203,6 @@ pub enum WorkflowAction {
     ForceClose,
     Save,
     Cancel,
-    AiAssist,
     Duplicate,
     CopyLink(String),
     OpenLinkOnDesktop(Url),
@@ -265,8 +251,6 @@ struct UiStateHandles {
     restore_from_trash_button: MouseStateHandle,
     keep_editing_state: MouseStateHandle,
     discard_changes_state: MouseStateHandle,
-    ai_assist_state: MouseStateHandle,
-    ai_assist_tool_tip: MouseStateHandle,
     edit_mode_button_mouse_state: MouseStateHandle,
     copy_content_button_mouse_state: MouseStateHandle,
     execute_command_mouse_state: MouseStateHandle,
@@ -299,9 +283,9 @@ pub struct WorkflowView {
     /// to append a number to the default argument name (argument_1, argument_2,
     /// etc.).
     default_argument_id: usize,
-    pub(super) ai_metadata_assist_state: AiAssistState,
     revision_ts: Option<Revision>,
-    pub(super) auth_state: Arc<AuthState>,
+    // LOCAL FORK: `auth_state` was read only by `display_upgrade_error`, to decide whether
+    // the out-of-AI-credits toast should link to a login prompt or straight to billing.
     owner: Option<Owner>,
     initial_folder_id: Option<SyncId>,
 
@@ -439,12 +423,10 @@ impl WorkflowView {
             ui_state_handles: Default::default(),
             show_unsaved_changes: None,
             default_argument_id: 0,
-            ai_metadata_assist_state: AiAssistState::PreRequest,
             owner: None,
             initial_folder_id: None,
             revision_ts: None,
             command_display_data: WorkflowCommandDisplayData::new_empty(),
-            auth_state: AuthStateProvider::as_ref(ctx).get().clone(),
             pending_argument_editor_row: None,
             show_enum_creation_dialog: false,
             enum_creation_dialog,
@@ -1717,13 +1699,6 @@ impl WorkflowView {
         self.workflow_view_mode.is_editable()
     }
 
-    fn is_ai_assist_button_disabled(&self, app: &AppContext) -> bool {
-        // Autofill button should be disabled when there is no content or when there are secrets in the workflow.
-        self.content_editor.as_ref(app).is_empty(app)
-            || self.show_enum_creation_dialog
-            || self.workflow_contains_secrets(app)
-    }
-
     fn clear_content_formatting(&mut self, num_chars_content: usize, ctx: &mut ViewContext<Self>) {
         self.content_editor.update(ctx, |editor, ctx| {
             editor.update_buffer_styles(
@@ -2369,57 +2344,10 @@ impl WorkflowView {
 
         let mut button_row = Flex::row();
 
-        let label_and_icon = match self.ai_metadata_assist_state {
-            AiAssistState::PreRequest => Some((AI_ASSIST_BUTTON_TEXT, Icon::AiAssistant)),
-            AiAssistState::RequestInFlight => Some((AI_ASSIST_LOADING_TEXT, Icon::Refresh)),
-            AiAssistState::Generated => None,
-        };
-
-        if let Some((label, icon)) = label_and_icon {
-            // AI-generated workflow metadata is only supported for Command workflows currently.
-            if AISettings::as_ref(app).is_any_ai_enabled(app)
-                && self.is_editable()
-                && !self.is_for_agent_mode
-            {
-                let mut button = self
-                    .build_footer_button(
-                        ButtonVariant::Secondary,
-                        label.to_string(),
-                        Some((icon, TextAndIconAlignment::TextFirst)),
-                        self.ui_state_handles.ai_assist_state.clone(),
-                        appearance,
-                    )
-                    .with_style(UiComponentStyles {
-                        width: Some(AI_ASSIST_BUTTON_SIZE),
-                        ..Default::default()
-                    });
-
-                if self.is_ai_assist_button_disabled(app) {
-                    button = button.disabled();
-                }
-
-                let rendered_button = button
-                    .build()
-                    .with_cursor(Cursor::PointingHand)
-                    .on_click(move |ctx, _, _| ctx.dispatch_typed_action(WorkflowAction::AiAssist))
-                    .finish();
-
-                let button_with_tool_tip = appearance.ui_builder().tool_tip_on_element(
-                    "Generate a title, descriptions, or parameters with Warp AI".to_string(),
-                    self.ui_state_handles.ai_assist_tool_tip.clone(),
-                    rendered_button,
-                    ParentAnchor::TopMiddle,
-                    ChildAnchor::BottomMiddle,
-                    vec2f(0., 5.),
-                );
-
-                button_row.add_child(
-                    Container::new(button_with_tool_tip)
-                        .with_margin_right(8.)
-                        .finish(),
-                )
-            }
-        }
+        // LOCAL FORK: the "Autofill" button sat here, asking Warp's server to generate a
+        // title, description and argument metadata for the command. Unlike its twin in
+        // `arguments_ui::modal`, this one was gated on `is_any_ai_enabled`, which no build
+        // of this fork can satisfy, so it was already unreachable rather than merely broken.
 
         if self.is_editable() {
             // If we are in a context where we can't run workflows and are in the edit mode, then
@@ -2547,120 +2475,10 @@ impl WorkflowView {
         })
     }
 
-    /// LOCAL FORK: the AI client that generated workflow metadata went with the agent.
-    /// The entry point is kept so the "AI assist" button still resolves, but the request
-    /// can never be issued; report it immediately rather than leaving the view stuck in
-    /// `RequestInFlight` with its editors disabled. This mirrors the same stub in
-    /// `drive::workflows::ai_assist`.
-    fn issue_request(&mut self, ctx: &mut ViewContext<Self>) {
-        self.ai_metadata_assist_state = AiAssistState::PreRequest;
-        self.enable_editors(ctx);
-        self.display_error_toast(
-            "Generating workflow metadata is not available in this build.".to_string(),
-            ctx,
-        );
-        ctx.notify();
-    }
-
-    fn display_upgrade_error(
-        &mut self,
-        team_uid: Option<ServerId>,
-        user_id: UserUid,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let upgrade_link = team_uid
-            .map(UserWorkspaces::upgrade_link_for_team)
-            .unwrap_or_else(|| UserWorkspaces::upgrade_link(user_id));
-
-        let window_id = ctx.window_id();
-        let toast_link = if self.auth_state.is_anonymous_or_logged_out() {
-            ToastLink::new("Upgrade for more credits.".into())
-                .with_onclick_action(WorkspaceAction::AttemptLoginGatedAIUpgrade)
-        } else {
-            ToastLink::new("Upgrade for more credits.".into()).with_href(upgrade_link)
-        };
-
-        crate::workspace::ToastStack::handle(ctx).update(ctx, |stack, ctx| {
-            stack.add_ephemeral_toast(
-                DismissibleToast::error("Looks like you're out of AI credits.".into())
-                    .with_link(toast_link),
-                window_id,
-                ctx,
-            );
-            ctx.notify();
-        });
-    }
-
-    // Populate only the missing field in the workflow editor with the generated suggestion from AI.
-    fn populate_missing_field_with_suggestion(
-        &mut self,
-        workflow: Workflow,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        self.name_editor.update(ctx, |editor, ctx| {
-            if editor.is_empty(ctx) {
-                editor.set_buffer_text(workflow.name(), ctx);
-            }
-        });
-
-        self.description_editor.update(ctx, |editor, ctx| {
-            if editor.is_empty(ctx) {
-                editor.set_buffer_text(
-                    workflow
-                        .description()
-                        .map(String::as_str)
-                        .unwrap_or_default(),
-                    ctx,
-                );
-            }
-        });
-
-        let content_parsed = !self.arguments_state.arguments.is_empty();
-        if !content_parsed {
-            self.content_editor.update(ctx, |editor, ctx| {
-                editor.set_buffer_text(workflow.content(), ctx);
-            });
-
-            // note: normally, we wouldn't have to do this, since editing the command
-            // editor's text will trigger the event that does this automatically.
-            // however, that happens in a callback, yet we need to know what the args
-            // are right away to populate the description/default value editors.
-            self.arguments_state = ArgumentsState::for_command_workflow(
-                &self.arguments_state,
-                workflow.content().to_string(),
-            );
-            self.update_arguments_rows(ctx);
-
-            workflow
-                .arguments()
-                .iter()
-                .enumerate()
-                .for_each(|(index, argument)| {
-                    // Since suggestion generated by AI is non-deterministic, we should make sure to handle each
-                    // operation safely.
-                    if index >= self.arguments_rows.len() {
-                        return;
-                    }
-
-                    if let Some(description) = &argument.description {
-                        self.arguments_rows[index]
-                            .description_editor
-                            .update(ctx, |editor, ctx| {
-                                editor.set_buffer_text(description.as_str(), ctx);
-                            });
-                    }
-
-                    if let Some(default_value) = &argument.default_value {
-                        self.arguments_rows[index].default_value_editor.update(
-                            ctx,
-                            |editor, ctx| {
-                                editor.set_buffer_text(default_value.as_str(), ctx);
-                            },
-                        );
-                    }
-                });
-        }
-    }
+    // LOCAL FORK: `issue_request`, `display_upgrade_error` and
+    // `populate_missing_field_with_suggestion` went with the Autofill button. The first was
+    // already a stub that only reported the feature missing; the other two were flagged
+    // dead by rustc once nothing called them.
 
     pub(super) fn render_trash_banner(&self, app: &AppContext) -> Option<Box<dyn Element>> {
         let cloud_model = CloudModel::as_ref(app);
@@ -2988,7 +2806,6 @@ impl TypedActionView for WorkflowView {
             }
             WorkflowAction::RunWorkflow => self.copy_to_command_line(ctx),
             WorkflowAction::CopyContent => self.copy_content(ctx),
-            WorkflowAction::AiAssist => self.issue_request(ctx),
             WorkflowAction::Duplicate => self.duplicate_object(ctx),
             WorkflowAction::CopyLink(link) => {
                 send_telemetry_from_ctx!(

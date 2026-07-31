@@ -523,64 +523,9 @@ fn test_pasting_command_same_number_of_arguments() {
     });
 }
 
-#[test]
-fn test_populating_missing_fields_with_suggestion() {
-    App::test((), |mut app| async move {
-        let modal_view = create_modal(&mut app);
-
-        modal_view.update(&mut app, |view, ctx| {
-            view.content_editor.update(ctx, |editor, ctx| {
-                editor.set_buffer_text("git {{foo_1}} {{foo_2}}", ctx);
-            });
-
-            view.title_editor.update(ctx, |editor, ctx| {
-                editor.set_buffer_text("Title foo", ctx);
-            });
-        });
-
-        modal_view.read(&app, |view, _| {
-            assert_eq!(view.arguments_rows.len(), 2);
-        });
-
-        modal_view.update(&mut app, |view, ctx| {
-            let workflow = Workflow::Command {
-                name: "New Title".to_string(),
-                description: Some("New description".to_string()),
-                command: "git foo_1 foo_2".to_string(),
-                arguments: vec![],
-                tags: vec![],
-                source_url: None,
-                author: None,
-                author_url: None,
-                shells: vec![],
-                environment_variables: None,
-            };
-            view.populate_missing_field_with_suggestion(workflow, ctx)
-        });
-
-        modal_view.read(&app, |view, app| {
-            assert_eq!(view.arguments_rows.len(), 2);
-
-            assert_eq!(
-                view.content_editor.as_ref(app).buffer_text(app).as_str(),
-                "git {{foo_1}} {{foo_2}}"
-            );
-
-            assert_eq!(
-                view.title_editor.as_ref(app).buffer_text(app).as_str(),
-                "Title foo"
-            );
-
-            assert_eq!(
-                view.description_editor
-                    .as_ref(app)
-                    .buffer_text(app)
-                    .as_str(),
-                "New description"
-            );
-        });
-    });
-}
+// LOCAL FORK: `test_populating_missing_fields_with_suggestion` covered
+// `populate_missing_field_with_suggestion`, which applied an Autofill response to the
+// modal's editors. It went with the Autofill button.
 
 #[test]
 fn test_populating_with_sanitization() {

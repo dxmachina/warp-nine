@@ -1,6 +1,5 @@
 mod cloud_object_naming_dialog;
 pub mod empty_trash_confirmation_dialog;
-pub mod folders;
 pub mod import;
 pub(crate) mod index;
 pub mod items;

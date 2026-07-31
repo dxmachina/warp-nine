@@ -231,7 +231,11 @@ impl<'a> WarpDriveRow<'a> {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
+    // LOCAL FORK: this used to open with `object.to_warp_drive_item(appearance)?`. That trait
+    // method was the object model's only dependency on `drive/items/`, and this was its only
+    // caller, so it went with the model. The index that calls this is removed in the next step,
+    // so the constructor is stubbed out rather than reimplemented over downcasts.
+    #[allow(clippy::too_many_arguments, unused_variables)]
     pub fn new_from_cloud_object(
         object: &dyn CloudObject,
         item_states: ItemStates,
@@ -248,23 +252,7 @@ impl<'a> WarpDriveRow<'a> {
         menu_direction: MenuDirection,
         appearance: &'a Appearance,
     ) -> Option<Self> {
-        let item = object.to_warp_drive_item(appearance)?;
-        Self::new(
-            item,
-            item_states,
-            space,
-            folder_depth,
-            menu,
-            can_move,
-            has_menu_items,
-            menu_open,
-            share_dialog_open,
-            is_selected,
-            is_focused,
-            sync_queue_is_dequeueing,
-            menu_direction,
-            appearance,
-        )
+        None
     }
 
     pub fn should_show_preview(&self) -> bool {

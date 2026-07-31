@@ -14,12 +14,8 @@ use crate::cloud_object::model::json_model::JsonModel;
 use crate::cloud_object::{
     GenericStringObjectFormat, GenericStringObjectUniqueKey, JsonObjectType, Revision,
 };
-use crate::drive::items::WarpDriveItem;
-use crate::drive::items::env_var_collection::WarpDriveEnvVarCollection;
-use crate::server::ids::SyncId;
 use crate::server::sync_queue::QueueItem;
 use crate::terminal::shell::ShellType;
-use crate::{Appearance, CloudObjectTypeAndId};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EnvVarCollectionType {
@@ -153,21 +149,6 @@ impl StringModel for EnvVarCollection {
 
     fn supports_linking(&self) -> bool {
         true
-    }
-
-    fn to_warp_drive_item(
-        &self,
-        id: SyncId,
-        _appearance: &Appearance,
-        env_var_collection: &CloudEnvVarCollection,
-    ) -> Option<Box<dyn WarpDriveItem>> {
-        Some(Box::new(WarpDriveEnvVarCollection::new(
-            CloudObjectTypeAndId::GenericStringObject {
-                object_type: GenericStringObjectFormat::Json(JsonObjectType::EnvVarCollection),
-                id,
-            },
-            env_var_collection.clone(),
-        )))
     }
 }
 

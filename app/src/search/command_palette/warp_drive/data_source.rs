@@ -7,11 +7,11 @@ use warpui::{AppContext, Entity, ModelContext, ModelHandle, SingletonEntity};
 use super::env_var_collection_search_item::EnvVarCollectionSearchItem;
 use super::notebook_search_item::NotebookSearchItem;
 use super::workflow_search_item::WorkflowSearchItem;
+use crate::cloud_object::folders::CloudFolder;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::{
     CloudObject, CloudObjectLocation, GenericStringObjectFormat, JsonObjectType, ObjectType,
 };
-use crate::drive::folders::CloudFolder;
 use crate::env_vars::CloudEnvVarCollection;
 use crate::notebooks::CloudNotebook;
 use crate::search::QueryFilter;
@@ -547,11 +547,11 @@ mod full_text_searcher {
     use warpui::r#async::executor::Background;
     use warpui::{AppContext, SingletonEntity};
 
+    use crate::cloud_object::folders::CloudFolder;
     use crate::cloud_object::model::persistence::CloudModel;
     use crate::cloud_object::{
         CloudObject, CloudObjectLocation, GenericStringObjectFormat, JsonObjectType, ObjectType,
     };
-    use crate::drive::folders::CloudFolder;
     use crate::env_vars::CloudEnvVarCollection;
     use crate::notebooks::CloudNotebook;
     use crate::notebooks::manager::NotebookManager;

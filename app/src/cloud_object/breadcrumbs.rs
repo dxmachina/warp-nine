@@ -1,7 +1,7 @@
 use warpui::AppContext;
 
 use super::{CloudObject, Space};
-use crate::drive::folders::CloudFolder;
+use crate::cloud_object::folders::CloudFolder;
 
 // Encapsulates an object that can contain other objects, and keeps
 // information necessary to describe where an object lives.

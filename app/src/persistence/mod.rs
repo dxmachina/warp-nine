@@ -45,12 +45,12 @@ use warpui::{AppContext, Entity, SingletonEntity};
 use self::model::{AgentConversation, AgentConversationData, Project};
 use crate::app_state::AppState;
 use crate::auth::auth_manager::PersistedCurrentUserInformation;
+use crate::cloud_object::folders::CloudFolder;
 use crate::cloud_object::model::actions::ObjectAction;
 use crate::cloud_object::model::generic_string_model::CloudStringObject;
 use crate::cloud_object::{
     CloudObject, CloudObjectMetadata, ObjectIdType, RevisionAndLastEditor, ServerCreationInfo,
 };
-use crate::drive::folders::CloudFolder;
 use crate::notebooks::CloudNotebook;
 use crate::persisted_workspace::EnablementState;
 use crate::server::experiments::ServerExperiment;

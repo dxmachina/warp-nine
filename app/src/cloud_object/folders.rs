@@ -6,11 +6,7 @@ pub use cloud_object_models::{CloudFolder, CloudFolderModel};
 // Re-exported from warp_server_client.
 pub use warp_server_client::ids::FolderId;
 
-use super::items::WarpDriveItem;
 use crate::cloud_object::CloudObjectTypeAndId;
-// Re-exported from warp_server_client.
-use super::items::folder::WarpDriveFolder;
-use crate::appearance::Appearance;
 use crate::cloud_object::{
     CloudModelType, CloudObjectEventEntrypoint, CloudObjectUpsertParams, CreateCloudObjectResult,
     CreateObjectRequest, GenericServerObject, ObjectType, Revision, Space, UpdateCloudObjectResult,
@@ -122,17 +118,5 @@ impl CloudModelType for CloudFolderModel {
 
     fn renders_in_warp_drive(&self) -> bool {
         true
-    }
-
-    fn to_warp_drive_item(
-        &self,
-        id: SyncId,
-        _appearance: &Appearance,
-        folder: &CloudFolder,
-    ) -> Option<Box<dyn WarpDriveItem>> {
-        Some(Box::new(WarpDriveFolder::new(
-            self.cloud_object_type_and_id(id),
-            folder.clone(),
-        )))
     }
 }

@@ -12,13 +12,13 @@ use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 use super::generic_string_model::GenericStringObjectId;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::CloudObjectTypeAndId;
+use crate::cloud_object::folders::{CloudFolder, CloudFolderModel};
 use crate::cloud_object::{
     CloudModelType, CloudObject, CloudObjectLocation, CloudObjectPermissions, GenericCloudObject,
     GenericServerObject, GenericStringObjectFormat, JsonObjectType, ObjectIdType, ObjectType,
     ObjectsToUpdate, Owner, Revision, RevisionAndLastEditor, ServerCloudObject, ServerCreationInfo,
     ServerFolder, ServerMetadata, ServerNotebook, ServerPermissions, ServerWorkflow, Space,
 };
-use crate::drive::folders::{CloudFolder, CloudFolderModel};
 use crate::drive::{
     DriveIndexVariant, should_auto_open_welcome_folder,
     write_has_auto_opened_welcome_folder_to_user_defaults,
@@ -1091,14 +1091,6 @@ impl CloudModel {
             .filter(|object| {
                 object.warn_if_unsaved_at_quit() && object.metadata().has_pending_content_changes()
             })
-            .count()
-    }
-
-    /// Number of cloud objects that have errored in some way and are visible in the Warp Drive index
-    pub fn num_visible_errored_objects(&self) -> usize {
-        self.objects_by_id
-            .values()
-            .filter(|object| object.renders_in_warp_drive() && object.metadata().is_errored())
             .count()
     }
 

@@ -32,6 +32,7 @@ use super::listener::ObjectUpdateMessage;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
 use crate::cloud_object::CloudObjectTypeAndId;
+use crate::cloud_object::folders::{CloudFolderModel, FolderId};
 use crate::cloud_object::model::actions::{
     ObjectAction, ObjectActionHistory, ObjectActionType, ObjectActions,
 };
@@ -54,7 +55,6 @@ use crate::cloud_object::{
     ServerMetadata, ServerPermissions, ServerPreference, ServerWorkflowEnum, Space,
     UpdateCloudObjectResult,
 };
-use crate::drive::folders::{CloudFolderModel, FolderId};
 use crate::env_vars::{CloudEnvVarCollectionModel, EnvVarCollection};
 use crate::network::{NetworkStatus, NetworkStatusEvent, NetworkStatusKind};
 use crate::notebooks::{CloudNotebookModel, NotebookId};

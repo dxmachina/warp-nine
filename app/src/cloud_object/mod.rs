@@ -22,10 +22,8 @@ use self::model::generic_string_model::{
     GenericStringModel, GenericStringObjectId, Serializer, StringModel,
 };
 use self::model::persistence::CloudModel;
-use crate::appearance::Appearance;
 use crate::auth::UserUid;
 use crate::channel::ChannelState;
-use crate::drive::items::WarpDriveItem;
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::update_manager::InitiatedBy;
 use crate::server::ids::{HashableId, HashedSqliteId, ObjectUid, ServerId, SyncId, ToServerId};
@@ -55,6 +53,10 @@ pub use cloud_objects::drive::CloudObjectTypeAndId;
 pub use object_type::DriveObjectType;
 pub use open_object::{OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings};
 pub mod breadcrumbs;
+// LOCAL FORK: was `drive/folders/mod.rs`. It is the `CloudModelType` impl for `CloudFolder`, i.e.
+// how a folder is persisted and synced, not how one is drawn. Its `to_warp_drive_item` impl was
+// the only thing tying it to the browser, and that went with the trait method.
+pub mod folders;
 pub mod grab_edit_access_modal;
 pub mod model;
 pub mod toast_message;
@@ -175,10 +177,6 @@ pub trait CloudObject: Debug {
     fn should_show_activity_toasts(&self) -> bool {
         true
     }
-
-    /// Creates a new Warp Drive item for this object.  Returns None if this
-    /// object is not rendered in Warp Drive.
-    fn to_warp_drive_item(&self, appearance: &Appearance) -> Option<Box<dyn WarpDriveItem>>;
 
     /// Returns the web link of this object. Will return none if we do not support web links
     /// for this particular object (i.e. if it's not yet sync'd to the server, or if we don't
@@ -462,15 +460,6 @@ pub trait CloudModelType: Debug + Clone + Send + Sync {
     fn warn_if_unsaved_at_quit(&self) -> bool {
         true
     }
-
-    /// Creates a new warp drive item for this model type. Returns None
-    /// if this object does not render in Warp Drive.
-    fn to_warp_drive_item(
-        &self,
-        id: SyncId,
-        appearance: &Appearance,
-        object: &Self::CloudObjectType,
-    ) -> Option<Box<dyn WarpDriveItem>>;
 
     /// Returns the display name for this model (e.g. to show in the Warp Drive index)
     fn display_name(&self) -> String;
@@ -789,10 +778,6 @@ where
 
     fn renders_in_warp_drive(&self) -> bool {
         self.model().renders_in_warp_drive()
-    }
-
-    fn to_warp_drive_item(&self, appearance: &Appearance) -> Option<Box<dyn WarpDriveItem>> {
-        self.model().to_warp_drive_item(self.id, appearance, self)
     }
 
     fn can_export(&self) -> bool {

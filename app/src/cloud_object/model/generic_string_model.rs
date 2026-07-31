@@ -8,14 +8,12 @@ use cloud_objects::cloud_object::CloudObjectUpsertParams;
 pub use cloud_objects::cloud_object::{GenericStringModel, Serializer};
 pub use warp_server_client::ids::GenericStringObjectId;
 
-use crate::appearance::Appearance;
 use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::{
     CloudModelType, CloudObject, CloudObjectEventEntrypoint, CreateCloudObjectResult,
     CreateObjectRequest, GenericCloudObject, GenericServerObject, GenericStringObjectFormat,
     GenericStringObjectUniqueKey, ObjectType, Revision, UpdateCloudObjectResult,
 };
-use crate::drive::items::WarpDriveItem;
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::update_manager::InitiatedBy;
 use crate::server::ids::{ServerId, SyncId};
@@ -88,17 +86,6 @@ pub trait StringModel: Clone + Debug + PartialEq + Send + Sync + 'static {
 
     /// Sets the display name for this model
     fn set_display_name(&mut self, _name: &str) {}
-
-    /// Creates a new warp drive item for this model type. Returns None
-    /// if this object does not render in Warp Drive.
-    fn to_warp_drive_item(
-        &self,
-        _id: SyncId,
-        _appearance: &Appearance,
-        _object: &Self::CloudObjectType,
-    ) -> Option<Box<dyn WarpDriveItem>> {
-        None
-    }
 
     /// Returns a sync queue item of this object that would allow it to be updated
     /// properly on the server.  Takes an optional revision_ts to set as the revision
@@ -315,14 +302,5 @@ where
 
     fn renders_in_warp_drive(&self) -> bool {
         self.string_model.renders_in_warp_drive()
-    }
-
-    fn to_warp_drive_item(
-        &self,
-        id: SyncId,
-        appearance: &Appearance,
-        object: &GenericCloudObject<GenericStringObjectId, Self>,
-    ) -> Option<Box<dyn WarpDriveItem>> {
-        self.string_model.to_warp_drive_item(id, appearance, object)
     }
 }

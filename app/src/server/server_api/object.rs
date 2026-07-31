@@ -123,6 +123,7 @@ use warp_graphql::subscriptions::get_warp_drive_updates::GetWarpDriveUpdates;
 use warp_graphql::subscriptions::start_graphql_streaming_operation;
 
 use crate::channel::ChannelState;
+use crate::cloud_object::folders::FolderId;
 use crate::cloud_object::model::generic_string_model::{
     GenericStringModel, GenericStringObjectId, Serializer, StringModel,
 };
@@ -134,7 +135,6 @@ use crate::cloud_object::{
     ServerFolder, ServerMetadata, ServerNotebook, ServerObject, ServerPermissions, ServerWorkflow,
     TryFromGql as _, UpdateCloudObjectResult,
 };
-use crate::drive::folders::FolderId;
 use crate::env_vars::EnvVarCollection;
 use crate::notebooks::{NotebookId, SerializedNotebook};
 use crate::server::graphql::schema::{

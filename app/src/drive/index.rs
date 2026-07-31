@@ -38,7 +38,6 @@ use super::cloud_object_naming_dialog::CloudObjectNamingDialog;
 use super::empty_trash_confirmation_dialog::{
     EmptyTrashConfirmationDialog, EmptyTrashConfirmationEvent,
 };
-use super::folders::CloudFolder;
 use super::items::WarpDriveItemId;
 use super::items::ai_fact_collection::WarpDriveAIFactCollection;
 use super::items::item::{ItemStates, WarpDriveRow, tools_panel_menu_direction};
@@ -50,6 +49,7 @@ use crate::auth::auth_manager::{AuthManager, LoginGatedFeature};
 use crate::auth::auth_state::AuthState;
 use crate::auth::auth_view_modal::AuthViewVariant;
 use crate::banner::BannerState;
+use crate::cloud_object::folders::CloudFolder;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::{CloudViewModel, CloudViewModelEvent, UpdateTimestamp};
 use crate::cloud_object::object_limits::{
@@ -1156,13 +1156,16 @@ impl DriveIndex {
         ctx.notify();
     }
 
+    // LOCAL FORK: `num_errored_objects` was refreshed here from
+    // `CloudModel::num_visible_errored_objects`, the object model's only Warp-Drive-shaped query.
+    // That went with the model; the field is left in place because this whole index is removed in
+    // the next step, and its only reader gates the "retry all" button, which now never renders.
     fn on_cloud_model_changed(
         &mut self,
-        cloud_model: ModelHandle<CloudModel>,
+        _cloud_model: ModelHandle<CloudModel>,
         ctx: &mut ViewContext<Self>,
     ) {
         self.initialize_section_states(ctx);
-        self.num_errored_objects = cloud_model.as_ref(ctx).num_visible_errored_objects();
         ctx.notify();
     }
 

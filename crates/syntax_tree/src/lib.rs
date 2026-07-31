@@ -36,9 +36,17 @@ pub enum DecorationStateEvent {
     DecorationUpdated { version: BufferVersion },
 }
 
-struct LanguageQueries {
+/// The language currently applied to the buffer.
+///
+/// Always present once a language has been detected, even when that language has
+/// no tree-sitter grammar compiled in — the language's metadata (indent unit,
+/// comment prefix, bracket pairs) is useful on its own.
+struct ActiveLanguage {
     language: Arc<Language>,
-    syntax_query: HighlightQuery,
+    /// `None` when `language.grammar` is `None`. With no grammar there is nothing
+    /// to parse and therefore nothing to highlight, and callers render the buffer
+    /// as unhighlighted text.
+    highlight: Option<HighlightQuery>,
 }
 
 /// Single-entry cache for highlight queries.
@@ -78,7 +86,7 @@ impl HighlightCacheKey {
 /// DecorationUpdated event.
 pub struct SyntaxTreeState {
     syntax_tree: Mutex<HashMap<BufferVersion, Tree>>,
-    language_queries: Option<LanguageQueries>,
+    active_language: Option<ActiveLanguage>,
     buffer_version: BufferVersion,
     color_map: ColorMap,
     buffer_handle: WeakModelHandle<Buffer>,
@@ -99,38 +107,48 @@ impl SyntaxTreeState {
             buffer_version,
             buffer_handle,
             parsing_handle: None,
-            language_queries: None,
+            active_language: None,
             highlight_cache: RefCell::new(None),
         }
     }
 
     pub fn set_language(&mut self, language: Arc<Language>) {
-        self.language_queries = Some(LanguageQueries {
-            syntax_query: HighlightQuery::new(&language.highlight_query, self.color_map),
+        let highlight = language
+            .grammar
+            .as_ref()
+            .map(|grammar| HighlightQuery::new(&grammar.highlight_query, self.color_map));
+        self.active_language = Some(ActiveLanguage {
             language,
+            highlight,
         });
     }
 
+    /// Whether the active language can actually be highlighted, i.e. a language is
+    /// set *and* a tree-sitter grammar for it is compiled in. False for a language
+    /// that only carries metadata; callers use this to skip parsing and rendering
+    /// work that would produce nothing.
     pub fn has_supported_highlighting(&self) -> bool {
-        self.language_queries.is_some()
+        self.active_language
+            .as_ref()
+            .is_some_and(|active| active.highlight.is_some())
     }
 
     pub fn indent_unit(&self) -> Option<IndentUnit> {
-        self.language_queries
+        self.active_language
             .as_ref()
-            .map(|queries| queries.language.indent_unit)
+            .map(|active| active.language.indent_unit)
     }
 
     pub fn bracket_pairs(&self) -> Option<&[(char, char)]> {
-        self.language_queries
+        self.active_language
             .as_ref()
-            .map(|queries| queries.language.bracket_pairs.as_slice())
+            .map(|active| active.language.bracket_pairs.as_slice())
     }
 
     pub fn comment_prefix(&self) -> Option<&str> {
-        self.language_queries
+        self.active_language
             .as_ref()
-            .and_then(|queries| queries.language.comment_prefix.as_ref())
+            .and_then(|active| active.language.comment_prefix.as_ref())
             .map(|s| s.as_str())
     }
 
@@ -146,9 +164,10 @@ impl SyntaxTreeState {
         let buffer_version = render_content_version.unwrap_or(self.buffer_version);
 
         let language_id = self
-            .language_queries
+            .active_language
             .as_ref()
-            .map(|q| q.language.grammar.clone());
+            .and_then(|active| active.language.grammar.as_ref())
+            .map(|grammar| grammar.grammar.clone());
 
         // Check cache first
         if let Ok(cache) = Ref::filter_map(self.highlight_cache.borrow(), |c| c.as_ref())
@@ -162,15 +181,19 @@ impl SyntaxTreeState {
         let mut syntax_tree_lock = self.syntax_tree.lock();
         let tree = syntax_tree_lock.get(&buffer_version)?;
         let buffer = self.buffer_handle.upgrade(ctx)?;
-        let language_queries = self.language_queries.as_ref()?;
+        let active_language = self.active_language.as_ref()?;
+        // No grammar means no highlights at all, not empty ones: bail so the caller
+        // renders the text unhighlighted instead of caching a blank result.
+        let highlight = active_language.highlight.as_ref()?;
+        let grammar = active_language.language.grammar.as_ref()?;
 
         let mut combined_highlights = RangeMap::new();
 
         // Iterate over all ranges and collect highlights for each
         for range in ranges.iter() {
-            let highlights = language_queries.syntax_query.get_highlighted_chunks(
+            let highlights = highlight.get_highlighted_chunks(
                 range.clone(),
-                &language_queries.language.highlight_query,
+                &grammar.highlight_query,
                 buffer.as_ref(ctx),
                 tree,
             );
@@ -210,31 +233,34 @@ impl SyntaxTreeState {
         let syntax_tree_lock = self.syntax_tree.lock();
         let tree = syntax_tree_lock.get(&self.buffer_version)?;
         let buffer = self.buffer_handle.upgrade(ctx)?;
-        let language_queries = self.language_queries.as_ref()?;
+        let active_language = self.active_language.as_ref()?;
+        let indents_query = active_language
+            .language
+            .grammar
+            .as_ref()?
+            .indents_query
+            .as_ref()?;
 
-        indentation_delta(
-            buffer.as_ref(ctx),
-            tree,
-            point,
-            language_queries.language.indents_query.as_ref()?,
-        )
+        indentation_delta(buffer.as_ref(ctx), tree, point, indents_query)
     }
 
     /// Re-parse the tree based on the updated tree and source content.
     ///
-    /// Returns `None` if the buffer exceeds [`MAX_PARSE_BYTES`].
+    /// Returns `None` if `language` has no tree-sitter grammar compiled in, or if
+    /// the buffer exceeds [`MAX_PARSE_BYTES`].
     async fn parse_text(
         content: BufferSnapshot,
         old_tree: Option<Tree>,
         language: &Language,
     ) -> Option<Tree> {
+        let grammar = language.grammar.as_ref()?;
         if content.byte_len() > MAX_PARSE_BYTES {
             return None;
         }
         Some(PARSER.with(|parser| {
             let mut parser = parser.borrow_mut();
             parser
-                .set_language(&language.grammar)
+                .set_language(&grammar.grammar)
                 .expect("incompatible grammar");
             let mut bytes = content.bytes();
             let mut callback = |byte_offset: usize, _point: arborium::tree_sitter::Point| {
@@ -278,8 +304,8 @@ impl SyntaxTreeState {
 
     pub fn set_color_map(&mut self, color_map: ColorMap) {
         self.color_map = color_map;
-        if let Some(language_query) = self.language_queries.take() {
-            self.set_language(language_query.language);
+        if let Some(active_language) = self.active_language.take() {
+            self.set_language(active_language.language);
         }
         // Clear highlight cache since colors have changed
         *self.highlight_cache.borrow_mut() = None;
@@ -323,12 +349,18 @@ impl DecorationLayer for SyntaxTreeState {
         }
 
         let Some(language) = self
-            .language_queries
+            .active_language
             .as_ref()
-            .map(|language_queries| language_queries.language.clone())
+            .map(|active_language| active_language.language.clone())
         else {
             return;
         };
+
+        // Without a grammar there is nothing to parse with. Bail before spawning a
+        // parse that could only return `None`; the editor renders unhighlighted text.
+        if language.grammar.is_none() {
+            return;
+        }
 
         let mut syntax_tree_lock = self.syntax_tree.lock();
         let mut tree = syntax_tree_lock.get(&self.buffer_version).cloned();

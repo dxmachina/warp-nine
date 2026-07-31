@@ -307,10 +307,37 @@ tracing-subscriber = { version = "0.3.22", default-features = false, features = 
 # The base crate is still needed — `syntax_tree` uses its `tree_sitter`
 # re-export, which is not feature-gated. With no `lang-*` features,
 # `arborium::get_language()` returns None for every language, so `load_language`
-# in `crates/languages` yields None and the editor renders text unhighlighted
-# rather than failing. Language *detection* by filename is a plain table in
-# `crates/languages` and is unaffected, so file-type icons and the "open in Warp"
-# banner keep working.
+# in `crates/languages` yields None.
+#
+# CORRECTION: an earlier version of this comment claimed language *detection* by
+# filename was "a plain table" and therefore unaffected. That is wrong, and it
+# understated the cost of this change.
+#
+# `language_by_filename_parts` is a table of filenames and extensions, but every
+# arm of it returns `language_by_name("shell")` and friends, which calls
+# `load_language`, which bails on its first line:
+#
+#     let grammar = arborium::get_language(arborium_name)?;
+#
+# So detection returns None for all 35 languages, and everything downstream of a
+# `Language` goes with it: file-type icons, the Code-vs-Text routing behind "open
+# in Warp", the language label on a code tab, comment toggling, bracket matching
+# and indent unit.
+#
+# The waste is that none of that needs a grammar. All 35 `config.yaml` files are
+# still embedded in `crates/languages/grammars/`, carrying display_name,
+# comment_prefix, brackets and indent_unit, and they are simply unreachable
+# behind that early return. Splitting `Language` into always-available metadata
+# and an optional grammar restores the lot at no binary cost. Five of the app's
+# failing tests are this one bug.
+#
+# FIXED. `languages::Language` now holds `grammar: Option<LanguageGrammar>` and
+# `load_language` reads `config.yaml` first, so detection and metadata work for
+# all 35 languages with no grammar compiled in. The two paragraphs above describe
+# the state before that split; they are kept for the reasoning, not as a
+# description of current behavior. Syntax highlighting is still off — that part
+# genuinely needs a grammar, and `syntax_tree` degrades to unhighlighted text
+# instead of faking one.
 arborium = { version = "2", default-features = false }
 unicode-general-category = "1.1.0"
 unicode-linebreak = "0.1.5"

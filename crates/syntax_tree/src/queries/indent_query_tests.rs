@@ -1,6 +1,21 @@
+//! Tests for the indent query.
+//!
+//! Every test here needs a real tree-sitter grammar: it parses a source snippet
+//! into a syntax tree and then runs the language's `indents.scm` against it.
+//! Neither the tree nor the query exists without a grammar, and this fork
+//! compiles none in — `arborium` is built with `default-features = false` and no
+//! `lang-*` features (see the workspace `Cargo.toml`), so
+//! `languages::Language::grammar` is `None` for every language.
+//!
+//! There is no honest way to make these pass in that configuration, so they are
+//! `#[ignore]`d unless the `tree-sitter-grammars` feature is on. They still
+//! compile, so they cannot silently rot, and the test runner reports them as
+//! ignored with a reason rather than as passes. See the feature's comment in
+//! `crates/syntax_tree/Cargo.toml` for what enabling it requires.
+
 use std::sync::Arc;
 
-use arborium::tree_sitter::Tree;
+use arborium::tree_sitter::{Query, Tree};
 use languages::{Language, language_by_filename};
 use warp_editor::content::buffer::{Buffer, BufferSnapshot};
 use warp_editor::content::selection_model::BufferSelectionModel;
@@ -18,11 +33,25 @@ fn mock_buffer_and_tree(text_content: &str, language: Arc<Language>) -> (Buffer,
     let tree = warpui_core::r#async::block_on(async {
         SyntaxTreeState::parse_text(snapshot, None, &language).await
     })
-    .expect("test buffer is small and should parse");
+    .expect("test buffer is small and a grammar should be compiled in, so it should parse");
 
     // Create a minimal buffer
     let buffer = Buffer::new(Box::new(|_, _| IndentBehavior::Ignore));
     (buffer, tree)
+}
+
+/// The `indents.scm` query for `language`.
+///
+/// Panics when no tree-sitter grammar is compiled in for the language. Every
+/// caller is a test that only runs with the `tree-sitter-grammars` feature on.
+fn indents_query(language: &Language) -> &Query {
+    language
+        .grammar
+        .as_ref()
+        .expect("no tree-sitter grammar is compiled in for this language")
+        .indents_query
+        .as_ref()
+        .expect("language should bundle an indents.scm query")
 }
 
 fn test_path(filename: &str) -> StandardizedPath {
@@ -30,6 +59,10 @@ fn test_path(filename: &str) -> StandardizedPath {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "tree-sitter-grammars"),
+    ignore = "needs a tree-sitter grammar; this fork compiles none in"
+)]
 fn test_indent_query() {
     App::test((), |mut app| async move {
         let language = language_by_filename(&test_path("test.rs"))
@@ -65,7 +98,7 @@ fn test_indent_query() {
         })
         .expect("test buffer is small and should parse");
 
-        let query = language.as_ref().indents_query.as_ref().unwrap();
+        let query = indents_query(language.as_ref());
 
         buffer_handle.read(&app, |buffer, _| {
             // Check that the top level code is not improperly marked as indented because of the indentation
@@ -120,6 +153,10 @@ fn test_indent_query() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "tree-sitter-grammars"),
+    ignore = "needs a tree-sitter grammar; this fork compiles none in"
+)]
 fn test_indent_query_on_go() {
     App::test((), |mut app| async move {
         let language = language_by_filename(&test_path("test.go"))
@@ -162,7 +199,7 @@ fn test_indent_query_on_go() {
         })
         .expect("test buffer is small and should parse");
 
-        let query = &language.as_ref().indents_query.as_ref().unwrap();
+        let query = indents_query(language.as_ref());
 
         buffer_handle.read(&app, |buffer, _| {
             // Check that the top level code is not improperly marked as indented because of the indentation
@@ -216,6 +253,10 @@ fn test_indent_query_on_go() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "tree-sitter-grammars"),
+    ignore = "needs a tree-sitter grammar; this fork compiles none in"
+)]
 fn test_indent_query_on_go_bracket_expansion() {
     let language =
         language_by_filename(&test_path("test.go")).expect("Should contain language rule for go");
@@ -226,7 +267,7 @@ fn test_indent_query_on_go_bracket_expansion() {
         }"#,
         language.clone(),
     );
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // Indentation level on first line between parentheses should be 0 (considering the closing bracket).
     assert_eq!(
@@ -256,6 +297,10 @@ fn test_indent_query_on_go_bracket_expansion() {
 
 // source: https://peps.python.org/pep-0008/#indentation
 #[test]
+#[cfg_attr(
+    not(feature = "tree-sitter-grammars"),
+    ignore = "needs a tree-sitter grammar; this fork compiles none in"
+)]
 fn test_indent_query_on_python() {
     let language = language_by_filename(&test_path("test.py"))
         .expect("Should contain language rule for python");
@@ -271,7 +316,7 @@ fn test_indent_query_on_python() {
             print(var_one)"#,
         language.clone(),
     );
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // Check that the top level code is not improperly marked as indented because of the indentation
     // in the string literal.
@@ -306,11 +351,15 @@ fn test_indent_query_on_python() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "tree-sitter-grammars"),
+    ignore = "needs a tree-sitter grammar; this fork compiles none in"
+)]
 fn test_indent_query_on_python_colon() {
     let language = language_by_filename(&test_path("test.py"))
         .expect("Should contain language rule for python");
     let (if_buffer, if_tree) = mock_buffer_and_tree(r#"if x:"#, language.clone());
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // `if x:|`
     assert_eq!(
@@ -325,7 +374,7 @@ fn test_indent_query_on_python_colon() {
         "#,
         language.clone(),
     );
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // `if x:|
     // `
@@ -363,7 +412,7 @@ fn test_indent_query_on_python_colon() {
         pass"#,
         language.clone(),
     );
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // `if x:|
     // pass`
@@ -412,7 +461,7 @@ fn test_indent_query_on_python_colon() {
             pass"#,
         language.clone(),
     );
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // `if x:|
     //     pass`
@@ -458,7 +507,7 @@ fn test_indent_query_on_python_colon() {
 
     let (split_line_buffer, split_line_bugger) =
         mock_buffer_and_tree(r#"if x:pass"#, language.clone());
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // `if x:|pass`
     assert_eq!(
@@ -487,7 +536,7 @@ fn test_indent_query_on_python_colon() {
     );
 
     let (function_buffer, function_tree) = mock_buffer_and_tree(r#"def foo():"#, language.clone());
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // `def foo():|`
     assert_eq!(
@@ -511,7 +560,7 @@ def foo():
     if x:"#,
         language.clone(),
     );
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // `
     // def foo():
@@ -569,7 +618,7 @@ def foo():
 "#,
         language.clone(),
     );
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // `
     // def foo():
@@ -607,6 +656,10 @@ def foo():
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "tree-sitter-grammars"),
+    ignore = "needs a tree-sitter grammar; this fork compiles none in"
+)]
 fn test_indent_query_on_javascript() {
     let language = language_by_filename(&test_path("test.js"))
         .expect("Should contain language rule for javascript");
@@ -632,7 +685,7 @@ fn test_indent_query_on_javascript() {
         checkIfPositive(0);"#,
         language.clone(),
     );
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // Check that the top level code is not improperly marked as indented because of the indentation
     // in the string literal.
@@ -667,6 +720,10 @@ fn test_indent_query_on_javascript() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "tree-sitter-grammars"),
+    ignore = "needs a tree-sitter grammar; this fork compiles none in"
+)]
 fn test_indent_query_on_typescript() {
     let language = language_by_filename(&test_path("test.ts"))
         .expect("Should contain language rule for typescript");
@@ -705,7 +762,7 @@ fn test_indent_query_on_typescript() {
     export { ProcessedUser, processUserData };"#,
         language.clone(),
     );
-    let query = &language.as_ref().indents_query.as_ref().unwrap();
+    let query = indents_query(language.as_ref());
 
     // Check that the top level code is not improperly marked as indented because of the indentation
     // in the string literal.

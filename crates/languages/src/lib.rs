@@ -200,23 +200,42 @@ fn language_by_filename_parts(
     }
 }
 
-/// Captures the language-specific parser grammar and queries for syntax features like highlighting and
-/// bracket pairing. In the future, this will also be the entry point for LSP.
-pub struct Language {
+/// The tree-sitter parser grammar for a language, together with every query that is
+/// only meaningful in its presence.
+///
+/// Held behind an `Option` on [`Language`] because a grammar is a compile-time
+/// artifact: it exists only when the matching `arborium` `lang-*` feature is enabled.
+pub struct LanguageGrammar {
     /// Tree-sitter parser grammar.
     pub grammar: ParserGrammar,
     /// Query for syntax highlighting.
     pub highlight_query: Query,
     /// Query for auto indent.
     pub indents_query: Option<Query>,
+    /// Query for parsing symbols.
+    pub symbols_query: Option<Query>,
+}
+
+/// A supported language: the metadata that always applies, plus the tree-sitter
+/// grammar when one is compiled in.
+///
+/// Everything outside `grammar` comes from the language's embedded `config.yaml`
+/// and needs no parser, so it is available even in builds that ship no grammars.
+/// In the future this will also be the entry point for LSP.
+pub struct Language {
+    /// Tree-sitter grammar and the queries derived from it.
+    ///
+    /// `None` when no tree-sitter grammar is compiled in for this language, which
+    /// in this fork is every language (see the `arborium` dependency in the
+    /// workspace `Cargo.toml`). Callers must degrade to unhighlighted text rather
+    /// than substitute anything for a missing parse.
+    pub grammar: Option<LanguageGrammar>,
     /// Unit for each indent action.
     pub indent_unit: IndentUnit,
     /// Comment prefix.
     pub comment_prefix: Option<String>,
     /// Language-specific bracket pairs.
     pub bracket_pairs: Vec<(char, char)>,
-    /// Query for parsing symbols.
-    pub symbols_query: Option<Query>,
     /// Display name for the language.
     pub display_name: String,
 }
@@ -261,20 +280,25 @@ fn to_arborium_name(lang: &str) -> &str {
 /// LOCAL FORK: always `None`. Upstream matched 34 languages onto
 /// `arborium::lang_*::HIGHLIGHTS_QUERY` constants; those grammars are no longer
 /// compiled in (see the `arborium` dependency in the workspace Cargo.toml), so
-/// the match arms would not resolve. Returning `None` makes `load_language`
-/// bail the same way it already did for any unsupported language.
+/// the match arms would not resolve. Returning `None` leaves [`Language::grammar`]
+/// empty; the language's metadata is unaffected.
 fn get_arborium_highlight_query(_lang: &str) -> Option<&str> {
     None
 }
 
+/// Load a language's metadata, plus its tree-sitter grammar if one is compiled in.
+///
+/// Returns `None` only when `lang` is not one of [`SUPPORTED_LANGUAGES`] or its
+/// embedded `config.yaml` is missing. A missing grammar is not a failure: the
+/// returned [`Language`] simply has `grammar: None`, which is what lets file-type
+/// detection, display names, comment prefixes, bracket pairs and the indent unit
+/// keep working in a build that ships no grammars.
 fn load_language(lang: &str) -> Option<Language> {
-    let arborium_name = to_arborium_name(lang);
-    let grammar = arborium::get_language(arborium_name)?;
+    if !SUPPORTED_LANGUAGES.contains(&lang) {
+        return None;
+    }
 
-    let config_path = [lang, "config.yaml"].join("\\");
-    let config = load_yaml(&config_path);
-    let indent_unit = config.indent_unit;
-    let comment_prefix = config.comment_prefix;
+    let config = load_config(lang)?;
     let bracket_pairs = config
         .brackets
         .into_iter()
@@ -284,6 +308,22 @@ fn load_language(lang: &str) -> Option<Language> {
             Some((start, end))
         })
         .collect();
+
+    Some(Language {
+        grammar: load_grammar(lang),
+        indent_unit: config.indent_unit,
+        comment_prefix: config.comment_prefix,
+        bracket_pairs,
+        display_name: config.display_name,
+    })
+}
+
+/// Load the tree-sitter grammar for `lang` and the queries that depend on it.
+///
+/// `None` when arborium has no grammar compiled in for the language, or when no
+/// bundled highlight query is available for it.
+fn load_grammar(lang: &str) -> Option<LanguageGrammar> {
+    let grammar = arborium::get_language(to_arborium_name(lang))?;
 
     let highlight_query_str = get_arborium_highlight_query(lang)?;
     let highlight_query = Query::new(&grammar, highlight_query_str)
@@ -295,29 +335,26 @@ fn load_language(lang: &str) -> Option<Language> {
     let symbols_query_path = [lang, "identifiers.scm"].join("\\");
     let symbols_query = load_query(&symbols_query_path, &grammar);
 
-    Some(Language {
+    Some(LanguageGrammar {
+        grammar,
         highlight_query,
         indents_query,
-        grammar,
-        indent_unit,
-        comment_prefix,
-        bracket_pairs,
         symbols_query,
-        display_name: config.display_name,
     })
 }
 
-fn load_yaml(path: &str) -> LanguageConfig {
-    match <Grammars as RustEmbed>::get(path) {
-        Some(file) => {
-            let config: LanguageConfig =
-                serde_yaml::from_slice(&file.data).expect("Unable to deserialize the YAML content");
-            config
-        }
-        None => {
-            panic!("Couldn't initiate yaml config from {path}");
-        }
-    }
+/// Read and parse a language's embedded `config.yaml`.
+///
+/// `None` when no config is embedded for `lang`. A config that is present but
+/// malformed is a broken build rather than a missing language, so it panics.
+fn load_config(lang: &str) -> Option<LanguageConfig> {
+    let path = [lang, "config.yaml"].join("\\");
+    let file = <Grammars as RustEmbed>::get(&path)?;
+    Some(
+        serde_yaml::from_slice(&file.data).unwrap_or_else(|err| {
+            panic!("Unable to deserialize the YAML content of {path}: {err}")
+        }),
+    )
 }
 
 fn load_query(path: &str, grammar: &ParserGrammar) -> Option<Query> {

@@ -6,6 +6,30 @@ authors = ["Warp Team <dev@warp.dev>"]
 publish.workspace = true
 license.workspace = true
 
+[features]
+# Marks the tests that cannot run without real tree-sitter grammars. Off by
+# default, and deliberately empty: it pulls in nothing and changes no binary.
+#
+# This fork builds `arborium` with `default-features = false` and no `lang-*`
+# features (see the workspace `Cargo.toml`), which drops ~51MB of static parse
+# tables. `languages::Language::grammar` is therefore `None` for every language,
+# so there is no syntax tree to run an indent query against. The tests in
+# `src/queries/indent_query_tests.rs` are `#[ignore]`d unless this feature is on:
+# they still compile under `--all-targets`, and they are reported as ignored
+# rather than passing on a stub.
+#
+# Turning this on by itself does NOT make them pass. To actually run them you
+# must also, in this order:
+#   1. re-add the needed `lang-*` features to the workspace `arborium`
+#      dependency (at minimum lang-rust, lang-go, lang-python, lang-javascript
+#      and lang-typescript for these tests), and
+#   2. restore the `arborium::lang_*::HIGHLIGHTS_QUERY` match arms in
+#      `get_arborium_highlight_query` in `crates/languages/src/lib.rs`,
+#      without which `load_grammar` still yields `None`.
+# Both are recoverable verbatim from commit ac9fdfe04, and both re-add binary
+# size, which is exactly what that commit set out to remove.
+tree-sitter-grammars = []
+
 [dependencies]
 rangemap.workspace = true
 arborium.workspace = true

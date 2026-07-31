@@ -347,11 +347,9 @@ impl TeamUpdateManager {
                 }
 
                 let workspaces = response.metadata.workspaces;
-                let joinable_teams = response.metadata.joinable_teams;
 
                 UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
                     user_workspaces.update_workspaces(workspaces.clone(), ctx);
-                    user_workspaces.update_joinable_teams(joinable_teams, ctx);
                 });
 
                 // Check if the current workspace is still in the list of workspaces.
@@ -465,12 +463,10 @@ impl TeamUpdateManager {
         match result {
             Ok(user_workspaces_access) => {
                 let workspaces = user_workspaces_access.workspaces;
-                let joinable_teams = user_workspaces_access.joinable_teams;
                 let experiments = user_workspaces_access.experiments;
 
                 UserWorkspaces::handle(ctx).update(ctx, |user_workspaces, ctx| {
                     user_workspaces.update_workspaces(workspaces.clone(), ctx);
-                    user_workspaces.update_joinable_teams(joinable_teams.clone(), ctx);
                 });
 
                 // Check if the current workspace is still in the list of workspaces.

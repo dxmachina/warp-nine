@@ -61,7 +61,6 @@ use super::workspace::{
 };
 use crate::auth::UserUid;
 use crate::convert_to_server_experiment;
-use crate::server::cloud_objects::listener::ObjectUpdateMessage;
 use crate::server::experiments::ServerExperiment;
 use crate::server::graphql::schema::object_action_history_from_gql;
 use crate::server::ids::ServerId;
@@ -70,6 +69,7 @@ use crate::workspaces::workspace::{
     EnterpriseCreditsAutoReloadPolicy, EnterprisePayAsYouGoPolicy, ManagedByokByoePolicy,
     MultiAdminPolicy, PurchaseAddOnCreditsPolicy, UsageBasedPricingSettings,
 };
+use cloud_object_client::ObjectUpdateMessage;
 
 pub const PLACEHOLDER_WORKSPACE_UID: &str = "NOT_A_REAL_WORKSPACE_UID";
 

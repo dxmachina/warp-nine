@@ -24,7 +24,7 @@ use warpui::{
     duration_with_jitter,
 };
 
-use super::listener::ObjectUpdateMessage;
+use cloud_object_client::ObjectUpdateMessage;
 // LOCAL FORK: a `#[cfg(not(target_family = "wasm"))]` attribute sat here and was not ours to keep.
 // On `main` it belongs to an import the excision deleted; removing the item without
 // its attribute rebound it to the line below, which `main` leaves ungated. That hid

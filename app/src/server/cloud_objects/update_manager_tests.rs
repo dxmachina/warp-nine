@@ -34,7 +34,6 @@ use crate::cloud_object::{
 };
 use crate::notebooks::{CloudNotebook, CloudNotebookModel, NotebookId};
 use crate::persistence::ModelEvent;
-use crate::server::cloud_objects::listener::ObjectUpdateMessage;
 use crate::server::cloud_objects::test_utils::{
     UpdateManagerStruct, create_update_manager_struct, initialize_app, mock_server_api,
 };
@@ -54,6 +53,7 @@ use crate::workflows::workflow_enum::{
 };
 use crate::workflows::{CloudWorkflow, CloudWorkflowModel, WorkflowId};
 use crate::workspaces::user_profiles::{UserProfileWithUID, UserProfiles};
+use cloud_object_client::ObjectUpdateMessage;
 
 fn create_object<K, M>(
     app: &mut App,

@@ -65,6 +65,29 @@ The lesson generalises: when a predicate is pinned to a constant, every branch o
 it becomes unconditional in one direction. Both directions have to be checked,
 and "the feature is off" is not the same as "the UI for it is gone".
 
+### A neutralised accessor is not a neutralised value
+
+`should_collect_ai_ugc_telemetry` decides how much of a terminal block gets
+serialized: the full output (first and last 2500 lines) when AI-UGC collection is
+on, or a truncation to `MAX_SERIALIZED_OUTPUT_LINES` when it is off.
+
+An earlier pass pinned `PrivacySettingsSnapshot`'s accessors to `false`, with a
+comment saying telemetry is hard-off in this build. That was true of the
+snapshot. It was not true of the value: `terminal_manager` calls the free
+function with `PrivacySettings::as_ref(ctx).is_telemetry_enabled`, a *different*
+field that still tracks the setting, and that setting defaults to `true`. With
+the workspace UGC setting defaulting to `RespectUserSetting` and
+`global_ai_analytics_collection` compiled in, the predicate returned true.
+
+So every serialized block was carrying its untruncated output into sqlite, to
+feed an upload endpoint that had already been deleted. Nothing failed; the
+database just grew.
+
+This is the same shape as the auth surfaces above. Neutralising a predicate in
+one place does not neutralise the callers that reach the value by another route.
+When pinning something off, grep for the *field* as well as the accessor, and
+follow each caller to what it actually controls.
+
 ### The rebinding family has a silent member
 
 Removing `WorkspaceAction::LogOut` left its match arm behind:
@@ -111,6 +134,46 @@ the sweep is the reason to believe it.
 
 That sweep is worth re-running after any large excision: `cargo check` cannot
 report on a file it never opens.
+
+## What is left, measured (2026-07-31)
+
+Login, telemetry, the agent, Warp Drive and the cloud settings pages are gone.
+What remains is one connected subsystem, not a list of independent targets:
+
+| piece | lines | note |
+|---|---|---|
+| `app/src/server/cloud_objects` | 12,658 | the sync half |
+| `app/src/cloud_object` | 10,393 | model **and** sync; the model backs local objects |
+| `crates/graphql` (`warp_graphql`) | 9,855 | 33 app files import it |
+| `app/src/workspaces` | 6,062 | teams, plus the Space/Owner mapping |
+| `crates/warp_server_client` | 3,554 | 24% login; `iap.rs` serves session sharing |
+| `crates/warp_server_auth` | 1,398 | `AuthState` is a kept dependency |
+
+These cannot be taken in any order. `crates/graphql` cannot go before the sync
+layer that imports it. `warp_server_auth` cannot shrink without
+`warp_server_client`, which the server API layer still needs.
+
+`app/src/workspaces` is the one that looks easiest and is not. It reads as team
+and account infrastructure, but 29 of its methods are called from ~30 files
+outside it, and about twenty are admin-policy predicates gating **kept**
+features: `is_codebase_context_enabled`, `is_voice_enabled`,
+`is_prompt_suggestions_toggleable`, `is_enterprise_secret_redaction_enabled`. It
+also owns `personal_drive`, `space_to_owner` and `owner_to_space`, the
+Space/Owner mapping the local object model uses. This is a carve-out on the shape
+of the Warp Drive one, not a deletion.
+
+Every one of those predicates currently returns its no-workspace default, because
+`current_workspace()` is `None`. That makes the transformation well defined: each
+call site should be replaced by exactly what it evaluates to today. It also makes
+it dangerous to eyeball, because getting one wrong silently flips a kept feature
+on or off, and 20 of the 29 are booleans where both values look plausible.
+
+The cheaper first move is to gut `UserWorkspaces`'s implementation while keeping
+its surface: delete the network clients, the polling, `gql_convert.rs`, `team.rs`
+and `user_profiles.rs`, and have the accessors return their no-workspace defaults
+directly. That reclaims most of the lines while touching zero call sites, and
+leaves the 29 sites to be simplified afterwards under a compiler that can check
+the result.
 
 ## Correction (2026-07-30): the agent was not the size problem
 

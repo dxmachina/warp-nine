@@ -7,7 +7,6 @@ mod auth_view_shared_helpers;
 mod login_error_modal;
 mod login_failure_notification;
 pub mod needs_sso_link_view;
-pub mod paste_auth_token_modal;
 mod user_properties;
 use crate::settings::{
     CRASH_REPORTING_ENABLED_DEFAULTS_KEY, CloudPreferencesSettings, PrivacySettings,
@@ -57,7 +56,6 @@ pub fn init(app: &mut AppContext) {
     auth_override_warning_body::init(app);
     // LOCAL FORK: `login_slide::init` went with `auth/login_slide.rs`. The slide
     // had no construction site left, so its fixed keybindings had nothing to bind to.
-    paste_auth_token_modal::init(app);
 }
 
 /// Returns the configured Warp web logout URL.

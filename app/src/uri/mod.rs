@@ -108,7 +108,9 @@ impl FromStr for UriHost {
 
     fn from_str(s: &str) -> Result<Self> {
         match s {
-            "auth" => Ok(Self::Auth),
+            // LOCAL FORK: `warp://auth/desktop_redirect?refresh_token=...` was the return
+            // leg of the browser sign-in flow. Refusing to parse the host makes the whole
+            // flow unreachable. `UriHost::Auth` is kept but is now unconstructible.
             "team" => Ok(Self::Team),
             "action" => Ok(Self::Action),
             "launch" => Ok(Self::Launch),

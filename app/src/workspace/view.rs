@@ -18373,11 +18373,8 @@ impl Workspace {
                 auth_manager.initiate_anonymous_user_linking(entrypoint, ctx);
             });
         } else {
-            // User is fully logged out (no Firebase user) — open the regular sign-up page.
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                let sign_up_url = auth_manager.sign_up_url();
-                ctx.open_url(&sign_up_url);
-            });
+            // LOCAL FORK: opened the browser sign-up page. This build has no accounts, so
+            // the branch is a no-op rather than a link to a flow that would re-enable AI.
         }
         self.require_login_modal.update(ctx, |auth_modal, ctx| {
             auth_modal.skip_to_browser_open_step(ctx);
@@ -19546,12 +19543,8 @@ impl TypedActionView for Workspace {
                     view.add_ephemeral_toast(new_toast, ctx);
                 });
             }
-            Reauth => {
-                AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                    let sign_in_url = auth_manager.sign_in_url();
-                    ctx.open_url(&sign_in_url);
-                });
-            }
+            // LOCAL FORK: Reauth opened the browser sign-in page. See `uri/mod.rs`.
+            Reauth => {}
             SignupAnonymousUser => {
                 self.initiate_user_signup(AnonymousUserSignupEntrypoint::SignUpButton, ctx);
             }

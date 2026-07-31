@@ -239,26 +239,14 @@ impl AuthView {
         ctx.emit(AuthViewEvent::Close);
     }
 
-    /// Parses the given 'clipboard_content' string into a URL which is assumed to represent the
-    /// OAuth redirect URL containing the user's refresh token after the user authenticated Warp.
-    fn handle_pasted_auth_url(&mut self, pasted_url: String, ctx: &mut ViewContext<Self>) {
-        self.set_auth_token_input_editable(false, ctx);
-        match AuthRedirectPayload::from_raw_url(pasted_url) {
-            Ok(redirect_payload) => {
-                AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                    auth_manager.initialize_user_from_auth_payload(redirect_payload, true, ctx);
-                });
-            }
-            Err(error) => {
-                safe_error!(
-                    safe: ("Failed to parse AuthRedirectPayload from redirect URL"),
-                    full: ("Failed to parse AuthRedirectPayload from redirect URL: {error:#}")
-                );
-                self.last_login_failure_reason =
-                    Some(LoginFailureReason::InvalidRedirectUrl { was_pasted: true });
-                self.set_auth_token_input_editable(true, ctx);
-            }
-        }
+    /// LOCAL FORK: this parsed a pasted OAuth redirect URL and handed its refresh token to
+    /// `AuthManager::initialize_user_from_auth_payload`, which sets credentials and therefore
+    /// turns `is_logged_in()` true. It bypassed `uri/mod.rs` entirely, so refusing to route
+    /// `warp://auth/...` did not close it. It now fails closed like any malformed URL.
+    fn handle_pasted_auth_url(&mut self, _pasted_url: String, ctx: &mut ViewContext<Self>) {
+        self.last_login_failure_reason =
+            Some(LoginFailureReason::InvalidRedirectUrl { was_pasted: true });
+        self.set_auth_token_input_editable(true, ctx);
     }
 
     fn set_auth_token_input_editable(&mut self, is_editable: bool, ctx: &mut ViewContext<Self>) {

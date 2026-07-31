@@ -1145,10 +1145,10 @@ pub(crate) fn initialize_app(
         ctx.set_zoom_factor(WindowSettings::as_ref(ctx).zoom_level.as_zoom_factor());
     }
 
-    // Extract API key from command line options, if applicable.
-    let api_key = api_key_from_launch_mode(launch_mode);
-
-    let auth_state = Arc::new(AuthState::initialize(ctx, api_key));
+    // LOCAL FORK: `--api-key` was the last remaining way to hand this build a credential.
+    // `AuthState::initialize` is now always called with `None`, so `is_logged_in()` is
+    // structurally false and every `Availability::AI_ENABLED` surface stays dark.
+    let auth_state = Arc::new(AuthState::initialize(ctx, None));
     timer.mark_interval_end("AUTH_MANAGER_SET_USER");
 
     // NetworkLogModel must be registered before ServerApiProvider so that

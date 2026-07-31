@@ -41,6 +41,7 @@ use crate::terminal::event_listener::ChannelEventListener;
 #[cfg(unix)]
 use crate::terminal::local_tty::terminal_attributes::Event as TerminalAttributesPollerEvent;
 use crate::terminal::local_tty::{Pty, PtyOptions};
+use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::model::session::Sessions;
 #[cfg(unix)]
 use crate::terminal::model::terminal_model::BlockIndex;
@@ -196,6 +197,7 @@ impl<S> TerminalManager<S> {
         startup_directory: Option<PathBuf>,
         env_vars: HashMap<OsString, OsString>,
         is_shared_session_creator: IsSharedSessionCreator,
+        all_restored_blocks: Option<&[SerializedBlock]>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         initial_size: Vector2F,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -216,6 +218,7 @@ impl<S> TerminalManager<S> {
             startup_directory,
             env_vars,
             is_shared_session_creator,
+            all_restored_blocks,
             user_default_shell_unsupported_banner_model_handle,
             initial_size,
             model_event_sender,
@@ -234,6 +237,7 @@ impl<S> TerminalManager<S> {
         startup_directory: Option<PathBuf>,
         env_vars: HashMap<OsString, OsString>,
         is_shared_session_creator: IsSharedSessionCreator,
+        all_restored_blocks: Option<&[SerializedBlock]>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         initial_size: Vector2F,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -254,6 +258,7 @@ impl<S> TerminalManager<S> {
             startup_directory,
             env_vars,
             is_shared_session_creator,
+            all_restored_blocks,
             user_default_shell_unsupported_banner_model_handle,
             initial_size,
             model_event_sender,
@@ -271,6 +276,7 @@ impl<S> TerminalManager<S> {
         startup_directory: Option<PathBuf>,
         env_vars: HashMap<OsString, OsString>,
         is_shared_session_creator: IsSharedSessionCreator,
+        all_restored_blocks: Option<&[SerializedBlock]>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         initial_size: Vector2F,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -317,9 +323,14 @@ impl<S> TerminalManager<S> {
         });
         let wsl_name_or_shell_starter = ShellStarter::init(preferred_shell.clone());
 
-        // LOCAL FORK: restored blocks came from agent conversation restoration.
+        // Create the terminal model with all restored blocks
+        log::info!(
+            "Creating terminal model with {} restored blocks",
+            all_restored_blocks.map(|blocks| blocks.len()).unwrap_or(0)
+        );
         let model = terminal_manager::create_terminal_model(
             startup_directory.clone(),
+            all_restored_blocks,
             initial_size,
             channel_event_proxy.clone(),
             ShellLaunchState::DeterminingShell {

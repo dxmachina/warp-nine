@@ -61,8 +61,7 @@ use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::{CloudViewModel, CloudViewModelEvent, UpdateTimestamp};
 use crate::cloud_object::{
     CloudObject, CloudObjectEventEntrypoint, CloudObjectLocation, CloudObjectSyncStatus,
-    GenericCloudObject, GenericStringObjectFormat, JsonObjectType, NumInFlightRequests, ObjectType,
-    Space,
+    GenericStringObjectFormat, JsonObjectType, NumInFlightRequests, ObjectType, Space,
 };
 use crate::drive::panel::DrivePanelAction;
 use crate::editor::{EditorView, Event as EditorEvent, SingleLineEditorOptions};
@@ -70,7 +69,6 @@ use crate::env_vars::CloudEnvVarCollection;
 use crate::features::FeatureFlag;
 use crate::menu::{Event, Menu, MenuItem, MenuItemFields};
 use crate::network::NetworkStatus;
-use crate::notebooks::CloudNotebookModel;
 use crate::server::cloud_objects::update_manager::{
     FetchSingleObjectOption, InitiatedBy, UpdateManager,
 };

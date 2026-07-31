@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use pathfinder_geometry::rect::RectF;
 use serde::{Deserialize, Serialize};
@@ -13,6 +15,7 @@ use crate::settings_view::SettingsSection;
 use crate::settings_view::environments_page::EnvironmentsPage;
 use crate::tab::SelectedTabColor;
 use crate::terminal::ShellLaunchData;
+use crate::terminal::model::block::SerializedBlock;
 use crate::themes::theme::AnsiColorIdentifier;
 use crate::workspace::WorkspaceRegistry;
 use crate::workspace::tab_group::TabGroupId;
@@ -22,6 +25,14 @@ use crate::workspace::view::left_panel::ToolPanelView;
 pub struct AppState {
     pub windows: Vec<WindowSnapshot>,
     pub active_window_index: Option<usize>,
+    /// Previous session command blocks, keyed by pane UUID, read from the `blocks` table.
+    /// Only populated on the restore path; [`get_app_state`] leaves it empty because
+    /// blocks are persisted per-block as they complete, not with the window snapshot.
+    ///
+    /// LOCAL FORK: this used to hold `ai::blocklist::SerializedBlockListItem`s, a
+    /// single-variant enum wrapping a command block. The wrapper went with the agent
+    /// crate; the blocks are plain terminal state and are stored directly.
+    pub block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
     pub running_mcp_servers: Vec<uuid::Uuid>,
 }
 
@@ -376,6 +387,7 @@ pub fn get_app_state(app: &AppContext) -> AppState {
     AppState {
         windows,
         active_window_index,
+        block_lists: Default::default(),
         running_mcp_servers: Vec::new(),
     }
 }

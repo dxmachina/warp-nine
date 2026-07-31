@@ -1,7 +1,5 @@
 use warpui::elements::ChildView;
-use warpui::{
-    Element, Entity, EntityId, ModelHandle, SingletonEntity as _, View, ViewContext, ViewHandle,
-};
+use warpui::{Element, Entity, EntityId, ModelHandle, View, ViewContext, ViewHandle};
 
 use crate::search::data_source::Query;
 use crate::search::mixer::SearchMixer;

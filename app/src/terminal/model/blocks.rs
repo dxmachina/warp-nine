@@ -554,6 +554,7 @@ impl<'a> SharedSessionScrollbackBlocks<'a> {
 impl BlockList {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        restored_blocks: Option<&[SerializedBlock]>,
         sizes: BlockSize,
         event_proxy: ChannelEventListener,
         background_executor: Arc<Background>,
@@ -577,7 +578,7 @@ impl BlockList {
             obfuscate_secrets,
             is_ai_ugc_telemetry_enabled,
         );
-        block_list.initialize();
+        block_list.initialize(restored_blocks);
         block_list
     }
 
@@ -657,9 +658,33 @@ impl BlockList {
         }
     }
 
-    /// Must be called before the model is used, as part of the BlockList lifecycle.
-    fn initialize(&mut self) {
-        // LOCAL FORK: restoring a serialized block list was an agent-only path.
+    /// Must be called before the model is used. Even if no blocks are to be restored,
+    /// this is necessary in the BlockList lifecycle.
+    ///
+    /// LOCAL FORK: restored blocks used to arrive as `ai::blocklist::SerializedBlockListItem`,
+    /// a single-variant enum wrapping a command block. That wrapper went with the agent
+    /// crate; the blocks themselves are plain terminal state, so this now takes
+    /// [`SerializedBlock`] directly.
+    fn initialize(&mut self, restored_blocks: Option<&[SerializedBlock]>) {
+        if let Some(restored_blocks) = restored_blocks {
+            self.is_restored_session = true;
+
+            let mut processor = Processor::new();
+
+            self.restored_session_ts = restored_blocks.last().and_then(|block| block.completed_ts);
+
+            for block in restored_blocks {
+                // For session-restoration, we only want to restore blocks
+                // that were completed.
+                if block.start_ts.is_some() && block.completed_ts.is_some() {
+                    self.restore_block(block, BootstrapStage::RestoreBlocks, &mut processor);
+                } else {
+                    log::warn!(
+                        "Tried to restore a block that was either not started or not completed"
+                    );
+                }
+            }
+        }
         self.create_warp_input_block();
     }
 

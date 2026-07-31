@@ -1,5 +1,13 @@
 use super::*;
 
+// These tests call `build_script_for_shell`, not `script_for_shell`. The latter memoizes
+// into the process-global `BOOTSTRAP_CACHE`, which is keyed only by `ShellType` and not by
+// asset provider, so whichever test first asks for a given shell wins for the whole
+// process. Any test that spawns a real local shell asks for the bundled script via
+// `crate::ASSETS`, and this file would then assert against that instead of
+// `TestAssetProvider`. It bit `test_trims_whitespace` (Zsh) specifically, because zsh is
+// the only shell a real session is spawned for on a dev machine.
+
 struct TestAssetProvider;
 
 impl AssetProvider for TestAssetProvider {
@@ -30,7 +38,7 @@ impl AssetProvider for TestAssetProvider {
 #[test]
 fn test_include_directive() {
     assert_eq!(
-        decode_script(&script_for_shell(ShellType::Bash, &TestAssetProvider)),
+        decode_script(&build_script_for_shell(ShellType::Bash, &TestAssetProvider)),
         "hello world!\n"
     );
 }
@@ -38,7 +46,7 @@ fn test_include_directive() {
 #[test]
 fn test_trims_comments() {
     assert_eq!(
-        decode_script(&script_for_shell(ShellType::Fish, &TestAssetProvider)),
+        decode_script(&build_script_for_shell(ShellType::Fish, &TestAssetProvider)),
         "this_is_a_command\n"
     );
 }
@@ -46,7 +54,7 @@ fn test_trims_comments() {
 #[test]
 fn test_trims_whitespace() {
     assert_eq!(
-        decode_script(&script_for_shell(ShellType::Zsh, &TestAssetProvider)),
+        decode_script(&build_script_for_shell(ShellType::Zsh, &TestAssetProvider)),
         "asdf\nno whitespace\n yes whitespace!\n prepended whitespace\n"
     );
 }
@@ -54,7 +62,10 @@ fn test_trims_whitespace() {
 #[test]
 fn test_trims_powershell_specifics() {
     assert_eq!(
-        decode_script(&script_for_shell(ShellType::PowerShell, &TestAssetProvider)),
+        decode_script(&build_script_for_shell(
+            ShellType::PowerShell,
+            &TestAssetProvider
+        )),
         " Write-Output 'Testing some output'\n function test1 {\n param([string]$command)\n Invoke-Expression $command\n }\n"
     );
 }

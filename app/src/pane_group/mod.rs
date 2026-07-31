@@ -16,14 +16,12 @@ use session_sharing_protocol::common::{
     ParticipantId, Role, RoleRequestId, RoleRequestRejectedReason, RoleRequestResponse, SessionId,
 };
 use settings::Setting as _;
-use tree::DEFAULT_FLEX_VALUE;
 use typed_path::TypedPath;
 use url::Url;
 use uuid::Uuid;
 use warp_core::command::ExitCode;
 use warp_core::context_flag::ContextFlag;
 use warp_errors::report_if_error;
-use warp_terminal::shell::{ShellName, ShellType};
 #[cfg(feature = "local_fs")]
 use warp_util::path::LineAndColumnArg;
 use warp_util::path::convert_wsl_to_windows_host_path;
@@ -94,6 +92,7 @@ use crate::terminal::general_settings::{GeneralSettings, GeneralSettingsChangedE
 use crate::terminal::local_tty::TerminalManager as LocalTtyTerminalManager;
 #[cfg(all(feature = "local_tty", not(feature = "remote_tty")))]
 use crate::terminal::local_tty::{TerminalViewSurfaceConfig, create_terminal_view_surface};
+use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::model::session::Session;
 #[cfg(feature = "remote_tty")]
 use crate::terminal::remote_tty::TerminalManager as RemoteTtyTerminalManager;
@@ -111,9 +110,15 @@ use crate::terminal::view::{
     BlockNotification, ExecuteCommandEvent, LeftPanelTargetView, SyncEvent, TerminalViewState,
 };
 use crate::terminal::{
-    MockTerminalManager, ShareBlockModal, ShareBlockModalEvent, ShellLaunchData, ShellLaunchState,
-    TerminalManager, TerminalModel, TerminalView,
+    ShareBlockModal, ShareBlockModalEvent, ShellLaunchData, TerminalManager, TerminalModel,
+    TerminalView,
 };
+// LOCAL FORK: `MockTerminalManager` is used only in the fallback branch of the
+// `cfg_if!` in `create_terminal_view`, which compiles when neither `remote_tty`
+// nor `local_tty` is on. A native build reports the import unused; deleting it
+// would break that branch, so it is gated rather than removed.
+#[cfg(not(any(feature = "remote_tty", feature = "local_tty")))]
+use crate::terminal::MockTerminalManager;
 use crate::tips::{Tip, TipAction, TipsCompleted, mark_feature_used_and_write_to_user_defaults};
 use crate::undo_close::{UndoCloseStack, UndoCloseStackEvent};
 #[cfg(target_family = "wasm")]
@@ -768,9 +773,30 @@ impl NewTerminalOptions {
 #[derive(Debug)]
 pub enum PanesLayout {
     SingleTerminal(Box<NewTerminalOptions>),
-    Snapshot(Box<PaneNodeSnapshot>),
+    /// LOCAL FORK: upstream carried `block_lists` as a separate parameter on
+    /// `Workspace::add_tab_with_pane_layout`, `PaneGroup::new_with_panes_layout` and
+    /// `PaneGroup::restore_pane_tree`, which meant ~20 call sites passing an empty map.
+    /// The snapshot is the only layout that can have restored blocks, so they ride along
+    /// with it here instead.
+    Snapshot {
+        root: Box<PaneNodeSnapshot>,
+        /// Per-pane command blocks from the previous session, keyed by pane UUID and
+        /// read from the `blocks` table at startup.
+        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
+    },
     Template(PaneTemplateType),
     AmbientAgent,
+}
+
+impl PanesLayout {
+    /// Builds a snapshot layout with no restored blocks. Used by the many call sites
+    /// that synthesize a pane tree at runtime rather than restoring a saved session.
+    pub fn snapshot(root: PaneNodeSnapshot) -> Self {
+        Self::Snapshot {
+            root: Box::new(root),
+            block_lists: Default::default(),
+        }
+    }
 }
 
 impl Default for PanesLayout {
@@ -1238,6 +1264,7 @@ impl PaneGroup {
                             uuid.as_bytes(),
                             IsSharedSessionCreator::No,
                             resources,
+                            None, /* restored_blocks */
                             user_default_shell_unsupported_banner_model_handle,
                             view_size,
                             model_event_sender.clone(),
@@ -1340,6 +1367,7 @@ impl PaneGroup {
     #[allow(clippy::too_many_arguments)]
     fn restore_pane_tree(
         root: PaneNodeSnapshot,
+        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
         resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
@@ -1350,6 +1378,7 @@ impl PaneGroup {
         match root {
             PaneNodeSnapshot::Leaf(leaf) => Self::restore_pane_leaf(
                 leaf,
+                block_lists,
                 resources,
                 ctx,
                 pane_contents,
@@ -1378,6 +1407,7 @@ impl PaneGroup {
                 for (flex, node) in pane.children {
                     match PaneGroup::restore_pane_tree(
                         node,
+                        block_lists.clone(),
                         resources.clone(),
                         ctx,
                         pane_contents,
@@ -1411,6 +1441,7 @@ impl PaneGroup {
     #[allow(clippy::too_many_arguments)]
     fn restore_pane_leaf(
         leaf: LeafSnapshot,
+        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
         resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
@@ -1428,6 +1459,7 @@ impl PaneGroup {
             }
             LeafContents::Terminal(terminal_snapshot) => {
                 let uuid = PaneUuid(terminal_snapshot.uuid.clone());
+                let restored_blocks = block_lists.get(&uuid);
 
                 let chosen_shell = terminal_snapshot
                     .shell_launch_data
@@ -1446,13 +1478,15 @@ impl PaneGroup {
                     .filter(|path| path.is_dir());
 
                 // LOCAL FORK: restored terminal panes used to re-hydrate their agent
-                // conversations here. Conversation restoration went with the agent.
+                // conversations here as well. Conversation restoration went with the
+                // agent; the pane's own command blocks are still restored.
                 let (terminal_view, terminal_manager) = PaneGroup::create_session(
                     startup_directory,
                     HashMap::new(),
                     uuid.0.as_slice(),
                     IsSharedSessionCreator::No,
                     resources,
+                    restored_blocks.map(Vec::as_slice),
                     user_default_shell_unsupported_banner_model_handle,
                     view_size,
                     model_event_sender.clone(),
@@ -2630,6 +2664,7 @@ impl PaneGroup {
             uuid.as_bytes(),
             options.is_shared_session_creator,
             resources,
+            None, /* restored_blocks */
             unsupported_banner_model_handle,
             view_bounds.size(),
             model_event_sender.clone(),
@@ -2686,8 +2721,9 @@ impl PaneGroup {
                     view_bounds.size(),
                     model_event_sender_clone,
                 ),
-                PanesLayout::Snapshot(panes_snapshot) => Self::restore_pane_tree(
-                    *panes_snapshot,
+                PanesLayout::Snapshot { root, block_lists } => Self::restore_pane_tree(
+                    *root,
+                    block_lists,
                     resources.clone(),
                     ctx,
                     pane_contents,
@@ -4390,9 +4426,9 @@ impl PaneGroup {
     // session path here needs to be a valid os path otherwise the app will crash.
     // Environment variables are merged into the default environment for the terminal process,
     // and do not completely replace it.
-    // LOCAL FORK: the restored block list, the AI conversation restoration and the
-    // agent input config all came out with the agent, so a new session is always
-    // created empty.
+    // LOCAL FORK: the AI conversation restoration and the agent input config came out
+    // with the agent. `restored_blocks` stayed: it is the pane's persisted command
+    // blocks, read from the `blocks` table at startup.
     #[allow(clippy::too_many_arguments, unused_variables)]
     fn create_session(
         startup_directory: Option<PathBuf>,
@@ -4400,6 +4436,7 @@ impl PaneGroup {
         terminal_session_uuid: &[u8],
         is_shared_session: IsSharedSessionCreator,
         resources: TerminalViewResources,
+        restored_blocks: Option<&[SerializedBlock]>,
         user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
         initial_size: Vector2F,
         model_event_sender: Option<SyncSender<ModelEvent>>,
@@ -4410,6 +4447,8 @@ impl PaneGroup {
         ModelHandle<Box<dyn TerminalManager>>,
     ) {
         add_session_focus_env_vars(&mut env_vars, terminal_session_uuid);
+
+        let restored_blocks = restored_blocks.filter(|blocks| !blocks.is_empty());
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "remote_tty")] {
@@ -4423,12 +4462,14 @@ impl PaneGroup {
                 let terminal_manager = terminal_init.manager;
                 let terminal_view = terminal_init.view;
             } else if #[cfg(feature = "local_tty")] {
+                let has_restored_command_blocks = restored_blocks.is_some();
                 let model_event_sender_for_surface = model_event_sender.clone();
                 let window_id = ctx.window_id();
                 let terminal_init = LocalTtyTerminalManager::<TerminalView>::create_model(
                     startup_directory,
                     env_vars,
                     is_shared_session,
+                    restored_blocks,
                     user_default_shell_unsupported_banner_model_handle,
                     initial_size,
                     model_event_sender,
@@ -4443,7 +4484,7 @@ impl PaneGroup {
                                 has_conversation_restoration: false,
                                 is_historical: false,
                                 should_use_live_appearance: false,
-                                has_restored_command_blocks: false,
+                                has_restored_command_blocks,
                             },
                             surface_init,
                             ctx,
@@ -4462,6 +4503,7 @@ impl PaneGroup {
                         shell_type: ShellType::Zsh
                     },
                     resources,
+                    restored_blocks,
                     initial_size,
                     ctx.window_id(),
                     ctx,
@@ -4633,6 +4675,7 @@ impl PaneGroup {
             uuid.as_bytes(),
             is_shared_session_creator,
             resources,
+            None, /* restored_blocks */
             self.user_default_shell_unsupported_banner_model_handle
                 .clone(),
             view_bounds.size(),

@@ -14,14 +14,13 @@ use warpui::elements::{
 use warpui::fonts::Weight;
 use warpui::presenter::ChildView;
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
-use warpui::{AppContext, EntityId, SingletonEntity, ViewHandle, WeakViewHandle};
+use warpui::{AppContext, SingletonEntity, ViewHandle};
 
 use crate::appearance::Appearance;
 use crate::terminal::input::{Input, InputAction, InputSuggestionsMode, MenuPositioning};
 use crate::terminal::model::TerminalModel;
 use crate::terminal::view::{PADDING_LEFT, TerminalAction};
 use crate::ui_components::icons::Icon;
-use crate::workspaces::user_workspaces::UserWorkspaces;
 
 /// Whether the terminal input message bar should be shown.
 ///

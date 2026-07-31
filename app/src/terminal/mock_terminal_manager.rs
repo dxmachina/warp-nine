@@ -6,6 +6,7 @@ use pathfinder_geometry::vector::Vector2F;
 use warpui::{AppContext, ModelHandle, ViewHandle, WindowId};
 
 use super::event_listener::ChannelEventListener;
+use super::model::block::SerializedBlock;
 use super::model::session::Sessions;
 use super::model_events::ModelEventDispatcher;
 use super::terminal_manager::BlockSpacing;
@@ -23,9 +24,11 @@ pub struct MockTerminalManagerInit {
 }
 
 impl MockTerminalManager {
+    #[allow(clippy::too_many_arguments)]
     pub fn create_model(
         shell_state: ShellLaunchState,
         resources: TerminalViewResources,
+        restored_blocks: Option<&[SerializedBlock]>,
         initial_size: Vector2F,
         window_id: WindowId,
         ctx: &mut AppContext,
@@ -40,6 +43,7 @@ impl MockTerminalManager {
 
         let model = super::terminal_manager::create_terminal_model(
             None,
+            restored_blocks,
             initial_size,
             channel_event_proxy,
             shell_state,
@@ -157,15 +161,13 @@ mod testing {
     }
 
     impl MockTerminalManager {
-        /// LOCAL FORK: `restored_blocks` carried `SerializedBlockListItem`s, which went
-        /// with the agent along with session block restore. The parameter is kept (as an
-        /// always-`None` unit slice) so the ~100 `None`-passing call sites in
-        /// `terminal/view_tests.rs` stay unchanged.
+        /// LOCAL FORK: `restored_blocks` carried `SerializedBlockListItem`s. That
+        /// single-variant wrapper went with the agent crate; the blocks themselves are
+        /// plain terminal state, so this carries `SerializedBlock`s directly.
         pub fn create_new_terminal_view_window_for_test(
             app: &mut App,
-            restored_blocks: Option<&[()]>,
+            restored_blocks: Option<&[SerializedBlock]>,
         ) -> ViewHandle<TerminalView> {
-            let _ = restored_blocks;
             let server_api = app.read(|ctx| ServerApiProvider::as_ref(ctx).get());
             let tips_model = app.add_model(|_| Default::default());
 
@@ -182,6 +184,7 @@ mod testing {
                         shell_type: ShellType::Zsh,
                     },
                     resources,
+                    restored_blocks,
                     Vector2F::new(7., 10.5),
                     ctx.window_id(),
                     ctx,

@@ -31,11 +31,10 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use async_channel::Sender;
-use base64::Engine as _;
 #[cfg(feature = "local_fs")]
 use diesel::SqliteConnection;
 use futures::FutureExt as _;
@@ -48,13 +47,11 @@ use parking_lot::FairMutex;
 use parking_lot::Mutex;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use session_sharing_protocol::common::{AgentAttachment, ParticipantId, ServerConversationToken};
 use settings::{Setting as _, ToggleableSetting};
 use string_offset::{ByteOffset, CharOffset};
 use vec1::Vec1;
-use vim::vim::{VimHandler, VimMode};
-use warp_cli::agent::Harness;
+use vim::vim::VimMode;
 use warp_completer::completer::{
     self, CompleterOptions, CompletionContext, CompletionsFallbackStrategy, Description, Match,
     MatchStrategy, MatchType, PathSeparators, SuggestionResults,
@@ -63,19 +60,14 @@ use warp_completer::meta::{HasSpan, Spanned};
 use warp_completer::parsers::LiteCommand;
 use warp_completer::parsers::simple::command_at_cursor_position;
 use warp_completer::signatures::CommandRegistry;
-use warp_completer::util::parse_current_commands_and_tokens;
 use warp_core::r#async::debounce;
 use warp_core::context_flag::ContextFlag;
-use warp_core::ui::theme::AnsiColorIdentifier;
-use warp_core::ui::theme::color::internal_colors;
 use warp_core::user_preferences::GetUserPreferences as _;
 use warp_editor::editor::NavigationKey;
 use warp_errors::{report_error, report_if_error};
 use warp_util::path::ShellFamily;
 pub use warpui::WindowId;
 use warpui::accessibility::{AccessibilityContent, ActionAccessibilityContent, WarpA11yRole};
-#[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
-use warpui::r#async::FutureExt as _;
 use warpui::r#async::SpawnedFutureHandle;
 use warpui::clipboard::{ClipboardContent, ImageData};
 use warpui::clipboard_utils::CLIPBOARD_IMAGE_MIME_TYPES;
@@ -83,7 +75,7 @@ use warpui::color::ColorU;
 use warpui::elements::{
     AnchorPair, ChildAnchor, Clipped, ConstrainedBox, Container, DispatchEventResult,
     DropTargetData, Element, EventHandler, MouseStateHandle, OffsetType, ParentAnchor,
-    ResizableStateHandle, SavePosition, SelectionHandle, Text, YAxisAnchor, resizable_state_handle,
+    ResizableStateHandle, SavePosition, SelectionHandle, YAxisAnchor, resizable_state_handle,
 };
 pub use warpui::elements::{ParentElement as _, Stack};
 pub use warpui::geometry::vector::{Vector2F, vec2f};
@@ -91,8 +83,6 @@ use warpui::keymap::{BindingDescription, EditableBinding, FixedBinding, Keystrok
 use warpui::platform::OperatingSystem;
 use warpui::presenter::ChildView;
 use warpui::text_layout::TextStyle;
-use warpui::ui_components::chip::Chip;
-use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::units::IntoPixels;
 use warpui::{
     AppContext, Entity, EntityId, FocusContext, ModelAsRef, ModelHandle, SingletonEntity,
@@ -135,11 +125,9 @@ use crate::ASSETS;
 // and skill machinery all came out with it. Only the terminal's own input editor is kept.
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::channel::{Channel, ChannelState};
-use crate::cloud_object::model::actions::ObjectActionType;
-use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::model::view::CloudViewModel;
-use crate::cloud_object::{CloudObject, CloudObjectLookup as _, Space};
+use crate::cloud_object::{CloudObject, Space};
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;
 use crate::code_review::diff_state::DiffMode;
@@ -147,7 +135,6 @@ use crate::completer::SessionContext;
 use crate::context_chips::display::{PromptDisplay, PromptDisplayEvent};
 use crate::context_chips::display_chip::PromptChipShellCommand;
 use crate::context_chips::prompt_type::PromptType;
-use crate::context_chips::spacing;
 use crate::editor::{
     AutosuggestionLocation, AutosuggestionType, BaselinePositionComputationMethod,
     CommandXRayAnchor, CrdtOperation, DisplayPoint, EditOrigin, EditorAction,
@@ -163,7 +150,6 @@ use crate::input_suggestions::{
     Event as InputSuggestionsEvent, HistoryInputSuggestion, InputSuggestions,
     TabCompletionsPreselectOption,
 };
-use crate::network::NetworkStatus;
 use crate::pane_group::PaneGroupAction;
 use crate::pane_group::focus_state::PaneFocusHandle;
 #[cfg(feature = "local_fs")]
@@ -172,7 +158,6 @@ use crate::prefix::longest_common_prefix;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search::QueryFilter;
 use crate::search::slash_command_menu::static_commands::commands::{self, COMMAND_REGISTRY};
-use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::SyncId;
 use crate::server::server_api::ServerApi;
 use crate::server::telemetry::{
@@ -187,7 +172,6 @@ use crate::settings::{
     MAX_TIMES_TO_SHOW_AUTOSUGGESTION_HINT,
 };
 use crate::settings_view::{SettingsSection, flags};
-use crate::skills::SkillReference;
 use crate::suggestions::ignored_suggestions_model::{
     IgnoredSuggestionsModel, IgnoredSuggestionsModelEvent, SuggestionType,
 };
@@ -212,17 +196,13 @@ use crate::terminal::input::suggestions_mode_model::{
 use crate::terminal::input::terminal_message_bar::TerminalInputMessageBar;
 use crate::terminal::model::session::active_session::ActiveSession;
 use crate::terminal::model::session::shell_quote_arg;
-use crate::terminal::package_installers::command_at_cursor_has_common_package_installer_prefix;
 use crate::terminal::prompt_render_helper::should_render_ps1_prompt;
-use crate::terminal::telemetry_banner::should_collect_ai_ugc_telemetry;
-use crate::terminal::universal_developer_input::AtContextMenuDisabledReason;
 use crate::tips::{
     Tip, TipAction, TipHint, TipsCompleted, mark_feature_used_and_write_to_user_defaults,
 };
 // LOCAL FORK: AIQueryRouting / resolve_ai_query_routing routed a prompt to a cloud or
 // remote agent; they went with the agent.
 use crate::terminal::view::CodeDiffAction;
-use crate::ui_components::icons::Icon;
 use crate::user_config::WarpConfig;
 use crate::util::bindings::{self, CustomAction, keybinding_name_to_normalized_string};
 #[cfg(feature = "local_fs")]

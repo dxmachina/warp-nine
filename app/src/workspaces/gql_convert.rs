@@ -7,9 +7,9 @@ use warp_errors::report_error;
 use warp_graphql::billing::{
     AiAutonomyPolicy as GqlAiAutonomyPolicy, AmbientAgentsPolicy as GqlAmbientAgentsPolicy,
     BillingCycleUsageHistory as GqlBillingCycleUsageHistory, BillingMetadata as GqlBillingMetadata,
-    BonusGrant as GqlBonusGrant, ByoApiKeyPolicy as GqlByoApiKeyPolicy,
-    ByoEndpointPolicy as GqlByoEndpointPolicy, CodebaseContextPolicy as GqlCodebaseContextPolicy,
-    CustomerType as GqlCustomerType, DelinquencyStatus as GqlDelinquencyStatus,
+    ByoApiKeyPolicy as GqlByoApiKeyPolicy, ByoEndpointPolicy as GqlByoEndpointPolicy,
+    CodebaseContextPolicy as GqlCodebaseContextPolicy, CustomerType as GqlCustomerType,
+    DelinquencyStatus as GqlDelinquencyStatus,
     EnterpriseCreditsAutoReloadPolicy as GqlEnterpriseCreditsAutoReloadPolicy,
     EnterprisePayAsYouGoPolicy as GqlEnterprisePayAsYouGoPolicy, InstanceShape as GqlInstanceShape,
     ManagedByokByoePolicy as GqlManagedByokByoePolicy, MultiAdminPolicy as GqlMultiAdminPolicy,
@@ -24,18 +24,16 @@ use warp_graphql::billing::{
     UsageVisibilityGranularity as GqlUsageVisibilityGranularity,
     UsageVisibilityPolicy as GqlUsageVisibilityPolicy, WarpAiPolicy as GqlWarpAiPolicy,
 };
-use warp_graphql::queries::get_conversation_usage as gql_usage;
 use warp_graphql::queries::get_workspaces_metadata_for_user::User as GqlUser;
 use warp_graphql::subscriptions::get_warp_drive_updates::WarpDriveUpdate;
 use warp_graphql::user::DiscoverableTeamData as GqlDiscoverableTeamData;
 use warp_graphql::workspace::{
     AddonCreditsSettings as GqlAddonCreditsSettings,
-    AdminEnablementSetting as GqlAdminEnablementSetting, AiAutonomyValue as GqlAiAutonomyValue,
+    AdminEnablementSetting as GqlAdminEnablementSetting,
     AiPermissionsSettings as GqlAiPermissionsSettings,
     ByoEndpointMetadata as GqlByoEndpointMetadata,
     ByoEndpointModelMetadata as GqlByoEndpointModelMetadata,
-    ByoFirstPartyKey as GqlByoFirstPartyKey,
-    ComputerUseAutonomyValue as GqlComputerUseAutonomyValue, EmailInvite as GqlEmailInvite,
+    ByoFirstPartyKey as GqlByoFirstPartyKey, EmailInvite as GqlEmailInvite,
     HostEnablementSetting as GqlHostEnablementSetting,
     InviteLinkDomainRestriction as GqlInviteLinkDomainRestriction,
     MembershipRole as GqlMembershipRole, Team as GqlTeam, TeamByoSettings as GqlTeamByoSettings,
@@ -43,7 +41,6 @@ use warp_graphql::workspace::{
     UgcCollectionEnablementSetting as GqlUgcCollectionEnablementSetting, Workspace as GqlWorkspace,
     WorkspaceMember as GqlWorkspaceMember, WorkspaceMemberUsageInfo as GqlWorkspaceMemberUsageInfo,
     WorkspaceSettings as GqlWorkspaceSettings,
-    WriteToPtyAutonomyValue as GqlWriteToPtyAutonomyValue,
 };
 
 use super::team::{DiscoverableTeam, MembershipRole, Team, TeamMember};

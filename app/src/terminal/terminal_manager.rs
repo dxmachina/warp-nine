@@ -8,7 +8,7 @@ use settings::Setting as _;
 use warpui::{AppContext, SingletonEntity};
 
 use super::event_listener::ChannelEventListener;
-use super::model::block::BlockSize;
+use super::model::block::{BlockSize, SerializedBlock};
 use super::safe_mode_settings::get_secret_obfuscation_mode;
 use super::session_settings::SessionSettings;
 use super::settings::TerminalSettings;
@@ -109,6 +109,7 @@ pub(super) fn compute_block_size(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn create_terminal_model(
     startup_directory: Option<PathBuf>,
+    restored_blocks: Option<&[SerializedBlock]>,
     initial_size: Vector2F,
     channel_event_proxy: ChannelEventListener,
     shell_state: ShellLaunchState,
@@ -133,6 +134,7 @@ pub(super) fn create_terminal_model(
         should_collect_ai_ugc_telemetry(ctx, PrivacySettings::as_ref(ctx).is_telemetry_enabled);
 
     TerminalModel::new(
+        restored_blocks,
         sizes,
         terminal_colors_list(ctx),
         channel_event_proxy,

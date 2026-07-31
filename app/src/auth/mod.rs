@@ -29,7 +29,10 @@ use warp_errors::{report_error, report_if_error};
 use warpui::modals::{AlertDialogWithCallbacks, ModalButton};
 use warpui::{AppContext, SingletonEntity};
 
-#[cfg(not(target_family = "wasm"))]
+// LOCAL FORK: a `#[cfg(not(target_family = "wasm"))]` attribute sat here and was not ours to keep.
+// On `main` it belongs to an import the excision deleted; removing the item without
+// its attribute rebound it to the line below, which `main` leaves ungated. That hid
+// these symbols from every build where the condition is false.
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::code::editor_management::{CodeEditorStatus, CodeEditorSummary};
 use crate::env_vars::manager::EnvVarCollectionManager;

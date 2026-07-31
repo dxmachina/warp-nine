@@ -2587,6 +2587,25 @@ fn test_open_slash_command_requires_path() {
 #[test]
 fn test_changelog_slash_command_clears_buffer_on_success() {
     App::test((), |mut app| async move {
+        // `/changelog` is gated behind `FeatureFlag::Changelog` in two places, and only one
+        // of them can be reached from a test. `all_commands` (`static_commands/commands.rs`)
+        // only pushes `CHANGELOG` when the flag is on, and it feeds `COMMAND_REGISTRY`, a
+        // process-global `LazyLock` that `input::init` dereferences during the first
+        // `initialize_app` in the whole test binary. A thread-local `override_enabled` in
+        // this test therefore cannot get `/changelog` into the registry, so driving this
+        // through `input_enter` would depend on test order: `parse_slash_command` would not
+        // match, `maybe_handle_enter_for_slash_command` would return false, and Enter would
+        // run `/changelog` as a shell command (which deliberately does not clear the buffer
+        // synchronously; `TerminalView` clears it on `BlockCompleted`).
+        //
+        // So execute the command directly, the way
+        // `test_create_docker_sandbox_slash_command_executes_and_clears_buffer` does. The
+        // override is still needed for the `SlashCommandKind::Changelog` arm of
+        // `execute_slash_command`, which bails when the flag is off. The `input_enter` ->
+        // slash command -> cleared buffer route stays covered by
+        // `test_open_slash_command_clears_buffer_on_success`, whose `/open-file` is
+        // registered unconditionally.
+        let _changelog_flag = FeatureFlag::Changelog.override_enabled(true);
         initialize_app(&mut app);
 
         let terminal = add_window_with_bootstrapped_terminal(
@@ -2603,7 +2622,14 @@ fn test_changelog_slash_command_clears_buffer_on_success() {
         });
 
         input.update(&mut app, |input, ctx| {
-            input.input_enter(ctx);
+            let handled = input.execute_slash_command(
+                &commands::CHANGELOG,
+                None,
+                SlashCommandTrigger::input(),
+                /*is_queued_prompt*/ false,
+                ctx,
+            );
+            assert!(handled, "/changelog should have been handled");
         });
 
         input.read(&app, |input, ctx| {

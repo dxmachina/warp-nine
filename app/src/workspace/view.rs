@@ -41,8 +41,6 @@ use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ::settings::{Setting, ToggleableSetting};
-#[cfg(not(target_family = "wasm"))]
-use anyhow::Context as _;
 #[cfg(target_os = "macos")]
 use anyhow::Result;
 use autoupdate::AutoupdateStage;
@@ -74,7 +72,6 @@ use warp_core::ui::color::coloru_with_opacity;
 use warp_core::ui::theme::color::internal_colors;
 use warp_core::ui::theme::phenomenon::PhenomenonStyle;
 use warp_core::ui::theme::{AnsiColors, Fill};
-use warp_core::user_preferences::GetUserPreferences as _;
 use warp_editor::editor::NavigationKey;
 use warp_errors::{report_error, report_if_error};
 use warp_server_client::auth::AuthEvent;
@@ -442,7 +439,7 @@ use crate::workspace::view::right_panel::{RightPanelEvent, RightPanelView};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::AdminEnablementSetting;
 // LOCAL FORK: `AgentNotificationsModel` and `BlocklistAIHistoryModel` removed with the agent.
-use crate::{GlobalResourceHandles, TelemetryEvent, autoupdate, send_telemetry_from_ctx, settings};
+use crate::{GlobalResourceHandles, TelemetryEvent, autoupdate, send_telemetry_from_ctx};
 
 /// The padding that should be applied to the workspace as a whole.
 pub const WORKSPACE_PADDING: f32 = 1.0;
@@ -3266,8 +3263,10 @@ impl Workspace {
             } => {
                 self.configure_empty_workspace(previous_active_window, shell, ctx);
             }
-            // LOCAL FORK: restored block lists went with the agent.
-            NewWorkspaceSource::Restored { window_snapshot } => {
+            NewWorkspaceSource::Restored {
+                window_snapshot,
+                block_lists,
+            } => {
                 let active_tab_index = window_snapshot.active_tab_index;
                 let restored_left_panel_open = window_snapshot.left_panel_open;
 
@@ -3303,7 +3302,10 @@ impl Workspace {
                     .for_each(|(tab_index, saved_tab)| {
                         let custom_title = saved_tab.custom_title.clone();
                         self.add_tab_with_pane_layout(
-                            PanesLayout::Snapshot(Box::new(saved_tab.root.clone())),
+                            PanesLayout::Snapshot {
+                                root: Box::new(saved_tab.root.clone()),
+                                block_lists: block_lists.clone(),
+                            },
                             custom_title,
                             ctx,
                         );
@@ -7178,14 +7180,14 @@ impl Workspace {
             }
         });
 
-        let panes_layout = PanesLayout::Snapshot(Box::new(PaneNodeSnapshot::Leaf(LeafSnapshot {
+        let panes_layout = PanesLayout::snapshot(PaneNodeSnapshot::Leaf(LeafSnapshot {
             is_focused: true,
             custom_vertical_tabs_title: None,
             contents: LeafContents::Settings(SettingsPaneSnapshot::Local {
                 current_page: page.unwrap_or_default(),
                 search_query: search_query.map(|s| s.to_owned()),
             }),
-        })));
+        }));
         self.add_tab_with_pane_layout(panes_layout, Some("Settings".to_owned()), ctx);
     }
 
@@ -10796,11 +10798,11 @@ impl Workspace {
 
     fn add_get_started_tab(&mut self, ctx: &mut ViewContext<Self>) {
         self.add_tab_with_pane_layout(
-            PanesLayout::Snapshot(Box::new(PaneNodeSnapshot::Leaf(LeafSnapshot {
+            PanesLayout::snapshot(PaneNodeSnapshot::Leaf(LeafSnapshot {
                 is_focused: true,
                 custom_vertical_tabs_title: None,
                 contents: LeafContents::GetStarted,
-            }))),
+            })),
             None,
             ctx,
         );
@@ -11000,9 +11002,9 @@ impl Workspace {
         }
     }
 
-    // LOCAL FORK: dropped the inert `block_lists` parameter. It used to carry serialized
-    // agent block lists (`SerializedBlockListItem`) into the restored pane group; that
-    // type went with the agent, and every call site passed an empty map.
+    // LOCAL FORK: dropped the `block_lists` parameter. It carried the restored panes'
+    // command blocks into the pane group, but only `PanesLayout::Snapshot` can have any,
+    // and every other call site passed an empty map. The blocks now ride on that variant.
     pub fn add_tab_with_pane_layout(
         &mut self,
         panes_layout: PanesLayout,
@@ -11023,7 +11025,7 @@ impl Workspace {
         let active_tab_default_color = active_tab.and_then(|tab| tab.default_directory_color);
 
         let is_new_terminal = matches!(panes_layout, PanesLayout::SingleTerminal(_));
-        let is_restoration = matches!(panes_layout, PanesLayout::Snapshot(_));
+        let is_restoration = matches!(panes_layout, PanesLayout::Snapshot { .. });
         let new_pane_group = ctx.add_typed_action_view(|ctx| {
             let mut pane_group = PaneGroup::new_with_panes_layout(
                 self.tips_completed.clone(),
@@ -11150,14 +11152,14 @@ impl Workspace {
         ctx: &mut ViewContext<Self>,
     ) {
         // TODO: We should validate that this notebook exists and fallback if it doesn't
-        let panes_layout = PanesLayout::Snapshot(Box::new(PaneNodeSnapshot::Leaf(LeafSnapshot {
+        let panes_layout = PanesLayout::snapshot(PaneNodeSnapshot::Leaf(LeafSnapshot {
             is_focused: true,
             custom_vertical_tabs_title: None,
             contents: LeafContents::Notebook(NotebookPaneSnapshot::CloudNotebook {
                 notebook_id: Some(notebook_id),
                 settings: settings.clone(),
             }),
-        })));
+        }));
         self.add_tab_with_pane_layout(panes_layout, None, ctx);
     }
 
@@ -11167,14 +11169,14 @@ impl Workspace {
         settings: &OpenWarpDriveObjectSettings,
         ctx: &mut ViewContext<Self>,
     ) {
-        let panes_layout = PanesLayout::Snapshot(Box::new(PaneNodeSnapshot::Leaf(LeafSnapshot {
+        let panes_layout = PanesLayout::snapshot(PaneNodeSnapshot::Leaf(LeafSnapshot {
             is_focused: true,
             custom_vertical_tabs_title: None,
             contents: LeafContents::Workflow(WorkflowPaneSnapshot::CloudWorkflow {
                 workflow_id: Some(workflow_id),
                 settings: settings.clone(),
             }),
-        })));
+        }));
         self.add_tab_with_pane_layout(panes_layout, None, ctx);
     }
 
@@ -11184,13 +11186,13 @@ impl Workspace {
         file_path: Option<PathBuf>,
         ctx: &mut ViewContext<Self>,
     ) {
-        let panes_layout = PanesLayout::Snapshot(Box::new(PaneNodeSnapshot::Leaf(LeafSnapshot {
+        let panes_layout = PanesLayout::snapshot(PaneNodeSnapshot::Leaf(LeafSnapshot {
             is_focused: true,
             custom_vertical_tabs_title: None,
             contents: LeafContents::Notebook(NotebookPaneSnapshot::LocalFileNotebook {
                 path: file_path,
             }),
-        })));
+        }));
         self.add_tab_with_pane_layout(panes_layout, None, ctx);
     }
 

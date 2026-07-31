@@ -3,25 +3,18 @@ use std::future::Future;
 
 use settings::Setting as _;
 use warp_core::features::FeatureFlag;
-use warp_core::send_telemetry_from_ctx;
 use warp_util::sync::Condition;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity, WindowId};
 
 use super::hoa_onboarding;
 use super::view::feature_intro_modal::{FEATURE_INTROS, FeatureIntroId};
-use super::view::free_ai_removal_modal::{
-    FreeAiRemovalModalTelemetryEvent, FreeAiRemovalModalVariant,
-};
+use crate::auth::AuthManager;
 use crate::auth::auth_manager::AuthManagerEvent;
-use crate::auth::{AuthManager, AuthStateProvider};
 use crate::channel::{Channel, ChannelState};
-use crate::root_view::has_completed_local_onboarding;
 use crate::settings::cloud_preferences_syncer::{
     CloudPreferencesSyncer, CloudPreferencesSyncerEvent,
 };
 use crate::terminal::general_settings::GeneralSettings;
-use crate::terminal::session_settings::{AgentToolbarChipSelection, SessionSettings};
-use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::CustomerType;
 
 /// A generic model for managing one-time modals that should be shown to users only once.

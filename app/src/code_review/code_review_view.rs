@@ -1,5 +1,5 @@
 use crate::settings::{AISettings, CodeSettings};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -85,8 +85,6 @@ use crate::code_review::DiffSetScope;
 use crate::code_review::comments::{
     AttachedReviewCommentTarget, CommentId, ReviewCommentBatch, ReviewCommentBatchEvent,
 };
-#[cfg(feature = "local_fs")]
-use crate::code_review::context::create_attachment_reference_and_key;
 use crate::code_review::diff_selector::{DiffSelector, DiffSelectorEvent, DiffTarget};
 use crate::code_review::diff_state::{
     DiffHunk, DiffLineType, DiffMode, DiffState, DiffStateModel, DiffStateModelEvent, DiffStats,
@@ -97,11 +95,8 @@ use crate::code_review::find_model::CodeReviewFindModel;
 use crate::code_review::git_repo_model::{GitRepoModels, GitRepoStatusEvent, GitRepoStatusModel};
 use crate::code_review::github_repo_model::{GitHubRepoEvent, GitHubRepoModel};
 use crate::code_review::hidden_lines::calculate_hidden_lines;
-#[cfg(feature = "local_fs")]
-use crate::code_review::telemetry_event::DiffSetContextScope;
 use crate::code_review::telemetry_event::{
-    AddToContextOrigin, CodeReviewContextDestination, CodeReviewTelemetryEvent, GitButtonKind,
-    PaneStateChange,
+    CodeReviewTelemetryEvent, GitButtonKind, PaneStateChange,
 };
 use crate::coding_panel_enablement_state::CodingPanelEnablementState;
 use crate::editor::InteractionState;
@@ -115,7 +110,7 @@ use crate::send_telemetry_from_ctx;
 use crate::server::telemetry::CodePanelsFileOpenEntrypoint;
 use crate::settings_view::SettingsSection;
 use crate::terminal::input::MenuPositioning;
-use crate::terminal::view::{CliAgentRouting, InitProjectModel, TerminalAction, TerminalView};
+use crate::terminal::view::{InitProjectModel, TerminalAction, TerminalView};
 use crate::themes::theme::WarpTheme;
 use crate::ui_components::blended_colors::{neutral_2, neutral_3};
 use crate::ui_components::buttons::icon_button_with_color;
@@ -7170,7 +7165,13 @@ use scroll_preservation::RelocatableScrollContext;
 #[path = "code_review_view_integration.rs"]
 mod code_review_view_integration;
 
-use crate::persisted_workspace::{LspTask, PersistedWorkspace, PersistedWorkspaceEvent};
+// LOCAL FORK: `LspTask` is `#[cfg(feature = "local_fs")]`, and its only two consumers
+// here (`handle_enable_lsp`, `handle_install_and_enable_lsp`) carry that gate too. On
+// `main` this was a function-local import inside those gated functions; the excision
+// hoisted it to module level ungated, which broke every build without `local_fs`.
+#[cfg(feature = "local_fs")]
+use crate::persisted_workspace::LspTask;
+use crate::persisted_workspace::{PersistedWorkspace, PersistedWorkspaceEvent};
 #[cfg(feature = "integration_tests")]
 pub use code_review_view_integration::CodeReviewVisibleAnchorForTest;
 use warp_errors::report_error;

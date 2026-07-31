@@ -91,8 +91,7 @@ fn create_docker_sandbox_view(
                 None,
                 HashMap::new(),
                 IsSharedSessionCreator::No,
-                // LOCAL FORK: the `restored_blocks` parameter went with
-                // `SerializedBlockListItem`; block restore is no longer supported.
+                None, /* restored_blocks */
                 user_default_shell_unsupported_banner_model_handle,
                 initial_size,
                 model_event_sender,

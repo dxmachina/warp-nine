@@ -31,7 +31,6 @@ use warpui::{
 };
 
 use super::buffer_location::LocalOrRemotePath;
-use super::diff_viewer::DiffViewer;
 use super::editor::view::{CodeEditorEvent, CodeEditorView};
 use super::editor_management::{CodeManager, CodeSource};
 use super::local_code_editor::{LocalCodeEditorEvent, LocalCodeEditorView};

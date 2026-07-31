@@ -19,10 +19,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_fs;
-use base64::Engine as _;
-use base64::engine::general_purpose;
 use element::CommandXRayMouseStateHandle;
-use figma_utils::is_figma_png;
 use itertools::{Either, Itertools};
 use mime_guess::from_path;
 use model::{
@@ -49,8 +46,8 @@ use vim::{
     vim_inner_quote, vim_inner_word, vim_word_iterator_from_offset,
 };
 use warp_completer::completer::Description;
+use warp_core::safe_error;
 use warp_core::semantic_selection::SemanticSelection;
-use warp_core::{safe_error, send_telemetry_from_ctx};
 use warp_editor::editor::NavigationKey;
 use warp_util::path::ShellFamily;
 use warp_util::user_input::UserInput;
@@ -98,7 +95,6 @@ use crate::editor::RangeExt;
 use crate::editor::accept_autosuggestion_keybinding_view::AcceptAutosuggestionKeybinding;
 use crate::editor::autosuggestion_ignore_view::{AutosuggestionIgnore, AutosuggestionIgnoreEvent};
 use crate::features::FeatureFlag;
-use crate::server::telemetry::TelemetryEvent;
 #[cfg(feature = "voice_input")]
 use crate::settings::AISettingsChangedEvent;
 use crate::settings::{
@@ -106,7 +102,6 @@ use crate::settings::{
     InputSettings, SelectionSettings,
 };
 use crate::settings_view::flags;
-use crate::suggestions::ignored_suggestions_model::{IgnoredSuggestionsModel, SuggestionType};
 use crate::terminal::grid_size_util::grid_cell_dimensions;
 use crate::terminal::model::block::BlockId;
 use crate::themes::theme::Fill;
@@ -116,7 +111,7 @@ use crate::ui_components::icons;
 use crate::util::bindings::{CustomAction, cmd_or_ctrl_shift, keybinding_name_to_keystroke};
 use crate::util::clipboard::clipboard_content_with_escaped_paths;
 use crate::util::color::{ContrastingColor, MinimumAllowedContrast};
-use crate::util::image::{MAX_IMAGE_COUNT_FOR_QUERY, MAX_IMAGE_SIZE_BYTES, resize_image};
+use crate::util::image::MAX_IMAGE_COUNT_FOR_QUERY;
 use crate::util::merge_ranges;
 use crate::view_components::DismissibleToast;
 #[cfg(feature = "voice_input")]

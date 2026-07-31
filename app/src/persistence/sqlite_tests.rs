@@ -17,7 +17,7 @@ use super::{
 };
 use crate::app_state::{
     AppState, CodePaneSnapShot, CodePaneTabSnapshot, LeafContents, LeafSnapshot, PaneNodeSnapshot,
-    TabGroupSnapshot, TabSnapshot, TerminalPaneSnapshot, WindowSnapshot,
+    PaneUuid, TabGroupSnapshot, TabSnapshot, TerminalPaneSnapshot, WindowSnapshot,
 };
 use crate::cloud_object::{CloudObjectPermissions, Owner};
 use crate::code::editor_management::CodeSource;
@@ -146,6 +146,7 @@ fn sqlite_read_restores_app_state_and_codebase_metadata() {
     let app_state = AppState {
         windows: vec![test_terminal_window_snapshot(false)],
         active_window_index: Some(0),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
     save_app_state(&mut conn, &app_state).expect("app state should save");
@@ -161,6 +162,67 @@ fn sqlite_read_restores_app_state_and_codebase_metadata() {
     assert_eq!(restored_app_state.windows.len(), 1);
     assert_eq!(restored.codebase_indices.len(), 1);
     assert_eq!(restored.codebase_indices[0].path, metadata.path);
+}
+
+/// A block persisted by `ModelEvent::SaveBlock` must come back out of
+/// `AppState::block_lists` on the next launch, keyed by its pane UUID. This is the whole
+/// point of the `blocks` table: the write side runs on every completed command, so a
+/// broken read side leaves the data sitting in SQLite unread and the terminal comes up
+/// blank after a restart.
+#[test]
+fn sqlite_read_restores_previous_session_blocks_for_a_pane() {
+    let tempdir = tempfile::tempdir().expect("tempdir should be created");
+    let database_path = tempdir.path().join("warp.sqlite");
+    let mut conn = setup_database(&database_path).expect("database should initialize");
+
+    let window_snapshot = test_terminal_window_snapshot(false);
+    let pane_uuid = match &window_snapshot.tabs[0].root {
+        PaneNodeSnapshot::Leaf(LeafSnapshot {
+            contents: LeafContents::Terminal(terminal),
+            ..
+        }) => terminal.uuid.clone(),
+        _ => panic!("the test snapshot should hold a terminal leaf"),
+    };
+    let app_state = AppState {
+        windows: vec![window_snapshot],
+        active_window_index: Some(0),
+        block_lists: Default::default(),
+        running_mcp_servers: Default::default(),
+    };
+    save_app_state(&mut conn, &app_state).expect("app state should save");
+
+    let block = SerializedBlock::new_for_test("echo hi".into(), "hi".into());
+    let writer = start_writer(conn, database_path.clone()).expect("writer should start");
+    writer
+        .sender
+        .send(ModelEvent::SaveBlock(BlockCompleted {
+            pane_id: pane_uuid.clone(),
+            is_local: true,
+            block: Arc::new(block.clone()),
+        }))
+        .expect("save block event should send");
+    writer
+        .sender
+        .send(ModelEvent::Terminate)
+        .expect("terminate event should send");
+    writer.handle.join().expect("writer should terminate");
+
+    let mut conn = setup_database(&database_path).expect("database should reopen");
+    let restored = read_sqlite_data(&mut conn, None, PersistedDataScope::Full)
+        .expect("persisted data should load");
+    let restored_app_state = restored
+        .app_state
+        .expect("app state should be present for the full scope");
+
+    let restored_blocks = restored_app_state
+        .block_lists
+        .get(&PaneUuid(pane_uuid))
+        .expect("the pane should have its previous session blocks");
+    assert_eq!(restored_blocks.len(), 1);
+    assert_eq!(restored_blocks[0].stylized_command, block.stylized_command);
+    assert_eq!(restored_blocks[0].stylized_output, block.stylized_output);
+    assert!(restored_blocks[0].start_ts.is_some());
+    assert!(restored_blocks[0].completed_ts.is_some());
 }
 
 /// Mirrors `init_db(&PersistenceScope::Tui)` in an isolated tempdir: the TUI
@@ -287,16 +349,19 @@ fn test_deduplicate_snapshots() {
     let snapshot_1 = AppState {
         active_window_index: Some(1),
         windows: Default::default(),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
     let snapshot_2 = AppState {
         active_window_index: Some(2),
         windows: Default::default(),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
     let snapshot_3 = AppState {
         active_window_index: Some(3),
         windows: Default::default(),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
 
@@ -404,6 +469,7 @@ fn test_sqlite_round_trips_vertical_tabs_panel_open() {
             test_terminal_window_snapshot(true),
         ],
         active_window_index: Some(1),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
 
@@ -474,6 +540,7 @@ fn test_sqlite_round_trips_custom_vertical_tabs_title() {
             tab_groups: vec![],
         }],
         active_window_index: Some(0),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
 
@@ -551,6 +618,7 @@ fn test_sqlite_round_trips_code_pane_with_multiple_tabs() {
             tab_groups: vec![],
         }],
         active_window_index: Some(0),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
 
@@ -668,6 +736,7 @@ fn test_sqlite_round_trips_tab_groups() {
             }],
         }],
         active_window_index: Some(0),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
 
@@ -818,6 +887,7 @@ fn test_sqlite_round_trips_pinned_state() {
             ],
         }],
         active_window_index: Some(0),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
 
@@ -950,6 +1020,7 @@ fn test_sqlite_drops_too_small_bounds_on_save() {
     let app_state = AppState {
         windows: vec![snapshot],
         active_window_index: Some(0),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
 
@@ -988,6 +1059,7 @@ fn test_sqlite_drops_too_small_bounds_on_read() {
     let app_state = AppState {
         windows: vec![test_terminal_window_snapshot(false)],
         active_window_index: Some(0),
+        block_lists: Default::default(),
         running_mcp_servers: Default::default(),
     };
     save_app_state(&mut conn, &app_state).expect("app state should save");

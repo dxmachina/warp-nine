@@ -2,6 +2,7 @@ use crate::settings::{
     AISettings, QuakeModeSettings, apply_account_first_onboarding_settings,
     apply_onboarding_settings,
 };
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
@@ -38,7 +39,7 @@ use warpui::{
     ViewContext, ViewHandle, WindowId, id,
 };
 
-use crate::app_state::{AppState, WindowSnapshot};
+use crate::app_state::{AppState, PaneUuid, WindowSnapshot};
 use crate::appearance::Appearance;
 use crate::auth::auth_manager::{AuthManager, AuthManagerEvent};
 use crate::auth::auth_override_warning_modal::{
@@ -78,6 +79,7 @@ use crate::settings_view::{OpenTeamsSettingsModalArgs, SettingsSection, flags};
 use crate::terminal::available_shells::AvailableShell;
 use crate::terminal::general_settings::GeneralSettings;
 use crate::terminal::keys_settings::KeysSettings;
+use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::shell::ShellType;
 use crate::terminal::view::{TerminalAction, cell_size_and_padding};
 use crate::themes::theme::{AnsiColorIdentifier, Blend, Fill};
@@ -743,6 +745,7 @@ fn open_from_restored(arg: &OpenFromRestoredArg, ctx: &mut AppContext) {
                                 global_resource_handles.clone(),
                                 NewWorkspaceSource::Restored {
                                     window_snapshot: window.clone(),
+                                    block_lists: app_state.block_lists.clone(),
                                 },
                                 ctx,
                             );
@@ -782,6 +785,7 @@ fn open_from_restored(arg: &OpenFromRestoredArg, ctx: &mut AppContext) {
                                     global_resource_handles.clone(),
                                     NewWorkspaceSource::Restored {
                                         window_snapshot: window.clone(),
+                                        block_lists: app_state.block_lists.clone(),
                                     },
                                     ctx,
                                 );
@@ -833,6 +837,7 @@ fn open_from_restored(arg: &OpenFromRestoredArg, ctx: &mut AppContext) {
                             global_resource_handles,
                             NewWorkspaceSource::Restored {
                                 window_snapshot: window.clone(),
+                                block_lists: app_state.block_lists.clone(),
                             },
                             ctx,
                         );
@@ -1488,6 +1493,8 @@ pub enum NewWorkspaceSource {
     },
     Restored {
         window_snapshot: WindowSnapshot,
+        /// Previous session command blocks for the window's panes, keyed by pane UUID.
+        block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
     },
     Session {
         options: Box<NewTerminalOptions>,

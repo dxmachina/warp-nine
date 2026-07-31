@@ -21,7 +21,6 @@ use session_sharing_protocol::sharer::{
     TeamAccessLevelUpdateResponse, UpdatePendingUserRoleResponse,
 };
 use warp_core::execution_mode::AppExecutionMode;
-use warp_core::send_telemetry_from_ctx;
 use warp_errors::report_error;
 use warpui::{AppContext, ModelHandle, SingletonEntity, ViewHandle, WindowId};
 
@@ -35,7 +34,6 @@ use crate::features::FeatureFlag;
 use crate::network::{NetworkStatusEvent, NetworkStatusKind};
 use crate::pane_group::TerminalViewResources;
 use crate::persistence::ModelEvent;
-use crate::server::telemetry::{TelemetryAgentViewEntryOrigin, TelemetryEvent};
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
 use crate::terminal::shared_session::manager::Manager;
@@ -83,8 +81,10 @@ pub(crate) struct TerminalViewSurfaceConfig {
     pub(crate) has_restored_command_blocks: bool,
 }
 
-// LOCAL FORK: fn terminal_view_restored_blocks removed with the agent; the
-// block list item type and the conversation restoration it merged in are gone.
+// LOCAL FORK: fn terminal_view_restored_blocks is gone. It merged a pane's persisted
+// command blocks with the blocks synthesized from an agent conversation; the agent half
+// went with the agent crate, so `create_session` passes the persisted blocks straight
+// through instead.
 
 pub(crate) fn create_terminal_view_surface(
     config: TerminalViewSurfaceConfig,

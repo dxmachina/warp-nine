@@ -76,6 +76,7 @@ impl TerminalManager {
         // Create the terminal model.
         let model = terminal_manager::create_terminal_model(
             None, /* startup_directory */
+            None, /* restored_blocks */
             initial_size,
             channel_event_proxy.clone(),
             // TODO(alokedesai): Add support for other shells within the network-backed pty.

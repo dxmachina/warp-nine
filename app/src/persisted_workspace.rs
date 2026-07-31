@@ -13,14 +13,12 @@ use lsp::supported_servers::LSPServerType;
 use lsp::{LspManagerModel, LspServerConfig};
 #[cfg(feature = "local_fs")]
 use repo_metadata::RepoMetadataModel;
-#[cfg(feature = "local_fs")]
-use repo_metadata::repositories::{DetectedRepositories, DetectedRepositoriesEvent};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "local_fs")]
 use warp_core::channel::ChannelState;
 use warp_errors::report_if_error;
 #[cfg(feature = "local_fs")]
-use warp_util::{local_or_remote_path::LocalOrRemotePath, standardized_path::StandardizedPath};
+use warp_util::standardized_path::StandardizedPath;
 #[cfg(feature = "local_fs")]
 use warpui::windowing::WindowManager;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
@@ -34,7 +32,6 @@ use crate::persistence::ModelEvent;
 use crate::send_telemetry_from_ctx;
 #[cfg(feature = "local_fs")]
 use crate::server::server_api::ServerApiProvider;
-use crate::settings::CodeSettings;
 use crate::terminal::TerminalView;
 #[cfg(feature = "local_fs")]
 use crate::terminal::local_shell::LocalShellState;

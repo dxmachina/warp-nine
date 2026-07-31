@@ -13,7 +13,10 @@ use warpui::elements::ChildView;
 use warpui::{Element, Entity, ModelHandle, View, ViewContext, ViewHandle};
 
 use crate::persisted_workspace::PersistedWorkspace;
-#[cfg(feature = "local_fs")]
+// LOCAL FORK: a `#[cfg(feature = "local_fs")]` attribute sat here and was not ours to keep.
+// On `main` it belongs to an import the excision deleted; removing the item without
+// its attribute rebound it to the line below, which `main` leaves ungated. That hid
+// these symbols from every build where the condition is false.
 use crate::search::data_source::{Query, QueryFilter};
 use crate::search::mixer::{AddAsyncSourceOptions, SearchMixer};
 use crate::terminal::input::buffer_model::{InputBufferModel, InputBufferUpdateEvent};

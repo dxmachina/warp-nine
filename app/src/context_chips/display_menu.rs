@@ -32,8 +32,6 @@ use warpui::{
     ViewContext, ViewHandle, WindowId,
 };
 
-use crate::cloud_object::CloudObjectLookup as _;
-use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::editor::{
     EditorOptions, EditorView, Event as EditorEvent, PropagateAndNoOpNavigationKeys, TextOptions,
 };

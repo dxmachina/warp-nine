@@ -36,8 +36,9 @@ pub use self::terminal_manager::{TerminalManager, get_shell_starter};
 #[cfg(windows)]
 pub use self::terminal_view_adaptor::shutdown_all_pty_event_loops;
 #[cfg(all(feature = "local_tty", not(feature = "remote_tty")))]
-// LOCAL FORK: `terminal_view_restored_blocks` removed with the agent (session
-// block restore went out with `SerializedBlockListItem`).
+// LOCAL FORK: `terminal_view_restored_blocks` is gone. It merged the pane's persisted
+// command blocks with the blocks synthesized from an agent conversation; without the
+// agent half the caller just passes the persisted blocks through.
 pub(crate) use self::terminal_view_adaptor::{
     TerminalViewSurfaceConfig, create_terminal_view_surface,
 };

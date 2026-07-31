@@ -6,7 +6,7 @@ use parking_lot::FairMutex;
 use session_sharing_protocol::common::{
     OrderedTerminalEvent, OrderedTerminalEventType, Scrollback, WindowSize,
 };
-use warpui::{Entity, ModelContext, SingletonEntity, WeakViewHandle};
+use warpui::{Entity, ModelContext, WeakViewHandle};
 
 use crate::terminal::event_listener::ChannelEventListener;
 use crate::terminal::model::ansi::{self};

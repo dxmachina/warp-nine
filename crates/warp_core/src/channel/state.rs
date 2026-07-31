@@ -21,7 +21,19 @@ lazy_static! {
 lazy_static! {
     static ref MOCK_SERVER: Mutex<mockito::ServerGuard> = Mutex::new(mockito::Server::new());
     static ref MOCK_SERVER_URL: String = MOCK_SERVER.lock().url();
-    static ref APP_VERSION: Mutex<Option<&'static str>> = Mutex::new(None);
+}
+
+#[cfg(feature = "test-util")]
+thread_local! {
+    /// Test-only override of the app version, scoped to the calling thread.
+    ///
+    /// This is deliberately thread-local rather than a process-wide `Mutex`: the
+    /// libtest harness runs each test on its own thread, so a process-global here
+    /// lets any test that calls [`ChannelState::set_app_version`] change the version
+    /// out from under every other test running concurrently. That is exactly what
+    /// used to make the `autoupdate` download tests fail intermittently, since
+    /// `should_update` compares against `ChannelState::app_version()`.
+    static APP_VERSION: std::cell::Cell<Option<&'static str>> = const { std::cell::Cell::new(None) };
 }
 
 #[derive(Debug)]
@@ -331,14 +343,15 @@ impl ChannelState {
 
     #[cfg(feature = "test-util")]
     pub fn app_version() -> Option<&'static str> {
-        let version = APP_VERSION.lock();
-
-        version.or_else(|| option_env!("GIT_RELEASE_TAG"))
+        APP_VERSION
+            .with(|version| version.get())
+            .or_else(|| option_env!("GIT_RELEASE_TAG"))
     }
 
+    /// Overrides the app version for the current thread only. See [`APP_VERSION`].
     #[cfg(feature = "test-util")]
     pub fn set_app_version(version: Option<&'static str>) {
-        *APP_VERSION.lock() = version;
+        APP_VERSION.with(|slot| slot.set(version));
     }
 
     #[cfg(not(feature = "test-util"))]

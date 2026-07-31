@@ -306,7 +306,8 @@ pub fn render_overlay(overlay_body: Box<dyn Element>, appearance: &Appearance) -
 }
 
 // ---------------------------------------------------------------------------
-// Privacy settings overlay (shared between AuthViewBody and LoginSlideView)
+// Privacy settings overlay (was shared between AuthViewBody and LoginSlideView;
+// LOCAL FORK: the login slide is deleted, so AuthViewBody is now the only consumer)
 // ---------------------------------------------------------------------------
 
 /// Handles needed to render the privacy settings overlay.

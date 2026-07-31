@@ -127,8 +127,8 @@ impl PasteAuthTokenModalView {
         });
 
         // When the editor sees an Enter/Paste/etc. commit, submit the current
-        // buffer text upward. This matches the semantics of the inline editor
-        // in `login_slide.rs`.
+        // buffer text upward. LOCAL FORK: this used to match the inline editor in
+        // `login_slide.rs`, which is deleted; the semantics are preserved here.
         ctx.subscribe_to_view(&auth_token_input, |me, _, event, ctx| {
             use crate::editor::Event::{AltEnter, CmdEnter, Enter, Paste, ShiftEnter};
             match event {

@@ -955,6 +955,7 @@ impl TerminalModel {
         event_proxy: ChannelEventListener,
         background_executor: Arc<Background>,
         should_show_bootstrap_block: bool,
+        restored_blocks: Option<&[SerializedBlock]>,
         honor_ps1: bool,
         is_inverted: bool,
         session_startup_path: Option<PathBuf>,
@@ -962,6 +963,7 @@ impl TerminalModel {
         use super::session::get_local_hostname;
 
         let mut terminal_model = Self::new(
+            restored_blocks,
             sizes,
             colors,
             event_proxy,
@@ -1017,6 +1019,7 @@ impl TerminalModel {
 
     #[allow(clippy::too_many_arguments)]
     fn new_internal(
+        restored_blocks: Option<&[SerializedBlock]>,
         sizes: BlockSize,
         colors: color::List,
         event_proxy: ChannelEventListener,
@@ -1040,6 +1043,7 @@ impl TerminalModel {
             obfuscate_secrets,
         );
         let block_list = BlockList::new(
+            restored_blocks,
             sizes,
             event_proxy.clone(),
             background_executor,
@@ -1099,8 +1103,13 @@ impl TerminalModel {
     }
 
     /// Creates a terminal model for a local terminal session.
+    ///
+    /// `restored_blocks` are the previous session's command blocks for this pane, read
+    /// from the `blocks` table at startup. They are replayed into the block list before
+    /// the shell bootstraps.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        restored_blocks: Option<&[SerializedBlock]>,
         sizes: BlockSize,
         colors: color::List,
         event_proxy: ChannelEventListener,
@@ -1116,6 +1125,7 @@ impl TerminalModel {
         shell_state: ShellLaunchState,
     ) -> Self {
         Self::new_internal(
+            restored_blocks,
             sizes,
             colors,
             event_proxy,
@@ -1147,6 +1157,7 @@ impl TerminalModel {
         obfuscate_secrets: ObfuscateSecrets,
     ) -> Self {
         Self::new_internal(
+            None,
             sizes,
             colors,
             event_proxy,
@@ -1182,6 +1193,7 @@ impl TerminalModel {
         obfuscate_secrets: ObfuscateSecrets,
     ) -> Self {
         Self::new_internal(
+            None,
             sizes,
             colors,
             event_proxy,

@@ -41,7 +41,6 @@ use pathfinder_geometry::rect::RectF;
 use pathfinder_geometry::vector::Vector2F;
 use persistence::model::AMBIENT_AGENT_PANE_KIND;
 use uuid::Uuid;
-use warp_core::features::FeatureFlag;
 use warp_errors::{report_error, report_if_error};
 use warpui::platform::FullscreenState;
 use warpui::windowing::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
@@ -52,7 +51,8 @@ use super::agent::{
     upsert_agent_conversation,
 };
 use super::block_list::{
-    delete_ai_conversation, delete_blocks, save_block, update_block_agent_view_visibility,
+    delete_ai_conversation, delete_blocks, get_all_restored_blocks, save_block,
+    update_block_agent_view_visibility,
 };
 use super::model::{
     self, AI_DOCUMENT_PANE_KIND, AI_FACT_PANE_KIND, ActiveMCPServer, CODE_PANE_KIND,
@@ -2533,13 +2533,15 @@ fn read_sqlite_data(
             )
             .collect();
 
+        let restored_blocks = get_all_restored_blocks(conn)?;
+
         // Load active MCP servers from database
         let running_mcp_servers = load_active_mcp_servers(conn)?;
 
-        // LOCAL FORK: restored block lists were agent transcript state.
         Some(AppState {
             windows: saved_windows,
             active_window_index,
+            block_lists: Arc::new(restored_blocks),
             running_mcp_servers,
         })
     } else {

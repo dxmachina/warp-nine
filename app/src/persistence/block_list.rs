@@ -1,10 +1,14 @@
 //! Manages how we write to and read from our SQLite database for terminal blocks.
 
+use std::collections::HashMap;
+
 use diesel::prelude::*;
 use diesel::result::Error;
 use diesel::sqlite::SqliteConnection;
 
+use super::model::Block;
 use super::{model, schema};
+use crate::app_state::PaneUuid;
 use crate::terminal::model::block::{SerializedAgentViewVisibility, SerializedBlock};
 
 const MAX_TERMINAL_BLOCKS_TO_PERSIST_PER_SESSION: i64 = 100;
@@ -12,8 +16,49 @@ const MAX_TERMINAL_BLOCKS_TO_PERSIST_PER_SESSION: i64 = 100;
 // LOCAL FORK: the AIQuery row structs and their read limits went with the
 // agent; nothing writes or reads the `ai_queries` table any more.
 
-// LOCAL FORK: fn get_all_restored_blocks removed with the agent; its result
-// type came from the agent block list and nothing reads it any more.
+/// LOCAL FORK: the values used to be `ai::blocklist::SerializedBlockListItem`, a
+/// single-variant enum that wrapped a command block so AI blocks could share the list.
+/// The wrapper went with the agent crate; command blocks are plain terminal state.
+type PersistedBlocks = HashMap<PaneUuid, Vec<SerializedBlock>>;
+
+/// Returns the most recent [`MAX_TERMINAL_BLOCKS_TO_PERSIST_PER_SESSION`] blocks for each
+/// session. The blocks are in chronological order.
+pub(super) fn get_all_restored_blocks(
+    conn: &mut SqliteConnection,
+) -> Result<PersistedBlocks, diesel::result::Error> {
+    let terminal_sessions = schema::terminal_panes::table
+        .select(model::TerminalSession::as_select())
+        .load::<model::TerminalSession>(conn)?;
+
+    let block_lists = Block::belonging_to(&terminal_sessions)
+        .select(Block::as_select())
+        .order_by(schema::blocks::columns::id.asc())
+        .load::<Block>(conn)?
+        .grouped_by(&terminal_sessions);
+
+    let mut all_blocks_by_pane = block_lists
+        .into_iter()
+        .zip(terminal_sessions)
+        .map(|(blocks, terminal_pane)| {
+            (
+                PaneUuid(terminal_pane.uuid),
+                blocks.into_iter().map(SerializedBlock::from).collect(),
+            )
+        })
+        .collect::<PersistedBlocks>();
+
+    for blocks in all_blocks_by_pane.values_mut() {
+        blocks.sort_by_key(|block| block.start_ts);
+        // Only keep most recent command blocks
+        blocks.drain(
+            0..blocks
+                .len()
+                .saturating_sub(MAX_TERMINAL_BLOCKS_TO_PERSIST_PER_SESSION as usize),
+        );
+    }
+
+    Ok(all_blocks_by_pane)
+}
 
 pub(super) fn save_block(
     conn: &mut SqliteConnection,

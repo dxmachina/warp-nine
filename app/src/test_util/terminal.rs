@@ -33,6 +33,7 @@ use crate::suggestions::ignored_suggestions_model::IgnoredSuggestionsModel;
 use crate::system::{SystemInfo, SystemStats};
 use crate::terminal::alt_screen_reporting::AltScreenReporting;
 use crate::terminal::keys::TerminalKeybindings;
+use crate::terminal::model::block::SerializedBlock;
 use crate::terminal::resizable_data::ResizableData;
 use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::terminal::view::inline_banner::ByoLlmAuthBannerSessionState;
@@ -133,7 +134,7 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
 /// Returns the handle to that terminal view.
 pub fn add_window_with_terminal(
     app: &mut App,
-    restored_blocks: Option<&[()]>,
+    restored_blocks: Option<&[SerializedBlock]>,
 ) -> ViewHandle<TerminalView> {
     add_window_with_id_and_terminal(app, restored_blocks).1
 }
@@ -142,14 +143,13 @@ pub fn add_window_with_terminal(
 /// Returns the WindowID and the handle to that terminal view.
 pub fn add_window_with_id_and_terminal(
     app: &mut App,
-    restored_blocks: Option<&[()]>,
+    restored_blocks: Option<&[SerializedBlock]>,
 ) -> (WindowId, ViewHandle<TerminalView>) {
     // LOCAL FORK: `restored_blocks` used to be `Option<&[SerializedBlockListItem]>`.
-    // Session block restore went with the agent and that type no longer exists,
-    // so the parameter is retained (every call site passes `None`) but ignored.
-    let _ = restored_blocks;
+    // That single-variant wrapper went with the agent crate; the blocks themselves
+    // are plain terminal state, so this carries `SerializedBlock`s directly.
     let tips_model = app.add_model(|_| Default::default());
     app.add_window(WindowStyle::NotStealFocus, |ctx| {
-        TerminalView::new_for_test(tips_model, None, ctx)
+        TerminalView::new_for_test(tips_model, restored_blocks, ctx)
     })
 }

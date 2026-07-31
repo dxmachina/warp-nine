@@ -106,6 +106,21 @@ pub fn should_use_rc_file_bootstrap_method(
 /// Returns the bootstrap script that should be used when initializing a shell
 /// of the given type.
 ///
+/// The result is memoized in [`BOOTSTRAP_CACHE`], which is keyed only by shell type. That
+/// is fine in the app, where `assets` is always `crate::ASSETS`, but it means the first
+/// caller for a given shell decides what every later caller sees. Tests that pass their
+/// own [`AssetProvider`] must call [`build_script_for_shell`] directly so they don't race
+/// the cache against a session that spawned a real shell.
+///
+/// See [`build_script_for_shell`] for the interpolation this performs.
+pub fn script_for_shell(shell_type: ShellType, assets: &dyn AssetProvider) -> Cow<'static, [u8]> {
+    BOOTSTRAP_CACHE
+        .get_or_insert(&shell_type, || build_script_for_shell(shell_type, assets))
+        .into()
+}
+
+/// Builds the bootstrap script for `shell_type` from `assets`, with no memoization.
+///
 /// This supports a very basic form of interpolation:
 ///
 /// ```shell
@@ -118,7 +133,7 @@ pub fn should_use_rc_file_bootstrap_method(
 /// At the moment, this interpolation is only performed for the top-level file,
 /// and is not performed recursively, but it would be useful to add such support
 /// in the future.
-pub fn script_for_shell(shell_type: ShellType, assets: &dyn AssetProvider) -> Cow<'static, [u8]> {
+fn build_script_for_shell(shell_type: ShellType, assets: &dyn AssetProvider) -> Vec<u8> {
     let file = match shell_type {
         ShellType::Bash => "bash.sh",
         ShellType::Zsh => "zsh.sh",
@@ -126,83 +141,75 @@ pub fn script_for_shell(shell_type: ShellType, assets: &dyn AssetProvider) -> Co
         ShellType::PowerShell => "pwsh.ps1",
     };
 
-    BOOTSTRAP_CACHE
-        .get_or_insert(&shell_type, || {
-            let file_path = format!("bundled/bootstrap/{file}");
-            let bootstrap = assets
-                .get(&file_path)
-                .unwrap_or_else(|_| panic!("failed to retrieve {file_path} from assets"));
+    let file_path = format!("bundled/bootstrap/{file}");
+    let bootstrap = assets
+        .get(&file_path)
+        .unwrap_or_else(|_| panic!("failed to retrieve {file_path} from assets"));
 
-            // Interpret the file as UTF-8.  We do this in an unchecked way
-            // for performance, expecting that any issues here will be caught by
-            // unit tests.
-            let bootstrap = unsafe { String::from_utf8_unchecked(bootstrap.to_vec()) };
+    // Interpret the file as UTF-8.  We do this in an unchecked way
+    // for performance, expecting that any issues here will be caught by
+    // unit tests.
+    let bootstrap = unsafe { String::from_utf8_unchecked(bootstrap.to_vec()) };
 
-            let additional_files = memo_map::MemoMap::new();
+    let additional_files = memo_map::MemoMap::new();
 
-            // Parse through the file, looking for any lines which start with
-            // "#include", and replacing that line with the contents of the file
-            // located at the path specified.
-            //
-            // We trim most leading and all trailing whitespace from lines, and
-            // drop all empty lines and lines that only contain a comment.  We
-            // keep a single leading space on each line, if one exists, to
-            // avoid interfering with histignorespace behavior.
-            //
-            // This minimizes the number of bytes we send over the pty during the
-            // bootstrap process.
-            fn trim_and_borrow_line(mut line: &str) -> Cow<'_, str> {
-                let len = line.len();
-                let trimmed_len = line.trim_start().len();
-                if trimmed_len < len {
-                    let trimmed_chars = len - trimmed_len;
-                    line = &line[trimmed_chars - 1..];
-                }
-                Cow::Borrowed(line.trim_end())
+    // Parse through the file, looking for any lines which start with
+    // "#include", and replacing that line with the contents of the file
+    // located at the path specified.
+    //
+    // We trim most leading and all trailing whitespace from lines, and
+    // drop all empty lines and lines that only contain a comment.  We
+    // keep a single leading space on each line, if one exists, to
+    // avoid interfering with histignorespace behavior.
+    //
+    // This minimizes the number of bytes we send over the pty during the
+    // bootstrap process.
+    fn trim_and_borrow_line(mut line: &str) -> Cow<'_, str> {
+        let len = line.len();
+        let trimmed_len = line.trim_start().len();
+        if trimmed_len < len {
+            let trimmed_chars = len - trimmed_len;
+            line = &line[trimmed_chars - 1..];
+        }
+        Cow::Borrowed(line.trim_end())
+    }
+    let mut script = bootstrap
+        .trim_start_matches(BYTE_ORDER_MARK)
+        .split('\n')
+        .map(trim_and_borrow_line)
+        .flat_map(|line| {
+            if let Some(path) = line.strip_prefix("#include ") {
+                additional_files
+                    .get_or_insert(path, || {
+                        let data = assets
+                            .get(path)
+                            .unwrap_or_else(|_| panic!("failed to retrieve {path} from assets"));
+                        let data_string = unsafe { String::from_utf8_unchecked(data.to_vec()) };
+                        data_string
+                            .replace("@@USING_CON_PTY_BOOLEAN@@", &(cfg!(windows).to_string()))
+                    })
+                    .split('\n')
+                    .map(trim_and_borrow_line)
+                    .collect_vec()
+            } else {
+                vec![line]
             }
-            let mut script = bootstrap
-                .trim_start_matches(BYTE_ORDER_MARK)
-                .split('\n')
-                .map(trim_and_borrow_line)
-                .flat_map(|line| {
-                    if let Some(path) = line.strip_prefix("#include ") {
-                        additional_files
-                            .get_or_insert(path, || {
-                                let data = assets.get(path).unwrap_or_else(|_| {
-                                    panic!("failed to retrieve {path} from assets")
-                                });
-                                let data_string =
-                                    unsafe { String::from_utf8_unchecked(data.to_vec()) };
-                                data_string.replace(
-                                    "@@USING_CON_PTY_BOOLEAN@@",
-                                    &(cfg!(windows).to_string()),
-                                )
-                            })
-                            .split('\n')
-                            .map(trim_and_borrow_line)
-                            .collect_vec()
-                    } else {
-                        vec![line]
-                    }
-                })
-                // Filter out empty lines and comments, to minimize the amount
-                // of data we send over the pty during the bootstrap process.
-                .filter(|line| {
-                    let line = line.trim_start();
-                    !(line.is_empty()
-                        || line.starts_with('#')
-                        || shell_type == ShellType::PowerShell
-                            && line
-                                .starts_with("[Diagnostics.CodeAnalysis.SuppressMessageAttribute"))
-                })
-                .join("\n");
-
-            // Make sure there's a newline at the end of the bootstrap script,
-            // otherwise we'll never submit the final line to the shell.
-            script.push('\n');
-            script.into_bytes()
         })
-        .into()
+        // Filter out empty lines and comments, to minimize the amount
+        // of data we send over the pty during the bootstrap process.
+        .filter(|line| {
+            let line = line.trim_start();
+            !(line.is_empty()
+                || line.starts_with('#')
+                || shell_type == ShellType::PowerShell
+                    && line.starts_with("[Diagnostics.CodeAnalysis.SuppressMessageAttribute"))
+        })
+        .join("\n");
+
+    // Make sure there's a newline at the end of the bootstrap script,
+    // otherwise we'll never submit the final line to the shell.
+    script.push('\n');
+    script.into_bytes()
 }
 
 /// Generates a cryptographically random session ID for use as both a session

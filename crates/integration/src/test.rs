@@ -2,9 +2,6 @@
 //! src/integration.rs and src/bin/integration.rs in order to register them
 //! to be run.
 
-mod agent_mode;
-mod ai_assistant;
-mod ai_document;
 mod block_filtering;
 mod bootstrapping;
 mod code_review;
@@ -22,11 +19,8 @@ mod pane_restoration;
 #[cfg(target_os = "macos")]
 mod preview_config_migration;
 mod remote_server;
-mod rich_input_ctrl_enter;
-mod rules;
 mod secrets;
 mod session_restoration;
-mod settings_execution_profiles;
 mod settings_file_errors;
 mod settings_file_hot_reload;
 mod settings_file_migration;
@@ -46,9 +40,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
-pub use agent_mode::*;
-pub use ai_assistant::*;
-pub use ai_document::*;
 use anyhow::{Result, anyhow};
 pub use block_filtering::*;
 pub use bootstrapping::*;
@@ -71,13 +62,10 @@ use pathfinder_geometry::vector::Vector2F;
 #[cfg(target_os = "macos")]
 pub use preview_config_migration::*;
 pub use remote_server::*;
-pub use rich_input_ctrl_enter::*;
-pub use rules::*;
 use rust_embed::RustEmbed;
 pub use secrets::*;
 pub use session_restoration::*;
 use settings::Setting as _;
-pub use settings_execution_profiles::*;
 pub use settings_file_errors::*;
 pub use settings_file_hot_reload::*;
 pub use settings_file_migration::*;
@@ -92,10 +80,9 @@ pub use typeahead::*;
 use version_compare::Cmp;
 pub use video_recording::*;
 use warp::appearance::Appearance;
+use warp::cmd_or_ctrl_shift;
 use warp::features::FeatureFlag;
-use warp::integration_testing::assertions::{
-    assert_binding_display_string, go_offline, go_online, join_a_workspace,
-};
+use warp::integration_testing::assertions::assert_binding_display_string;
 use warp::integration_testing::block::{
     BlockPosition, LinePosition, assert_block_visible, assert_bottom_of_block_approx_at,
     assert_num_blocks_in_model,
@@ -113,9 +100,7 @@ use warp::integration_testing::navigation_palette::{
     RecentSession, check_recency, navigate_to_other_session_step, open_navigation_palette_step,
 };
 use warp::integration_testing::pane_group::assert_focused_pane_index;
-use warp::integration_testing::settings::{
-    assert_theme_chooser_contains, set_window_custom_size, toggle_setting,
-};
+use warp::integration_testing::settings::{assert_theme_chooser_contains, toggle_setting};
 use warp::integration_testing::step::{
     assert_no_pending_model_events, new_step_with_default_assertions,
     new_step_with_default_assertions_for_pane,
@@ -144,9 +129,8 @@ use warp::integration_testing::terminal::{
     validate_git_branch, wait_until_bootstrapped_pane, wait_until_bootstrapped_single_pane_for_tab,
 };
 use warp::integration_testing::view_getters::{
-    pane_group_view, single_input_suggestions_view_for_tab, single_input_view_for_tab,
+    single_input_suggestions_view_for_tab, single_input_view_for_tab,
     single_terminal_pane_view_for_tab, single_terminal_view, single_terminal_view_for_tab,
-    workspace_view,
 };
 use warp::integration_testing::warp_drive::assert_is_left_panel_open;
 use warp::integration_testing::window::{
@@ -155,7 +139,6 @@ use warp::integration_testing::window::{
 };
 use warp::integration_testing::workspace::assert_tab_count;
 use warp::integration_testing::{self, view_of_type};
-use warp::pane_group::AGENT_MODE_PANE_DEFAULT_MINIMUM_WIDTH;
 use warp::settings::{
     CompletionsOpenWhileTyping, CtrlTabBehavior, INPUT_MODE, MonospaceFontSize, TabBehavior,
 };
@@ -180,10 +163,7 @@ use warp::terminal::view::{
 use warp::terminal::{TerminalView, shell};
 use warp::util::bindings::CustomAction;
 use warp::workflows::categories::CategoriesView;
-use warp::workspace::{
-    NEW_SESSION_MENU_BUTTON_POSITION_ID, NEW_TAB_BUTTON_POSITION_ID, Workspace, WorkspaceAction,
-};
-use warp::{AgentModeEntrypoint, cmd_or_ctrl_shift};
+use warp::workspace::{NEW_SESSION_MENU_BUTTON_POSITION_ID, NEW_TAB_BUTTON_POSITION_ID, Workspace};
 use warpui_core::event::KeyState;
 use warpui_core::integration::{AssertionOutcome, StepData, TestStep};
 use warpui_core::keymap::{Keystroke, PerPlatformKeystroke, Trigger};
@@ -2066,43 +2046,6 @@ pub fn test_add_and_close_session() -> Builder {
                 .with_hover_over_saved_position("close_tab_button:0")
                 .with_click_on_saved_position("close_tab_button:0")
                 .add_assertion(assert_tab_count(1)),
-        )
-}
-
-pub fn test_open_and_close_resource_center() -> Builder {
-    new_builder()
-        .with_step(wait_until_bootstrapped_single_pane_for_tab(0))
-        .with_step(
-            new_step_with_default_assertions("Click the resource center button to show the menu")
-                .with_hover_over_saved_position("resource_center_button")
-                .with_click_on_saved_position("resource_center_button")
-                .add_assertion(|app, window_id| {
-                    let views = app.views_of_type(window_id).expect("No workspace found");
-                    let workspace: &ViewHandle<Workspace> =
-                        views.first().expect("No workspace in views");
-                    let is_resource_center_showing =
-                        workspace.read(app, |workspace, _| workspace.is_resource_center_showing());
-                    async_assert!(
-                        is_resource_center_showing,
-                        "Expected resource center to be showing",
-                    )
-                }),
-        )
-        .with_step(
-            new_step_with_default_assertions("Click the resource center button to hide the menu")
-                .with_hover_over_saved_position("resource_center_button")
-                .with_click_on_saved_position("resource_center_button")
-                .add_assertion(|app, window_id| {
-                    let views = app.views_of_type(window_id).expect("No workspace found");
-                    let workspace: &ViewHandle<Workspace> =
-                        views.first().expect("No workspace in views");
-                    let is_resource_center_showing =
-                        workspace.read(app, |workspace, _| workspace.is_resource_center_showing());
-                    async_assert!(
-                        !is_resource_center_showing,
-                        "Expected resource center not to be showing",
-                    )
-                }),
         )
 }
 
@@ -6719,92 +6662,6 @@ pub fn test_pane_group_state_clear_blocks() -> Builder {
             new_step_with_default_assertions("clear the pane")
                 .with_keystrokes(&[cmd_or_ctrl_shift("k")])
                 .add_assertion(assert_pane_group_has_state(0, TerminalViewState::Normal)),
-        )
-}
-
-/// Create a small window and enough terminal panes inside it so that a new pane would normally have
-/// a narrow width. Check that the Agent Mode pane is wide enough regardless.
-pub fn test_agent_mode_pane_minimum_size() -> Builder {
-    const WINDOW_ID_KEY: &str = "small_window_id";
-
-    new_builder()
-        .with_step(set_window_custom_size(40, 120))
-        .with_step(add_and_save_window(WINDOW_ID_KEY))
-        .with_step(
-            new_step_with_default_assertions("Check the new window size")
-                .add_named_assertion_with_data_from_prior_step(
-                    "Validate window size",
-                    move |app, _, step_data_map| {
-                        let window_id = step_data_map
-                            .get(WINDOW_ID_KEY)
-                            .expect("Window ID for new window should exist");
-
-                        let size = app
-                            .window_bounds(window_id)
-                            .expect("Window should exist")
-                            .size();
-                        // This doesn't correspond clearly to the given rows and columns due to line
-                        // height and padding. There's also some platform-specific variance and room
-                        // for floating-point error.
-                        assert_approx_eq!(f32, size.x(), 992., epsilon = 2.);
-                        assert_approx_eq!(f32, size.y(), 644., epsilon = 2.);
-                        AssertionOutcome::Success
-                    },
-                ),
-        )
-        .with_step(
-            new_step_with_default_assertions("Create a new empty pane")
-                .with_keystrokes(&[cmd_or_ctrl_shift("d")]),
-        )
-        .with_step(
-            new_step_with_default_assertions("Create an Agent Mode pane and check its width")
-                .with_action(move |app, _, step_data_map| {
-                    let window_id = step_data_map
-                        .get(WINDOW_ID_KEY)
-                        .expect("Window ID for new window should exist");
-
-                    let workspace_view_id = workspace_view(app, *window_id).id();
-
-                    app.dispatch_typed_action(
-                        *window_id,
-                        &[workspace_view_id],
-                        &WorkspaceAction::NewPaneInAgentMode {
-                            entrypoint: AgentModeEntrypoint::TabBar,
-                            zero_state_prompt_suggestion_type: None,
-                        },
-                    );
-                })
-                .add_named_assertion_with_data_from_prior_step(
-                    "Check Agent Mode pane width",
-                    |app, _, step_data_map| {
-                        let window_id = step_data_map
-                            .get(WINDOW_ID_KEY)
-                            .expect("Window ID for new window should exist");
-
-                        let pane_group = pane_group_view(app, *window_id, 0);
-                        pane_group.read(app, |view, app| {
-                            let Some(agent_mode_pane) = view.terminal_view_at_pane_index(2, app)
-                            else {
-                                return AssertionOutcome::failure(
-                                    "no terminal pane at pane_index 2".to_owned(),
-                                );
-                            };
-
-                            let pane_width =
-                                agent_mode_pane.as_ref(app).size_info().pane_size_px().x();
-
-                            // Approx equality to handle pane borders, etc.
-                            assert_approx_eq!(
-                                f32,
-                                pane_width - AGENT_MODE_PANE_DEFAULT_MINIMUM_WIDTH,
-                                0.,
-                                epsilon = 4.
-                            );
-
-                            AssertionOutcome::Success
-                        })
-                    },
-                ),
         )
 }
 

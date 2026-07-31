@@ -546,7 +546,12 @@ pub fn test_restore_snapshot_with_settings_page() -> Builder {
             TestStep::new("Verify settings pane restoration")
                 .add_assertion(assert_pane_title(0, 1, "Settings"))
                 .add_assertion(move |app, window_id| {
-                    // Verify the settings view exists and is on the Referrals page.
+                    // LOCAL FORK: the snapshot persists the page as "Referrals", a section
+                    // this build no longer has. `SettingsSection::from_str` returns `Err`
+                    // for it and `sqlite.rs` falls back to `unwrap_or_default()`, so the
+                    // pane must still restore, landing on the default page. That fallback
+                    // is what this assertion now covers: an unknown persisted page must
+                    // degrade to the default rather than drop the pane.
                     let settings_views: Vec<ViewHandle<SettingsView>> = app
                         .views_of_type(window_id)
                         .expect("Settings view must exist");
@@ -556,7 +561,7 @@ pub fn test_restore_snapshot_with_settings_page() -> Builder {
                     settings_view.read(app, |view, _| {
                         async_assert_eq!(
                             view.current_settings_section(),
-                            SettingsSection::Referrals
+                            SettingsSection::default()
                         )
                     })
                 }),

@@ -181,15 +181,6 @@ impl ActiveNotebookData {
                     ctx.emit(ActiveNotebookDataEvent::TrashStatusChanged);
                 }
             }
-            (ObjectOperation::MoveToDrive, OperationSuccessType::Success) => {
-                let current_id = self.id();
-                let server_id = result.server_id.expect("Expect server id on success");
-                if let Some(id) = current_id
-                    && id.into_server() == Some(server_id)
-                {
-                    ctx.emit(ActiveNotebookDataEvent::MovedToSpace);
-                }
-            }
             _ => {}
         }
     }

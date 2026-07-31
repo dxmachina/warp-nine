@@ -9,12 +9,12 @@ pub use cloud_objects::cloud_object::{GenericStringModel, Serializer};
 pub use warp_server_client::ids::GenericStringObjectId;
 
 use crate::appearance::Appearance;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::{
     CloudModelType, CloudObject, CloudObjectEventEntrypoint, CreateCloudObjectResult,
     CreateObjectRequest, GenericCloudObject, GenericServerObject, GenericStringObjectFormat,
     GenericStringObjectUniqueKey, ObjectType, Revision, UpdateCloudObjectResult,
 };
-use crate::drive::CloudObjectTypeAndId;
 use crate::drive::items::WarpDriveItem;
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::update_manager::InitiatedBy;

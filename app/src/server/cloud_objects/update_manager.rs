@@ -31,6 +31,7 @@ use super::listener::ObjectUpdateMessage;
 // these symbols from every build where the condition is false.
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::model::actions::{
     ObjectAction, ObjectActionHistory, ObjectActionType, ObjectActions,
 };
@@ -48,7 +49,6 @@ use crate::cloud_object::{
     ServerMetadata, ServerPermissions, ServerPreference, ServerWorkflowEnum, Space,
     UpdateCloudObjectResult,
 };
-use crate::drive::CloudObjectTypeAndId;
 use crate::drive::drive_helpers::{
     is_feature_gated_anonymous_user_past_env_var_limit,
     is_feature_gated_anonymous_user_past_notebook_limit,

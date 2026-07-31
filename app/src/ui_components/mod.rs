@@ -4,7 +4,10 @@
 //! within the app.
 pub(crate) mod avatar;
 pub(crate) mod blended_colors;
-pub(crate) mod breadcrumb;
+// LOCAL FORK: `breadcrumb` removed. It rendered a clickable Space/Folder path row whose only
+// action was revealing the object in the Warp Drive panel. All four consumers (the workflow view,
+// the notebook details bar, the env var collection view and the workflow argument modal) dropped
+// their rows with the panel, leaving the module with no callers.
 pub mod buttons;
 pub(crate) mod color_dot;
 pub(crate) mod dialog;

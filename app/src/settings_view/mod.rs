@@ -96,6 +96,11 @@ mod settings_file_footer;
 pub(crate) mod settings_page;
 mod show_blocks_view;
 mod tab_menu;
+// LOCAL FORK: was `drive/cloud_action_confirmation_dialog.rs`. Despite living under
+// `drive/`, it has zero Drive content: it is the confirm-delete-team, confirm-leave-team
+// and confirm-remove-member dialog, and `teams_page.rs` is its only consumer. Renamed to
+// say what it is.
+mod team_action_confirmation_dialog;
 mod teams_page;
 mod telemetry;
 mod transfer_ownership_confirmation_modal;

@@ -12,9 +12,9 @@ use warpui::{
 
 use super::CloudNotebook;
 use super::notebook::NotebookView;
+use crate::cloud_object::OpenWarpDriveObjectSettings;
 use crate::cloud_object::Owner;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
-use crate::drive::OpenWarpDriveObjectSettings;
 use crate::pane_group::{NotebookPane, PaneContent};
 use crate::server::cloud_objects::update_manager::{
     ObjectOperation, OperationSuccessType, UpdateManager, UpdateManagerEvent,

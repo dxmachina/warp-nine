@@ -11,6 +11,13 @@ use anyhow::Result;
 use workflow::Workflow;
 
 pub mod aliases;
+// LOCAL FORK: lifted out of `app/src/drive/workflows/`. Despite living under `drive/`,
+// this is the workflow argument-prompt UI: the modal that asks for `{{arg}}` values
+// before running a workflow, its argument editors, the enum-creation dialog and the
+// argument type helpers. `app/src/workflows/` and `app/src/notebooks/` consume it
+// directly. Its only ties to Drive proper were an icon colour and the
+// "View in Warp Drive" action, both of which go with the browser.
+pub mod arguments_ui;
 pub mod command_parser;
 pub mod export_workflow;
 pub mod info_box;
@@ -24,12 +31,12 @@ use async_trait::async_trait;
 pub use categories::{CategoriesView, CategoriesViewEvent, WorkflowsViewAction};
 
 use crate::appearance::Appearance;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::model::view::CloudViewModel;
 use crate::cloud_object::{
     CloudModelType, CloudObjectEventEntrypoint, CloudObjectUpsertParams, CreateCloudObjectResult,
     CreateObjectRequest, GenericServerObject, ObjectType, Revision, UpdateCloudObjectResult,
 };
-use crate::drive::CloudObjectTypeAndId;
 use crate::drive::items::WarpDriveItem;
 use crate::drive::items::workflow::WarpDriveWorkflow;
 use crate::notebooks::{NotebookId, NotebookLocation};

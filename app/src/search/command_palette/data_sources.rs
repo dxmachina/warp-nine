@@ -217,12 +217,8 @@ impl DataSourceStore {
                 // zero state yet.
                 None
             }
-            ItemSummary::CloudObject => {
-                // We don't yet support all cloud objects in the command palette but
-                // we have a `ViewInWarpDrive` action that supports all of them, so
-                // this is necessary to make the compiler happy.
-                None
-            }
+            // LOCAL FORK: `ItemSummary::CloudObject` covered objects the palette does not
+            // itself open, reachable only via `ViewInWarpDrive`; removed with the Drive panel.
             ItemSummary::NewSession { id } => self
                 .new_session_data_source
                 .as_ref()

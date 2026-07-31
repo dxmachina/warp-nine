@@ -6,8 +6,8 @@ pub use cloud_object_models::{CloudFolder, CloudFolderModel};
 // Re-exported from warp_server_client.
 pub use warp_server_client::ids::FolderId;
 
-use super::CloudObjectTypeAndId;
 use super::items::WarpDriveItem;
+use crate::cloud_object::CloudObjectTypeAndId;
 // Re-exported from warp_server_client.
 use super::items::folder::WarpDriveFolder;
 use crate::appearance::Appearance;

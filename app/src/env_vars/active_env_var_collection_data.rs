@@ -1,7 +1,6 @@
 use warpui::{Entity, ModelContext, SingletonEntity};
 
 use super::CloudEnvVarCollectionModel;
-use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::persistence::CloudModelEvent;
 use crate::cloud_object::model::view::CloudViewModel;
 use crate::cloud_object::{CloudObject, Owner, Revision, Space};
@@ -246,20 +245,10 @@ impl ActiveEnvVarCollectionData {
         self.id() == Some(env_var_collection_id)
     }
 
-    pub fn breadcrumbs(&self, ctx: &AppContext) -> Option<Vec<ContainingObject>> {
-        let cloud_env_var_collection = match &self.active_env_var_collection {
-            ActiveEnvVarCollection::None => None,
-            ActiveEnvVarCollection::CommittedEnvVarCollection(id) => {
-                CloudModel::as_ref(ctx).get_env_var_collection(id)
-            }
-            ActiveEnvVarCollection::NewEnvVarCollection(env_var_collection) => {
-                Some(env_var_collection.as_ref())
-            }
-        };
-
-        cloud_env_var_collection
-            .map(|env_var_collection| env_var_collection.containing_objects_path(ctx))
-    }
+    // LOCAL FORK: `breadcrumbs` fed the location row that went with the Warp Drive
+    // browser. `containing_objects_path` itself stays: `CloudObject::breadcrumbs()`
+    // still renders the "Personal / folder" line on ~20 command-palette and search
+    // items.
 
     pub fn trash_status(&self, ctx: &AppContext) -> TrashStatus {
         match &self.active_env_var_collection {

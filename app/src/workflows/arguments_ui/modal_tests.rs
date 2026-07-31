@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use warp_core::ui::appearance::Appearance;
 use warpui::platform::WindowStyle;
-use warpui::{App, SingletonEntity, ViewHandle};
+use warpui::{App, ViewHandle};
 
 use super::WorkflowModal;
 use crate::UserWorkspaces;

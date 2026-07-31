@@ -18,11 +18,12 @@ use warpui::rendering::ThinStrokes;
 
 use crate::auth::auth_manager::LoginGatedFeature;
 use crate::channel::Channel;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::model::generic_string_model::GenericStringObjectId;
 use crate::cloud_object::{GenericStringObjectFormat, ObjectType, Space};
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;
-use crate::drive::{CloudObjectTypeAndId, DriveSortOrder};
+use crate::drive::DriveSortOrder;
 use crate::features::FeatureFlag;
 use crate::launch_configs::save_modal::SaveState;
 use crate::notebooks::telemetry::NotebookTelemetryAction;
@@ -437,7 +438,8 @@ pub enum CommandSearchResultType {
     TranslateUsingWarpAI,
     Notebook,
     EnvVarCollection,
-    ViewInWarpDrive,
+    // LOCAL FORK: `ViewInWarpDrive` had no producer in `From<&CommandSearchItemAction>` and was
+    // never constructed; removed with the Warp Drive panel.
     AIQuery,
     Project,
 }

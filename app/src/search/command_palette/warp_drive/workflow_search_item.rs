@@ -5,8 +5,8 @@ use warpui::{AppContext, Element, SingletonEntity};
 
 use crate::appearance::Appearance;
 use crate::cloud_object::CloudObject;
+use crate::cloud_object::DriveObjectType;
 use crate::drive::cloud_object_styling::warp_drive_icon_color;
-use crate::drive::{CloudObjectTypeAndId, DriveObjectType};
 use crate::search::command_palette::mixer::CommandPaletteItemAction;
 use crate::search::command_palette::render_util::render_search_item_icon;
 use crate::search::command_palette::styles::SEARCH_ITEM_TEXT_PADDING;
@@ -142,10 +142,10 @@ impl SearchItem for WorkflowSearchItem {
         }
     }
 
+    // LOCAL FORK: the modified-enter action revealed the workflow in the Warp Drive panel.
+    // The panel is gone, so the secondary action is the primary one.
     fn execute_result(&self) -> Self::Action {
-        CommandPaletteItemAction::ViewInWarpDrive {
-            id: CloudObjectTypeAndId::Workflow(self.cloud_workflow.id),
-        }
+        self.accept_result()
     }
 
     fn accessibility_label(&self) -> String {

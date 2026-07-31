@@ -40,25 +40,15 @@ use super::{CloudWorkflowModel, WorkflowSource, WorkflowType, WorkflowViewMode};
 use crate::appearance::Appearance;
 use crate::auth::auth_state::AuthState;
 use crate::auth::{AuthStateProvider, UserUid};
-use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::CloudViewModel;
 use crate::cloud_object::{
     CloudObject, CloudObjectEventEntrypoint, ObjectType, Owner, Revision, Space,
 };
+use crate::cloud_object::{CloudObjectTypeAndId, DriveObjectType, OpenWarpDriveObjectSettings};
 use crate::drive::cloud_object_styling::warp_drive_icon_color;
 use crate::drive::drive_helpers::has_feature_gated_anonymous_user_reached_workflow_limit;
-use crate::drive::items::WarpDriveItemId;
 use crate::drive::sharing::{ContentEditability, ShareableObject, SharingAccessLevel};
-use crate::drive::workflows::arguments::ArgumentsState;
-use crate::drive::workflows::enum_creation_dialog::{
-    EnumCreationDialog, EnumCreationDialogEvent, WorkflowEnumData,
-};
-use crate::drive::workflows::workflow_arg_selector::{
-    WorkflowArgSelector, WorkflowArgSelectorEvent,
-};
-use crate::drive::workflows::workflow_arg_type_helpers::{self, ArgumentEditorRowIndex};
-use crate::drive::{CloudObjectTypeAndId, DriveObjectType, OpenWarpDriveObjectSettings};
 use crate::editor::{
     EditorOptions, EditorView, EnterAction, EnterSettings, Event as EditorEvent, InteractionState,
     PlainTextEditorViewAction as EditorAction, PropagateAndNoOpNavigationKeys,
@@ -82,7 +72,6 @@ use crate::settings::app_installation_detection::{
 };
 use crate::terminal::model::secret_detection::find_secrets_in_text;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
-use crate::ui_components::breadcrumb::{BreadcrumbState, render_breadcrumbs};
 use crate::ui_components::buttons::{accent_icon_button, icon_button};
 use crate::ui_components::dialog::{Dialog, dialog_styles};
 use crate::ui_components::icons::Icon;
@@ -91,6 +80,14 @@ use crate::uri::web_intent_parser::open_url_on_desktop;
 use crate::util::bindings::CustomAction;
 use crate::view_components::{DismissibleToast, ToastLink, ToastType};
 use crate::workflows::CloudWorkflow;
+use crate::workflows::arguments_ui::arguments::ArgumentsState;
+use crate::workflows::arguments_ui::enum_creation_dialog::{
+    EnumCreationDialog, EnumCreationDialogEvent, WorkflowEnumData,
+};
+use crate::workflows::arguments_ui::workflow_arg_selector::{
+    WorkflowArgSelector, WorkflowArgSelectorEvent,
+};
+use crate::workflows::arguments_ui::workflow_arg_type_helpers::{self, ArgumentEditorRowIndex};
 use crate::workflows::workflow::{Argument, Workflow};
 use crate::workspace::{ToastStack, WorkspaceAction};
 use crate::{FeatureFlag, UserWorkspaces, send_telemetry_from_ctx};
@@ -207,7 +204,8 @@ impl WorkflowEditorErrorState {
 
 #[derive(Debug, Clone)]
 pub enum WorkflowAction {
-    ViewInWarpDrive(WarpDriveItemId),
+    // LOCAL FORK: the breadcrumbs action `ViewInWarpDrive` revealed this workflow in the Warp
+    // Drive panel; removed with the panel, and the breadcrumb row itself went with it.
     AddArgument,
     ToggleViewMode,
     RunWorkflow,
@@ -231,7 +229,8 @@ pub enum WorkflowViewEvent {
     Pane(PaneEvent),
     CreatedWorkflow(SyncId),
     UpdatedWorkflow(SyncId),
-    ViewInWarpDrive(WarpDriveItemId),
+    // LOCAL FORK: `ViewInWarpDrive` revealed this workflow in the Warp Drive panel; removed with
+    // the panel.
     OpenDriveObjectShareDialog {
         cloud_object_type_and_id: CloudObjectTypeAndId,
         invitee_email: Option<String>,
@@ -295,7 +294,6 @@ pub struct WorkflowView {
     alias_bar: ViewHandle<AliasBar>,
     env_vars_selector: ViewHandle<EnvVarSelector>,
     env_vars_state: EnvironmentVariablesState,
-    breadcrumbs: Vec<BreadcrumbState<ContainingObject>>,
     errors: WorkflowEditorErrorState,
     ui_state_handles: UiStateHandles,
     show_unsaved_changes: Option<UnsavedChangeType>,
@@ -440,7 +438,6 @@ impl WorkflowView {
             alias_bar,
             env_vars_selector,
             env_vars_state: Default::default(),
-            breadcrumbs: Vec::new(),
             errors: WorkflowEditorErrorState::new(),
             ui_state_handles: Default::default(),
             show_unsaved_changes: None,
@@ -818,16 +815,11 @@ impl WorkflowView {
                 });
             }
         }
-        self.update_breadcrumb(ctx);
         self.update_editors_interactivity(ctx);
         self.refresh_pane_overflow_menu(ctx);
 
-        if let Some(focused_folder_id) = settings.focused_folder_id.map(SyncId::ServerId) {
-            self.view_in_warp_drive(
-                WarpDriveItemId::Object(CloudObjectTypeAndId::Folder(focused_folder_id)),
-                ctx,
-            );
-        }
+        // LOCAL FORK: a `focused_folder_id` used to reveal the workflow's containing folder in the
+        // Warp Drive panel; removed with the panel.
 
         if let Some(invitee_email) = settings.invitee_email.clone() {
             let object_id_to_share = settings
@@ -1796,20 +1788,6 @@ impl WorkflowView {
         });
     }
 
-    fn update_breadcrumb(&mut self, ctx: &mut ViewContext<Self>) {
-        let workflow = self.get_cloud_workflow(ctx);
-
-        if let Some(the_workflow) = workflow {
-            self.breadcrumbs = the_workflow
-                .containing_objects_path(ctx)
-                .into_iter()
-                .map(BreadcrumbState::new)
-                .collect();
-        } else {
-            log::warn!("Workflow not found from cloudmodel, could not update breadcrumb");
-        }
-    }
-
     pub fn focus(&mut self, ctx: &mut ViewContext<Self>) {
         ctx.focus(&self.name_editor);
         ctx.emit(WorkflowViewEvent::Pane(PaneEvent::FocusSelf));
@@ -2580,10 +2558,6 @@ impl WorkflowView {
         })
     }
 
-    fn view_in_warp_drive(&mut self, id: WarpDriveItemId, ctx: &mut ViewContext<Self>) {
-        ctx.emit(WorkflowViewEvent::ViewInWarpDrive(id));
-    }
-
     /// LOCAL FORK: the AI client that generated workflow metadata went with the agent.
     /// The entry point is kept so the "AI assist" button still resolves, but the request
     /// can never be issued; report it immediately rather than leaving the view stuck in
@@ -2845,25 +2819,12 @@ impl View for WorkflowView {
             ContainerConfiguration::SuggestionDialog => 0.,
         };
 
+        // LOCAL FORK: this row led with a breadcrumb trail of the workflow's containing
+        // Space/Folder path. Clicking a crumb revealed the workflow in the Warp Drive panel,
+        // which was the trail's only interaction, so it went with the panel. Only the edit
+        // toggle is left, so the row is end-aligned and carries the vertical margin the
+        // breadcrumb container used to supply.
         let mut row = Flex::row();
-        row.add_child(
-            Shrinkable::new(
-                2.,
-                Container::new(render_breadcrumbs(
-                    self.breadcrumbs.clone(),
-                    appearance,
-                    |ctx, _, breadcrumb| {
-                        ctx.dispatch_typed_action(WorkflowAction::ViewInWarpDrive(
-                            breadcrumb.kind.into_item_id(),
-                        ));
-                    },
-                ))
-                .with_horizontal_margin(CORE_HORIZONATAL_MARGIN)
-                .with_vertical_margin(vertical_margin / 2.)
-                .finish(),
-            )
-            .finish(),
-        );
 
         let editability = if FeatureFlag::SharedWithMe.is_enabled() {
             self.editability(app)
@@ -2886,6 +2847,7 @@ impl View for WorkflowView {
                     1.,
                     Container::new(self.render_edit_toggle_button(editability, appearance))
                         .with_margin_right(CORE_HORIZONATAL_MARGIN)
+                        .with_vertical_margin(vertical_margin / 2.)
                         .finish(),
                 )
                 .finish(),
@@ -2894,7 +2856,7 @@ impl View for WorkflowView {
 
         content.add_child(
             row.with_cross_axis_alignment(CrossAxisAlignment::Center)
-                .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                .with_main_axis_alignment(MainAxisAlignment::End)
                 .with_main_axis_size(MainAxisSize::Max)
                 .finish(),
         );
@@ -3017,7 +2979,6 @@ impl TypedActionView for WorkflowView {
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         match action {
-            WorkflowAction::ViewInWarpDrive(id) => self.view_in_warp_drive(*id, ctx),
             WorkflowAction::AddArgument => self.add_argument(ctx),
             WorkflowAction::ToggleViewMode => self.toggle_view_mode(ctx),
             WorkflowAction::CloseUnsavedDialog => self.hide_unsaved_changes_dialog(ctx),

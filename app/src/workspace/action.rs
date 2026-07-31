@@ -22,7 +22,7 @@ use super::view::{OnboardingTutorial, WorkspaceBanner};
 // its attribute rebound it to the line below, which `main` leaves ungated. That hid
 // these symbols from every build where the condition is false.
 use crate::auth::auth_manager::LoginGatedFeature;
-use crate::drive::CloudObjectTypeAndId;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::drive::items::WarpDriveItemId;
 use crate::palette::PaletteMode;
 use crate::pane_group::PaneGroup;

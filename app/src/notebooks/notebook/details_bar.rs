@@ -12,39 +12,29 @@ use warpui::{AppContext, Element, SingletonEntity};
 use super::super::active_notebook_data::ActiveNotebookData;
 use super::{EDIT_BUTTON_MARGIN, NotebookAction};
 use crate::appearance::Appearance;
-use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::view::{Editor, EditorState};
 use crate::drive::sharing::ContentEditability;
 use crate::notebooks::active_notebook_data::Mode;
 use crate::notebooks::styles;
-use crate::ui_components::breadcrumb::{BreadcrumbState, render_breadcrumbs};
 use crate::ui_components::buttons::{accent_icon_button, icon_button};
 use crate::ui_components::icons::Icon;
 use crate::workspaces::user_profiles::UserProfiles;
 
 /// Component to show details about a notebook:
-/// * Interactive breadcrumbs for its location within Warp Drive
 /// * The current editor of the notebook
 /// * Grab-the-baton UI controls
+// LOCAL FORK: this bar also rendered a breadcrumb row with the notebook's containing
+// Space/Folder path. Clicking a crumb revealed the notebook in the Warp Drive panel, which is
+// the only thing the row did, so the row and its cached state went with the panel.
 pub struct DetailsBar {
-    breadcrumbs: Vec<BreadcrumbState<ContainingObject>>,
     edit_mode_button_mouse_state: MouseStateHandle,
 }
 
 impl DetailsBar {
     pub fn new() -> Self {
         Self {
-            breadcrumbs: Vec::new(),
             edit_mode_button_mouse_state: Default::default(),
         }
-    }
-
-    /// Update the cached breadcrumbs in the notebook header.
-    pub fn update_breadcrumbs(&mut self, notebook_data: &ActiveNotebookData, ctx: &AppContext) {
-        self.breadcrumbs = notebook_data
-            .breadcrumbs(ctx)
-            .map(|breadcrumbs| breadcrumbs.into_iter().map(BreadcrumbState::new).collect())
-            .unwrap_or_default();
     }
 
     pub fn render(
@@ -57,22 +47,6 @@ impl DetailsBar {
             .with_main_axis_size(MainAxisSize::Max)
             .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
             .with_cross_axis_alignment(CrossAxisAlignment::Center);
-
-        header_row.add_child(
-            Shrinkable::new(
-                2.,
-                render_breadcrumbs(
-                    self.breadcrumbs.iter().cloned(),
-                    appearance,
-                    |ctx, _, breadcrumb| {
-                        ctx.dispatch_typed_action(NotebookAction::ViewInWarpDrive(
-                            breadcrumb.kind.into_item_id(),
-                        ));
-                    },
-                ),
-            )
-            .finish(),
-        );
 
         let mut editing_state_row = Flex::row()
             .with_main_axis_alignment(MainAxisAlignment::End)

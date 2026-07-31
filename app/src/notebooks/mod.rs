@@ -17,11 +17,11 @@ use serde::{Deserialize, Serialize};
 use warpui::AppContext;
 
 use crate::appearance::Appearance;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::{
     CloudModelType, CloudObjectEventEntrypoint, CloudObjectUpsertParams, CreateCloudObjectResult,
     CreateObjectRequest, GenericServerObject, ObjectType, Owner, Revision, UpdateCloudObjectResult,
 };
-use crate::drive::CloudObjectTypeAndId;
 use crate::drive::items::WarpDriveItem;
 use crate::drive::items::notebook::WarpDriveNotebook;
 use crate::persistence::ModelEvent;

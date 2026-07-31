@@ -5,7 +5,6 @@ use warp_util::path::LineAndColumnArg;
 use warpui::keymap::BindingId;
 use warpui::{EntityId, WindowId};
 
-use crate::drive::CloudObjectTypeAndId;
 use crate::launch_configs::launch_config::LaunchConfig;
 use crate::search::command_palette::new_session::{NewSessionOption, NewSessionOptionId};
 use crate::search::mixer::SearchMixer;
@@ -27,9 +26,8 @@ pub enum CommandPaletteItemAction {
     OpenNotebook {
         id: SyncId,
     },
-    ViewInWarpDrive {
-        id: CloudObjectTypeAndId,
-    },
+    // LOCAL FORK: `ViewInWarpDrive` revealed an object in the Warp Drive panel; removed with the
+    // panel.
     InvokeEnvironmentVariables {
         id: SyncId,
     },
@@ -108,12 +106,6 @@ impl CommandPaletteItemAction {
             CommandPaletteItemAction::OpenLaunchConfiguration { .. } => {
                 ItemSummary::LaunchConfiguration
             }
-            CommandPaletteItemAction::ViewInWarpDrive { id } => match id {
-                CloudObjectTypeAndId::Notebook(_)
-                | CloudObjectTypeAndId::Folder(_)
-                | CloudObjectTypeAndId::GenericStringObject { .. } => ItemSummary::CloudObject,
-                CloudObjectTypeAndId::Workflow(id) => ItemSummary::Workflow { id: *id },
-            },
             CommandPaletteItemAction::OpenFile {
                 path,
                 project_directory,
@@ -180,8 +172,8 @@ pub enum ItemSummary {
     /// Dummy enum variant for launch configurations until we support showing them in recent section
     /// of the zero state
     LaunchConfiguration,
-    /// Dummy enum variant for cloud objects that aren't supported yet in command palette
-    CloudObject,
+    // LOCAL FORK: `CloudObject` was the summary for `ViewInWarpDrive`, the only action that
+    // produced it; removed with the Warp Drive panel.
     File {
         path: String,
         project_directory: String,

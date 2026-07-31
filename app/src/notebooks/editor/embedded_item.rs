@@ -28,8 +28,8 @@ use warpui::units::{IntoPixels, Pixels};
 use warpui::{AppContext, Element, LayoutContext, SingletonEntity, SizeConstraint};
 
 use crate::cloud_object::CloudObject;
+use crate::cloud_object::DriveObjectType;
 use crate::cloud_object::model::persistence::CloudModel;
-use crate::drive::DriveObjectType;
 use crate::drive::cloud_object_styling::warp_drive_icon_color;
 use crate::server::ids::{HashableId, ToServerId};
 use crate::ui_components::icons::Icon;

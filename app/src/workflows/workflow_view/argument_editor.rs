@@ -20,10 +20,6 @@ use super::{
     VERTICAL_TEXT_INPUT_PADDING, WORKFLOW_PARAMETER_HIGHLIGHT_COLOR, WorkflowAction, WorkflowView,
     WorkflowViewEvent,
 };
-use crate::drive::workflows::workflow_arg_selector::{
-    WorkflowArgSelector, WorkflowArgSelectorStyles,
-};
-use crate::drive::workflows::workflow_arg_type_helpers::{self, ArgumentTypeEditor};
 use crate::editor::{
     EditOrigin, EditorView, Event as EditorEvent, InteractionState,
     PlainTextEditorViewAction as EditorAction,
@@ -31,6 +27,10 @@ use crate::editor::{
 use crate::pane_group::PaneEvent;
 use crate::ui_components::buttons::icon_button;
 use crate::ui_components::icons::Icon;
+use crate::workflows::arguments_ui::workflow_arg_selector::{
+    WorkflowArgSelector, WorkflowArgSelectorStyles,
+};
+use crate::workflows::arguments_ui::workflow_arg_type_helpers::{self, ArgumentTypeEditor};
 use crate::workflows::workflow::Workflow;
 use crate::workspace::WorkspaceAction;
 

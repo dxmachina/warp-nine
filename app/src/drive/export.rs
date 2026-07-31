@@ -16,7 +16,7 @@ use warpui::platform::file_picker::FilePickerError;
 use warpui::platform::{FilePickerConfiguration, OperatingSystem};
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity, WindowId};
 
-use super::CloudObjectTypeAndId;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::Space;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::safe_warn;

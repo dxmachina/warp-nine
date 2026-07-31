@@ -17,9 +17,9 @@ use super::drive_helpers::{
 };
 use super::index::{DriveIndex, DriveIndexAction, DriveIndexEvent};
 use super::items::WarpDriveItemId;
-use super::{CloudObjectTypeAndId, DriveObjectType};
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::model::view::CloudViewModel;
+use crate::cloud_object::{CloudObjectTypeAndId, DriveObjectType};
 use crate::cloud_object::{GenericStringObjectFormat, JsonObjectType, Owner, Space};
 use crate::env_vars::CloudEnvVarCollection;
 use crate::env_vars::manager::EnvVarCollectionSource;

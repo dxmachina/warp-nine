@@ -20,7 +20,7 @@ use warpui::{AppContext, EntityId, SingletonEntity as _, TypedActionView, ViewHa
 
 use self::docker::open_docker_container;
 use crate::cloud_object::ObjectType;
-use crate::drive::{OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings};
+use crate::cloud_object::{OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings};
 use crate::features::FeatureFlag;
 use crate::launch_configs::launch_config::LaunchConfig;
 use crate::linear::{LinearAction, LinearIssueWork};

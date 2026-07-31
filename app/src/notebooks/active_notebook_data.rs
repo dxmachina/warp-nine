@@ -1,7 +1,6 @@
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
 use super::{CloudNotebookModel, NotebookId};
-use crate::cloud_object::breadcrumbs::ContainingObject;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::{CloudViewModel, Editor, EditorState};
 use crate::cloud_object::{CloudObject, Owner, Space};
@@ -250,16 +249,10 @@ impl ActiveNotebookData {
         )
     }
 
-    /// Calculate the breadcrumbs for this object.
-    pub fn breadcrumbs(&self, ctx: &AppContext) -> Option<Vec<ContainingObject>> {
-        let cloud_notebook = match &self.active_notebook {
-            ActiveNotebook::None => None,
-            ActiveNotebook::CommittedNotebook(id) => CloudModel::as_ref(ctx).get_notebook(id),
-            ActiveNotebook::NewNotebook(notebook) => Some(notebook.as_ref()),
-        };
-
-        cloud_notebook.map(|notebook| notebook.containing_objects_path(ctx))
-    }
+    // LOCAL FORK: `breadcrumbs` fed the location row that went with the Warp Drive
+    // browser. `containing_objects_path` itself stays: `CloudObject::breadcrumbs()`
+    // still renders the "Personal / folder" line on ~20 command-palette and search
+    // items.
 
     /// The space that the active notebook is shown in for this user.
     pub fn space(&self, app: &AppContext) -> Option<Space> {

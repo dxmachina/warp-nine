@@ -12,7 +12,7 @@ use warpui::{
 use super::shared_objects_creation_denied_body::{
     SharedObjectsCreationDeniedBody, SharedObjectsCreationDeniedBodyEvent,
 };
-use crate::drive::DriveObjectType;
+use crate::cloud_object::DriveObjectType;
 use crate::drive::cloud_object_styling::warp_drive_icon_color;
 use crate::modal::{Modal, ModalEvent};
 use crate::server::ids::ServerId;

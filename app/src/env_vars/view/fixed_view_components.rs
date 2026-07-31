@@ -1,6 +1,7 @@
 use pathfinder_color::ColorU;
 use pathfinder_geometry::vector::Vector2F;
 use warp_core::features::FeatureFlag;
+use warpui::Element;
 use warpui::elements::{
     Align, ConstrainedBox, Container, CrossAxisAlignment, Empty, Flex, MainAxisAlignment,
     MainAxisSize, ParentElement, Rect, Shrinkable, Stack,
@@ -8,12 +9,10 @@ use warpui::elements::{
 use warpui::fonts::Weight;
 use warpui::ui_components::button::{ButtonVariant, TextAndIcon, TextAndIconAlignment};
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
-use warpui::{Element, ViewContext};
 
 use crate::drive::sharing::{ContentEditability, SharingAccessLevel};
 use crate::env_vars::active_env_var_collection_data::TrashStatus;
 use crate::env_vars::view::env_var_collection::{EnvVarCollectionAction, EnvVarCollectionView};
-use crate::ui_components::breadcrumb::BreadcrumbState;
 use crate::ui_components::buttons::icon_button;
 use crate::ui_components::icons::Icon;
 use crate::{AppContext, Appearance, SingletonEntity};
@@ -26,18 +25,11 @@ const SAVE_BUTTON_TEXT: &str = "Save";
 const VARIABLES_LABEL_TEXT: &str = "Variables";
 
 /// This file contains components that fixed in the view,
-/// i.e. the trash banner, breadcrumbs, and variables section header
+/// i.e. the trash banner and variables section header
+// LOCAL FORK: `update_breadcrumbs` lived here and cached the collection's containing
+// Space/Folder path for a breadcrumb row. The row's only interaction was revealing the
+// collection in the Warp Drive panel, so both went with the panel.
 impl EnvVarCollectionView {
-    pub(super) fn update_breadcrumbs(&mut self, ctx: &mut ViewContext<Self>) {
-        self.breadcrumbs = self
-            .active_env_var_collection_data
-            .update(ctx, |data, ctx| {
-                data.breadcrumbs(ctx)
-                    .map(|breadcrumbs| breadcrumbs.into_iter().map(BreadcrumbState::new).collect())
-                    .unwrap_or_default()
-            })
-    }
-
     pub(super) fn render_trash_banner(
         &self,
         access_level: SharingAccessLevel,

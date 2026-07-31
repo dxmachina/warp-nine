@@ -7,13 +7,13 @@ use super::{DriveIndex, DriveIndexAction, SharedObjectLimitBannerKind};
 use crate::ASSETS;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::AuthManager;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::model::actions::ObjectActions;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::model::view::CloudViewModel;
 use crate::cloud_object::{
     CloudObjectSyncStatus, ObjectIdType, ObjectType, Owner, ServerCreationInfo, Space,
 };
-use crate::drive::CloudObjectTypeAndId;
 use crate::drive::items::WarpDriveItemId;
 use crate::menu::MenuItem;
 use crate::network::NetworkStatus;

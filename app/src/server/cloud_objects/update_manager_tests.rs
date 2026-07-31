@@ -16,6 +16,7 @@ use super::{GetCloudObjectResponse, InitialLoadResponse, UpdateManager};
 use crate::ASSETS;
 use crate::auth::UserUid;
 use crate::auth::user::TEST_USER_UID;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::model::actions::{
     ObjectAction, ObjectActionHistory, ObjectActionSubtype, ObjectActionType, ObjectActions,
 };
@@ -30,7 +31,6 @@ use crate::cloud_object::{
     ServerNotebook, ServerObject, ServerObjectGuest, ServerPreference, ServerWorkflow,
     ServerWorkflowEnum, Space, UpdateCloudObjectResult,
 };
-use crate::drive::CloudObjectTypeAndId;
 use crate::drive::folders::{CloudFolder, CloudFolderModel, FolderId};
 use crate::drive::sharing::{SharingAccessLevel, Subject, UserKind};
 use crate::notebooks::{CloudNotebook, CloudNotebookModel, NotebookId};

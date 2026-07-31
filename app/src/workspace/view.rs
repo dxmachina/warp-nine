@@ -173,6 +173,7 @@ use crate::cloud_object::toast_message::CloudObjectToastMessage;
 use crate::cloud_object::{
     CloudObject, GenericStringObjectFormat, JsonObjectType, ObjectType, Owner, Space,
 };
+use crate::cloud_object::{CloudObjectTypeAndId, DriveObjectType, OpenWarpDriveObjectSettings};
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code::editor::{add_color, remove_color};
 #[cfg(feature = "local_fs")]
@@ -190,10 +191,7 @@ use crate::drive::export::ExportManager;
 use crate::drive::import::modal::{ImportModal, ImportModalEvent};
 use crate::drive::items::WarpDriveItemId;
 use crate::drive::settings::{WarpDriveSettings, WarpDriveSettingsChangedEvent};
-use crate::drive::workflows::modal::{WorkflowModal, WorkflowModalEvent};
-use crate::drive::{
-    CloudObjectTypeAndId, DriveObjectType, DrivePanel, DrivePanelEvent, OpenWarpDriveObjectSettings,
-};
+use crate::drive::{DrivePanel, DrivePanelEvent};
 use crate::editor::{
     EditorView, Event as EditorEvent, PropagateAndNoOpNavigationKeys, SingleLineEditorOptions,
     TextOptions,
@@ -214,6 +212,7 @@ use crate::palette::PaletteMode;
 #[cfg(feature = "local_fs")]
 use crate::pane_group::FilePane;
 use crate::pane_group::pane::ActionOrigin;
+use crate::workflows::arguments_ui::modal::{WorkflowModal, WorkflowModalEvent};
 // LOCAL FORK: `AIFactPane`, `CodeDiffPane` and `ExecutionProfileEditorPane` removed with the agent.
 use crate::pane_group::{
     self, AnyPaneContent, CodePane, CodeReviewPanelArg, Direction as PaneGroupDirection, Direction,
@@ -9581,9 +9580,8 @@ impl Workspace {
                 // If saved workflow id matches the one that is currently displayed, then refresh workflow info box + input
                 self.maybe_refresh_workflow_info_box_and_input(workflow_id, ctx);
             }
-            WorkflowModalEvent::ViewInWarpDrive(id) => {
-                self.view_in_and_focus_warp_drive(*id, ctx);
-            }
+            // LOCAL FORK: `WorkflowModalEvent::ViewInWarpDrive` revealed the workflow in the Warp
+            // Drive panel; removed with the panel.
             WorkflowModalEvent::AiAssistUpgradeError(team_uid, user_id) => {
                 let upgrade_link = team_uid
                     .map(UserWorkspaces::upgrade_link_for_team)
@@ -12059,9 +12057,8 @@ impl Workspace {
                 ctx,
                 true,
             ),
-            CommandPaletteEvent::ViewInWarpDrive { id } => {
-                self.view_in_and_focus_warp_drive(WarpDriveItemId::Object(*id), ctx);
-            }
+            // LOCAL FORK: `CommandPaletteEvent::ViewInWarpDrive` revealed an object in the Warp
+            // Drive panel; removed with the panel.
             #[allow(unused_variables)]
             CommandPaletteEvent::OpenFile {
                 path,
@@ -12871,9 +12868,8 @@ impl Workspace {
                 // Focus an existing pane by its locator (used when avoiding duplicate file panes during undo close pane)
                 self.focus_pane(*locator, ctx);
             }
-            pane_group::Event::ViewInWarpDrive(id) => {
-                self.view_in_and_focus_warp_drive(*id, ctx);
-            }
+            // LOCAL FORK: `pane_group::Event::ViewInWarpDrive` revealed an object in the Warp
+            // Drive panel; removed with the panel.
             // If focused pane contains an object, then set selected state in WD to that object
             pane_group::Event::PaneFocused => {
                 self.current_workspace_state.close_all_modals();

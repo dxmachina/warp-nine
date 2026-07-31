@@ -48,11 +48,10 @@ use crate::cloud_object::grab_edit_access_modal::{GrabEditAccessModal, GrabEditA
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent, UpdateSource};
 use crate::cloud_object::model::view::{Editor, EditorState};
 use crate::cloud_object::{CloudObject, CloudObjectEventEntrypoint, ObjectType, Owner, Space};
+use crate::cloud_object::{CloudObjectTypeAndId, OpenWarpDriveObjectSettings};
 use crate::drive::drive_helpers::has_feature_gated_anonymous_user_reached_notebook_limit;
 use crate::drive::export::ExportManager;
-use crate::drive::items::WarpDriveItemId;
 use crate::drive::sharing::ShareableObject;
-use crate::drive::{CloudObjectTypeAndId, OpenWarpDriveObjectSettings};
 use crate::editor::{
     EditOrigin, EditorView, Event as EditorEvent, InteractionState, PropagateAndNoOpNavigationKeys,
     SingleLineEditorOptions, TextColors, TextOptions,
@@ -247,7 +246,8 @@ pub enum NotebookEvent {
         source: WorkflowSource,
     },
     EditWorkflow(SyncId),
-    ViewInWarpDrive(WarpDriveItemId),
+    // LOCAL FORK: `ViewInWarpDrive` revealed this notebook in the Warp Drive panel; removed with
+    // the panel.
     Pane(PaneEvent),
     MoveToSpace {
         cloud_object_type_and_id: CloudObjectTypeAndId,
@@ -276,7 +276,8 @@ pub enum NotebookAction {
     ResetFontSize,
     ConflictResolutionBannerRefreshClicked,
     FocusTerminalInput,
-    ViewInWarpDrive(WarpDriveItemId),
+    // LOCAL FORK: the breadcrumbs action `ViewInWarpDrive` revealed this notebook in the Warp
+    // Drive panel; removed with the panel. The breadcrumbs still render, but are inert.
     ContextMenu(ContextMenuAction), // right click context menu
     MoveToSpace {
         cloud_object_type_and_id: CloudObjectTypeAndId,
@@ -573,9 +574,11 @@ impl NotebookView {
                 log::info!("Edit rejected, switching to view mode");
                 self.switch_to_view(ctx);
             }
-            ActiveNotebookDataEvent::BreadcrumbsChanged => {
-                self.update_breadcrumbs(ctx);
-            }
+            // LOCAL FORK: this arm refreshed the details bar's breadcrumb row, which showed the
+            // notebook's containing Space/Folder path and whose only interaction was revealing
+            // the notebook in the Warp Drive panel. The row went with the panel, so the arm is a
+            // named no-op: the event is still received, and the `ctx.notify()` below still runs.
+            ActiveNotebookDataEvent::BreadcrumbsChanged => {}
             ActiveNotebookDataEvent::CreatedOnServer => {
                 ctx.emit(NotebookEvent::Pane(PaneEvent::AppStateChanged));
                 if let Some(id) = self
@@ -1199,10 +1202,6 @@ impl NotebookView {
         });
     }
 
-    fn view_in_warp_drive(&mut self, id: WarpDriveItemId, ctx: &mut ViewContext<Self>) {
-        ctx.emit(NotebookEvent::ViewInWarpDrive(id));
-    }
-
     fn move_to_team_owner(
         &mut self,
         cloud_object_type_and_id: CloudObjectTypeAndId,
@@ -1660,7 +1659,6 @@ impl NotebookView {
                 }
             }
         });
-        self.update_breadcrumbs(ctx);
         if let Some(invitee_email) = settings.invitee_email.clone() {
             let object_id_to_share = settings
                 .focused_folder_id
@@ -1671,12 +1669,9 @@ impl NotebookView {
                 invitee_email: Some(invitee_email),
                 source: SharingDialogSource::InviteeRequest,
             });
-        } else if let Some(focused_folder_id) = settings.focused_folder_id.map(SyncId::ServerId) {
-            self.view_in_warp_drive(
-                WarpDriveItemId::Object(CloudObjectTypeAndId::Folder(focused_folder_id)),
-                ctx,
-            );
         }
+        // LOCAL FORK: the `focused_folder_id` branch revealed the notebook's containing folder in
+        // the Warp Drive panel; removed with the panel.
 
         ctx.notify();
         baton_future
@@ -1708,7 +1703,7 @@ impl NotebookView {
             });
         }
 
-        self.update_breadcrumbs(ctx);
+        ctx.notify();
 
         self.switch_to_edit(ctx);
     }
@@ -1778,13 +1773,6 @@ impl NotebookView {
                 report_error!("Tried to save notebook, but none were active")
             }
         }
-    }
-
-    /// Update the breadcrumbs for this notebook.
-    fn update_breadcrumbs(&mut self, ctx: &mut ViewContext<Self>) {
-        self.details_bar
-            .update_breadcrumbs(self.active_notebook_data.as_ref(ctx), ctx);
-        ctx.notify();
     }
 
     /// Save this notebook and give up edit access before detaching it from a pane.
@@ -2287,7 +2275,6 @@ impl TypedActionView for NotebookView {
             NotebookAction::ResetFontSize => {
                 self.apply_font_size_to_setting(NotebookFontSize::default_value(), ctx)
             }
-            NotebookAction::ViewInWarpDrive(id) => self.view_in_warp_drive(*id, ctx),
             NotebookAction::FocusTerminalInput => {
                 ctx.emit(NotebookEvent::Pane(PaneEvent::FocusActiveSession))
             }

@@ -76,13 +76,13 @@ use crate::app_state::{
 use crate::auth::UserUid;
 use crate::auth::auth_manager::PersistedCurrentUserInformation;
 use crate::auth::auth_state::AuthStateProvider;
+use crate::cloud_object::OpenWarpDriveObjectSettings;
 use crate::cloud_object::model::actions::{
     ObjectAction, ObjectActionSubtype, object_action_from_persisted,
 };
 use crate::cloud_object::model::generic_string_model::{CloudStringObject, GenericStringObjectId};
 use crate::cloud_object::{CloudObject, ObjectIdType};
 use crate::code::editor_management::CodeSource;
-use crate::drive::OpenWarpDriveObjectSettings;
 use crate::notebooks::NotebookId;
 use crate::persisted_workspace::EnablementState;
 use crate::persistence::model::{

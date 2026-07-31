@@ -50,10 +50,6 @@ use crate::auth::{AuthStateProvider, UserUid};
 use crate::channel::ChannelState;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{CloudObjectEventEntrypoint, Space};
-use crate::drive::cloud_action_confirmation_dialog::{
-    CloudActionConfirmationDialog, CloudActionConfirmationDialogEvent,
-    CloudActionConfirmationDialogVariant,
-};
 use crate::editor::{
     EditorView, Event as EditorEvent, InteractionState, SingleLineEditorOptions, TextOptions,
 };
@@ -65,6 +61,10 @@ use crate::send_telemetry_from_ctx;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::ServerId;
 use crate::server::telemetry::TelemetryEvent;
+use crate::settings_view::team_action_confirmation_dialog::{
+    CloudActionConfirmationDialog, CloudActionConfirmationDialogEvent,
+    CloudActionConfirmationDialogVariant,
+};
 use crate::themes::theme::Blend;
 use crate::themes::{self};
 use crate::ui_components::icons::Icon;

@@ -16,10 +16,10 @@ use warpui::{AppContext, Element, SingletonEntity, ViewHandle};
 
 use super::WarpDriveItemId;
 use crate::appearance::Appearance;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::model::view::CloudViewModel;
 use crate::cloud_object::{CloudObject, CloudObjectLocation, CloudObjectMetadataExt, Owner, Space};
-use crate::drive::CloudObjectTypeAndId;
 use crate::drive::index::{
     AUTOSCROLL_DETECTION_DISTANCE, AUTOSCROLL_SPEED_MULTIPLIER, DRIVE_INDEX_VIEW_POSITION_ID,
     DriveIndexAction, FOLDER_DEPTH_INDENT, INDEX_CONTENT_MARGIN_LEFT, ITEM_FONT_SIZE,

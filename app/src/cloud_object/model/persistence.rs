@@ -11,6 +11,7 @@ use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
 use super::generic_string_model::GenericStringObjectId;
 use crate::auth::AuthStateProvider;
+use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::{
     CloudModelType, CloudObject, CloudObjectLocation, CloudObjectPermissions, GenericCloudObject,
     GenericServerObject, GenericStringObjectFormat, JsonObjectType, ObjectIdType, ObjectType,
@@ -19,7 +20,7 @@ use crate::cloud_object::{
 };
 use crate::drive::folders::{CloudFolder, CloudFolderModel};
 use crate::drive::{
-    CloudObjectTypeAndId, DriveIndexVariant, should_auto_open_welcome_folder,
+    DriveIndexVariant, should_auto_open_welcome_folder,
     write_has_auto_opened_welcome_folder_to_user_defaults,
 };
 use crate::env_vars::{CloudEnvVarCollection, CloudEnvVarCollectionModel, EnvVarCollection};

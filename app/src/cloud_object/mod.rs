@@ -26,7 +26,6 @@ use crate::appearance::Appearance;
 use crate::auth::UserUid;
 use crate::channel::ChannelState;
 use crate::drive::items::WarpDriveItem;
-use crate::drive::{CloudObjectTypeAndId, OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings};
 use crate::persistence::ModelEvent;
 use crate::server::cloud_objects::update_manager::InitiatedBy;
 use crate::server::ids::{HashableId, HashedSqliteId, ObjectUid, ServerId, SyncId, ToServerId};
@@ -37,6 +36,15 @@ use crate::workflows::{CloudWorkflow, WorkflowSource};
 use crate::workspaces::user_profiles::UserProfiles;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
+pub mod object_type;
+pub mod open_object;
+// LOCAL FORK: `crate::drive::` used to be the import path for all four of these. The first is
+// defined in the `cloud_objects` crate and was only ever re-exported through Drive; the other
+// three were lifted out of `drive/mod.rs`. Re-exported here so the ~40 consumers name the object
+// model rather than the browser.
+pub use cloud_objects::drive::CloudObjectTypeAndId;
+pub use object_type::DriveObjectType;
+pub use open_object::{OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings};
 pub mod breadcrumbs;
 pub mod grab_edit_access_modal;
 pub mod model;

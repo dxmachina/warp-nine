@@ -33,6 +33,7 @@ use warpui::{
     UpdateView, View, ViewContext, ViewHandle, WindowId,
 };
 
+use super::DriveSortOrder;
 use super::cloud_object_naming_dialog::CloudObjectNamingDialog;
 use super::drive_helpers::{
     has_feature_gated_anonymous_user_reached_env_var_limit,
@@ -50,7 +51,6 @@ use super::items::mcp_server_collection::WarpDriveMCPServerCollection;
 use super::settings::WarpDriveSettings;
 use super::sharing::dialog::{SharingDialog, SharingDialogEvent};
 use super::sharing::{ContentEditability, ShareableObject};
-use super::{CloudObjectTypeAndId, DriveObjectType, DriveSortOrder};
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_manager::{AuthManager, LoginGatedFeature};
@@ -63,6 +63,7 @@ use crate::cloud_object::{
     CloudObject, CloudObjectEventEntrypoint, CloudObjectLocation, CloudObjectSyncStatus,
     GenericStringObjectFormat, JsonObjectType, NumInFlightRequests, ObjectType, Space,
 };
+use crate::cloud_object::{CloudObjectTypeAndId, DriveObjectType};
 use crate::drive::panel::DrivePanelAction;
 use crate::editor::{EditorView, Event as EditorEvent, SingleLineEditorOptions};
 use crate::env_vars::CloudEnvVarCollection;

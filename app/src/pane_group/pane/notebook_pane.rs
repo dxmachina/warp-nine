@@ -12,8 +12,7 @@ use super::{
 };
 use crate::app_state::{LeafContents, NotebookPaneSnapshot};
 use crate::cloud_object::Space;
-use crate::drive::items::WarpDriveItemId;
-use crate::drive::{CloudObjectTypeAndId, OpenWarpDriveObjectSettings};
+use crate::cloud_object::{CloudObjectTypeAndId, OpenWarpDriveObjectSettings};
 use crate::notebooks::link::{LinkEvent, NotebookLinks};
 use crate::notebooks::manager::{NotebookManager, NotebookSource};
 use crate::notebooks::notebook::{NotebookEvent, NotebookView};
@@ -225,7 +224,6 @@ fn handle_notebook_event(
         NotebookEvent::EditWorkflow(id) => {
             ctx.emit(crate::pane_group::Event::OpenCloudWorkflowForEdit(*id))
         }
-        NotebookEvent::ViewInWarpDrive(id) => view_in_warp_drive(*id, ctx),
         NotebookEvent::MoveToSpace {
             cloud_object_type_and_id,
             new_space,
@@ -260,10 +258,6 @@ fn run_notebook_workflow(
         workflow_selection_source: WorkflowSelectionSource::Notebook,
         argument_override: None,
     });
-}
-
-fn view_in_warp_drive(id: WarpDriveItemId, ctx: &mut ViewContext<PaneGroup>) {
-    ctx.emit(crate::pane_group::Event::ViewInWarpDrive(id))
 }
 
 fn move_to_space(

@@ -135,7 +135,6 @@ pub mod themes;
 // On `main` it belongs to an import the excision deleted; removing the item without
 // its attribute rebound it to the line below, which `main` leaves ungated. That hid
 // these symbols from every build where the condition is false.
-use auth::auth_manager::AuthManager;
 use auth::auth_state::{AuthState, AuthStateProvider};
 use code::editor_management::CodeManager;
 use code::opened_files::OpenedFilesModel;
@@ -1052,36 +1051,9 @@ pub struct UpdateQuakeModeEventArg {
     active_window_id: Option<WindowId>,
 }
 
-fn refresh_user_after_iap_access(ctx: &mut AppContext) {
-    let iap_manager = IapManager::handle(ctx);
-    if !iap_manager.as_ref(ctx).is_enabled() || iap_manager.as_ref(ctx).has_valid_token() {
-        AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-            auth_manager.refresh_user(ctx);
-        });
-        return;
-    }
-
-    let mut refresh_started = false;
-    ctx.subscribe_to_model(&iap_manager, move |iap_manager, event, ctx| match event {
-        IapManagerEvent::StateChanged => {
-            if refresh_started || !iap_manager.as_ref(ctx).has_valid_token() {
-                return;
-            }
-            refresh_started = true;
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                auth_manager.refresh_user(ctx);
-            });
-        }
-        IapManagerEvent::AccessUnavailable => {
-            report_error!("Staging IAP access unavailable before startup user refresh");
-        }
-        IapManagerEvent::RefreshFailed {
-            message: _,
-            is_first_failure_of_streak: _,
-        } => {}
-    });
-    iap_manager.update(ctx, |manager, ctx| manager.ensure_access(ctx));
-}
+// LOCAL FORK: `refresh_user_after_iap_access` went with login. It waited for a valid
+// Identity-Aware Proxy token on staging builds and then re-fetched the signed-in user
+// through `AuthManager`. There is no user to re-fetch.
 
 fn api_key_from_launch_mode(launch_mode: &LaunchMode) -> Option<String> {
     match launch_mode {
@@ -1185,14 +1157,6 @@ pub(crate) fn initialize_app(
     );
 
     ctx.add_singleton_model(|_ctx| AuthStateProvider::new(auth_state.clone()));
-
-    ctx.add_singleton_model(|ctx| {
-        AuthManager::new(
-            server_api.clone(),
-            server_api_provider.as_ref(ctx).get_auth_client(),
-            ctx,
-        )
-    });
 
     ctx.add_singleton_model(|_ctx| GPUState::new());
 
@@ -1458,13 +1422,12 @@ pub(crate) fn initialize_app(
         });
     });
 
-    let user_is_logged_in = auth_state.is_logged_in();
-
-    if user_is_logged_in {
-        // Set the first frame callback to record the app's startup time.
-        // This is only sent for logged-in users so that new users don't skew performance metrics.
-        let is_screen_reader_enabled = ctx.is_screen_reader_enabled();
-        let from_relaunch = launch_mode.args().finish_update;
+    // LOCAL FORK: this block was gated on `user_is_logged_in`, which upstream used to keep
+    // new users out of its startup-time metrics. The measurement is gone, but the block had
+    // accumulated work that has nothing to do with accounts: low-power GPU detection, the
+    // graphics-backend dropdown refresh, and crash-recovery frame tracking. Pinning auth to
+    // logged out left all three permanently unreachable. It now runs unconditionally.
+    {
         ctx.on_first_frame_drawn(move |ctx| {
             let timing_data = IntervalTimer::handle(ctx).update(ctx, |timer, _| {
                 timer.mark_interval_end("FIRST_FRAME_DRAWN");
@@ -1490,10 +1453,6 @@ pub(crate) fn initialize_app(
                 crash_recovery.on_frame_drawn(window_id, ctx);
             });
         })
-    } else {
-        // LOCAL FORK: the logged-out branch existed only to probe for a Homebrew install
-        // and report the download source as a new-user measurement. `download_method.rs`
-        // went with it.
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -1608,7 +1567,6 @@ pub(crate) fn initialize_app(
     themes::theme_deletion_modal::init(ctx);
     root_view::init(ctx);
     voltron::init(ctx);
-    auth::init(ctx);
     reward_view::init(ctx);
     crate::view_components::find::init(ctx);
     prompt::editor_modal::init(ctx);
@@ -1838,14 +1796,6 @@ pub(crate) fn initialize_app(
             _ => {}
         };
     });
-
-    // LOCAL FORK: this used to skip CLI launches, which established IAP access in
-    // their own dispatch path. That launch mode is gone, so every remaining client
-    // waits for IAP here before refreshing its persisted user, since the refresh
-    // itself calls the IAP-gated warp-server.
-    if user_is_logged_in {
-        refresh_user_after_iap_access(ctx);
-    }
 
     // Add a singleton model that holds the current prompt configuration.
     ctx.add_singleton_model(Prompt::new);

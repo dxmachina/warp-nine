@@ -670,7 +670,6 @@ fn handle_terminal_view_event(
                     is_open.then_some(pane_id);
                 ctx.notify();
             }
-            Event::AnonymousUserSignup => ctx.emit(pane_group::Event::AnonymousUserSignup),
             #[cfg(feature = "local_fs")]
             Event::OpenFileWithTarget {
                 path,
@@ -746,11 +745,6 @@ fn handle_terminal_view_event(
                     remote_pane_id: terminal_pane_id,
                     upload_id: *upload_id,
                 })
-            }
-            Event::SignupAnonymousUser { entrypoint } => {
-                ctx.emit(pane_group::Event::SignupAnonymousUser {
-                    entrypoint: *entrypoint,
-                });
             }
             Event::OpenThemeChooser => {
                 ctx.emit(pane_group::Event::OpenThemeChooser);

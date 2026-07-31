@@ -49,7 +49,6 @@ use warpui::{Entity, ModelContext, SingletonEntity};
 use workspace::WorkspaceClient;
 
 use super::experiments::{ServerExperiment, ServerExperiments};
-use crate::auth::auth_manager::AuthManager;
 use crate::auth::auth_state::AuthState;
 use crate::settings::PrivacySettingsSnapshot;
 use crate::{ChannelState, settings_view};
@@ -728,22 +727,9 @@ impl ServerApiProvider {
             event_receiver,
             move |_, event, ctx| {
                 match event {
-                    AuthEvent::UserAccountDisabled => {
-                        // We dispatch a global action here because the log out code requires
-                        // `server_api`, causing a circular model reference panic when it calls
-                        // `ServerApiProvider` to get access.
-                        // TODO: We should remove this pattern where `ServerApiProvider` responds
-                        // to events; it's prone to these sorts of circular reference issues.
-                        ctx.dispatch_global_action("app:log_out", ());
-                    }
-                    AuthEvent::NeedsReauth => {
-                        // AuthManager depends on a reference to ServerApi, so ServerApi can't easily
-                        // hold a ref to AuthManager. To get around this, we emit an event on ServerApi
-                        // and handle calling the AuthManager here instead.
-                        AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                            auth_manager.set_needs_reauth(true, ctx);
-                        });
-                    }
+                    // LOCAL FORK: `UserAccountDisabled` used to force a log out and
+                    // `NeedsReauth` used to flag the account for re-login. Both handlers went
+                    // with logging in and out; the events now fall through to subscribers.
                     AuthEvent::IapChallengeReceived => {
                         IapManager::handle(ctx)
                             .update(ctx, |manager, ctx| manager.handle_challenge(ctx));

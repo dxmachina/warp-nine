@@ -6,7 +6,6 @@ use warpui::{AddSingletonModel, App, WindowId};
 use warpui_extras::user_preferences;
 
 use super::*;
-use crate::auth::AuthManager;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{CloudObject, CloudObjectGuest};
 use crate::features::FeatureFlag;
@@ -73,7 +72,6 @@ fn initialize_app_with_auth(
     app.add_singleton_model(PrivacySettings::mock);
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
     app.add_singleton_model(|_| auth_state_provider);
-    app.add_singleton_model(AuthManager::new_for_test);
     app.add_singleton_model(|_| {
         PublicPreferences::new(Box::<user_preferences::in_memory::InMemoryPreferences>::default())
     });

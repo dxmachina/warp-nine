@@ -1156,13 +1156,7 @@ pub fn init(app: &mut AppContext) {
         ]);
     }
 
-    app.register_editable_bindings([EditableBinding::new(
-        "workspace:log_out",
-        "Log out",
-        WorkspaceAction::LogOut,
-    )
-    .with_group(bindings::BindingGroup::Settings.as_str())
-    .with_context_predicate(id!("Workspace") & !id!("IsAnonymousUser"))]);
+    // LOCAL FORK: the `workspace:log_out` binding went with logging out.
 
     // LOCAL FORK: no `toggle_resource_center` binding -- the panel it opened is
     // gone, so the keybinding would otherwise be the one remaining way in.

@@ -6,6 +6,112 @@ Working notes for stripping login, agents, and cloud from the Warp OSS checkout
 (`warp/`, upstream `warpdotdev/warp` @ `3fdb2dec6`), targeting an
 Apple-Silicon-only local build.
 
+## Login is gone (2026-07-31)
+
+`app/src/auth` is down to a single 25-line `mod.rs` that re-exports account
+*state*. 62 files, 7,578 deletions. What went:
+
+| file | lines |
+|---|---|
+| `auth_view_body.rs` | 1,060 |
+| `auth_manager.rs` (+ its tests) | 1,023 |
+| `auth_view_shared_helpers.rs` | 603 |
+| `auth_override_warning_body.rs` | 419 |
+| `auth_view_modal.rs` | 388 |
+| `terminal/view/inline_banner/anonymous_user_ai_sign_up.rs` | 240 |
+| the rest of `app/src/auth` | 508 |
+| `root_view.rs` | 845 |
+| `settings_view/main_page.rs` | 455 |
+| `workspace/view.rs` | 361 |
+
+`AuthState` **stays**. It lives in `warp_server_auth` and kept features read it:
+session sharing, the cloud object model, the remote-server SSH context and crash
+reporting all ask it for a user id or a logged-in flag. It is pinned logged out,
+so each of those takes a branch upstream also has. Removing the type would mean
+rewriting those callers for no gain.
+
+`AuthOnboardingState` collapsed from seven variants to one. `Auth` (the login
+wall), `ConfirmIncomingAuth`, `WebImport`, `NeedsSsoLink`, `Onboarding` and
+`PostAuthOnboarding` had no origin left: the fork boots straight into the
+terminal and `try_open_onboarding_slides` was already a stub. The single-variant
+enum is kept on purpose; collapsing it to a bare `ViewHandle<Workspace>` would
+touch ~50 `if let` sites for no behaviour change.
+
+Logging out went with logging in. `maybe_log_out` / `log_out` existed to swap
+accounts: they dropped the sqlite database, reset the cloud object model, stopped
+the sync and polling loops and left every shared session. With no second account
+those were buttons that only wiped local state.
+
+### Four surfaces were live, not dead
+
+Pinning auth logged out in `4683193da` did not hide the logged-out UI, it made it
+**unconditional**. Each of these was on screen in the shipped build:
+
+- the workspace header "Sign up" button,
+- the settings main page account section, rendering its anonymous branch with a
+  "Sign up" button and a "Compare plans" upgrade link,
+- an inline terminal banner offering to sign up to unlock AI, in a build with no
+  AI,
+- the privacy page "Manage your data" section, linking out to delete an account
+  that does not exist.
+
+The same inversion cut the other way in `lib.rs`, where a block gated on
+`user_is_logged_in` had accumulated work unrelated to accounts: low-power GPU
+detection, the graphics-backend dropdown refresh and **crash-recovery frame
+tracking**. All three had been silently unreachable. That block now runs
+unconditionally.
+
+The lesson generalises: when a predicate is pinned to a constant, every branch on
+it becomes unconditional in one direction. Both directions have to be checked,
+and "the feature is off" is not the same as "the UI for it is gone".
+
+### The rebinding family has a silent member
+
+Removing `WorkspaceAction::LogOut` left its match arm behind:
+
+```rust
+LogOut => {
+    ctx.dispatch_global_action("app:maybe_log_out", ());
+}
+```
+
+`LogOut` is no longer a variant, so this is not a pattern match against a
+variant. It is an **irrefutable binding** that matches every action, and it sat
+near the top of a 500-arm match. Every arm below it became unreachable: opening
+the vertical tabs panel, closing a tab, sharing a session, all of it.
+
+This compiled with zero errors. `cargo check` reported it only as
+`warning: unreachable pattern`, 180 of them, buried in the 400-plus warnings this
+tree already emits. Four configurations were green. The one signal that caught it
+was a test asserting a panel opened.
+
+That makes it the worst-behaved member of the rebinding family so far, and it is
+the same root cause as the fourteen before it: **deleting an item is not local
+when something else names it.** The E0408 or-pattern variant at least errored,
+600 lines away. This one produced correct-looking code that silently stopped
+dispatching most of the application's actions.
+
+The check is cheap and now belongs beside the parse-error guard on every pass:
+
+    cargo check ... 2>&1 | grep -c 'unreachable pattern'
+
+Expect zero. A non-zero count after deleting an enum variant means an arm was
+left behind and is now swallowing its neighbours.
+
+### Files nothing compiles
+
+An orphan sweep (no `mod` declaration, no `#[path]`) found seven files, 1,596
+lines, that were not in the binary at all and so were invisible to every error
+count. The one that matters: `app/src/server/telemetry/collector.rs`, 229 lines
+holding the entire Rudderstack transport, startup flush, 30-second periodic
+flush, 60-second active-usage event, shutdown flush. It reads and greps as live
+code. `telemetry/mod.rs` had stopped declaring `mod collector`, so none of it
+shipped. Deleting on the strength of a module comment would have been luck;
+the sweep is the reason to believe it.
+
+That sweep is worth re-running after any large excision: `cargo check` cannot
+report on a file it never opens.
+
 ## Correction (2026-07-30): the agent was not the size problem
 
 This document was written assuming the agent and cloud code were why the binary

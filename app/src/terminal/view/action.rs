@@ -14,8 +14,8 @@ use warpui::event::ModifiersState;
 use warpui::units::Lines;
 
 use super::inline_banner::{
-    AnonymousUserLoginBannerAction, AwsBedrockLoginBannerAction, AwsCliNotInstalledBannerAction,
-    OpenInWarpBannerAction, VimModeBannerAction,
+    AwsBedrockLoginBannerAction, AwsCliNotInstalledBannerAction, OpenInWarpBannerAction,
+    VimModeBannerAction,
 };
 use super::{
     AliasExpansionBannerAction, ContextMenuAction, GridHighlightedLink, InputContextMenuAction,
@@ -312,7 +312,6 @@ pub enum TerminalAction {
     ToggleCLIAgentVoiceInput(voice_input::VoiceInputToggledFrom),
 
     HyperlinkClick(HyperlinkUrl),
-    AttemptLoginGatedFeature,
     StartFileDropTarget,
     StopFileDropTarget,
     OpenTeamSettingsPage,
@@ -340,7 +339,6 @@ pub enum TerminalAction {
     ToggleAutoexecuteMode,
     ToggleQueueNextPrompt,
     AgentModeSetupSpeedbumpBanner(AgentModeSetupSpeedbumpBannerAction),
-    AnonymousUserAISignUpBanner(AnonymousUserLoginBannerAction),
     ResumeConversation,
     ForkConversationFromLastKnownGoodState,
     ToggleAIDocumentPane,
@@ -630,7 +628,6 @@ impl fmt::Debug for TerminalAction {
             #[cfg(feature = "voice_input")]
             ToggleCLIAgentVoiceInput(source) => write!(f, "ToggleCLIAgentVoiceInput({source:?})"),
             HyperlinkClick(hyperlink_url) => write!(f, "HyperlinkClick({hyperlink_url:?})"),
-            AttemptLoginGatedFeature => write!(f, "AttemptLoginGatedFeature"),
             StartFileDropTarget => write!(f, "StartFileDropTarget"),
             StopFileDropTarget => write!(f, "StopFileDropTarget"),
             RunNativeShellCompletions { buffer_text, .. } => {
@@ -656,9 +653,6 @@ impl fmt::Debug for TerminalAction {
             ToggleQueueNextPrompt => write!(f, "ToggleQueueNextPrompt"),
             AgentModeSetupSpeedbumpBanner(action) => {
                 write!(f, "AgentModeSetupSpeedbumpBanner({action:?})")
-            }
-            AnonymousUserAISignUpBanner(action) => {
-                write!(f, "AnonymousUserLoginBanner({action:?})")
             }
             ResumeConversation => write!(f, "ResumeConversation"),
             ForkConversationFromLastKnownGoodState => {

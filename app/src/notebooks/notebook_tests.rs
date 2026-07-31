@@ -15,7 +15,6 @@ use warpui::{
 };
 
 use super::{EDIT_WINDOW_DURATION, NotebookEvent, NotebookView, SAVE_PERIOD};
-use crate::auth::auth_manager::AuthManager;
 use crate::auth::user::{TEST_USER_EMAIL, TEST_USER_UID};
 use crate::auth::{AuthStateProvider, UserUid};
 use crate::cloud_object::OpenWarpDriveObjectSettings;
@@ -77,7 +76,6 @@ fn initialize_app(app: &mut App) {
     app.add_singleton_model(|_| ActiveSession::default());
     app.add_singleton_model(|_| ObjectActions::new(Vec::new()));
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
-    app.add_singleton_model(AuthManager::new_for_test);
     #[cfg(feature = "voice_input")]
     app.add_singleton_model(voice_input::VoiceInput::new);
 }

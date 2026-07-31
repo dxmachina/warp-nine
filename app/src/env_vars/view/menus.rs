@@ -6,7 +6,6 @@ use warpui::{SingletonEntity, ViewContext, ViewHandle};
 use super::env_var_collection::{EnvVarCollectionAction, EnvVarCollectionView, VariableRowIndex};
 use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::export::ExportManager;
-use crate::cloud_object::object_limits::has_feature_gated_anonymous_user_reached_env_var_limit;
 use crate::cloud_object::{CloudObject, GenericStringObjectFormat, Space};
 use crate::env_vars::active_env_var_collection_data::TrashStatus;
 use crate::external_secrets::SecretManager;
@@ -420,10 +419,9 @@ impl EnvVarCollectionView {
 
     pub(super) fn untrash_env_var_collection(&self, ctx: &mut ViewContext<Self>) {
         if let Some(env_var_collection_id) = self.active_env_var_collection_data.as_ref(ctx).id() {
-            if has_feature_gated_anonymous_user_reached_env_var_limit(ctx) {
-                return;
-            }
-
+            // LOCAL FORK: an anonymous-user object limit guard stood here. It could only
+            // fire for feature-gated anonymous cloud accounts, which this build cannot
+            // create, so untrashing is now unconditional.
             UpdateManager::handle(ctx).update(ctx, move |update_manager, ctx| {
                 update_manager.untrash_object(
                     CloudObjectTypeAndId::GenericStringObject {

@@ -22,7 +22,6 @@ use super::{
     Stage, StartupFailure, StartupRetryState, startup_max_attempts,
 };
 use crate::auth::AuthStateProvider;
-use crate::auth::auth_manager::AuthManager;
 use crate::server::server_api::ServerApiProvider;
 use crate::terminal::TerminalModel;
 use crate::terminal::shared_session::{MAX_BYTES_SHAREABLE, SharedSessionSource};
@@ -663,7 +662,6 @@ fn test_messages_are_buffered_while_reconnecting() {
             )
         });
         app.add_singleton_model(|_| AuthStateProvider::new_for_test());
-        app.add_singleton_model(AuthManager::new_for_test);
         let (network, _) = create_network(&mut app, false);
         let ws_proxy_rx = network.read(&app, |network, _ctx| network.ws_proxy_rx.clone());
 

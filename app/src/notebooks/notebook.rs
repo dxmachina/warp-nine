@@ -48,7 +48,6 @@ use crate::cloud_object::export::ExportManager;
 use crate::cloud_object::grab_edit_access_modal::{GrabEditAccessModal, GrabEditAccessModalEvent};
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent, UpdateSource};
 use crate::cloud_object::model::view::{Editor, EditorState};
-use crate::cloud_object::object_limits::has_feature_gated_anonymous_user_reached_notebook_limit;
 use crate::cloud_object::{CloudObject, CloudObjectEventEntrypoint, ObjectType, Owner, Space};
 use crate::cloud_object::{CloudObjectTypeAndId, OpenWarpDriveObjectSettings};
 use crate::editor::{
@@ -1165,10 +1164,9 @@ impl NotebookView {
 
     fn untrash_notebook(&self, ctx: &mut ViewContext<Self>) {
         if let Some(notebook_id) = self.notebook_id(ctx) {
-            if has_feature_gated_anonymous_user_reached_notebook_limit(ctx) {
-                return;
-            }
-
+            // LOCAL FORK: an anonymous-user object limit guard stood here. It could only
+            // fire for feature-gated anonymous cloud accounts, which this build cannot
+            // create, so untrashing is now unconditional.
             UpdateManager::handle(ctx).update(ctx, move |update_manager, ctx| {
                 update_manager.untrash_object(
                     CloudObjectTypeAndId::from_id_and_type(notebook_id, ObjectType::Notebook),

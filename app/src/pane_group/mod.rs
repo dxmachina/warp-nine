@@ -49,8 +49,6 @@ use crate::app_state::{
 };
 use crate::appearance::Appearance;
 use crate::auth::AuthStateProvider;
-use crate::auth::auth_manager::AuthManager;
-use crate::auth::auth_view_modal::AuthViewVariant;
 use crate::banner::{Banner, BannerEvent, BannerState, BannerTextContent, DismissalType};
 use crate::channel::{Channel, ChannelState};
 use crate::cloud_object::Space;
@@ -77,7 +75,7 @@ use crate::quit_warning::UnsavedStateSummary;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ObjectUid, SyncId};
 use crate::server::server_api::{ServerApi, ServerApiProvider};
-use crate::server::telemetry::{AnonymousUserSignupEntrypoint, PaletteSource};
+use crate::server::telemetry::PaletteSource;
 use crate::session_management::SessionNavigationData;
 use crate::settings::PaneSettings;
 use crate::settings_view::SettingsSection;
@@ -565,7 +563,6 @@ pub enum Event {
         /// If set, open the fact collection to the specific rule.
         sync_id: Option<SyncId>,
     },
-    AnonymousUserSignup,
     /// Request that the workspace open the command palette.
     OpenPalette {
         mode: PaletteMode,
@@ -601,9 +598,6 @@ pub enum Event {
         message: String,
         flavor: ToastFlavor,
         pane_id: Option<PaneId>,
-    },
-    SignupAnonymousUser {
-        entrypoint: AnonymousUserSignupEntrypoint,
     },
     OpenThemeChooser,
     InvalidatedActiveConversation,
@@ -2026,17 +2020,15 @@ impl PaneGroup {
             return;
         };
 
+        // LOCAL FORK: this used to prompt for login before opening the share modal.
+        // Session sharing is a server feature and still needs an account, which this
+        // build has no way to obtain, so the early return stays and only the prompt
+        // goes. Behaviour is unchanged: sharing has been unreachable since login was
+        // closed off, and opening the modal anyway would just fail at the network.
         if AuthStateProvider::as_ref(ctx)
             .get()
             .is_anonymous_or_logged_out()
         {
-            AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
-                auth_manager.attempt_login_gated_feature(
-                    "Share Session",
-                    AuthViewVariant::ShareRequirementCloseable,
-                    ctx,
-                )
-            });
             return;
         }
 

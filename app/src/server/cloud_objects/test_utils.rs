@@ -9,7 +9,6 @@ use warpui::{App, ModelHandle, SingletonEntity};
 
 use super::update_manager::UpdateManager;
 use crate::auth::AuthStateProvider;
-use crate::auth::auth_manager::AuthManager;
 use crate::cloud_object::model::actions::ObjectActions;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::network::NetworkStatus;
@@ -42,7 +41,6 @@ pub fn initialize_app(app: &mut App) {
     // under test.
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
-    app.add_singleton_model(AuthManager::new_for_test);
     WarpDrivePrivacySettings::register(app);
     app.update(PrivacySettings::register_singleton);
     app.add_singleton_model(CloudModel::mock);

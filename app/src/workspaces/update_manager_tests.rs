@@ -4,7 +4,6 @@ use itertools::Itertools;
 use warpui::{AddSingletonModel, App};
 
 use super::*;
-use crate::auth::AuthManager;
 use crate::cloud_object::model::actions::ObjectActions;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{Owner, Revision, ServerMetadata, ServerPermissions, ServerWorkflow};
@@ -45,7 +44,6 @@ fn initialize_app(
     app.add_singleton_model(|_| UserProfiles::new(vec![]));
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
-    app.add_singleton_model(AuthManager::new_for_test);
 }
 
 fn mock_workflow(id: WorkflowId, owner: Owner) -> CloudWorkflow {

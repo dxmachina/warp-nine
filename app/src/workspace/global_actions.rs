@@ -95,8 +95,6 @@ pub fn init_global_actions(app: &mut AppContext) {
     );
     app.add_global_action("workspace:open_repository", open_repository);
     app.add_global_action("app:undo_close", undo_close);
-    app.add_global_action("app:maybe_log_out", trigger_maybe_log_out);
-    app.add_global_action("app:log_out", trigger_log_out);
 }
 
 fn toggle_mouse_reporting(_: &(), ctx: &mut AppContext) {
@@ -197,10 +195,6 @@ fn undo_close(_: &(), ctx: &mut AppContext) {
     });
 }
 
-fn trigger_maybe_log_out(_: &(), ctx: &mut AppContext) {
-    auth::maybe_log_out(ctx)
-}
-
 /// Dispatches an action to the active workspace, if one exists.
 fn dispatch_to_active_workspace(ctx: &mut AppContext, action: WorkspaceAction) {
     if let Some(window_id) = WindowManager::as_ref(ctx).active_window()
@@ -251,8 +245,4 @@ fn summarize_ai_conversation(prompt: &Option<String>, ctx: &mut AppContext) {
             initial_prompt: None,
         },
     );
-}
-
-fn trigger_log_out(_: &(), ctx: &mut AppContext) {
-    auth::log_out(ctx)
 }

@@ -40,7 +40,6 @@ use crate::workspaces::user_workspaces::UserWorkspaces;
 // eleven files.
 pub mod export;
 pub mod import;
-pub mod object_limits;
 pub mod object_type;
 pub mod open_object;
 pub mod styling;

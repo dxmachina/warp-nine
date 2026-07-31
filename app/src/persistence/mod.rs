@@ -44,7 +44,6 @@ use warpui::{AppContext, Entity, SingletonEntity};
 
 use self::model::{AgentConversation, AgentConversationData, Project};
 use crate::app_state::AppState;
-use crate::auth::auth_manager::PersistedCurrentUserInformation;
 use crate::cloud_object::folders::CloudFolder;
 use crate::cloud_object::model::actions::ObjectAction;
 use crate::cloud_object::model::generic_string_model::CloudStringObject;
@@ -429,9 +428,10 @@ pub enum ModelEvent {
         conversation_ids: Vec<String>,
     },
 
-    UpsertCurrentUserInformation {
-        user_information: PersistedCurrentUserInformation,
-    },
+    // LOCAL FORK: `UpsertCurrentUserInformation` went with login. `AuthManager` was its
+    // only producer, emitting it once after a successful sign-in to record the account
+    // email. Nothing in the app ever read the `current_user_information` table back, so
+    // the write path goes and the table and its migration stay untouched.
     UpsertCodebaseIndexMetadata {
         index_metadata: Box<CodeWorkspaceMetadata>,
     },

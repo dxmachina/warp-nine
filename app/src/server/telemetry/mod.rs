@@ -89,16 +89,8 @@ pub enum AgentModeRewindEntrypoint {
     SlashCommand,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum AnonymousUserSignupEntrypoint {
-    HitDriveObjectLimit,
-    LoginGatedFeature,
-    SignUpButton,
-    RenotificationBlock,
-    SignUpAIPrompt,
-    NextCommandSuggestionsUpgradeBanner,
-    Unknown,
-}
+// LOCAL FORK: `AnonymousUserSignupEntrypoint` went with signup. It tagged which surface
+// sent a logged-out user to the sign-up flow.
 
 /// The possible ways to trigger command x-ray
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]

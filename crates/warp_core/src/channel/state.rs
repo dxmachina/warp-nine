@@ -19,7 +19,24 @@ lazy_static! {
 
 #[cfg(feature = "test-util")]
 lazy_static! {
-    static ref MOCK_SERVER: Mutex<mockito::ServerGuard> = Mutex::new(mockito::Server::new());
+    // LOCAL FORK: built on a dedicated thread rather than inline.
+    //
+    // `mockito::Server::new` is the blocking constructor: it starts its own runtime and
+    // `block_on`s it. Whichever test touched this `lazy_static` first decided whether that
+    // happened inside an existing runtime. From a background executor thread it panics with
+    // "Cannot start a runtime from within a runtime", which poisons the `Once` and fails
+    // every later test that reads the mock URL, with a message naming lazy_static rather
+    // than the real cause.
+    //
+    // Nothing guaranteed a safe first touch. It happened to be warmed synchronously during
+    // test-harness setup, and deleting the auth test harness moved the first touch onto an
+    // executor thread and cost 24 tests. Constructing on a fresh thread has no ambient
+    // runtime to collide with, so initialisation order stops mattering.
+    static ref MOCK_SERVER: Mutex<mockito::ServerGuard> = Mutex::new(
+        std::thread::spawn(mockito::Server::new)
+            .join()
+            .expect("mockito server thread panicked")
+    );
     static ref MOCK_SERVER_URL: String = MOCK_SERVER.lock().url();
 }
 

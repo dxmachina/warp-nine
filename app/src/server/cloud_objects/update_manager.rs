@@ -30,7 +30,6 @@ use super::listener::ObjectUpdateMessage;
 // its attribute rebound it to the line below, which `main` leaves ungated. That hid
 // these symbols from every build where the condition is false.
 use crate::auth::AuthStateProvider;
-use crate::auth::auth_manager::AuthManager;
 use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::folders::{CloudFolderModel, FolderId};
 use crate::cloud_object::model::actions::{
@@ -41,11 +40,6 @@ use crate::cloud_object::model::generic_string_model::{
 };
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent, UpdateSource};
 use crate::cloud_object::model::view::{CloudViewModel, Editor, EditorState};
-use crate::cloud_object::object_limits::{
-    is_feature_gated_anonymous_user_past_env_var_limit,
-    is_feature_gated_anonymous_user_past_notebook_limit,
-    is_feature_gated_anonymous_user_past_workflow_limit,
-};
 use crate::cloud_object::{
     CloudLinkSharing, CloudModelType, CloudObject, CloudObjectEventEntrypoint, CloudObjectLocation,
     CloudObjectSyncStatus, CreateCloudObjectResult, CreateObjectRequest, GenericCloudObject,
@@ -2825,22 +2819,11 @@ impl UpdateManager {
         force_expand: bool,
         ctx: &mut ModelContext<Self>,
     ) {
-        let count = CloudModel::handle(ctx).read(ctx, |model, ctx| {
-            model
-                .active_non_welcome_notebooks_in_space(Space::Personal, ctx)
-                .count()
-        });
-        if AuthStateProvider::handle(ctx).read(ctx, |auth_state_provider, _ctx| {
-            is_feature_gated_anonymous_user_past_notebook_limit(
-                auth_state_provider.get(),
-                count + 1,
-            )
-        }) {
-            AuthManager::handle(ctx).update(ctx, |auth_manager: &mut AuthManager, ctx| {
-                auth_manager.anonymous_user_hit_drive_object_limit(ctx);
-            });
-            return;
-        };
+        // LOCAL FORK: an anonymous-user object limit guard stood here. It only ever
+        // fired for feature-gated anonymous cloud accounts, which this build cannot
+        // create, so it was already dead: `is_anonymous_user_feature_gated()` returns
+        // `None` with no user and the predicate folded to `false`. Personal objects are
+        // now unlimited, matching what a logged-in user saw upstream.
 
         self.create_object(
             model,
@@ -2896,22 +2879,11 @@ impl UpdateManager {
         force_expand: bool,
         ctx: &mut ModelContext<Self>,
     ) {
-        let count = CloudModel::handle(ctx).read(ctx, |model, ctx| {
-            model
-                .active_non_welcome_workflows_in_space(Space::Personal, ctx)
-                .count()
-        });
-        if AuthStateProvider::handle(ctx).read(ctx, |auth_state_provider, _ctx| {
-            is_feature_gated_anonymous_user_past_workflow_limit(
-                auth_state_provider.get(),
-                count + 1,
-            )
-        }) {
-            AuthManager::handle(ctx).update(ctx, |auth_manager: &mut AuthManager, ctx| {
-                auth_manager.anonymous_user_hit_drive_object_limit(ctx);
-            });
-            return;
-        };
+        // LOCAL FORK: an anonymous-user object limit guard stood here. It only ever
+        // fired for feature-gated anonymous cloud accounts, which this build cannot
+        // create, so it was already dead: `is_anonymous_user_feature_gated()` returns
+        // `None` with no user and the predicate folded to `false`. Personal objects are
+        // now unlimited, matching what a logged-in user saw upstream.
 
         self.create_object(
             CloudWorkflowModel::new(workflow),
@@ -2962,19 +2934,11 @@ impl UpdateManager {
         force_expand: bool,
         ctx: &mut ModelContext<Self>,
     ) {
-        let count = CloudModel::handle(ctx).read(ctx, |model, ctx| {
-            model
-                .active_non_welcome_env_var_collections_in_space(Space::Personal, ctx)
-                .count()
-        });
-        if AuthStateProvider::handle(ctx).read(ctx, |auth_state_provider, _ctx| {
-            is_feature_gated_anonymous_user_past_env_var_limit(auth_state_provider.get(), count + 1)
-        }) {
-            AuthManager::handle(ctx).update(ctx, |auth_manager: &mut AuthManager, ctx| {
-                auth_manager.anonymous_user_hit_drive_object_limit(ctx);
-            });
-            return;
-        };
+        // LOCAL FORK: an anonymous-user object limit guard stood here. It only ever
+        // fired for feature-gated anonymous cloud accounts, which this build cannot
+        // create, so it was already dead: `is_anonymous_user_feature_gated()` returns
+        // `None` with no user and the predicate folded to `false`. Personal objects are
+        // now unlimited, matching what a logged-in user saw upstream.
 
         self.create_object(
             model,

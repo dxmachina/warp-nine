@@ -465,7 +465,6 @@ impl View for CodeSettingsPageView {
 
 #[derive(Debug, Clone)]
 pub enum CodeSettingsPageEvent {
-    SignupAnonymousUser,
     OpenLspLogs { log_path: PathBuf },
     OpenProjectRules { rule_paths: Vec<PathBuf> },
 }
@@ -483,7 +482,6 @@ pub enum CodeSettingsPageAction {
     ManualResyncRemote(RemotePath),
     #[cfg(not(target_family = "wasm"))]
     DeleteRemoteIndex(RemotePath),
-    SignupAnonymousUser,
     /// Toggle an LSP server on/off for a workspace.
     ToggleLspServer {
         workspace_path: PathBuf,
@@ -576,9 +574,6 @@ impl TypedActionView for CodeSettingsPageView {
                 RemoteCodebaseIndexModel::handle(ctx).update(ctx, |model, ctx| {
                     model.drop_index(remote_path.clone(), ctx);
                 });
-            }
-            CodeSettingsPageAction::SignupAnonymousUser => {
-                ctx.emit(CodeSettingsPageEvent::SignupAnonymousUser);
             }
             CodeSettingsPageAction::ToggleLspServer {
                 workspace_path,

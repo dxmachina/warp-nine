@@ -10,7 +10,6 @@ use settings::{RespectUserSyncSetting, SyncToCloud};
 use warpui::{App, ModelHandle};
 
 use super::*;
-use crate::auth::auth_manager::AuthManager;
 use crate::auth::user::TEST_USER_UID;
 use crate::auth::{AuthStateProvider, UserUid};
 use crate::cloud_object::folders::{CloudFolderModel, FolderId};
@@ -83,7 +82,6 @@ fn initialize_app(
     app.add_singleton_model(|_| SystemStats::new());
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
-    app.add_singleton_model(AuthManager::new_for_test);
     app.add_singleton_model(|ctx| {
         UserWorkspaces::mock(
             team_client_mock.clone(),

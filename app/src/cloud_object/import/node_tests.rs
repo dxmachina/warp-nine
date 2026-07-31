@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::{FileId, FileNode, FileType, FileUploadState, FolderId, FolderNode, ImportedNode};
-use crate::drive::import::nodes::{UploadResult, UploadStatus};
+use crate::cloud_object::import::nodes::{UploadResult, UploadStatus};
 
 fn mock_tree() -> FileUploadState {
     let mut folder_id_to_node = HashMap::new();

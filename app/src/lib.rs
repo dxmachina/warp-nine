@@ -28,7 +28,6 @@ mod crash_reporting;
 mod debug_dump;
 mod default_terminal;
 mod download_method;
-mod drive;
 #[cfg(windows)]
 mod dynamic_libraries;
 mod env_vars;

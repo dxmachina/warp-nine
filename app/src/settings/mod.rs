@@ -34,6 +34,7 @@ mod shared_object_limit_banner;
 mod ssh;
 mod theme;
 mod vim_banner;
+pub mod warp_drive;
 
 #[cfg(test)]
 #[path = "schema_validation_tests.rs"]

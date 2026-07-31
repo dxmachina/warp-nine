@@ -23,8 +23,8 @@ use super::{
 };
 use crate::appearance;
 use crate::banner::BannerState;
-use crate::drive::settings::WarpDriveSettings;
 use crate::search::command_search::settings::CommandSearchSettings;
+use crate::settings::warp_drive::WarpDriveSettings;
 use crate::terminal::BlockListSettings;
 use crate::terminal::alt_screen_reporting::AltScreenReporting;
 use crate::terminal::general_settings::GeneralSettings;

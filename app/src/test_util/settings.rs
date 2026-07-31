@@ -26,10 +26,10 @@ pub fn initialize_settings_for_tests_with_mode(
     use warp_core::execution_mode::AppExecutionMode;
     use warp_core::semantic_selection::SemanticSelection;
 
-    use crate::drive::settings::WarpDriveSettings;
     use crate::search::command_search::settings::CommandSearchSettings;
     use crate::settings::app_icon::AppIconSettings;
     use crate::settings::manager::SettingsManager;
+    use crate::settings::warp_drive::WarpDriveSettings;
     use crate::settings::{
         AISettings, AccessibilitySettings, AliasExpansionSettings, AppEditorSettings,
         BlockVisibilitySettings, ChangelogSettings, CloudPreferencesSettings, CodeSettings,

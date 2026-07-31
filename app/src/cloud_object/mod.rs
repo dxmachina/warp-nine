@@ -39,6 +39,7 @@ use crate::workspaces::user_workspaces::UserWorkspaces;
 // `styling` keys icon colour off the object kind for tab icons and search results across
 // eleven files.
 pub mod export;
+pub mod import;
 pub mod object_limits;
 pub mod object_type;
 pub mod open_object;

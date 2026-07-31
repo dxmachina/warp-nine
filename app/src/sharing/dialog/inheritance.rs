@@ -1,23 +1,19 @@
 //! Support for displaying inherited ACLs.
 
 use warp_core::ui::appearance::Appearance;
-use warpui::elements::{CrossAxisAlignment, Flex, MouseStateHandle, ParentElement as _};
+use warpui::elements::{CrossAxisAlignment, Flex, ParentElement as _};
 use warpui::ui_components::components::UiComponent as _;
 use warpui::{AppContext, Element, SingletonEntity as _};
 
 use super::style;
-use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::ServerObjectContainer;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::server::ids::SyncId;
-use crate::server::telemetry::SharingDialogSource;
-use crate::workspace::WorkspaceAction;
 
 /// UI state for inherited permissions.
 pub struct InheritanceState {
     // The server API allows inheriting ACLs from drives as well, but we currently don't use this.
     source_folder: SyncId,
-    link_handle: MouseStateHandle,
 }
 
 impl InheritanceState {
@@ -35,10 +31,7 @@ impl InheritanceState {
             return None;
         }
 
-        Some(InheritanceState {
-            source_folder,
-            link_handle: Default::default(),
-        })
+        Some(InheritanceState { source_folder })
     }
 
     pub fn details(&self, appearance: &Appearance, app: &AppContext) -> InheritanceDetails {
@@ -47,34 +40,24 @@ impl InheritanceState {
             .map(|folder| &folder.model().name);
 
         match folder_name {
+            // LOCAL FORK: the folder name used to be a link that opened the parent folder's own
+            // sharing settings in the Warp Drive index. The index went with the Warp Drive
+            // browser and folders have no UI left, so the name is now plain text and the tooltip
+            // says what is actually true.
             Some(folder_name) => {
                 let prefix = style::detail_text("Inherited from ", appearance)
                     .build()
                     .finish();
-                let source_folder = self.source_folder;
-                let folder_link = appearance
-                    .ui_builder()
-                    .link(
-                        folder_name.to_owned(),
-                        None,
-                        Some(Box::new(move |ctx| {
-                            ctx.dispatch_typed_action(WorkspaceAction::OpenObjectSharingSettings {
-                                object_id: CloudObjectTypeAndId::Folder(source_folder),
-                                source: SharingDialogSource::InheritedPermission,
-                            });
-                        })),
-                        self.link_handle.clone(),
-                    )
-                    .soft_wrap(false)
+                let folder_name = style::detail_text(folder_name.to_owned(), appearance)
                     .build()
                     .finish();
 
                 InheritanceDetails {
                     source_label: Flex::row()
-                        .with_children([prefix, folder_link])
+                        .with_children([prefix, folder_name])
                         .with_cross_axis_alignment(CrossAxisAlignment::Center)
                         .finish(),
-                    tooltip_text: "Edit inherited permissions on the parent folder",
+                    tooltip_text: "Cannot edit inherited permissions",
                 }
             }
             None => InheritanceDetails {

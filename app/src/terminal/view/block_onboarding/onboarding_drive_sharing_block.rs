@@ -1,25 +1,20 @@
-use pathfinder_geometry::vector::vec2f;
 use warp_core::ui::appearance::Appearance;
-use warpui::elements::{
-    Border, Container, Flex, MainAxisAlignment, MainAxisSize, MouseStateHandle, ParentElement, Text,
-};
+use warpui::elements::{Border, Container, Flex, ParentElement, Text};
 use warpui::fonts::{Properties, Weight};
-use warpui::platform::Cursor;
-use warpui::ui_components::button::{ButtonVariant, TextAndIcon, TextAndIconAlignment};
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{AppContext, Element, Entity, SingletonEntity, View, ViewContext};
 
 use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
-use crate::terminal::view::telemetry::SharingDialogSource;
-use crate::ui_components::icons::Icon;
-use crate::workspace::WorkspaceAction;
 
-/// A rich onboarding block that prompts the user to share a newly-created personal Warp Drive
+/// A rich onboarding block that tells the user how to share a newly-created personal cloud
 /// object.
+// LOCAL FORK: the block used to end in a "Share <object>" button that dispatched
+// `WorkspaceAction::OpenObjectSharingSettings`, which opened the Warp Drive index's share
+// dialog. The index went with the Warp Drive browser, so the button went with it and the copy
+// now points only at the pane header, which owns a working share dialog of its own.
 pub struct OnboardingDriveSharingBlock {
     object_id: CloudObjectTypeAndId,
-    share_button: MouseStateHandle,
 }
 
 impl OnboardingDriveSharingBlock {
@@ -33,10 +28,7 @@ impl OnboardingDriveSharingBlock {
             }
         });
 
-        Self {
-            object_id,
-            share_button: Default::default(),
-        }
+        Self { object_id }
     }
 }
 
@@ -46,14 +38,11 @@ impl Entity for OnboardingDriveSharingBlock {
 
 const TITLE_TEXT: &str = "Sharing in Warp Drive";
 const BODY_TEXT: &[&str] = &[
-    "You can now share drive objects, in Warp or on the web, with anyone - Warp user or not. Click Share in the Warp Drive menu or the pane header to share via link or email.",
+    "You can now share saved objects, in Warp or on the web, with anyone - Warp user or not. Click Share in the pane header to share via link or email.",
     "You’ll be able to modify the access permissions any time.",
 ];
 
 const BLOCK_PADDING: f32 = 16.;
-const BUTTON_WIDTH: f32 = 100.;
-const BUTTON_HEIGHT: f32 = 32.;
-const BUTTON_FONT_SIZE: f32 = 14.;
 
 impl View for OnboardingDriveSharingBlock {
     fn ui_name() -> &'static str {
@@ -91,43 +80,6 @@ impl View for OnboardingDriveSharingBlock {
                     .finish(),
             );
         }
-
-        let button_label = match CloudModel::as_ref(app).get_by_uid(&self.object_id.uid()) {
-            Some(object) => format!("Share {}", object.display_name()),
-            None => format!("Share this {}", self.object_id.object_type()),
-        };
-        let object_id = self.object_id;
-        let button = appearance
-            .ui_builder()
-            .button(ButtonVariant::Accent, self.share_button.clone())
-            .with_style(UiComponentStyles {
-                width: Some(BUTTON_WIDTH),
-                height: Some(BUTTON_HEIGHT),
-                font_size: Some(BUTTON_FONT_SIZE),
-                font_weight: Some(Weight::Medium),
-                ..Default::default()
-            })
-            .with_text_and_icon_label(
-                TextAndIcon::new(
-                    TextAndIconAlignment::IconFirst,
-                    button_label,
-                    Icon::Share.to_warpui_icon(appearance.theme().background()),
-                    MainAxisSize::Min,
-                    MainAxisAlignment::SpaceEvenly,
-                    vec2f(BUTTON_FONT_SIZE, BUTTON_FONT_SIZE),
-                )
-                .with_inner_padding(10.),
-            )
-            .build()
-            .with_cursor(Cursor::PointingHand)
-            .on_click(move |ctx, _, _| {
-                ctx.dispatch_typed_action(WorkspaceAction::OpenObjectSharingSettings {
-                    object_id,
-                    source: SharingDialogSource::OnboardingBlock,
-                });
-            })
-            .finish();
-        content.add_child(button);
 
         Container::new(content.finish())
             .with_uniform_padding(BLOCK_PADDING)

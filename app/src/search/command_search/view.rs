@@ -39,7 +39,6 @@ use crate::auth::auth_state::AuthState;
 use crate::auth::auth_view_modal::AuthViewVariant;
 use crate::auth::{AuthStateProvider, UserUid};
 use crate::completer::SessionContext;
-use crate::drive::settings::WarpDriveSettings;
 use crate::search::QueryFilter;
 use crate::search::command_search::searcher::{CommandSearchItemAction, CommandSearchMixer};
 use crate::search::mixer::AddAsyncSourceOptions;
@@ -225,48 +224,49 @@ impl CommandSearchView {
             // will show up higher in the list (i.e.: further away from the input).
             // LOCAL FORK: the natural-language data source went with the agent.
 
-            if WarpDriveSettings::is_warp_drive_enabled(ctx) {
-                mixer.add_sync_source(
-                    WorkflowsDataSource::new(session_context.as_ref(), ctx),
-                    HashSet::from([QueryFilter::Workflows]),
-                );
+            // LOCAL FORK: the object data sources used to be gated on the `enable_warp_drive`
+            // setting, which went with the Warp Drive browser. Search is now the only way to
+            // reach these objects, so it is always on.
+            mixer.add_sync_source(
+                WorkflowsDataSource::new(session_context.as_ref(), ctx),
+                HashSet::from([QueryFilter::Workflows]),
+            );
 
-                let mut workflows_filters = HashSet::from([QueryFilter::Workflows]);
-                if AISettings::as_ref(ctx).is_any_ai_enabled(ctx) {
-                    workflows_filters.insert(QueryFilter::AgentModeWorkflows);
-                }
-
-                mixer.add_async_source(
-                    cloud_workflows_data_source(window_id),
-                    workflows_filters,
-                    AddAsyncSourceOptions {
-                        debounce_interval: Some(Duration::from_millis(50)),
-                        run_in_zero_state: true,
-                        run_when_unfiltered: true,
-                    },
-                    ctx,
-                );
-
-                mixer.add_async_source(
-                    notebooks_data_source(),
-                    HashSet::from([QueryFilter::Notebooks]),
-                    AddAsyncSourceOptions {
-                        debounce_interval: Some(Duration::from_millis(50)),
-                        run_in_zero_state: true,
-                        run_when_unfiltered: true,
-                    },
-                    ctx,
-                );
-
-                // EnvVarCollectionDataSource stays synchronous because each match target is
-                // structurally short (title, variable name, description). The per-item fuzzy
-                // match cost is negligible, so offloading to an async task would add complexity
-                // without meaningful performance benefit.
-                mixer.add_sync_source(
-                    EnvVarCollectionDataSource::new(),
-                    HashSet::from([QueryFilter::EnvironmentVariables]),
-                );
+            let mut workflows_filters = HashSet::from([QueryFilter::Workflows]);
+            if AISettings::as_ref(ctx).is_any_ai_enabled(ctx) {
+                workflows_filters.insert(QueryFilter::AgentModeWorkflows);
             }
+
+            mixer.add_async_source(
+                cloud_workflows_data_source(window_id),
+                workflows_filters,
+                AddAsyncSourceOptions {
+                    debounce_interval: Some(Duration::from_millis(50)),
+                    run_in_zero_state: true,
+                    run_when_unfiltered: true,
+                },
+                ctx,
+            );
+
+            mixer.add_async_source(
+                notebooks_data_source(),
+                HashSet::from([QueryFilter::Notebooks]),
+                AddAsyncSourceOptions {
+                    debounce_interval: Some(Duration::from_millis(50)),
+                    run_in_zero_state: true,
+                    run_when_unfiltered: true,
+                },
+                ctx,
+            );
+
+            // EnvVarCollectionDataSource stays synchronous because each match target is
+            // structurally short (title, variable name, description). The per-item fuzzy
+            // match cost is negligible, so offloading to an async task would add complexity
+            // without meaningful performance benefit.
+            mixer.add_sync_source(
+                EnvVarCollectionDataSource::new(),
+                HashSet::from([QueryFilter::EnvironmentVariables]),
+            );
 
             if FeatureFlag::AgentMode.is_enabled() && AISettings::as_ref(ctx).is_any_ai_enabled(ctx)
             {

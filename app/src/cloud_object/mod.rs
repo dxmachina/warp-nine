@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use chrono::{Duration, Utc};
 use derivative::Derivative;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -13,7 +12,6 @@ use url::Url;
 use warp_core::channel::Channel;
 use warp_core::features::FeatureFlag;
 use warp_graphql::queries::get_updated_cloud_objects::UpdatedObjectInput;
-use warp_graphql::scalars::time::ServerTimestamp;
 use warpui::{AppContext, SingletonEntity};
 
 use self::breadcrumbs::ContainingObject;
@@ -896,9 +894,9 @@ pub trait CloudObjectMetadataExt {
     #[cfg_attr(target_family = "wasm", expect(dead_code))]
     fn semantic_creator(&self, app: &AppContext) -> Option<String>;
 
-    /// Returns semantic summary of countdown of days until permadeletion.
-    /// Ex: "27 days until permanent deletion"
-    fn semantic_permadeletion_countdown(&self, app: &AppContext) -> Option<String>;
+    // LOCAL FORK: `semantic_permadeletion_countdown` rendered the trash row's
+    // "27 days until permanent deletion" label. The trash view went with the Warp Drive
+    // browser, and `drive/items/item.rs` was its only caller.
 }
 
 impl CloudObjectMetadataExt for CloudObjectMetadata {
@@ -935,49 +933,10 @@ impl CloudObjectMetadataExt for CloudObjectMetadata {
             .as_ref()
             .and_then(|uid| user_profiles.displayable_identifier_for_uid(UserUid::new(uid)))
     }
-
-    fn semantic_permadeletion_countdown(&self, app: &AppContext) -> Option<String> {
-        // 2 cases:
-        // 1) Either the object is a root level object.
-        // 2) Or the object is inside folder(s), call recursive function to get trashed_ts of top level folder.
-        if let Some(trashed_ts) = self
-            .trashed_ts
-            .or_else(|| get_top_folder_trashed_ts(self.folder_id, app))
-        {
-            let deletion_time = trashed_ts.utc() + Duration::days(31);
-            let current_time = Utc::now();
-            let days_left = deletion_time.signed_duration_since(current_time).num_days();
-
-            let full_string = match days_left {
-                0 | 1 => "1 day until permanent deletion".to_string(),
-                _ => format!("{days_left} days until permanent deletion"),
-            };
-            Some(full_string)
-        } else {
-            None
-        }
-    }
 }
 
-/// Helper function to retrieve trashed_ts of top level folder given a folder_id of an object.
-fn get_top_folder_trashed_ts(
-    folder_id: Option<SyncId>,
-    app: &AppContext,
-) -> Option<ServerTimestamp> {
-    let mut folder_id = folder_id;
-    let cloud_model = CloudModel::as_ref(app);
-    while let Some(current_folder_id) = folder_id {
-        // If the parent folder isn't in CloudModel, short-circuit so we don't loop forever.
-        let folder = cloud_model.get_folder_by_uid(&current_folder_id.uid())?;
-
-        if let Some(_parent_folder_id) = folder.metadata.folder_id {
-            folder_id = folder.metadata.folder_id
-        } else {
-            return folder.metadata.trashed_ts;
-        }
-    }
-    None
-}
+// LOCAL FORK: `get_top_folder_trashed_ts` fed `semantic_permadeletion_countdown` and went with
+// it.
 
 pub use cloud_object_client::{
     ObjectDeleteResult, ObjectMetadataUpdateResult, ObjectPermissionsUpdateData,

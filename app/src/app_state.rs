@@ -316,9 +316,10 @@ impl From<ToolPanelView> for LeftPanelDisplayedTab {
         match view {
             ToolPanelView::ProjectExplorer => LeftPanelDisplayedTab::FileTree,
             ToolPanelView::GlobalSearch { .. } => LeftPanelDisplayedTab::GlobalSearch,
-            // LOCAL FORK: `ToolPanelView::ConversationListView` went away with the agent.
-            // `LeftPanelDisplayedTab::ConversationListView` is kept because it is persisted.
-            ToolPanelView::WarpDrive => LeftPanelDisplayedTab::WarpDrive,
+            // LOCAL FORK: `ToolPanelView::ConversationListView` went away with the agent and
+            // `ToolPanelView::WarpDrive` with the Warp Drive browser.
+            // `LeftPanelDisplayedTab::{ConversationListView, WarpDrive}` are kept because they
+            // are persisted; they are simply no longer produced.
         }
     }
 }

@@ -82,14 +82,17 @@ pub(crate) fn handle(
             target,
             ctx,
         ),
-        ActionKind::SurfaceWarpDriveOpen => surface_workspace_action(
-            instance_id,
-            action,
-            SurfaceDestination::WarpDrive,
-            WorkspaceAction::OpenWarpDrive,
-            target,
-            ctx,
-        ),
+        // LOCAL FORK: `surface.warp_drive.open` and `surface.warp_drive.toggle` stay on the
+        // wire but no longer have a workspace action to dispatch: the Warp Drive browser was
+        // removed. `surface_unavailable_reason` reports the surface as unavailable
+        // unconditionally, so both fail closed with the standard error.
+        ActionKind::SurfaceWarpDriveOpen | ActionKind::SurfaceWarpDriveToggle => {
+            ensure_surface_available(action, SurfaceDestination::WarpDrive, ctx)?;
+            Err(ControlError::new(
+                ErrorCode::UnsupportedAction,
+                format!("{} is unavailable", action.as_str()),
+            ))
+        }
         ActionKind::SurfaceAgentManagementOpen => surface_workspace_action(
             instance_id,
             action,
@@ -121,13 +124,6 @@ pub(crate) fn handle(
             surface_command_search_open(instance_id, params, target, ctx)
         }
         ActionKind::SurfaceThemePickerOpen => surface_theme_picker_open(instance_id, target, ctx),
-        ActionKind::SurfaceWarpDriveToggle => workspace_action(
-            instance_id,
-            action,
-            WorkspaceAction::ToggleWarpDrive,
-            target,
-            ctx,
-        ),
         ActionKind::SurfaceResourceCenterToggle => workspace_action(
             instance_id,
             action,
@@ -686,12 +682,9 @@ fn settings_section(page: String) -> Result<SettingsSection, ControlError> {
             format!("surface.settings.open cannot resolve settings page {page:?}"),
         )
     })?;
-    if section == SettingsSection::WarpDrive {
-        return Err(ControlError::new(
-            ErrorCode::UnsupportedAction,
-            "surface.settings.open does not open Warp Drive settings",
-        ));
-    }
+    // LOCAL FORK: the explicit `SettingsSection::WarpDrive` rejection is gone because
+    // `SettingsSection::from_str` no longer resolves "Warp Drive" at all -- the page went with
+    // the Warp Drive browser -- so the `InvalidParams` error above now covers it.
     Ok(section)
 }
 

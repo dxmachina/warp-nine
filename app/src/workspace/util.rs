@@ -90,7 +90,6 @@ pub struct WorkspaceState {
     pub is_launch_config_save_modal_open: bool,
     pub is_resource_center_open: bool,
     pub is_command_search_open: bool,
-    pub is_warp_drive_open: bool,
     pub is_ai_assistant_panel_open: bool,
     pub is_agent_management_popup_open: bool,
     pub is_auth_override_modal_open: bool,
@@ -130,7 +129,6 @@ impl WorkspaceState {
             || self.is_theme_chooser_open
             || self.is_ai_assistant_panel_open
             || self.is_workflow_modal_open
-            || self.is_warp_drive_open
     }
 
     pub fn is_any_non_palette_modal_open(&self, app: &AppContext) -> bool {
@@ -212,7 +210,7 @@ impl WorkspaceState {
     }
 
     pub fn close_all_left_panels(&mut self) {
-        self.is_warp_drive_open = false;
+        // LOCAL FORK: Warp Drive was the other left panel and went with the browser.
         self.is_theme_chooser_open = false;
     }
 

@@ -1652,7 +1652,6 @@ pub(crate) fn initialize_app(
     billing::shared_objects_creation_denied_modal::init(ctx);
     tab_configs::new_worktree_modal::init(ctx);
     tab_configs::params_modal::init(ctx);
-    drive::index::init(ctx);
     sharing::dialog::init(ctx);
     settings_view::update_environment_form::init(ctx);
     env_vars::env_var_collection_block::init(ctx);

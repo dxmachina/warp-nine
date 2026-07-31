@@ -22,16 +22,12 @@ use super::view::{OnboardingTutorial, WorkspaceBanner};
 // its attribute rebound it to the line below, which `main` leaves ungated. That hid
 // these symbols from every build where the condition is false.
 use crate::auth::auth_manager::LoginGatedFeature;
-use crate::cloud_object::CloudObjectTypeAndId;
-use crate::drive::items::WarpDriveItemId;
 use crate::palette::PaletteMode;
 use crate::pane_group::PaneGroup;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search;
 use crate::server::ids::SyncId;
-use crate::server::telemetry::{
-    AddTabWithShellSource, AgentModeEntrypoint, PaletteSource, SharingDialogSource,
-};
+use crate::server::telemetry::{AddTabWithShellSource, AgentModeEntrypoint, PaletteSource};
 use crate::settings_view::{SettingsAction as SettingsTabAction, SettingsSection};
 use crate::tab::{NewSessionMenuItem, SelectedTabColor};
 use crate::tab_configs::TabConfig;
@@ -348,8 +344,9 @@ pub enum WorkspaceAction {
     CreateTeamNotebook,
     CreatePersonalWorkflow,
     CreateTeamWorkflow,
-    CreatePersonalFolder,
-    CreateTeamFolder,
+    // LOCAL FORK: `CreatePersonalFolder`/`CreateTeamFolder` went with the Warp Drive browser.
+    // Folder creation went through the panel's naming dialog, and with no tree to show them in
+    // a folder is not reachable afterwards.
     CreateTeamEnvVarCollection,
     CreatePersonalEnvVarCollection,
     CreatePersonalAIPrompt,
@@ -372,15 +369,10 @@ pub enum WorkspaceAction {
         cursor_position: Vector2F,
     },
     DropGroup,
-    /// Toggles the left panel. In Code Mode V1 this toggles Warp Drive.
-    /// In Code Mode V2 this toggles the left panel which contains both the project explorer and
-    /// Warp Drive. This happens as explicit action from the user.
+    /// Toggles the left panel, which contains the project explorer and global search. This
+    /// happens as an explicit action from the user.
+    // LOCAL FORK: `ToggleWarpDrive` and `OpenWarpDrive` went with the Warp Drive browser.
     ToggleLeftPanel,
-    /// Toggles directly to the Warp Drive tab of the left panel in Code Mode V2
-    ToggleWarpDrive,
-    /// Unconditionally opens Warp Drive. This is used in the case of user lifecycle
-    /// events like new user onboarding or when the user joins a team.
-    OpenWarpDrive,
     /// Toggles the right panel. This happens as an explicit action from the user.
     ToggleRightPanel,
     /// Opens the code review panel (right panel) without toggling. If already open,
@@ -465,14 +457,9 @@ pub enum WorkspaceAction {
     FocusLeftPanel,
     /// Moves focus to the panel on the right
     FocusRightPanel,
-    /// An action to view a newly created/edited workflow in WD from the toast
-    ViewObjectInWarpDrive(WarpDriveItemId),
-    /// Open the object's sharing settings in WD.
-    OpenObjectSharingSettings {
-        object_id: CloudObjectTypeAndId,
-        source: SharingDialogSource,
-    },
-    UndoTrash(CloudObjectTypeAndId),
+    // LOCAL FORK: `ViewObjectInWarpDrive`, `OpenObjectSharingSettings` and `UndoTrash` all
+    // terminated in the Warp Drive index and went with it. Objects are still shareable from the
+    // pane header (`pane:share_pane_contents`).
     /// Open a local path in the file explorer.
     OpenInExplorer {
         path: PathBuf,
@@ -779,7 +766,6 @@ impl From<&WorkspaceAction> for LoginGatedFeature {
             ImportToTeamDrive => "Importing to a team drive",
             CreateTeamNotebook => "Creating a team notebook",
             CreateTeamWorkflow => "Creating a team workflow",
-            CreateTeamFolder => "Creating a team folder",
             CreateTeamEnvVarCollection => "Creating a team environment variable collection",
             CreateTeamAIPrompt => "Creating a team prompt",
             OpenShareSessionModal(_) => "Sharing a session",
@@ -796,7 +782,6 @@ impl WorkspaceAction {
             ImportToTeamDrive
                 | CreateTeamNotebook
                 | CreateTeamWorkflow
-                | CreateTeamFolder
                 | CreateTeamEnvVarCollection
                 | CreateTeamAIPrompt
                 | OpenShareSessionModal(_)
@@ -948,8 +933,6 @@ impl WorkspaceAction {
             | CreateTeamNotebook
             | CreatePersonalWorkflow
             | CreateTeamWorkflow
-            | CreatePersonalFolder
-            | CreateTeamFolder
             | CreateTeamEnvVarCollection
             | CreatePersonalEnvVarCollection
             | CreatePersonalAIPrompt
@@ -960,8 +943,6 @@ impl WorkspaceAction {
             | DragGroup { .. }
             | StartGroupDrag(_)
             | ToggleLeftPanel
-            | ToggleWarpDrive
-            | OpenWarpDrive
             | ClosePanel
             | ToggleRightPanel
             | OpenCodeReviewPanel(..)
@@ -1018,10 +999,7 @@ impl WorkspaceAction {
             | RunCommand { .. }
             | InsertInInput { .. }
             | AttemptLoginGatedAIUpgrade
-            | UndoTrash(_)
             | OpenFilePath { .. }
-            | ViewObjectInWarpDrive(_)
-            | OpenObjectSharingSettings { .. }
             | TerminateApp
             | SignInAnonymousWebUser
             | TabHoverWidthStart { .. }

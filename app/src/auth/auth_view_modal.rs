@@ -21,7 +21,7 @@ use warpui::{
 
 use super::UserUid;
 use super::auth_manager::{AuthManager, AuthManagerEvent};
-use super::auth_view_body::{AuthStep, AuthViewBodyAction, AuthViewBodyEvent};
+use super::auth_view_body::{AuthStep, AuthViewBodyEvent};
 use super::credentials::RefreshToken;
 use super::login_failure_notification::{self, LoginFailureReason};
 use crate::appearance::Appearance;
@@ -215,11 +215,8 @@ impl AuthView {
         self.set_auth_step(ctx, AuthStep::BrowserOpen);
     }
 
-    pub fn start_sign_in(&mut self, ctx: &mut ViewContext<Self>) {
-        self.update_auth_body(ctx, |body, ctx| {
-            body.handle_action(&AuthViewBodyAction::Login, ctx);
-        });
-    }
+    // LOCAL FORK: `start_sign_in` was only called by the "Sign in to access Warp Drive"
+    // placeholder panel, which went with the Warp Drive browser.
 
     fn focus(&self, ctx: &mut ViewContext<Self>) {
         ctx.focus(&self.auth_screen_modal);

@@ -143,7 +143,6 @@ fn refreshing_pending_onboarding_choices_replaces_stale_settings() {
             show_conversation_history: false,
             show_project_explorer: true,
             show_global_search: false,
-            show_warp_drive: false,
             show_code_review_button: true,
         }),
         cli_agent_toolbar_enabled: true,

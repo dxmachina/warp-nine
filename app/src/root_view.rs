@@ -56,11 +56,9 @@ use crate::autoupdate::{AutoupdateState, AutoupdateStateEvent, RequestType, Upda
 use crate::changelog_model::ChangelogRequestType;
 use crate::cloud_object::export::ExportManager;
 use crate::cloud_object::model::persistence::CloudModel;
-use crate::cloud_object::{
-    CloudObjectTypeAndId, OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings,
-};
 use crate::cloud_object::{GenericStringObjectFormat, JsonObjectType, ObjectType};
-use crate::drive::items::WarpDriveItemId;
+use crate::cloud_object::{OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings};
+use crate::env_vars::manager::EnvVarCollectionSource;
 use crate::experiments::{BlockOnboarding, Experiment};
 use crate::features::FeatureFlag;
 use crate::interval_timer::IntervalTimer;
@@ -2245,32 +2243,28 @@ impl RootView {
         if let AuthOnboardingState::Terminal(handle) = &self.auth_onboarding_state {
             let cloud_model = CloudModel::as_ref(ctx);
 
+            // LOCAL FORK: every arm used to wait on `has_warp_drive_initialized_sections`,
+            // the panel's "index is populated" future, before acting. The panel is gone, so the
+            // objects open directly. Env-var links now open a pane instead of revealing the
+            // object in the index; folder links have nothing left to open.
             match arg.object_type {
                 ObjectType::Notebook => {
                     handle.update(ctx, |workspace, ctx| {
-                        let initialized_section_states =
-                            workspace.has_warp_drive_initialized_sections(ctx);
-                        let notebook_id = SyncId::ServerId(arg.server_id);
-                        let settings = arg.settings.clone();
-                        let _ = ctx.spawn(initialized_section_states, move |workspace, _, ctx| {
-                            workspace.open_notebook(
-                                &NotebookSource::Existing(notebook_id),
-                                &settings,
-                                ctx,
-                                false,
-                            );
-                        });
+                        workspace.open_notebook(
+                            &NotebookSource::Existing(SyncId::ServerId(arg.server_id)),
+                            &arg.settings,
+                            ctx,
+                            false,
+                        );
                     });
                 }
                 ObjectType::Workflow => {
                     handle.update(ctx, |workspace, ctx| {
-                        let initialized_section_states =
-                            workspace.has_warp_drive_initialized_sections(ctx);
-                        let workflow_id = SyncId::ServerId(arg.server_id);
-                        let settings = arg.settings.clone();
-                        let _ = ctx.spawn(initialized_section_states, move |workspace, _, ctx| {
-                            workspace.open_workflow_from_intent(workflow_id, &settings, ctx);
-                        });
+                        workspace.open_workflow_from_intent(
+                            SyncId::ServerId(arg.server_id),
+                            &arg.settings,
+                            ctx,
+                        );
                     });
                 }
                 ObjectType::GenericStringObject(GenericStringObjectFormat::Json(
@@ -2281,35 +2275,12 @@ impl RootView {
                         return false;
                     }
 
-                    let item_id =
-                        WarpDriveItemId::Object(CloudObjectTypeAndId::from_generic_string_object(
-                            GenericStringObjectFormat::Json(JsonObjectType::EnvVarCollection),
-                            SyncId::ServerId(arg.server_id),
-                        ));
-
                     handle.update(ctx, |workspace, ctx| {
-                        let initialized_section_states =
-                            workspace.has_warp_drive_initialized_sections(ctx);
-                        let _ = ctx.spawn(initialized_section_states, move |workspace, _, ctx| {
-                            workspace.view_in_and_focus_warp_drive(item_id, ctx);
-                        });
-                    });
-                }
-                ObjectType::Folder => {
-                    if cloud_model.get_by_uid(&arg.server_id.uid()).is_none() {
-                        display_object_missing_error_in_window(ctx.window_id(), ctx);
-                        return false;
-                    }
-
-                    let item_id = WarpDriveItemId::Object(CloudObjectTypeAndId::Folder(
-                        SyncId::ServerId(arg.server_id),
-                    ));
-                    handle.update(ctx, |workspace, ctx| {
-                        let initialized_section_states =
-                            workspace.has_warp_drive_initialized_sections(ctx);
-                        let _ = ctx.spawn(initialized_section_states, move |workspace, _, ctx| {
-                            workspace.view_in_and_focus_warp_drive(item_id, ctx);
-                        });
+                        workspace.open_env_var_collection(
+                            &EnvVarCollectionSource::Existing(SyncId::ServerId(arg.server_id)),
+                            false,
+                            ctx,
+                        );
                     });
                 }
                 _ => {
@@ -2473,17 +2444,13 @@ impl RootView {
     /// Shows the user the settings view of their newly joined team
     /// within the app.
     pub fn handle_team_intent_link_action(&mut self, _: &(), ctx: &mut ViewContext<Self>) -> bool {
-        // Force-open warp drive.
+        // LOCAL FORK: this used to force-open Warp Drive so the new team's space was visible.
+        // The browser is gone, so there is nothing to reveal; just surface the window.
         let window_id = ctx.window_id();
-        if let AuthOnboardingState::Terminal(handle) = &self.auth_onboarding_state {
-            ctx.dispatch_typed_action_for_view(
-                window_id,
-                handle.id(),
-                &WorkspaceAction::OpenWarpDrive,
-            );
+        if let AuthOnboardingState::Terminal(_) = &self.auth_onboarding_state {
             ctx.windows().show_window_and_focus_app(window_id);
         } else {
-            report_error!("Auth not complete before trying to open warp drive");
+            report_error!("Auth not complete before handling a team intent link");
         }
 
         // Use the team tester model to notify relevant subscribers to refresh their data.

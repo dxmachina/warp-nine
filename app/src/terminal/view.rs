@@ -234,8 +234,8 @@ use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ObjectUid, SyncId};
 use crate::server::server_api::ServerApi;
 use crate::server::telemetry::{
-    self, AnonymousUserSignupEntrypoint, BootstrappingInfo, NotificationsTurnedOnSource,
-    PaletteSource, SaveAsWorkflowModalSource, SecretInteraction, SlowBootstrapInfo, TelemetryEvent,
+    AnonymousUserSignupEntrypoint, BootstrappingInfo, NotificationsTurnedOnSource, PaletteSource,
+    SaveAsWorkflowModalSource, SecretInteraction, SlowBootstrapInfo, TelemetryEvent,
     ToggleBlockFilterSource,
 };
 use crate::session_management::{CommandContext, SessionNavigationPromptElements};
@@ -1723,10 +1723,11 @@ pub enum Event {
     AmbientAgentViewModelCreated,
 }
 
+// LOCAL FORK: the `WarpDrive` variant went with the Warp Drive browser; the file tree is the
+// only left-panel view a terminal ever targets.
 #[derive(Clone, Copy, Debug)]
 pub enum LeftPanelTargetView {
     FileTree,
-    WarpDrive,
 }
 
 #[derive(Clone)]
@@ -10059,20 +10060,20 @@ impl TerminalView {
                     );
                 }
 
-                if WarpDriveSettings::is_warp_drive_enabled(ctx) {
-                    items.push(MenuItem::Separator);
-                    items.push(
-                        MenuItemFields::new("Save as workflow")
-                            .with_on_select_action(TerminalAction::ContextMenu(
-                                ContextMenuAction::OpenWorkflowModal,
-                            ))
-                            .with_key_shortcut_label(keybinding_name_to_display_string(
-                                "terminal:toggle_teams_modal",
-                                ctx,
-                            ))
-                            .into_item(),
-                    );
-                }
+                // LOCAL FORK: "Save as workflow" used to be gated on the `enable_warp_drive`
+                // setting, which went with the Warp Drive browser. Workflows are kept.
+                items.push(MenuItem::Separator);
+                items.push(
+                    MenuItemFields::new("Save as workflow")
+                        .with_on_select_action(TerminalAction::ContextMenu(
+                            ContextMenuAction::OpenWorkflowModal,
+                        ))
+                        .with_key_shortcut_label(keybinding_name_to_display_string(
+                            "terminal:toggle_teams_modal",
+                            ctx,
+                        ))
+                        .into_item(),
+                );
 
                 if is_single_selection {
                     let mut copy_output_menu_item = MenuItemFields::new("Copy output")
@@ -10580,7 +10581,9 @@ impl TerminalView {
         }
 
         // Section 3: Teams related
-        if !all_current_input_text.is_empty() && WarpDriveSettings::is_warp_drive_enabled(ctx) {
+        // LOCAL FORK: the `enable_warp_drive` half of this gate went with the Warp Drive
+        // browser. Workflows are kept.
+        if !all_current_input_text.is_empty() {
             items.extend([
                 MenuItem::Separator,
                 MenuItemFields::new("Save as workflow")

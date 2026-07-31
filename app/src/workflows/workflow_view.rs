@@ -64,7 +64,7 @@ use crate::server::cloud_objects::update_manager::{
 };
 use crate::server::ids::{ClientId, ServerId, SyncId};
 use crate::server::telemetry::{
-    CloudObjectTelemetryMetadata, SharingDialogSource, TelemetryCloudObjectType, TelemetryEvent,
+    CloudObjectTelemetryMetadata, TelemetryCloudObjectType, TelemetryEvent,
 };
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
@@ -231,11 +231,8 @@ pub enum WorkflowViewEvent {
     UpdatedWorkflow(SyncId),
     // LOCAL FORK: `ViewInWarpDrive` revealed this workflow in the Warp Drive panel; removed with
     // the panel.
-    OpenDriveObjectShareDialog {
-        cloud_object_type_and_id: CloudObjectTypeAndId,
-        invitee_email: Option<String>,
-        source: SharingDialogSource,
-    },
+    // LOCAL FORK: `OpenDriveObjectShareDialog` opened the Warp Drive index's share dialog for
+    // a `?invitee=` deep link; it went with the index. Sharing is on the pane header.
     RunWorkflow {
         workflow: Arc<WorkflowType>,
         source: WorkflowSource,
@@ -686,10 +683,14 @@ impl WorkflowView {
         });
     }
 
+    // LOCAL FORK: `settings` is now unused. Its `invitee_email` popped the Warp Drive index's
+    // share dialog and its `focused_folder_id` revealed the containing folder; both went with
+    // the index. The parameter stays because `OpenWarpDriveObjectSettings` is still in the pane
+    // restore path.
     pub fn load(
         &mut self,
         workflow: CloudWorkflow,
-        settings: &OpenWarpDriveObjectSettings,
+        _settings: &OpenWarpDriveObjectSettings,
         mode: WorkflowViewMode,
         ctx: &mut ViewContext<Self>,
     ) {
@@ -820,18 +821,6 @@ impl WorkflowView {
 
         // LOCAL FORK: a `focused_folder_id` used to reveal the workflow's containing folder in the
         // Warp Drive panel; removed with the panel.
-
-        if let Some(invitee_email) = settings.invitee_email.clone() {
-            let object_id_to_share = settings
-                .focused_folder_id
-                .map(|id| CloudObjectTypeAndId::Folder(SyncId::ServerId(id)))
-                .unwrap_or(CloudObjectTypeAndId::Workflow(workflow.id));
-            ctx.emit(WorkflowViewEvent::OpenDriveObjectShareDialog {
-                cloud_object_type_and_id: object_id_to_share,
-                invitee_email: Some(invitee_email),
-                source: SharingDialogSource::InviteeRequest,
-            });
-        }
 
         if matches!(mode, WorkflowViewMode::View) {
             self.focus_first_argument_value(ctx);

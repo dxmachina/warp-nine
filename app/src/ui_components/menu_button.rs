@@ -87,77 +87,9 @@ where
     button_with_menu
 }
 
-/// Variant with surface_1 hover background for Warp Drive items
-#[allow(clippy::too_many_arguments)]
-pub fn icon_button_with_context_menu_drive<F, V: View>(
-    icon: Icon,
-    on_click_action: F,
-    mouse_state_handle: MouseStateHandle,
-    context_menu: &ViewHandle<V>,
-    is_menu_open: bool,
-    menu_direction: MenuDirection,
-    cursor: Option<Cursor>,
-    appearance: &Appearance,
-) -> Stack
-where
-    F: 'static + FnMut(&mut EventContext, &AppContext, Vector2F),
-{
-    let button = icon_button(appearance, icon, is_menu_open, mouse_state_handle)
-        .with_hovered_styles(
-            warpui::ui_components::components::UiComponentStyles::default()
-                .set_background(appearance.theme().surface_1().into())
-                .set_border_color(appearance.theme().surface_3().into()),
-        )
-        .with_cursor(cursor);
-
-    let mut button_with_menu =
-        Stack::new().with_child(button.build().on_click(on_click_action).finish());
-
-    if is_menu_open {
-        button_with_menu.add_positioned_overlay_child(
-            ChildView::new(context_menu).finish(),
-            offset_positioning(menu_direction),
-        );
-    }
-
-    button_with_menu
-}
-
-/// Variant with surface_1 hover background for Warp Drive items (highlighted)
-pub fn highlight_icon_button_with_context_menu_drive<F, V: View>(
-    icon: Icon,
-    on_click_action: F,
-    mouse_state_handle: MouseStateHandle,
-    context_menu: &ViewHandle<V>,
-    is_menu_open: bool,
-    menu_direction: MenuDirection,
-    appearance: &Appearance,
-) -> Stack
-where
-    F: 'static + FnMut(&mut EventContext, &AppContext, Vector2F),
-{
-    let button = highlight(
-        icon_button(appearance, icon, is_menu_open, mouse_state_handle),
-        appearance,
-    )
-    .with_hovered_styles(
-        warpui::ui_components::components::UiComponentStyles::default()
-            .set_background(appearance.theme().surface_1().into())
-            .set_border_color(appearance.theme().surface_3().into()),
-    );
-
-    let mut button_with_menu =
-        Stack::new().with_child(button.build().on_click(on_click_action).finish());
-
-    if is_menu_open {
-        button_with_menu.add_positioned_overlay_child(
-            ChildView::new(context_menu).finish(),
-            offset_positioning(menu_direction),
-        );
-    }
-
-    button_with_menu
-}
+// LOCAL FORK: `icon_button_with_context_menu_drive` and its highlighted variant were the Warp
+// Drive index row's overflow buttons. `drive/items/item.rs` was their only caller and it went
+// with the browser.
 
 fn offset_positioning(menu_direction: MenuDirection) -> OffsetPositioning {
     match menu_direction {

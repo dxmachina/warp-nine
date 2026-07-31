@@ -68,7 +68,7 @@ use crate::server::cloud_objects::update_manager::{FetchSingleObjectOption, Upda
 use crate::server::ids::{ClientId, ServerId, SyncId};
 use crate::server::telemetry::{
     CloudObjectTelemetryMetadata, NotebookActionEvent, NotebookTelemetryMetadata,
-    SharingDialogSource, TelemetryCloudObjectType, TelemetryEvent,
+    TelemetryCloudObjectType, TelemetryEvent,
 };
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
@@ -253,11 +253,8 @@ pub enum NotebookEvent {
         cloud_object_type_and_id: CloudObjectTypeAndId,
         new_space: Space,
     },
-    OpenDriveObjectShareDialog {
-        cloud_object_type_and_id: CloudObjectTypeAndId,
-        invitee_email: Option<String>,
-        source: SharingDialogSource,
-    },
+    // LOCAL FORK: `OpenDriveObjectShareDialog` opened the Warp Drive index's share dialog for
+    // a `?invitee=` deep link; it went with the index. Sharing is on the pane header.
 }
 
 impl From<PaneEvent> for NotebookEvent {
@@ -1579,10 +1576,14 @@ impl NotebookView {
     ///
     /// The returned [`SpawnedFutureHandle`] guards asynchronous work to grab the baton and start
     /// editing if there is not already an editor.
+    // LOCAL FORK: `settings` is now unused. Its `invitee_email` popped the Warp Drive index's
+    // share dialog and its `focused_folder_id` revealed the containing folder; both went with
+    // the index. The parameter stays because `OpenWarpDriveObjectSettings` is still in the pane
+    // restore path.
     pub fn load(
         &mut self,
         notebook: CloudNotebook,
-        settings: &OpenWarpDriveObjectSettings,
+        _settings: &OpenWarpDriveObjectSettings,
         ctx: &mut ViewContext<Self>,
     ) -> SpawnedFutureHandle {
         self.set_title(&notebook.model().title, ctx);
@@ -1659,17 +1660,6 @@ impl NotebookView {
                 }
             }
         });
-        if let Some(invitee_email) = settings.invitee_email.clone() {
-            let object_id_to_share = settings
-                .focused_folder_id
-                .map(|id| CloudObjectTypeAndId::Folder(SyncId::ServerId(id)))
-                .unwrap_or(CloudObjectTypeAndId::Notebook(notebook.id));
-            ctx.emit(NotebookEvent::OpenDriveObjectShareDialog {
-                cloud_object_type_and_id: object_id_to_share,
-                invitee_email: Some(invitee_email),
-                source: SharingDialogSource::InviteeRequest,
-            });
-        }
         // LOCAL FORK: the `focused_folder_id` branch revealed the notebook's containing folder in
         // the Warp Drive panel; removed with the panel.
 

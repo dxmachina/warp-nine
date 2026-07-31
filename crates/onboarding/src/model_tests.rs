@@ -141,7 +141,6 @@ fn account_first_path_uses_agent_ui_defaults() {
             assert!(ui.show_conversation_history);
             assert!(ui.show_project_explorer);
             assert!(ui.show_global_search);
-            assert!(ui.show_warp_drive);
             assert!(ui.show_code_review_button);
         });
     });

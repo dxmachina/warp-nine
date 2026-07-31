@@ -229,15 +229,6 @@ fn handle_notebook_event(
             new_space,
         } => move_to_space(*cloud_object_type_and_id, *new_space, ctx),
         NotebookEvent::Pane(pane_event) => group.handle_pane_event(pane_id, pane_event, ctx),
-        NotebookEvent::OpenDriveObjectShareDialog {
-            cloud_object_type_and_id,
-            invitee_email,
-            source,
-        } => ctx.emit(crate::pane_group::Event::OpenDriveObjectShareDialog {
-            source: *source,
-            cloud_object_type_and_id: *cloud_object_type_and_id,
-            invitee_email: invitee_email.clone(),
-        }),
         // LOCAL FORK: `NotebookEvent::AttachPlanAsContext` attached a plan to an agent
         // conversation; removed with the agent.
     }

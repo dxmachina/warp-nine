@@ -64,7 +64,6 @@ use super::view::{
 use super::warpify::render::{draw_flag_pole, render_subshell_flag};
 use super::{HEIGHT_FUDGE_FACTOR_LINES, TerminalModel, heights_approx_eq};
 use crate::appearance::Appearance;
-use crate::drive::settings::WarpDriveSettings;
 use crate::features::FeatureFlag;
 use crate::pane_group::SplitPaneState;
 use crate::terminal::alt_screen::{should_intercept_mouse, should_intercept_scroll};
@@ -1198,7 +1197,10 @@ impl BlockListElement {
             self.ask_ai_assistant_button = Some(element);
         }
 
-        if WarpDriveSettings::is_warp_drive_enabled(app) {
+        // LOCAL FORK: the "Save as workflow" block button used to be gated on the
+        // `enable_warp_drive` setting, which went with the Warp Drive browser. Workflows are a
+        // kept feature, so the button is always rendered.
+        {
             let icon = Container::new(
                 ConstrainedBox::new(
                     ui_components::icons::Icon::Save

@@ -72,7 +72,6 @@ use crate::view_components::{
     ClickableTextInput, ClickableTextInputAction, ClickableTextInputEvent, ToastFlavor,
 };
 use crate::word_block_editor::{ChipEditorState, WordBlockEditorView, WordBlockEditorViewEvent};
-use crate::workspace::WorkspaceAction;
 use crate::workspaces::team::{DiscoverableTeam, MembershipRole, Team, TeamDeleteDisabledReason};
 use crate::workspaces::update_manager::{TeamUpdateManager, TeamUpdateManagerEvent};
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
@@ -172,7 +171,6 @@ pub enum TeamsPageAction {
     SendEmailInvites {
         team_uid: ServerId,
     },
-    OpenWarpDrive,
     GenerateUpgradeLink {
         team_uid: ServerId,
     },
@@ -284,7 +282,6 @@ impl TryFrom<&TeamsPageAction> for TelemetryEvent {
 #[derive(Clone)]
 pub enum TeamsPageViewEvent {
     TeamsChanged,
-    OpenWarpDrive,
     ShowToast {
         message: String,
         flavor: ToastFlavor,
@@ -530,7 +527,6 @@ impl TypedActionView for TeamsPageView {
                 self.send_email_invites(*team_uid, ctx);
                 ctx.notify();
             }
-            TeamsPageAction::OpenWarpDrive => ctx.emit(TeamsPageViewEvent::OpenWarpDrive),
             TeamsPageAction::ShowLeaveTeamConfirmationDialog => {
                 let variant = if self.should_show_reload_credits_confirmation(ctx) {
                     CloudActionConfirmationDialogVariant::LeaveTeamReloadCredits
@@ -1480,7 +1476,8 @@ impl TeamsPageView {
                 ctx,
             );
         });
-        ctx.dispatch_typed_action(&WorkspaceAction::OpenWarpDrive);
+        // LOCAL FORK: creating a team used to open Warp Drive to show the new team space.
+        // The browser is gone, so there is nothing to reveal.
     }
 
     fn set_team_member_role(

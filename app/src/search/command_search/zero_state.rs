@@ -11,7 +11,6 @@ use warpui::platform::Cursor;
 use warpui::{AppContext, Element, Entity, SingletonEntity, TypedActionView, View, ViewContext};
 
 use crate::appearance::Appearance;
-use crate::drive::settings::{WarpDriveSettings, WarpDriveSettingsChangedEvent};
 use crate::search::{FilterChipRenderer, QueryFilter};
 
 lazy_static! {
@@ -52,12 +51,6 @@ impl CommandSearchZeroStateView {
     pub fn new(ctx: &mut ViewContext<Self>) -> Self {
         ctx.subscribe_to_model(&AISettings::handle(ctx), |_, _, event, ctx| {
             if let AISettingsChangedEvent::IsAnyAIEnabled { .. } = event {
-                ctx.notify();
-            }
-        });
-
-        ctx.subscribe_to_model(&WarpDriveSettings::handle(ctx), |_, _, event, ctx| {
-            if let WarpDriveSettingsChangedEvent::EnableWarpDrive { .. } = event {
                 ctx.notify();
             }
         });
@@ -295,11 +288,10 @@ fn valid_query_filters(app: &AppContext) -> Vec<QueryFilter> {
         filters.push(QueryFilter::PromptHistory);
     }
 
-    if WarpDriveSettings::is_warp_drive_enabled(app) {
-        filters.extend([QueryFilter::Workflows, QueryFilter::Notebooks]);
-
-        filters.push(QueryFilter::EnvironmentVariables);
-    }
+    // LOCAL FORK: these used to be gated on the `enable_warp_drive` setting, which went with
+    // the Warp Drive browser. Search is now the only way to reach these objects.
+    filters.extend([QueryFilter::Workflows, QueryFilter::Notebooks]);
+    filters.push(QueryFilter::EnvironmentVariables);
 
     filters
 }

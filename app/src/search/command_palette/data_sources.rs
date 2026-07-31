@@ -8,7 +8,6 @@ use warpui::keymap::BindingId;
 use warpui::{AppContext, Entity, ModelContext, ModelHandle, SingletonEntity};
 
 use super::warp_drive;
-use crate::drive::settings::WarpDriveSettings;
 use crate::search::QueryFilter;
 use crate::search::action::CommandBindingDataSource;
 use crate::search::binding_source::BindingSource;
@@ -87,21 +86,22 @@ impl DataSourceStore {
                 HashSet::from([QueryFilter::Sessions]),
             );
 
-            if WarpDriveSettings::is_warp_drive_enabled(ctx) {
-                let mut warp_drive_filters = HashSet::from([
-                    QueryFilter::Notebooks,
-                    QueryFilter::Plans,
-                    QueryFilter::Drive,
-                    QueryFilter::Workflows,
-                ]);
+            // LOCAL FORK: this used to be gated on the `enable_warp_drive` setting, which went
+            // with the Warp Drive browser. The palette's object search is the replacement
+            // browser, so it is always on.
+            let mut warp_drive_filters = HashSet::from([
+                QueryFilter::Notebooks,
+                QueryFilter::Plans,
+                QueryFilter::Drive,
+                QueryFilter::Workflows,
+            ]);
 
-                warp_drive_filters.insert(QueryFilter::EnvironmentVariables);
+            warp_drive_filters.insert(QueryFilter::EnvironmentVariables);
 
-                if AISettings::as_ref(ctx).is_any_ai_enabled(ctx) {
-                    warp_drive_filters.insert(QueryFilter::AgentModeWorkflows);
-                }
-                mixer.add_sync_source(self.warp_drive_data_source.clone(), warp_drive_filters);
+            if AISettings::as_ref(ctx).is_any_ai_enabled(ctx) {
+                warp_drive_filters.insert(QueryFilter::AgentModeWorkflows);
             }
+            mixer.add_sync_source(self.warp_drive_data_source.clone(), warp_drive_filters);
 
             mixer.add_sync_source(
                 self.actions_data_source.clone(),

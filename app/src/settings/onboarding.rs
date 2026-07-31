@@ -5,7 +5,6 @@ use warp_core::features::FeatureFlag;
 use warp_errors::report_if_error;
 use warpui::{AppContext, SingletonEntity as _};
 
-use crate::drive::settings::WarpDriveSettings;
 use crate::workspace::tab_settings::TabSettings;
 use crate::workspaces::workspace::FtueAccountClass;
 
@@ -147,13 +146,8 @@ fn apply_ui_customization_settings(
         );
     });
 
-    WarpDriveSettings::handle(app).update(app, |settings, ctx| {
-        report_if_error!(
-            settings
-                .enable_warp_drive
-                .set_value(ui.show_warp_drive, ctx)
-        );
-    });
+    // LOCAL FORK: the onboarding "Warp Drive" chip and the `enable_warp_drive` setting it
+    // wrote both went with the Warp Drive browser.
 
     CodeSettings::handle(app).update(app, |settings, ctx| {
         report_if_error!(

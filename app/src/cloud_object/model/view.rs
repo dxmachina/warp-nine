@@ -235,24 +235,16 @@ impl CloudViewModel {
         }
     }
 
-    /// Get the timestamp to sort `object` according to `timestamp_kind`.
+    /// Get the timestamp to sort `object` by, considering all of the children of a folder.
+    // LOCAL FORK: this used to take an `UpdateTimestamp` selecting between the object's own
+    // trashed timestamp and its recursive revision timestamp. Only the Warp Drive trash index
+    // ever asked for the former, and it went with the browser.
     pub fn object_sorting_timestamp(
         &self,
         object: &dyn CloudObject,
-        timestamp_kind: UpdateTimestamp,
         app: &AppContext,
     ) -> Option<ServerTimestamp> {
-        match timestamp_kind {
-            // When sorting in the trash, we only ever consider the object's own trashed timestamp.
-            // For trashed folders, their indirectly-trashed children will not have a trashed_ts,
-            // so there's no need to recurse.
-            UpdateTimestamp::Trashed => object.metadata().trashed_ts,
-            // When sorting in the main index, we consider all of the children of a folder. This
-            // can be expensive, so it's cached.
-            UpdateTimestamp::Revision => {
-                self.sorting_timestamp_rec(object, CloudModel::as_ref(app), app)
-            }
-        }
+        self.sorting_timestamp_rec(object, CloudModel::as_ref(app), app)
     }
 
     /// Calculate the sorting timestamp for `object`:
@@ -449,13 +441,3 @@ impl Entity for CloudViewModel {
 
 /// Mark CloudViewModel as global application state.
 impl SingletonEntity for CloudViewModel {}
-
-/// The timestamp to use when sorting objects by their last updated time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum UpdateTimestamp {
-    /// Sort objects by their revision timestamp, when they were last edited.
-    #[default]
-    Revision,
-    /// Sort objects by their trashed timestamp.
-    Trashed,
-}

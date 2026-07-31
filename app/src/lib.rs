@@ -1159,6 +1159,9 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(|_ctx| GPUState::new());
 
     PrivacySettings::register_singleton(ctx);
+    // LOCAL FORK: upstream seeds these after a cloud object load, which needs an account.
+    // See `settings::privacy::seed_default_secret_regexes`.
+    crate::settings::seed_default_secret_regexes(ctx);
 
     // If any part of sqlite initialization fails, we just don't do session restoration (i.e.
     // feature degradation).

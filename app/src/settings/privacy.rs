@@ -865,3 +865,36 @@ impl Entity for PrivacySettings {
 }
 
 impl SingletonEntity for PrivacySettings {}
+
+/// Seeds the default secret-redaction patterns at startup.
+///
+/// LOCAL FORK: the terminal's obfuscation patterns come from exactly one place.
+/// `CustomSecretRegexUpdater` reads `user_secret_regex_list` and hands it to
+/// `set_user_and_enterprise_secret_regexes`; `SECRETS_REGEX` starts empty, so that list is
+/// the entire pattern set.
+///
+/// Upstream fills it in `handle_warp_drive_objects_loaded`, which is spawned on
+/// `UpdateManager::initial_load_complete()`. That future only resolves once a cloud object
+/// fetch completes, which needs an account. With login gone it never resolves, so on a
+/// fresh install the list stayed empty and obfuscation matched nothing: no IPv4, AWS,
+/// GitHub, Stripe, JWT or LLM API-key redaction at all. Existing installs were unaffected
+/// because the list is persisted, which is why this stayed quiet.
+///
+/// This is deliberately a startup call rather than part of `register_singleton`. Seeding
+/// during registration would write a cloud-synced setting before any test harness that
+/// registers `PrivacySettings` has finished wiring up, which changes what the (already
+/// unreachable) preferences syncer observes. Keeping it here confines the change to app
+/// startup, where it belongs.
+///
+/// `initialize_default_regexes_once` is idempotent and guarded by its own
+/// `has_initialized_default_secret_regexes` flag, so this is safe on fresh and upgraded
+/// databases alike.
+pub fn seed_default_secret_regexes(ctx: &mut AppContext) {
+    PrivacySettings::handle(ctx).update(ctx, |privacy_settings, ctx| {
+        privacy_settings.initialize_default_regexes_once(ctx);
+    });
+}
+
+#[cfg(test)]
+#[path = "privacy_tests.rs"]
+mod tests;

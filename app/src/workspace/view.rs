@@ -6291,32 +6291,6 @@ impl Workspace {
             })
     }
 
-    /// Triggers the drive sharing onboarding block.
-    fn check_and_trigger_drive_sharing_onboarding_block(
-        &mut self,
-        object_id: CloudObjectTypeAndId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if self.auth_state.is_anonymous_or_logged_out() {
-            return;
-        }
-
-        if *WarpDriveSettings::as_ref(ctx)
-            .sharing_onboarding_block_shown
-            .value()
-        {
-            return;
-        }
-
-        if let Some(terminal_view_handle) = self.active_session_view(ctx) {
-            // LOCAL FORK: this used to bail out while the agent was streaming a response.
-            // There is no agent conversation to be in progress any more.
-            terminal_view_handle.update(ctx, |terminal_view, ctx| {
-                terminal_view.insert_drive_sharing_onboarding_block(object_id, ctx);
-            });
-        }
-    }
-
     fn should_trigger_get_started_onboarding(&self, ctx: &mut ViewContext<Self>) -> bool {
         // Onboarding requires a real user to interact with it; suppress when
         // running in a headless mode like the SDK/CLI.
@@ -13312,9 +13286,12 @@ impl Workspace {
 
         let cloud_model = CloudModel::as_ref(ctx);
 
+        // LOCAL FORK: was `result.server_id.map(|id| id.uid())` with the client id as a
+        // fallback. The result now carries the object's `SyncId` directly, which is the
+        // one identity a local object always has.
         let object_id = result
-            .server_id
-            .map(|server_id| server_id.uid())
+            .object_id
+            .map(|id| id.uid())
             .or_else(|| result.client_id.map(|client_id| client_id.to_string()));
 
         if let Some(object_id) = object_id
@@ -13445,36 +13422,11 @@ impl Workspace {
                     })
         }
 
-        // If this was a successful update on a workflow - caused by this client - then we may need
-        // to update the contents of the workflow info box to represent the new synced state.
-        if result.success_type == OperationSuccessType::Success
-            && result.operation == ObjectOperation::Update
-        {
-            let cloud_model = CloudModel::as_ref(ctx);
-            let updated_object = cloud_model
-                .get_by_uid(&result.server_id.expect("Expect server id on success").uid());
-            if let Some(CloudObjectTypeAndId::Workflow(workflow_id)) =
-                updated_object.map(|o| o.cloud_object_type_and_id())
-            {
-                self.maybe_refresh_workflow_info_box_and_input(&workflow_id, ctx)
-            }
-        }
-
-        // If this was a successful personal object creation, then potentially show the sharing
-        // onboarding block.
-        if result.success_type == OperationSuccessType::Success
-            && matches!(result.operation, ObjectOperation::Create { .. })
-            && let Some(created_object) = result
-                .server_id
-                .and_then(|id| CloudModel::as_ref(ctx).get_by_uid(&id.uid()))
-            && created_object.space(ctx) == Space::Personal
-            && created_object.renders_in_warp_drive()
-        {
-            self.check_and_trigger_drive_sharing_onboarding_block(
-                created_object.cloud_object_type_and_id(),
-                ctx,
-            );
-        }
+        // LOCAL FORK: two follow-ups used to hang off this handler and both are gone with
+        // the results that triggered them. `ObjectOperation::Update` refreshed the workflow
+        // info box so it showed the newly synced state, which no longer differs from what
+        // was on screen the moment the user typed it. `ObjectOperation::Create` on a
+        // personal object offered the drive-sharing onboarding block, and sharing went.
     }
 
     fn restore_previous_workspace_state(&mut self, ctx: &mut ViewContext<Self>) {

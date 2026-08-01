@@ -31,7 +31,7 @@ use warpui::{
 
 use self::details_bar::DetailsBar;
 use super::active_notebook_data::{
-    ActiveNotebook, ActiveNotebookData, ActiveNotebookDataEvent, Mode, SavingStatus, TrashStatus,
+    ActiveNotebook, ActiveNotebookData, ActiveNotebookDataEvent, Mode, TrashStatus,
 };
 use super::context_menu::{
     ContextMenuAction, ContextMenuState, show_rich_editor_context_menu,
@@ -63,7 +63,7 @@ use crate::notebooks::editor::rich_text_styles;
 use crate::pane_group::focus_state::{PaneFocusHandle, PaneGroupFocusEvent};
 use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
-use crate::server::cloud_objects::update_manager::{FetchSingleObjectOption, UpdateManager};
+use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ClientId, ServerId, SyncId};
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
@@ -187,16 +187,8 @@ struct NotebookUpdateRequestDebounceArg {}
 
 #[derive(Default)]
 struct ButtonMouseStates {
-    conflict_resolution_refresh_button: MouseStateHandle,
-    conflict_resolution_copy_all_button: MouseStateHandle,
     restore_from_trash_button: MouseStateHandle,
     copy_to_personal_drive_button: MouseStateHandle,
-}
-
-#[derive(Clone, Copy)]
-enum NotebookSyncError {
-    InConflict,
-    FeatureNotAvailable,
 }
 
 /// A view that allows viewing/execution and editing of a Warp notebook.
@@ -266,7 +258,6 @@ pub enum NotebookAction {
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
-    ConflictResolutionBannerRefreshClicked,
     FocusTerminalInput,
     // LOCAL FORK: the breadcrumbs action `ViewInWarpDrive` revealed this notebook in the Warp
     // Drive panel; removed with the panel. The breadcrumbs still render, but are inert.
@@ -562,29 +553,11 @@ impl NotebookView {
                 log::info!("Edit mode confirmed from server");
                 self.set_editor_interaction_state(InteractionState::Editable, ctx);
             }
-            ActiveNotebookDataEvent::EditRejected => {
-                log::info!("Edit rejected, switching to view mode");
-                self.switch_to_view(ctx);
-            }
             // LOCAL FORK: this arm refreshed the details bar's breadcrumb row, which showed the
             // notebook's containing Space/Folder path and whose only interaction was revealing
             // the notebook in the Warp Drive panel. The row went with the panel, so the arm is a
             // named no-op: the event is still received, and the `ctx.notify()` below still runs.
             ActiveNotebookDataEvent::BreadcrumbsChanged => {}
-            ActiveNotebookDataEvent::CreatedOnServer => {
-                ctx.emit(NotebookEvent::Pane(PaneEvent::AppStateChanged));
-                if let Some(id) = self
-                    .active_notebook_data
-                    .as_ref(ctx)
-                    .id()
-                    .and_then(SyncId::into_server)
-                {
-                    self.pane_configuration.update(ctx, |pane_config, ctx| {
-                        pane_config
-                            .set_shareable_object(Some(ShareableObject::WarpDriveObject(id)), ctx);
-                    })
-                }
-            }
             ActiveNotebookDataEvent::TrashStatusChanged | ActiveNotebookDataEvent::MovedToSpace => {
                 self.pane_configuration.update(ctx, |pane_config, ctx| {
                     pane_config.refresh_pane_header_overflow_menu_items(ctx)
@@ -915,12 +888,6 @@ impl NotebookView {
                 .try_send(NotebookUpdateRequestDebounceArg {})
                 .context("Error enqueuing content save")
         );
-        self.active_notebook_data.update(ctx, |data, ctx| {
-            // Mark the notebook as saving as soon as there are changes to be saved. It won't be
-            // marked as Saved until we get a response from the server.
-            data.saving_status = SavingStatus::Saving;
-            ctx.notify();
-        });
         ctx.notify();
     }
 
@@ -1068,10 +1035,6 @@ impl NotebookView {
     /// dialog.
     pub fn grab_edit_access_or_display_access_dialog(&mut self, ctx: &mut ViewContext<Self>) {
         let active_notebook_data = self.active_notebook_data.as_ref(ctx);
-        if active_notebook_data.has_conflicts(ctx) {
-            // Do not attempt to grab edit access if there are conflicts.
-            return;
-        }
 
         let current_editor = active_notebook_data
             .current_editor(ctx)
@@ -1412,43 +1375,6 @@ impl NotebookView {
         NetworkStatus::as_ref(app).is_online()
     }
 
-    fn fetch_and_load_notebook(
-        &mut self,
-        notebook_id: ServerId,
-        settings: &OpenWarpDriveObjectSettings,
-        window_id: WindowId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        // If we have a parent folder we are trying to load as a part of this notebook, fetch that instead
-        let id_to_fetch = settings.focused_folder_id.unwrap_or(notebook_id);
-        let fetch_cloud_object_rx =
-            UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-                update_manager.fetch_single_cloud_object(
-                    &id_to_fetch,
-                    FetchSingleObjectOption::None,
-                    ctx,
-                )
-            });
-        let settings = settings.clone();
-        ctx.spawn(fetch_cloud_object_rx, move |me, _, ctx| {
-            if let Some(notebook) = CloudModel::as_ref(ctx)
-                .get_notebook(&SyncId::ServerId(notebook_id))
-                .cloned()
-            {
-                me.load(notebook, &settings, ctx);
-            } else {
-                ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                    toast_stack.add_ephemeral_toast_by_type(
-                        ToastType::CloudObjectNotFound,
-                        window_id,
-                        ctx,
-                    );
-                });
-                log::warn!("Tried to open unknown notebook {notebook_id:?} after fetching");
-            }
-        });
-    }
-
     /// Takes a `CloudNotebook` and loads it into the view.
     ///
     /// Namely, we reset the title and body's undo stack and we set the buffer to be
@@ -1469,15 +1395,9 @@ impl NotebookView {
         self.set_title(&notebook.model().title, ctx);
         self.set_content(&notebook, ctx);
 
-        if let Some(server_id) = notebook.id.into_server() {
-            self.pane_configuration
-                .update(ctx, |pane_configuration, ctx| {
-                    pane_configuration.set_shareable_object(
-                        Some(ShareableObject::WarpDriveObject(server_id)),
-                        ctx,
-                    );
-                });
-        }
+        // LOCAL FORK: the pane's shareable object was set here when the object had a server
+        // id, so the header offered a Share button. `ShareableObject::WarpDriveObject` went
+        // with drive sharing; sessions are the only shareable pane contents left.
 
         self.active_notebook_data.update(ctx, |data, ctx| {
             data.open_existing(notebook.id, ctx);
@@ -1695,27 +1615,6 @@ impl NotebookView {
         ctx.notify();
     }
 
-    fn conflict_dialog_refresh_button_clicked(&mut self, ctx: &mut ViewContext<Self>) {
-        let Some(id) = self.notebook_id(ctx) else {
-            return;
-        };
-
-        UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-            update_manager.replace_object_with_conflict(&id.uid(), ctx);
-        });
-
-        // Load the server's version of the notebook now that the cloud model has been updated.
-        // This will also switch back to edit mode if there isn't an active editor.
-        if let Some(notebook) = CloudModel::as_ref(ctx).get_notebook(&id) {
-            self.load(
-                notebook.clone(),
-                &OpenWarpDriveObjectSettings::default(),
-                ctx,
-            );
-        }
-        ctx.notify();
-    }
-
     fn render_body(&self) -> Box<dyn Element> {
         let editor = self.input.clone();
         let saved_position = self.view_position_id.clone();
@@ -1899,119 +1798,6 @@ impl NotebookView {
             .finish(),
         )
     }
-
-    fn render_sync_banner(
-        &self,
-        sync_error: NotebookSyncError,
-        appearance: &Appearance,
-    ) -> Box<dyn Element> {
-        let banner = Shrinkable::new(
-            1.,
-            appearance
-                .ui_builder()
-                .wrappable_text(
-                    match sync_error {
-                        NotebookSyncError::FeatureNotAvailable => FEATURE_NOT_AVAILABLE_MESSAGE,
-                        NotebookSyncError::InConflict => CONFLICT_RESOLUTION_MESSAGE,
-                    },
-                    true,
-                )
-                .with_style(UiComponentStyles {
-                    font_size: Some(appearance.ui_font_size() + 2.),
-                    ..Default::default()
-                })
-                .build()
-                .with_margin_bottom(BANNER_VERTICAL_MARGIN)
-                .with_margin_top(BANNER_VERTICAL_MARGIN)
-                .with_margin_right(HEADER_MARGIN)
-                .with_margin_left(HEADER_MARGIN)
-                .finish(),
-        )
-        .finish();
-
-        let mut action_row = Flex::row()
-            .with_main_axis_alignment(MainAxisAlignment::End)
-            .with_main_axis_size(MainAxisSize::Max)
-            .with_cross_axis_alignment(CrossAxisAlignment::Center);
-
-        let ui_builder = appearance.ui_builder().clone();
-        action_row.add_child(
-            Container::new(
-                Align::new(
-                    appearance
-                        .ui_builder()
-                        .button(
-                            ButtonVariant::Basic,
-                            self.button_mouse_states
-                                .conflict_resolution_copy_all_button
-                                .clone(),
-                        )
-                        .with_tooltip(move || {
-                            ui_builder
-                                .tool_tip("Copy notebook contents to your clipboard".to_string())
-                                .build()
-                                .finish()
-                        })
-                        .with_text_label("Copy All".to_string())
-                        .build()
-                        .on_click(|ctx, _, _| {
-                            ctx.dispatch_typed_action(NotebookAction::CopyToClipboard)
-                        })
-                        .finish(),
-                )
-                .finish(),
-            )
-            .with_margin_bottom(BANNER_VERTICAL_MARGIN)
-            .with_margin_right(HEADER_MARGIN)
-            .with_margin_left(HEADER_MARGIN)
-            .finish(),
-        );
-
-        if matches!(sync_error, NotebookSyncError::InConflict) {
-            let ui_builder = appearance.ui_builder().clone();
-            action_row.add_child(
-                Container::new(
-                    Align::new(
-                        appearance
-                            .ui_builder()
-                            .button(
-                                ButtonVariant::Basic,
-                                self.button_mouse_states
-                                    .conflict_resolution_refresh_button
-                                    .clone(),
-                            )
-                            .with_tooltip(move || {
-                                ui_builder
-                                    .tool_tip("Refresh notebook".to_string())
-                                    .build()
-                                    .finish()
-                            })
-                            .with_text_label(REFRESH_BUTTON_TEXT.to_string())
-                            .build()
-                            .on_click(|ctx, _, _| {
-                                ctx.dispatch_typed_action(
-                                    NotebookAction::ConflictResolutionBannerRefreshClicked,
-                                )
-                            })
-                            .finish(),
-                    )
-                    .finish(),
-                )
-                .with_margin_bottom(BANNER_VERTICAL_MARGIN)
-                .with_margin_right(HEADER_MARGIN)
-                .finish(),
-            );
-        }
-
-        Container::new(
-            Flex::column()
-                .with_children([banner, action_row.finish()])
-                .finish(),
-        )
-        .with_horizontal_padding(16.)
-        .with_background(appearance.theme().surface_2())
-        .finish()
-    }
 }
 
 impl Entity for NotebookView {
@@ -2077,21 +1863,6 @@ impl View for NotebookView {
             stack.add_child(ChildView::new(&self.grab_edit_access_modal).finish());
         }
 
-        if self
-            .active_notebook_data
-            .as_ref(app)
-            .feature_not_available()
-        {
-            stack.add_child(self.render_sync_banner(
-                NotebookSyncError::FeatureNotAvailable,
-                Appearance::as_ref(app),
-            ));
-        } else if self.active_notebook_data.as_ref(app).has_conflicts(app) {
-            stack.add_child(
-                self.render_sync_banner(NotebookSyncError::InConflict, Appearance::as_ref(app)),
-            );
-        }
-
         self.context_menu.render(&mut stack);
 
         SavePosition::new(stack.finish(), &self.view_position_id).finish()
@@ -2140,9 +1911,6 @@ impl TypedActionView for NotebookView {
             NotebookAction::Focus => ctx.focus_self(),
             NotebookAction::ToggleMode => self.toggle_mode(ctx),
             NotebookAction::Close => ctx.emit(NotebookEvent::Pane(PaneEvent::Close)),
-            NotebookAction::ConflictResolutionBannerRefreshClicked => {
-                self.conflict_dialog_refresh_button_clicked(ctx)
-            }
             NotebookAction::IncreaseFontSize => self.increase_font_size(ctx),
             NotebookAction::DecreaseFontSize => self.decrease_font_size(ctx),
             NotebookAction::ResetFontSize => {

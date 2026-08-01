@@ -10,7 +10,6 @@ use crate::cloud_object::{Owner, Revision, ServerMetadata, ServerPermissions, Se
 use crate::server::cloud_objects::update_manager::InitialLoadResponse;
 use crate::server::ids::SyncId;
 use crate::server::server_api::team::MockTeamClient;
-use crate::server::sync_queue::SyncQueue;
 use crate::settings::PrivacySettings;
 use crate::system::SystemStats;
 use crate::workflows::workflow::Workflow;
@@ -24,7 +23,6 @@ fn initialize_app(team_client: Arc<dyn TeamClient>, workspaces: Vec<Workspace>, 
     app.add_singleton_model(|_| SystemStats::new());
     app.add_singleton_model(TeamTesterStatus::new);
     app.add_singleton_model(|ctx| UserWorkspaces::mock(workspaces, ctx));
-    app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(CloudModel::mock);
     app.add_singleton_model(|_| ObjectActions::new(vec![]));
     app.add_singleton_model(PrivacySettings::mock);

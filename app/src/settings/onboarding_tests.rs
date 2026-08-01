@@ -7,7 +7,6 @@ use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::network::NetworkStatus;
 use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::sync_queue::SyncQueue;
 use crate::settings::{
     AISettings, CodeSettings, PrivacySettings, apply_account_first_onboarding_settings,
     apply_onboarding_settings,
@@ -29,7 +28,6 @@ fn account_first_settings_enable_agent_for_authenticated_users_and_apply_ui_choi
     App::test((), |mut app| async move {
         initialize_settings_for_tests(&mut app);
         app.add_singleton_model(|_| AuthStateProvider::new_for_test());
-        app.add_singleton_model(SyncQueue::mock);
         app.add_singleton_model(|_| NetworkStatus::new());
         app.add_singleton_model(TeamTesterStatus::mock);
         app.add_singleton_model(UpdateManager::mock);
@@ -87,7 +85,6 @@ fn apply_onboarding_settings_gates_third_party_ai_on_account() {
     App::test((), |mut app| async move {
         initialize_settings_for_tests(&mut app);
         app.add_singleton_model(|_| AuthStateProvider::new_for_test());
-        app.add_singleton_model(SyncQueue::mock);
         app.add_singleton_model(|_| NetworkStatus::new());
         app.add_singleton_model(TeamTesterStatus::mock);
         app.add_singleton_model(UpdateManager::mock);

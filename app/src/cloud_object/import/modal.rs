@@ -19,7 +19,6 @@ use crate::appearance::Appearance;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{CloudObject, Owner};
 use crate::server::ids::SyncId;
-use crate::server::sync_queue::SyncQueue;
 use crate::themes::theme::WarpTheme;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
@@ -88,19 +87,17 @@ impl ImportModal {
         let window_id = ctx.window_id();
         let import_body_id = self.import_modal.id();
 
-        let sync_queue_is_dequeueing = SyncQueue::as_ref(ctx).is_dequeueing();
-
         let allowed_file_types = vec![FileType::Yaml, FileType::Markdown];
 
         let mut file_picker_config = FilePickerConfiguration::new()
             .allow_multi_select()
             .set_allowed_file_types(allowed_file_types);
 
-        // Files under a folder could only be uploaded when the folder is created on the server.
-        // When sync queue is not dequeueing, disable folder upload in the import modal.
-        if sync_queue_is_dequeueing {
-            file_picker_config = file_picker_config.allow_folder();
-        }
+        // LOCAL FORK: folder import was gated on the sync queue running, because a file
+        // inside a folder could not be uploaded until the folder itself had come back from
+        // the server with an id. A child points at its parent's client id now, so the
+        // ordering constraint is gone and folders are always importable.
+        file_picker_config = file_picker_config.allow_folder();
 
         ctx.open_file_picker(
             move |result, ctx| match result {

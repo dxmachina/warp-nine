@@ -11,10 +11,10 @@ use super::update_manager::UpdateManager;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::actions::ObjectActions;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
+use crate::cloud_object::model::view::CloudViewModel;
 use crate::network::NetworkStatus;
 use crate::persistence::ModelEvent;
 use crate::server::server_api::ServerApiProvider;
-use crate::server::sync_queue::SyncQueue;
 use crate::settings::{PrivacySettings, WarpDrivePrivacySettings};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::update_manager::TeamUpdateManager;
@@ -44,28 +44,21 @@ pub fn initialize_app(app: &mut App) {
     WarpDrivePrivacySettings::register(app);
     app.update(PrivacySettings::register_singleton);
     app.add_singleton_model(CloudModel::mock);
+    app.add_singleton_model(CloudViewModel::mock);
     app.add_singleton_model(UserWorkspaces::default_mock);
     app.add_singleton_model(TeamUpdateManager::mock);
     app.add_singleton_model(|_| ObjectActions::new(Vec::new()));
 }
 
-pub fn create_update_manager_struct(
-    app: &mut App,
-    server_api: Arc<dyn ObjectClient>,
-) -> UpdateManagerStruct {
+/// LOCAL FORK: no longer takes an `ObjectClient`. The `UpdateManager` does not hold one,
+/// and the sync queue that shared it with the manager is gone.
+pub fn create_update_manager_struct(app: &mut App) -> UpdateManagerStruct {
     let (sender, receiver) = sync_channel(CHANNEL_SIZE);
 
-    // the sync queue can't be mocked; needs to use the same server_api as the update_manager
-    app.add_singleton_model(|ctx| SyncQueue::new(Default::default(), server_api.clone(), ctx));
     let update_manager =
-        app.add_singleton_model(|ctx| UpdateManager::new(Some(sender.clone()), server_api, ctx));
+        app.add_singleton_model(|ctx| UpdateManager::new(Some(sender.clone()), ctx));
 
     app.add_singleton_model(|_| UserProfiles::new(Vec::new()));
-
-    // set up the sync queue in a dequeueing state
-    SyncQueue::handle(app).update(app, |sync_queue, ctx| {
-        sync_queue.start_dequeueing(ctx);
-    });
 
     let cloud_model_events = app.update(|ctx| {
         let (tx, rx) = async_channel::unbounded();

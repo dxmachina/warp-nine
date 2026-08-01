@@ -55,10 +55,7 @@ use crate::network::NetworkStatus;
 use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
-use crate::server::cloud_objects::update_manager::{
-    FetchSingleObjectOption, ObjectOperation, OperationSuccessType, UpdateManager,
-    UpdateManagerEvent,
-};
+use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ClientId, ServerId, SyncId};
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
@@ -487,10 +484,11 @@ impl WorkflowView {
             workflow.handle_cloud_model_event(event, ctx)
         });
 
-        let update_manager = UpdateManager::handle(ctx);
-        ctx.subscribe_to_model(&update_manager, |me, _, event, ctx| {
-            me.handle_update_manager_event(event, ctx);
-        });
+        // LOCAL FORK: the workflow view no longer listens to the UpdateManager. Its handler
+        // had two jobs, both about a server's answer: rewrite the view's id and its command
+        // aliases from the client id to the server id once a create came back, and reload
+        // the workflow after an update so the next write carried a fresh revision. A
+        // workflow keeps its client id, and there is no revision to keep in step.
     }
 
     fn handle_cloud_model_event(&mut self, event: &CloudModelEvent, ctx: &mut ViewContext<Self>) {
@@ -507,62 +505,6 @@ impl WorkflowView {
             | CloudModelEvent::ObjectDeleted { .. }
             | CloudModelEvent::ObjectUntrashed { .. } => ctx.notify(),
             _ => (),
-        }
-    }
-
-    fn handle_update_manager_event(
-        &mut self,
-        event: &UpdateManagerEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let UpdateManagerEvent::ObjectOperationComplete { result } = event else {
-            return;
-        };
-
-        if let (ObjectOperation::Create { .. }, OperationSuccessType::Success) =
-            (&result.operation, &result.success_type)
-            && self.workflow_id.into_client() == result.client_id
-        {
-            let server_id = result
-                .server_id
-                .expect("Expect server id on success creation");
-
-            // The aliases were created with the old client sync id.  Update them to the new server id.
-            WorkflowAliases::handle(ctx).update(ctx, |aliases, ctx| {
-                if let Result::Err(e) =
-                    aliases.update_workflow_id(self.workflow_id, server_id.into(), ctx)
-                {
-                    report_error!(e.context("Failed to update aliases after workflow creation"));
-                }
-            });
-
-            if let Some(workflow) = CloudModel::as_ref(ctx).get_workflow_by_uid(&server_id.uid()) {
-                self.load(
-                    workflow.clone(),
-                    &OpenWarpDriveObjectSettings::default(),
-                    self.workflow_view_mode,
-                    ctx,
-                );
-            }
-            ctx.notify();
-        }
-
-        if let (ObjectOperation::Update, OperationSuccessType::Success) =
-            (&result.operation, &result.success_type)
-            && let Some(workflow) = self.get_cloud_workflow(ctx)
-        {
-            // This makes sure we get the correct updated revision_ts. So our subsequent
-            // updates don't fail
-            if self.workflow_id.into_client() == result.client_id
-                || self.workflow_id.uid() == result.server_id.unwrap_or_default().uid()
-            {
-                self.load(
-                    workflow,
-                    &OpenWarpDriveObjectSettings::default(),
-                    self.workflow_view_mode,
-                    ctx,
-                );
-            }
         }
     }
 
@@ -587,44 +529,6 @@ impl WorkflowView {
     // initial cloud load and then fetching from the server. Locally persisted objects
     // are in the model at startup and take the direct `load` path, so only objects that
     // would have come from the server ever reached this.
-
-    fn fetch_and_load_workflow(
-        &mut self,
-        workflow_id: ServerId,
-        settings: &OpenWarpDriveObjectSettings,
-        mode: WorkflowViewMode,
-        window_id: WindowId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        // If we have a parent folder we are trying to load as a part of this workflow, fetch that instead
-        let id_to_fetch = settings.focused_folder_id.unwrap_or(workflow_id);
-        let fetch_cloud_object_rx =
-            UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-                update_manager.fetch_single_cloud_object(
-                    &id_to_fetch,
-                    FetchSingleObjectOption::None,
-                    ctx,
-                )
-            });
-        let settings = settings.clone();
-        ctx.spawn(fetch_cloud_object_rx, move |me, _, ctx| {
-            if let Some(workflow) = CloudModel::as_ref(ctx)
-                .get_workflow(&SyncId::ServerId(workflow_id))
-                .cloned()
-            {
-                me.load(workflow, &settings, mode, ctx);
-            } else {
-                ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                    toast_stack.add_ephemeral_toast_by_type(
-                        ToastType::CloudObjectNotFound,
-                        window_id,
-                        ctx,
-                    );
-                });
-                log::warn!("Tried to open unknown workflow {workflow_id:?} after fetching");
-            }
-        });
-    }
 
     // LOCAL FORK: `settings` is now unused. Its `invitee_email` popped the Warp Drive index's
     // share dialog and its `focused_folder_id` revealed the containing folder; both went with
@@ -676,12 +580,9 @@ impl WorkflowView {
         if let ContainerConfiguration::Pane(pane_config) = &mut self.container_configuration {
             pane_config.update(ctx, |pane_config, ctx| {
                 pane_config.set_title(workflow_name, ctx);
-                if let Some(server_id) = workflow.id.into_server() {
-                    pane_config.set_shareable_object(
-                        Some(ShareableObject::WarpDriveObject(server_id)),
-                        ctx,
-                    );
-                }
+                // LOCAL FORK: the pane's shareable object was set here when the workflow had
+                // a server id, so the header offered a Share button.
+                // `ShareableObject::WarpDriveObject` went with drive sharing.
             });
         }
 

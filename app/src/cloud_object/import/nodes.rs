@@ -163,7 +163,6 @@ impl ImportedNode {
         appearance: &Appearance,
         indent_level: usize,
         allow_click_to_open_target: bool,
-        sync_queue_dequeueing: bool,
         folder_id_to_node: &HashMap<FolderId, FolderNode>,
         file_id_to_node: &HashMap<FileId, FileNode>,
     ) -> Box<dyn Element> {
@@ -172,7 +171,6 @@ impl ImportedNode {
                 let file_node = file_id_to_node.get(file_id).expect("Should exist");
                 file_node.render(
                     indent_level,
-                    sync_queue_dequeueing,
                     allow_click_to_open_target,
                     *file_id,
                     appearance,
@@ -181,7 +179,6 @@ impl ImportedNode {
             ImportedNode::Folder(folder_id) => {
                 let folder_node = folder_id_to_node.get(folder_id).expect("Should exist");
                 folder_node.render(
-                    sync_queue_dequeueing,
                     appearance,
                     indent_level,
                     allow_click_to_open_target,
@@ -311,7 +308,6 @@ impl FolderNode {
 
     fn render(
         &self,
-        sync_queue_dequeueing: bool,
         appearance: &Appearance,
         indent_level: usize,
         allow_click_to_open_target: bool,
@@ -319,9 +315,7 @@ impl FolderNode {
         file_id_to_node: &HashMap<FileId, FileNode>,
     ) -> Box<dyn Element> {
         let override_color = self.status.override_text_color(appearance);
-        let status_icon = self
-            .status
-            .render_status_icon(sync_queue_dequeueing, appearance);
+        let status_icon = self.status.render_status_icon(appearance);
 
         let icon_color =
             override_color.unwrap_or(warp_drive_icon_color(appearance, DriveObjectType::Folder));
@@ -378,7 +372,6 @@ impl FolderNode {
                 appearance,
                 indent_level + 1,
                 allow_click_to_open_target,
-                sync_queue_dequeueing,
                 folder_id_to_node,
                 file_id_to_node,
             ));
@@ -448,20 +441,20 @@ impl UploadStatus {
         }
     }
 
-    fn render_status_icon(
-        &self,
-        sync_queue_dequeueing: bool,
-        appearance: &Appearance,
-    ) -> Box<dyn Element> {
+    /// LOCAL FORK: took a `sync_queue_dequeueing: bool` threaded down from the modal's
+    /// render. It distinguished "written to this machine, still on its way to the server"
+    /// (a spinner) from "written to this machine, and that is all there is" (the laptop
+    /// icon). Only the second state exists now.
+    fn render_status_icon(&self, appearance: &Appearance) -> Box<dyn Element> {
         let status_icon_element = match &self {
-            UploadStatus::SavedLocally if !sync_queue_dequeueing => Icon::Laptop
+            UploadStatus::SavedLocally => Icon::Laptop
                 .to_warpui_icon(
                     appearance
                         .theme()
                         .sub_text_color(appearance.theme().surface_1()),
                 )
                 .finish(),
-            UploadStatus::Loading | UploadStatus::SavedLocally => Icon::Refresh
+            UploadStatus::Loading => Icon::Refresh
                 .to_warpui_icon(
                     appearance
                         .theme()
@@ -536,14 +529,11 @@ impl FileNode {
     fn render(
         &self,
         indent_level: usize,
-        sync_queue_dequeueing: bool,
         allow_click_to_open_target: bool,
         file_id: FileId,
         appearance: &Appearance,
     ) -> Box<dyn Element> {
-        let status_icon = self
-            .status
-            .render_status_icon(sync_queue_dequeueing, appearance);
+        let status_icon = self.status.render_status_icon(appearance);
 
         let override_color = self.status.override_text_color(appearance);
 

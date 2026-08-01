@@ -45,10 +45,11 @@ pub enum WorkflowOpenSource {
 
 impl WorkflowManager {
     pub fn new(ctx: &mut ModelContext<Self>) -> Self {
-        ctx.subscribe_to_model(
-            &UpdateManager::handle(ctx),
-            Self::handle_update_manager_event,
-        );
+        // LOCAL FORK: this model no longer listens to the UpdateManager. Its handler
+        // existed for one thing: when the server answered a create with the id it had
+        // minted, the pane keyed under the object's client id had to be rekeyed under the
+        // new server id. Objects keep their client id for life now, so there is nothing to
+        // rekey and no `ObjectOperation::Create` result to hear.
 
         WorkflowManager {
             panes_by_hashed_id: HashMap::new(),
@@ -166,39 +167,6 @@ impl WorkflowManager {
                     "Ignoring duplicate registration of panes for {}",
                     workflow_id.uid()
                 );
-            }
-        }
-    }
-
-    fn handle_update_manager_event(
-        &mut self,
-        _: ModelHandle<UpdateManager>,
-        event: &UpdateManagerEvent,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let UpdateManagerEvent::ObjectOperationComplete { result } = event else {
-            return;
-        };
-
-        if !matches!(&result.success_type, OperationSuccessType::Success) {
-            return;
-        }
-        if let ObjectOperation::Create { .. } = result.operation {
-            let server_id = result.server_id.expect("Expect server id on success");
-            let Some(server_id) = CloudModel::as_ref(ctx)
-                .get_workflow_by_uid(&server_id.uid())
-                .and_then(|workflow| workflow.id.into_server())
-            else {
-                return;
-            };
-            let Some(client_id) = result.client_id else {
-                return;
-            };
-
-            if let Some(mut pane) = self.panes_by_hashed_id.remove(&client_id.to_string()) {
-                pane.workflow_id = SyncId::ServerId(server_id);
-                self.panes_by_hashed_id
-                    .insert(server_id.uid().clone(), pane);
             }
         }
     }

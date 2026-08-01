@@ -14,7 +14,6 @@ use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::ClientId;
 use crate::server::server_api::ServerApiProvider;
 use crate::server::server_api::team::{MockTeamClient, TeamClient};
-use crate::server::sync_queue::SyncQueue;
 use crate::settings::{AISettings, CodeSettings, FocusedTerminalInfo};
 use crate::sharing::{SharingAccessLevel, Subject, UserKind};
 use crate::system::SystemStats;
@@ -50,7 +49,6 @@ fn initialize_app_with_auth(
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| SystemStats::new());
     app.add_singleton_model(TeamTesterStatus::new);
-    app.add_singleton_model(SyncQueue::mock);
     app.add_singleton_model(CloudModel::mock);
     app.add_singleton_model(|ctx| UserWorkspaces::mock(resources.workspaces, ctx));
     app.add_singleton_model(|ctx| TeamUpdateManager::new(team_client.clone(), None, ctx));

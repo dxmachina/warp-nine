@@ -239,7 +239,6 @@ use crate::root_view::{
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::experiments::ServerExperiments;
 #[cfg(not(target_family = "wasm"))]
-use crate::server::sync_queue::{QueueItem, SyncQueue};
 use crate::server::telemetry::PaletteSource;
 pub use crate::server::telemetry::{AgentModeEntrypoint, AgentModeEntrypointSelectionType};
 use crate::session_management::{RunningSessionSummary, SessionNavigationData};
@@ -1579,44 +1578,16 @@ pub(crate) fn initialize_app(
         .cloned()
         .collect::<Vec<_>>();
 
-    let mut all_queue_items = Vec::new();
-    let objects_with_pending_changes = cloud_objects
-        .iter()
-        .filter(|object| object.metadata().has_pending_content_changes())
-        .cloned()
-        .collect::<Vec<_>>();
-    all_queue_items.extend(QueueItem::from_cached_objects(
-        objects_with_pending_changes.into_iter(),
-    ));
-
+    // LOCAL FORK: the sync queue was primed here at startup, twice over: once from the
+    // cached objects whose content had not reached the server before the last quit, and
+    // once from the object actions still marked pending. Both were resumption of an
+    // interrupted upload. Every write is complete when it is made now, so there is nothing
+    // outstanding to resume and no queue to prime.
     let cloud_model = ctx.add_singleton_model(|_ctx| {
         CloudModel::new(
             persistence_writer.sender(),
             cloud_objects,
             time_of_next_force_object_refresh,
-        )
-    });
-
-    let unsynced_actions: Vec<(CloudObjectTypeAndId, ObjectAction)> = object_actions
-        .iter()
-        .filter(|action| action.is_pending())
-        .filter_map(|action| {
-            cloud_model.read(ctx, |model, _| {
-                let object = model.get_by_uid(&action.uid);
-                object.map(|o| (o.cloud_object_type_and_id(), action.clone()))
-            })
-        })
-        .collect::<Vec<_>>();
-
-    all_queue_items.extend(QueueItem::from_unsynced_actions(
-        unsynced_actions.into_iter(),
-    ));
-
-    ctx.add_singleton_model(|ctx| {
-        SyncQueue::new(
-            all_queue_items,
-            server_api_provider.as_ref(ctx).get_cloud_objects_client(),
-            ctx,
         )
     });
 
@@ -1643,13 +1614,7 @@ pub(crate) fn initialize_app(
         )
     });
 
-    ctx.add_singleton_model(|ctx| {
-        UpdateManager::new(
-            persistence_writer.sender(),
-            server_api_provider.as_ref(ctx).get_cloud_objects_client(),
-            ctx,
-        )
-    });
+    ctx.add_singleton_model(|ctx| UpdateManager::new(persistence_writer.sender(), ctx));
 
     // LOCAL FORK: the cloud preferences syncer went with cloud sync. It reconciled the
     // settings file against cloud preference objects in both directions.

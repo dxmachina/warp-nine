@@ -38,7 +38,7 @@ use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
 use crate::search::external_secrets::view::ExternalSecretsMenu;
-use crate::server::cloud_objects::update_manager::{FetchSingleObjectOption, UpdateManager};
+use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ServerId, SyncId};
 use crate::sharing::{ContentEditability, ShareableObject};
 use crate::terminal::model::secret_detection::find_secrets_in_text_with_levels;
@@ -584,35 +584,6 @@ impl EnvVarCollectionView {
         self.set_saving_status(SavingStatus::New, ctx);
     }
 
-    fn fetch_and_load_env_var_collection(
-        &mut self,
-        env_var_collection_id: ServerId,
-        window_id: WindowId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let fetch_cloud_object_rx =
-            UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-                update_manager.fetch_single_cloud_object(
-                    &env_var_collection_id,
-                    FetchSingleObjectOption::None,
-                    ctx,
-                )
-            });
-        ctx.spawn(fetch_cloud_object_rx, move |me, _, ctx| {
-            if let Some(env_var_collection) = CloudModel::as_ref(ctx)
-                .get_env_var_collection(&SyncId::ServerId(env_var_collection_id))
-                .cloned()
-            {
-                me.load(env_var_collection, ctx);
-            } else {
-                ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                    toast_stack.add_ephemeral_toast_by_type(ToastType::CloudObjectNotFound, window_id, ctx);
-                });
-                log::warn!("Tried to open unknown env var collection {env_var_collection_id:?} after fetching");
-            }
-        });
-    }
-
     pub fn load(&mut self, env_var_collection: CloudEnvVarCollection, ctx: &mut ViewContext<Self>) {
         self.active_env_var_collection_data
             .update(ctx, |data, ctx| {
@@ -626,12 +597,9 @@ impl EnvVarCollectionView {
         let title = collection.title.clone().unwrap_or_default();
 
         self.set_pane_title(if title.is_empty() { "Untitled" } else { &title }, ctx);
-        if let Some(server_id) = env_var_collection.id.into_server() {
-            self.pane_configuration.update(ctx, |pane_config, ctx| {
-                pane_config
-                    .set_shareable_object(Some(ShareableObject::WarpDriveObject(server_id)), ctx);
-            });
-        }
+        // LOCAL FORK: the pane's shareable object was set here when the object had a server
+        // id, so the header offered a Share button. `ShareableObject::WarpDriveObject` went
+        // with drive sharing; sessions are the only shareable pane contents left.
 
         let description = collection.description.clone().unwrap_or_default();
 
@@ -725,7 +693,7 @@ impl EnvVarCollectionView {
         }
     }
 
-    fn save_env_var_collection(&self, ctx: &mut ViewContext<Self>) {
+    fn save_env_var_collection(&mut self, ctx: &mut ViewContext<Self>) {
         if self.should_disable_save(ctx) {
             return;
         }
@@ -827,9 +795,17 @@ impl EnvVarCollectionView {
                 }
             }
             ActiveEnvVarCollection::None => {
-                report_error!("Tried to save EVC, but none were active")
+                report_error!("Tried to save EVC, but none were active");
+                return;
             }
         }
+
+        // LOCAL FORK: the collection is saved the moment the update manager returns, since
+        // it writes to the in-memory model and sqlite synchronously. This used to be set
+        // from the server's answer to the update; without it the Load button, which
+        // `should_disable_invoke` keeps disabled unless the status is `Saved`, would have
+        // stayed disabled forever after the first edit.
+        self.set_saving_status(SavingStatus::Saved, ctx);
     }
 
     pub(super) fn add_variable_row(&mut self, ctx: &mut ViewContext<Self>) {
@@ -922,14 +898,6 @@ impl EnvVarCollectionView {
             // Drive panel, so the row went with the panel. The event is still received and still
             // redraws the view.
             ActiveEnvVarCollectionDataEvent::BreadcrumbsChanged => ctx.notify(),
-            ActiveEnvVarCollectionDataEvent::CreatedOnServer(server_id) => {
-                self.pane_configuration.update(ctx, |pane_config, ctx| {
-                    pane_config.set_shareable_object(
-                        Some(ShareableObject::WarpDriveObject(*server_id)),
-                        ctx,
-                    );
-                });
-            }
             ActiveEnvVarCollectionDataEvent::TrashStatusChanged => {
                 self.pane_configuration.update(ctx, |pane_config, ctx| {
                     pane_config.refresh_pane_header_overflow_menu_items(ctx)

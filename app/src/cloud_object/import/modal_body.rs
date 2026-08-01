@@ -23,7 +23,6 @@ use super::queue::{ImportQueue, ImportQueueArgs, ImportQueueEvent, ParentId, Req
 use crate::appearance::Appearance;
 use crate::cloud_object::Owner;
 use crate::server::ids::{ClientId, SyncId};
-use crate::server::sync_queue::SyncQueue;
 use crate::ui_components::icons::Icon;
 use crate::view_components::DismissibleToast;
 use crate::workspace::ToastStack;
@@ -153,9 +152,10 @@ impl ImportModalBody {
                 }
             }
 
-            let sync_queue_dequeueing = SyncQueue::as_ref(ctx).is_dequeueing();
-
-            if !sync_queue_dequeueing && state.all_files_saved_locally() {
+            // LOCAL FORK: this used to also require the sync queue to have drained, since
+            // "saved locally" meant the object existed on this machine but had not reached
+            // the server yet. Saved locally is the whole of saved now.
+            if state.all_files_saved_locally() {
                 ctx.emit(ImportModalBodyEvent::AllFileSavedLocally);
             } else if state.is_complete() {
                 ctx.emit(ImportModalBodyEvent::UploadCompleted);
@@ -177,16 +177,10 @@ impl ImportModalBody {
 
     // Whether there is an active upload in progress (If all uploads are completed,
     // we don't consider the import modal upload to be in progress).
-    pub fn upload_in_progress(&self, app: &AppContext) -> bool {
-        let sync_queue_dequeueing = SyncQueue::as_ref(app).is_dequeueing();
-
+    pub fn upload_in_progress(&self, _app: &AppContext) -> bool {
         match &self.state {
             ImportState::Upload => false,
-            ImportState::PathExpanded(state)
-                if !sync_queue_dequeueing && state.all_files_saved_locally() =>
-            {
-                false
-            }
+            ImportState::PathExpanded(state) if state.all_files_saved_locally() => false,
             ImportState::PathExpanded(state) if state.is_complete() => false,
             _ => true,
         }
@@ -459,7 +453,6 @@ impl ImportModalBody {
     fn render_loaded_state(
         &self,
         file_upload_state: &FileUploadState,
-        sync_queue_dequeueing: bool,
         appearance: &Appearance,
     ) -> Box<dyn Element> {
         let mut column = Flex::column();
@@ -475,7 +468,6 @@ impl ImportModalBody {
                 appearance,
                 0,
                 file_upload_state.is_complete(),
-                sync_queue_dequeueing,
                 folder_id_to_node,
                 file_id_to_node,
             ));
@@ -499,16 +491,13 @@ impl View for ImportModalBody {
     }
 
     fn render(&self, app: &AppContext) -> Box<dyn Element> {
-        let sync_queue_dequeueing = SyncQueue::as_ref(app).is_dequeueing();
         let appearance = Appearance::as_ref(app);
 
         match &self.state {
             ImportState::Upload | ImportState::Loading | ImportState::PathLoaded => {
                 self.render_upload_state(appearance)
             }
-            ImportState::PathExpanded(paths) => {
-                self.render_loaded_state(paths, sync_queue_dequeueing, appearance)
-            }
+            ImportState::PathExpanded(paths) => self.render_loaded_state(paths, appearance),
         }
     }
 }

@@ -29,9 +29,15 @@ pub use cloud_objects::drive::sharing::{
 /// Identifier for an object that's shareable via the Warp Drive ACL model. Not all sharing in Warp
 /// is _currently_ tied into this model (e.g. block sharing).
 #[derive(Debug, Clone)]
+///
+/// LOCAL FORK: the `WarpDriveObject(ServerId)` variant is gone. Sharing a drive object
+/// meant granting another account access to it through the backend's ACL model, which
+/// needed a server id, an account to grant to and a server to hold the grant. None of the
+/// three exist here, and because the variant carried a `ServerId` it could not even be
+/// constructed for a locally created object: every call site sat behind
+/// `id.into_server()`, so the Share button never appeared on a workflow, notebook or env
+/// var collection in the first place.
 pub enum ShareableObject {
-    /// A shareable Warp Drive object.
-    WarpDriveObject(ServerId),
     /// A shared terminal session. Shared sessions are identified by the participating terminal
     /// pane.
     Session {
@@ -45,9 +51,6 @@ impl ShareableObject {
     /// The canonical link to this object.
     pub fn link(&self, app: &AppContext) -> Option<String> {
         match self {
-            ShareableObject::WarpDriveObject(id) => CloudModel::as_ref(app)
-                .get_by_uid(&id.uid())
-                .and_then(|object| object.object_link()),
             ShareableObject::Session { session_id, .. } => Some(join_link(session_id)),
         }
     }

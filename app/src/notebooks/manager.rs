@@ -76,10 +76,11 @@ pub enum NotebookSource {
 impl NotebookManager {
     /// Create a new [`NotebookManager`] singleton.
     pub fn new(cached_notebooks: Vec<CloudNotebook>, ctx: &mut ModelContext<Self>) -> Self {
-        ctx.subscribe_to_model(
-            &UpdateManager::handle(ctx),
-            Self::handle_update_manager_event,
-        );
+        // LOCAL FORK: this model no longer listens to the UpdateManager. Its handler
+        // existed for one thing: when the server answered a create with the id it had
+        // minted, the pane keyed under the object's client id had to be rekeyed under the
+        // new server id. Objects keep their client id for life now, so there is nothing to
+        // rekey and no `ObjectOperation::Create` result to hear.
 
         ctx.subscribe_to_model(&CloudModel::handle(ctx), Self::handle_cloud_model_event);
 
@@ -288,43 +289,6 @@ impl NotebookManager {
             notebook_id.uid(),
             NotebookRawTextStatus::ParseInFlight(handle.abort_handle()),
         );
-    }
-
-    fn handle_update_manager_event(
-        &mut self,
-        _: ModelHandle<UpdateManager>,
-        event: &UpdateManagerEvent,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let UpdateManagerEvent::ObjectOperationComplete { result } = event else {
-            return;
-        };
-
-        if !matches!(&result.success_type, OperationSuccessType::Success) {
-            return;
-        }
-        if let ObjectOperation::Create { .. } = result.operation {
-            let server_id = result.server_id.expect("Expect server id on success");
-            let Some(server_id) = CloudModel::as_ref(ctx)
-                .get_notebook_by_uid(&server_id.uid())
-                .and_then(|notebook| notebook.id.into_server())
-            else {
-                return;
-            };
-            let Some(client_id) = result.client_id else {
-                return;
-            };
-
-            if let Some(mut pane) = self.panes_by_hashed_id.remove(&client_id.to_string()) {
-                pane.notebook_id = SyncId::ServerId(server_id);
-                self.panes_by_hashed_id
-                    .insert(server_id.uid().clone(), pane);
-            }
-            if let Some(parse_status) = self.raw_text_by_hashed_id.remove(&client_id.to_string()) {
-                self.raw_text_by_hashed_id
-                    .insert(server_id.uid(), parse_status);
-            }
-        }
     }
 
     /// Swap the ID of the notebook open in a pane. This assumes the pane location and view are

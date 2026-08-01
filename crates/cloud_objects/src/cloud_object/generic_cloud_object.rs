@@ -94,6 +94,20 @@ impl<K, M> GenericCloudObject<K, M> {
 
     /// Creates a new GenericCloudObject with the given model, owner, and initial folder id.
     /// This is for the local creation flow, as opposed to creating from a server update.
+    ///
+    /// LOCAL FORK: starts at `NoLocalChanges` rather than `InFlight(1)`.
+    ///
+    /// The one in-flight request it counted was the create that `UpdateManager::create_object`
+    /// used to enqueue right after building this, and it was decremented when the server
+    /// answered. Neither happens now, so the count could only ever be 1 and every object a
+    /// user created stayed `InFlight` for the life of the object.
+    ///
+    /// That is not cosmetic: `has_pending_content_changes` treats anything other than
+    /// `NoLocalChanges` or `InConflict` as unsaved, and
+    /// `num_unsaved_objects_to_warn_about_before_quitting` counts it. Left alone, quitting
+    /// after making a single workflow would warn about unsaved work that was already on
+    /// disk, every time, with no way to clear it. The object is complete the moment it is
+    /// written, which is what `NoLocalChanges` means.
     pub fn new_local(
         model: M,
         owner: Owner,
@@ -105,7 +119,7 @@ impl<K, M> GenericCloudObject<K, M> {
             model: model.into(),
             metadata: CloudObjectMetadata {
                 pending_changes_statuses: CloudObjectStatuses {
-                    content_sync_status: CloudObjectSyncStatus::InFlight(NumInFlightRequests(1)),
+                    content_sync_status: CloudObjectSyncStatus::NoLocalChanges,
                     has_pending_metadata_change: false,
                     has_pending_permissions_change: false,
                     pending_untrash: false,

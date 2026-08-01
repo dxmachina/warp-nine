@@ -39,9 +39,6 @@ use crate::cloud_object::model::view::CloudViewModel;
 use crate::cloud_object::{CloudObject, Owner};
 use crate::editor::PropagateAndNoOpNavigationKeys;
 use crate::menu::{self, Menu, MenuItem, MenuItemFields};
-use crate::server::cloud_objects::update_manager::{
-    ObjectOperation, UpdateManager, UpdateManagerEvent,
-};
 use crate::server::ids::ServerId;
 use crate::server::telemetry::SharingDialogSource;
 use crate::terminal::TerminalView;
@@ -235,14 +232,11 @@ impl SharingDialog {
             me.handle_menu_event(menu, event, ctx)
         });
 
-        let update_manager = UpdateManager::handle(ctx);
-        ctx.subscribe_to_model(&update_manager, |me, _, event, ctx| {
-            me.handle_update_manager_event(event, ctx);
-        });
-
-        ctx.subscribe_to_model(&CloudModel::handle(ctx), |me, _, event, ctx| {
-            me.handle_cloud_model_event(event, ctx);
-        });
+        // LOCAL FORK: the dialog used to also watch the UpdateManager and the CloudModel,
+        // to re-read a drive object's guest list and link setting after the server confirmed
+        // a permissions change or pushed one from another client. Both handlers keyed on the
+        // target being a `WarpDriveObject`, which no longer exists. Session permissions come
+        // from `SessionPermissionsManager` below and are unaffected.
 
         ctx.subscribe_to_model(
             &SessionPermissionsManager::handle(ctx),
@@ -291,42 +285,6 @@ impl SharingDialog {
         }
     }
 
-    fn handle_update_manager_event(
-        &mut self,
-        event: &UpdateManagerEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let UpdateManagerEvent::ObjectOperationComplete { result } = event else {
-            return;
-        };
-
-        if let ObjectOperation::UpdatePermissions = result.operation {
-            self.refresh_object_permission_states(ctx);
-        }
-    }
-
-    fn handle_cloud_model_event(&mut self, event: &CloudModelEvent, ctx: &mut ViewContext<Self>) {
-        if let Some(target_server_id) = self.target_cloud_object_id(ctx) {
-            let event_object_id = match event {
-                CloudModelEvent::ObjectMoved { type_and_id, .. } => type_and_id,
-                CloudModelEvent::ObjectUpdated { type_and_id, .. } => type_and_id,
-                CloudModelEvent::ObjectTrashed { .. } => return,
-                CloudModelEvent::ObjectUntrashed { .. } => return,
-                CloudModelEvent::NotebookEditorChangedFromServer { .. } => return,
-                CloudModelEvent::ObjectCreated { type_and_id } => type_and_id,
-                CloudModelEvent::ObjectPermissionsUpdated { type_and_id, .. } => type_and_id,
-                CloudModelEvent::ObjectDeleted { .. } => return,
-                CloudModelEvent::ObjectForceExpanded { .. } => return,
-                CloudModelEvent::ObjectSynced { .. }
-                | CloudModelEvent::EnvironmentLastTaskRunTimestampsUpdated => return,
-            };
-
-            if event_object_id.sync_id().into_server() == Some(target_server_id) {
-                self.refresh_object_permission_states(ctx);
-            }
-        }
-    }
-
     fn handle_session_permissions_event(
         &mut self,
         event: &SessionPermissionsEvent,
@@ -358,7 +316,10 @@ impl SharingDialog {
         self.target = target;
         self.mode = SharingDialogMode::Access;
         self.reset_invite_form(ctx);
-        self.refresh_object_permission_states(ctx);
+        // LOCAL FORK: `refresh_object_permission_states` went with the drive target. It
+        // returned immediately for a session -- session permissions are pushed by
+        // `SessionPermissionsManager` rather than read out of a cloud object -- so its
+        // whole body ran only for a `WarpDriveObject`.
         ctx.notify();
     }
 
@@ -381,21 +342,6 @@ impl SharingDialog {
         }
     }
 
-    /// The Warp Drive server ID for the target object. `None` if the target is not a Warp Drive
-    /// object or AI conversation.
-    fn target_cloud_object_id(&self, _app: &AppContext) -> Option<ServerId> {
-        match self.target.as_ref() {
-            Some(ShareableObject::WarpDriveObject(id)) => Some(*id),
-            _ => None,
-        }
-    }
-
-    /// The targeted Warp Drive object, or `None` if the target is not a known Warp Drive object.
-    fn target_cloud_object<'a>(&self, app: &'a AppContext) -> Option<&'a dyn CloudObject> {
-        self.target_cloud_object_id(app)
-            .and_then(|id| CloudModel::as_ref(app).get_by_uid(&id.uid()))
-    }
-
     fn window_team_uid(&self, app: &AppContext) -> Option<ServerId> {
         UserWorkspaces::as_ref(app)
             .team_for_view_handle(&self.self_handle, app)
@@ -407,9 +353,6 @@ impl SharingDialog {
         self.target
             .as_ref()
             .and_then(|target| match target {
-                ShareableObject::WarpDriveObject(server_id) => CloudModel::as_ref(app)
-                    .get_by_uid(&server_id.uid())
-                    .map(|object| object.display_name()),
                 ShareableObject::Session { .. } => Some("session".to_string()),
             })
             .unwrap_or_else(|| "unknown".to_string())
@@ -436,9 +379,6 @@ impl SharingDialog {
         match self.target.as_ref() {
             // Always treat session contents as "editable," so that the sharing dialog is shown.
             Some(ShareableObject::Session { .. }) => ContentEditability::Editable,
-            Some(ShareableObject::WarpDriveObject(id)) => {
-                CloudViewModel::as_ref(app).object_editability(&id.uid(), app)
-            }
             None => ContentEditability::ReadOnly,
         }
     }
@@ -446,9 +386,6 @@ impl SharingDialog {
     /// The current user's access level on the shared object.
     fn access_level(&self, app: &AppContext) -> SharingAccessLevel {
         match self.target.as_ref() {
-            Some(ShareableObject::WarpDriveObject(id)) => {
-                CloudViewModel::as_ref(app).access_level(&id.uid(), app)
-            }
             Some(ShareableObject::Session { handle, .. }) => {
                 // Sharer always has Full access.
                 if handle.upgrade(app).is_some_and(|handle| {
@@ -522,13 +459,6 @@ impl SharingDialog {
 
     fn owner(&self, app: &AppContext) -> Option<Subject> {
         match self.target.as_ref()? {
-            ShareableObject::WarpDriveObject(id) => {
-                let owner = CloudModel::as_ref(app)
-                    .get_by_uid(&id.uid())?
-                    .permissions()
-                    .owner;
-                Some(Subject::from_owner(owner))
-            }
             ShareableObject::Session { handle, .. } => {
                 // Check if team has Full access - if so, team is the owner.
                 if let Some(TeamKind::SharedSessionTeam { team_uid, name }) =
@@ -668,60 +598,6 @@ impl SharingDialog {
         ctx.notify()
     }
 
-    /// Refreshes all permissions that have cached UI state.
-    fn refresh_object_permission_states(&mut self, ctx: &mut ViewContext<Self>) {
-        // The permission states for shared sessions are managed differently
-        // than other cloud objects. We return to avoid resetting the
-        // permissions for sessions.
-        if matches!(self.target, Some(ShareableObject::Session { .. })) {
-            return;
-        }
-
-        match self.target_cloud_object(ctx) {
-            Some(object) => {
-                let object_id = object.sync_id();
-                self.guest_states = object
-                    .permissions()
-                    .guests
-                    .iter()
-                    .map(move |guest| GuestState {
-                        menu_button_handle: Default::default(),
-                        subject: guest.subject.clone(),
-                        current_access_level: guest.access_level,
-                        tooltip_handle: Default::default(),
-                        inheritance: InheritanceState::from_object_and_source(
-                            &object_id,
-                            guest.source.as_ref(),
-                        ),
-                    })
-                    .collect();
-
-                self.link_sharing_state = match &object.permissions().anyone_with_link {
-                    Some(link_sharing) => LinkSharingState {
-                        access_level: Some(link_sharing.access_level),
-                        tooltip_handle: Default::default(),
-                        inheritance: InheritanceState::from_object_and_source(
-                            &object_id,
-                            link_sharing.source.as_ref(),
-                        ),
-                    },
-                    None => Default::default(),
-                }
-            }
-            None => {
-                self.guest_states.clear();
-                self.guest_states.shrink_to_fit();
-                self.link_sharing_state = Default::default();
-                self.team_sharing_state = Default::default();
-            }
-        }
-
-        self.guest_states
-            .sort_by_cached_key(|guest| guest.subject.name(ctx));
-
-        ctx.notify();
-    }
-
     /// Saved position ID for a particular guest's menu button.
     fn guest_access_button_id(&self, idx: usize) -> String {
         format!(
@@ -843,15 +719,6 @@ impl SharingDialog {
         }
 
         match &self.target {
-            Some(ShareableObject::WarpDriveObject(object_id)) => {
-                let guest_identifier = guest.subject.to_guest_identifier(ctx);
-                if let Some(guest_identifier) = guest_identifier {
-                    let object_id = *object_id;
-                    UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-                        update_manager.remove_object_guest(object_id, guest_identifier, ctx);
-                    });
-                }
-            }
             Some(ShareableObject::Session { handle, .. }) => {
                 self.remove_targeted_guest_for_session(idx, handle.clone(), ctx);
             }
@@ -909,52 +776,11 @@ impl SharingDialog {
         ctx.notify();
 
         match &self.target {
-            Some(ShareableObject::WarpDriveObject(object_id)) => {
-                self.set_targeted_guest_access_for_object(idx, access_level, *object_id, ctx);
-            }
             Some(ShareableObject::Session { handle, .. }) => {
                 self.set_targeted_guest_access_for_session(idx, access_level, handle.clone(), ctx);
             }
             None => (),
         };
-    }
-
-    fn set_targeted_guest_access_for_object(
-        &mut self,
-        guest_idx: usize,
-        access_level: SharingAccessLevel,
-        object_id: ServerId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let (guest_email, is_inherited) = match self.guest_states.get(guest_idx) {
-            Some(guest) => match guest.subject.email(ctx) {
-                Some(email) => (email.to_owned(), guest.inheritance.is_some()),
-                None => return,
-            },
-            None => return,
-        };
-
-        UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-            // If there's only an inherited guest ACL, we have to add a new guest to the descendant
-            // object.
-            if is_inherited {
-                update_manager.add_object_guests(
-                    object_id,
-                    vec![guest_email],
-                    access_level.into(),
-                    ctx,
-                );
-            } else {
-                update_manager.update_object_guests(
-                    object_id,
-                    vec![guest_email],
-                    access_level.into(),
-                    ctx,
-                );
-            }
-        });
-
-        self.set_open_menu(OpenMenuState::None, ctx);
     }
 
     fn set_targeted_guest_access_for_session(
@@ -1124,14 +950,6 @@ impl SharingDialog {
             invite_button = invite_button.disabled();
         }
 
-        // For Warp Drive targets, we can't update permissions while there's a pending change.
-        if self
-            .target_cloud_object(app)
-            .is_some_and(|object| object.metadata().has_pending_online_only_change())
-        {
-            invite_button = invite_button.disabled();
-        }
-
         let invite_button = invite_button
             .build()
             .with_cursor(Cursor::PointingHand)
@@ -1271,16 +1089,6 @@ impl SharingDialog {
         }
 
         match &self.target {
-            Some(ShareableObject::WarpDriveObject(object_id)) => {
-                UpdateManager::handle(ctx).update(ctx, |update_manager, ctx| {
-                    update_manager.add_object_guests(
-                        *object_id,
-                        form_state.invitee_emails,
-                        self.invite_form.selected_access_level.into(),
-                        ctx,
-                    );
-                });
-            }
             Some(ShareableObject::Session { handle, .. }) => {
                 let Some(handle) = handle.upgrade(ctx) else {
                     report_error!(
@@ -2573,17 +2381,13 @@ impl TypedActionView for SharingDialog {
             }
             SharingDialogAction::SetLinkPermissions(access_level) => {
                 self.set_open_menu(OpenMenuState::None, ctx);
-                if let Some(ShareableObject::WarpDriveObject(id)) = self.target.as_ref() {
-                    UpdateManager::handle(ctx).update(ctx, move |update_manager, ctx| {
-                        update_manager.set_object_link_permissions(*id, *access_level, ctx);
+                if let Some(ShareableObject::Session { handle, .. }) = self.target.as_ref()
+                    && let Some(view) = handle.upgrade(ctx)
+                {
+                    let role = access_level.map(|access_level| access_level.into());
+                    view.update(ctx, |view, ctx| {
+                        view.update_session_link_permissions(role, ctx)
                     });
-                } else if let Some(ShareableObject::Session { handle, .. }) = self.target.as_ref() {
-                    if let Some(view) = handle.upgrade(ctx) {
-                        let role = access_level.map(|access_level| access_level.into());
-                        view.update(ctx, |view, ctx| {
-                            view.update_session_link_permissions(role, ctx)
-                        });
-                    }
                 }
                 ctx.notify();
             }

@@ -30,27 +30,15 @@ pub enum Mode {
     View,
 }
 
-/// True if the object is currently being saved. We don't allow editing workflows
-/// yet so this is only used for notebooks, but we will want it to apply for
-/// workflows also.
-#[derive(Default)]
-pub enum SavingStatus {
-    #[default]
-    Saved,
-    Saving,
-}
-
 /// Data displayed in the status bar that is also relevant for workflows and notebooks.
 /// We share this data between views by making it a model.
 #[derive(Default)]
 pub struct ActiveNotebookData {
     /// Whether we're in editing, readonly or viewing mode.
     pub mode: Mode,
-    pub saving_status: SavingStatus,
     pub active_notebook: ActiveNotebook,
 
     pub show_grab_edit_access_modal: bool,
-    pub feature_not_available: bool,
 }
 
 impl ActiveNotebookData {
@@ -108,76 +96,25 @@ impl ActiveNotebookData {
             return;
         };
 
+        // LOCAL FORK: only trashing, untrashing and taking the edit baton still produce a
+        // result, and only ever a successful one. The `Create`, `Update`, `Rejection` and
+        // `FeatureNotAvailable` arms all read a server's answer to a request: a create
+        // reported the server id that had just been minted for a client id, an update
+        // reported that the write landed, a rejection that the revision was stale, and
+        // `FeatureNotAvailable` that the workspace was not entitled to notebooks.
+        //
+        // The match is on the object's `SyncId` rather than a `ServerId`, because these
+        // operations now run on objects that have only ever had a client id.
         match (&result.operation, &result.success_type) {
-            (ObjectOperation::Create { .. }, OperationSuccessType::Success) => {
-                if let Some(current_id) = self.id()
-                    && current_id.into_client() == result.client_id
-                {
-                    let server_id = result.server_id.expect("Expect server id on success");
-                    let notebook_id: NotebookId = server_id.into();
-                    self.feature_not_available = false;
-                    self.saving_status = SavingStatus::Saved;
-                    self.active_notebook =
-                        ActiveNotebook::CommittedNotebook(SyncId::ServerId(notebook_id.into()));
-                    ctx.emit(ActiveNotebookDataEvent::BreadcrumbsChanged);
-                    ctx.emit(ActiveNotebookDataEvent::CreatedOnServer);
-                    ctx.notify();
-                }
-            }
-            (ObjectOperation::Update, OperationSuccessType::Success) => {
-                if let Some(current_id) = self.id() {
-                    let server_id = result.server_id.expect("Expect server id on success");
-                    if current_id.into_server() == Some(server_id) {
-                        self.feature_not_available = false;
-                        self.saving_status = SavingStatus::Saved;
-                        ctx.notify();
-                    }
-                }
-            }
-            (ObjectOperation::Update, OperationSuccessType::Rejection) => {
-                let current_id = self.id();
-                if let Some(id) = current_id {
-                    let server_id = result
-                        .server_id
-                        .expect("Expect server id on update rejection");
-                    if id.into_server() == Some(server_id) {
-                        self.feature_not_available = false;
-                        ctx.emit(ActiveNotebookDataEvent::EditRejected);
-                        ctx.notify();
-                    }
-                }
-            }
-            (ObjectOperation::Update, OperationSuccessType::FeatureNotAvailable) => {
-                let current_id = self.id();
-                if let Some(id) = current_id {
-                    let server_id = result
-                        .server_id
-                        .expect("Expect server id on update failure");
-                    if id.into_server() == Some(server_id) {
-                        self.feature_not_available = true;
-                        ctx.emit(ActiveNotebookDataEvent::EditRejected);
-                        ctx.notify();
-                    }
-                }
-            }
             (ObjectOperation::TakeEditAccess, OperationSuccessType::Success) => {
-                let current_id = self.id();
-                let server_id = result.server_id.expect("Expect server id on success");
-                if let Some(id) = current_id
-                    && id.into_server() == Some(server_id)
-                {
-                    self.feature_not_available = false;
+                if self.id().is_some() && self.id() == result.object_id {
                     self.mode = Mode::Editing;
                     ctx.emit(ActiveNotebookDataEvent::SwitchedToEditMode);
                 }
             }
             (ObjectOperation::Trash, OperationSuccessType::Success)
             | (ObjectOperation::Untrash, OperationSuccessType::Success) => {
-                let current_id = self.id();
-                let server_id = result.server_id.expect("Expect server id on success");
-                if let Some(id) = current_id
-                    && id.into_server() == Some(server_id)
-                {
+                if self.id().is_some() && self.id() == result.object_id {
                     ctx.emit(ActiveNotebookDataEvent::TrashStatusChanged);
                 }
             }
@@ -187,10 +124,8 @@ impl ActiveNotebookData {
 
     pub fn reset(&mut self) {
         self.mode = Mode::View;
-        self.saving_status = SavingStatus::default();
         self.show_grab_edit_access_modal = false;
         self.active_notebook = ActiveNotebook::None;
-        self.feature_not_available = false;
     }
 
     pub fn open_new(
@@ -288,10 +223,6 @@ impl ActiveNotebookData {
             })
     }
 
-    pub fn feature_not_available(&self) -> bool {
-        self.feature_not_available
-    }
-
     /// Returns the current editor of the active object. Returns None
     /// if there is not currently an active notebook
     pub fn current_editor(&self, ctx: &AppContext) -> Option<Editor> {
@@ -345,12 +276,8 @@ pub enum ActiveNotebookDataEvent {
     ModeChangedFromServer,
     /// The editing baton for the current object was successfully grabbed server-side.
     SwitchedToEditMode,
-    /// An edit to the current object was rejected.
-    EditRejected,
     /// The notebook's breadcrumbs were updated.
     BreadcrumbsChanged,
-    /// This notebook was created on the server.
-    CreatedOnServer,
     /// This notebook was trashed or untrashed (used for refreshing pane overflow items)
     TrashStatusChanged,
     // This notebook was moved to a shared space.

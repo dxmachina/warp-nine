@@ -244,6 +244,7 @@ SELFSIGN=false
 DEVELOPER_ID_SIGN=false
 NOTARIZE=false
 NOTARY_PROFILE=""
+NOTARIZATION_FAILED=false
 DMG_CREATED=false
 OPEN_AFTER_BUNDLE=false
 READ_PASSWORDS_FROM_ENV=false
@@ -994,6 +995,19 @@ if [[ $NOTARIZE = true ]]; then
     exit 1
   fi
 
+  # LOCAL FORK: a notarisation failure must not destroy the build.
+  #
+  # This step runs before packaging so the ticket is stapled into the app that
+  # the disk image is built from. Under `set -e` that ordering had a nasty
+  # consequence: any notarisation failure -- an expired credential, a keychain
+  # that will not hand over the profile, Apple being down -- aborted the run
+  # here, so the DMG was never created and the app was never copied to the output
+  # directory. Since the script also clears the previous build's artifacts on
+  # startup, a transient credential problem left nothing at all behind.
+  #
+  # Failure is recorded and reported instead, packaging still runs, and the
+  # script exits non-zero at the end so nothing mistakes the result for a
+  # notarised build.
   if [[ "$ARTIFACT" = app ]]; then
     SIGNED_APP="$BUNDLE_DIR/$WARP_APP_NAME.app"
     APP_NOTARIZATION_ZIP="$BUNDLE_DIR/${WARP_APP_NAME}_notarize.zip"
@@ -1003,14 +1017,19 @@ if [[ $NOTARIZE = true ]]; then
     ditto -c -k --keepParent "$SIGNED_APP" "$APP_NOTARIZATION_ZIP"
 
     echo "Uploading $APP_NOTARIZATION_ZIP to Apple for notarization..."
-    notarize_artifact "$APP_NOTARIZATION_ZIP"
+    if notarize_artifact "$APP_NOTARIZATION_ZIP"; then
+      echo "Stapling the notarization ticket to $SIGNED_APP..."
+      xcrun stapler staple "$SIGNED_APP"
+      xcrun stapler validate "$SIGNED_APP"
 
-    echo "Stapling the notarization ticket to $SIGNED_APP..."
-    xcrun stapler staple "$SIGNED_APP"
-    xcrun stapler validate "$SIGNED_APP"
-
-    echo "Verifying Gatekeeper acceptance..."
-    spctl -a -vvv -t exec "$SIGNED_APP"
+      echo "Verifying Gatekeeper acceptance..."
+      spctl -a -vvv -t exec "$SIGNED_APP"
+    else
+      echo "WARNING: notarization failed. Continuing so the signed app and disk" >&2
+      echo "         image are still produced, but neither carries a ticket and" >&2
+      echo "         Gatekeeper will prompt on another machine." >&2
+      NOTARIZATION_FAILED=true
+    fi
 
     rm -f "$APP_NOTARIZATION_ZIP"
   else
@@ -1018,10 +1037,14 @@ if [[ $NOTARIZE = true ]]; then
     rm -f "$BIN_NOTARIZATION_ZIP"
     ditto -c -k "$OUT_DIR/$WARP_BIN" "$BIN_NOTARIZATION_ZIP"
     echo "Uploading $BIN_NOTARIZATION_ZIP to Apple for notarization..."
-    notarize_artifact "$BIN_NOTARIZATION_ZIP"
-    # Tickets cannot be stapled to a standalone binary, so verification reads the
-    # primary signature instead.
-    spctl -a -t open --context context:primary-signature -vv "$OUT_DIR/$WARP_BIN"
+    if notarize_artifact "$BIN_NOTARIZATION_ZIP"; then
+      # Tickets cannot be stapled to a standalone binary, so verification reads
+      # the primary signature instead.
+      spctl -a -t open --context context:primary-signature -vv "$OUT_DIR/$WARP_BIN"
+    else
+      echo "WARNING: notarization failed; the binary is signed but has no ticket." >&2
+      NOTARIZATION_FAILED=true
+    fi
     rm -f "$BIN_NOTARIZATION_ZIP"
   fi
 fi
@@ -1176,7 +1199,7 @@ fi
 # image was assembled, so the copy inside already carries its ticket. The image
 # still needs one of its own, or opening the download prompts even though the app
 # it holds would not.
-if [[ $NOTARIZE = true && "$ARTIFACT" = app && $DMG_CREATED = true ]]; then
+if [[ $NOTARIZE = true && $NOTARIZATION_FAILED != true && "$ARTIFACT" = app && $DMG_CREATED = true ]]; then
   echo "Signing and notarizing $DMG_DIR/$DMG_NAME..."
   codesign --force --timestamp --sign "$SIGNING_CERT" "$DMG_DIR/$DMG_NAME"
   notarize_artifact "$DMG_DIR/$DMG_NAME"
@@ -1261,4 +1284,16 @@ fi
 
 if [[ $OPEN_AFTER_BUNDLE = true ]]; then
     open "$OUT_DIR"
+fi
+
+# LOCAL FORK: surface a notarisation failure in the exit code.
+#
+# Everything above still ran, so the signed app and disk image exist and are
+# usable locally, but they carry no ticket. Exiting non-zero keeps a failed
+# notarisation from being mistaken for a successful release build.
+if [[ $NOTARIZATION_FAILED = true ]]; then
+  echo "" >&2
+  echo "Build completed but NOTARIZATION FAILED." >&2
+  echo "Artifacts are signed with Developer ID and are not notarized." >&2
+  exit 1
 fi

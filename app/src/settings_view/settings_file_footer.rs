@@ -235,7 +235,7 @@ pub fn render_settings_error_alert(
     // Use a `Wrap` flex as a graceful fallback: if the sidebar is narrower
     // than the buttons' combined natural width, they wrap onto a second
     // row instead of pushing the alert container wider than the sidebar.
-    let mut buttons_row = Wrap::row()
+    let buttons_row = Wrap::row()
         .with_cross_axis_alignment(CrossAxisAlignment::Center)
         .with_main_axis_size(MainAxisSize::Min)
         .with_spacing(ALERT_BUTTON_SPACING)

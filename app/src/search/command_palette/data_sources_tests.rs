@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use cloud_object_client::MockObjectClient;
 use settings::manager::SettingsManager;
 use warpui::{App, SingletonEntity};
 

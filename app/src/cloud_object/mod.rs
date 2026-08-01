@@ -1,9 +1,7 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::sync::Arc;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use derivative::Derivative;
 use lazy_static::lazy_static;
@@ -23,9 +21,7 @@ use self::model::persistence::CloudModel;
 use crate::auth::UserUid;
 use crate::channel::ChannelState;
 use crate::persistence::ModelEvent;
-use crate::server::cloud_objects::update_manager::InitiatedBy;
 use crate::server::ids::{HashableId, HashedSqliteId, ObjectUid, ServerId, SyncId, ToServerId};
-use crate::server::server_api::object::ObjectClient;
 use crate::util::time_format::format_approx_duration_from_now_utc;
 use crate::workflows::{CloudWorkflow, WorkflowSource};
 use crate::workspaces::user_profiles::UserProfiles;
@@ -465,20 +461,6 @@ pub trait CloudModelType: Debug + Clone + Send + Sync {
 
     /// Returns a serialized model.
     fn serialized(&self) -> SerializedModel;
-
-    /// Sends a request to the server to create this model.
-    async fn send_create_request(
-        object_client: Arc<dyn ObjectClient>,
-        request: CreateObjectRequest,
-    ) -> Result<CreateCloudObjectResult>;
-
-    /// Sends a request to the server to update this model.
-    async fn send_update_request(
-        &self,
-        object_client: Arc<dyn ObjectClient>,
-        server_id: ServerId,
-        revision: Option<Revision>,
-    ) -> Result<UpdateCloudObjectResult<GenericServerObject<Self::IdType, Self>>>;
 
     /// Returns whether this model type supports being moved to the given space.
     fn can_move_to_space(&self, _current_space: Space, _new_space: Space) -> bool {

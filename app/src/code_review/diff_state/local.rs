@@ -59,8 +59,6 @@ cfg_if::cfg_if! {
 #[cfg(feature = "local_fs")]
 use warp_errors::report_error;
 
-#[cfg(feature = "local_fs")]
-use super::DiffOperation;
 use super::{
     BackendOrigin, CommitChainMode, DiffHunk, DiffLine, DiffLineType, DiffMetadata,
     DiffMetadataAgainstBase, DiffMode, DiffState, DiffStateError, DiffStateModelEvent, DiffStats,
@@ -1633,7 +1631,7 @@ impl LocalDiffStateModel {
                 .take()
                 .map(|start| start.elapsed()),
             Err(e) => {
-                let load_duration = self
+                let _load_duration = self
                     .tracked_diff_load_start_time
                     .take()
                     .map(|start| start.elapsed());

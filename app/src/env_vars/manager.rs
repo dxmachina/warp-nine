@@ -1,15 +1,12 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use warpui::{Entity, EntityId, ModelContext, ModelHandle, SingletonEntity, WeakViewHandle};
+use warpui::{Entity, EntityId, ModelContext, SingletonEntity, WeakViewHandle};
 
 use crate::cloud_object::Owner;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::env_vars::view::env_var_collection::EnvVarCollectionView;
 use crate::pane_group::{EnvVarCollectionPane, PaneContent};
-use crate::server::cloud_objects::update_manager::{
-    ObjectOperation, OperationSuccessType, UpdateManager, UpdateManagerEvent,
-};
 use crate::server::ids::SyncId;
 use crate::{PaneViewLocator, WindowId, safe_warn};
 
@@ -29,7 +26,7 @@ pub enum EnvVarCollectionSource {
 
 /// Manages EnvVarCollection panes
 impl EnvVarCollectionManager {
-    pub fn new(ctx: &mut ModelContext<Self>) -> Self {
+    pub fn new(_ctx: &mut ModelContext<Self>) -> Self {
         // LOCAL FORK: this model no longer listens to the UpdateManager. Its handler
         // existed for one thing: when the server answered a create with the id it had
         // minted, the pane keyed under the object's client id had to be rekeyed under the

@@ -8,7 +8,7 @@ use crate::env_vars::CloudEnvVarCollection;
 use crate::server::cloud_objects::update_manager::{
     ObjectOperation, OperationSuccessType, UpdateManagerEvent,
 };
-use crate::server::ids::{ClientId, ServerId, SyncId};
+use crate::server::ids::{ClientId, SyncId};
 use crate::sharing::{ContentEditability, SharingAccessLevel};
 use crate::{AppContext, CloudModel, UpdateManager};
 

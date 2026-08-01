@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use warp_core::settings::Setting;
 use warp_core::ui::appearance::Appearance;
-use warp_errors::{report_error, report_if_error};
+use warp_errors::report_if_error;
 use warpui::elements::{
     Border, Container, CornerRadius, Flex, Hoverable, MainAxisAlignment, MainAxisSize,
     MouseStateHandle, ParentElement, Radius, Shrinkable, Text,
@@ -17,7 +17,7 @@ use warpui::{
 
 use super::config::{QuakeModeWindow, ThemeType};
 use crate::GlobalResourceHandlesProvider;
-use crate::settings::import::config::{Config, ParsedTerminalSetting, SettingType};
+use crate::settings::import::config::{Config, SettingType};
 use crate::settings::import::model::{ImportedConfigModel, TerminalTypeAndProfile};
 use crate::settings::{
     AppEditorSettings, CursorBlink, FontSettings, GlobalHotkeyMode, SelectionSettings,

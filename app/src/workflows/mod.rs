@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 pub use cloud_object_models::{CloudWorkflow, CloudWorkflowModel, WorkflowId};
 use serde::{Deserialize, Serialize};
 use warp_core::context_flag::ContextFlag;
@@ -7,7 +5,6 @@ use warp_core::features::FeatureFlag;
 use warpui::{AppContext, SingletonEntity};
 
 pub mod categories;
-use anyhow::Result;
 use workflow::Workflow;
 
 pub mod aliases;
@@ -32,15 +29,10 @@ pub use categories::{CategoriesView, CategoriesViewEvent, WorkflowsViewAction};
 
 use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::model::view::CloudViewModel;
-use crate::cloud_object::{
-    CloudModelType, CloudObjectEventEntrypoint, CloudObjectUpsertParams, CreateCloudObjectResult,
-    CreateObjectRequest, GenericServerObject, ObjectType, Revision, UpdateCloudObjectResult,
-};
+use crate::cloud_object::{CloudModelType, CloudObjectUpsertParams, ObjectType};
 use crate::notebooks::{NotebookId, NotebookLocation};
 use crate::persistence::ModelEvent;
-use crate::server::cloud_objects::update_manager::InitiatedBy;
 use crate::server::ids::{ServerId, SyncId};
-use crate::server::server_api::object::ObjectClient;
 use cloud_objects::cloud_object::SerializedModel;
 
 pub fn init(app: &mut AppContext) {
@@ -262,28 +254,6 @@ impl CloudModelType for CloudWorkflowModel {
         SerializedModel::new(
             serde_json::to_string(&self.data).expect("failed to serialize workflow"),
         )
-    }
-
-    async fn send_create_request(
-        object_client: Arc<dyn ObjectClient>,
-        request: CreateObjectRequest,
-    ) -> Result<CreateCloudObjectResult> {
-        object_client.create_workflow(request).await
-    }
-
-    async fn send_update_request(
-        &self,
-        object_client: Arc<dyn ObjectClient>,
-        server_id: ServerId,
-        revision: Option<Revision>,
-    ) -> Result<UpdateCloudObjectResult<GenericServerObject<WorkflowId, Self>>> {
-        object_client
-            .update_workflow(
-                server_id.into(),
-                serde_json::to_string(&self.data)?.into(),
-                revision,
-            )
-            .await
     }
 
     fn renders_in_warp_drive(&self) -> bool {

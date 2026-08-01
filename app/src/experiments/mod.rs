@@ -20,7 +20,7 @@ pub use block_onboarding_layer::{BLOCK_ONBOARDING_LAYER, BlockOnboarding};
 use dashmap::DashMap;
 pub use improved_palette_search_layer::{IMPROVED_PALETTE_SEARCH_LAYER, ImprovedPaletteSearch};
 use lazy_static::lazy_static;
-pub use login_layer::{AuthFlowInstructions, LOGIN_LAYER};
+pub use login_layer::LOGIN_LAYER;
 use warp_core::user_preferences::GetUserPreferences as _;
 use warp_errors::report_error;
 use warpui::{AppContext, SingletonEntity};
@@ -331,7 +331,7 @@ pub trait Experiment<T: Experiment<T>>: FromStr {
             assigned_group = Self::layer().get_assigned_group(&anonymous_id);
 
             if let Some(group) = assigned_group.as_ref() {
-                let group_assignment = group.variant();
+                let _group_assignment = group.variant();
                 // Send synchronously since this we rely on this event to collect experiment data.
             }
         }

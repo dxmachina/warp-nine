@@ -96,7 +96,7 @@ use warpui::platform::{
     Cursor, FilePickerConfiguration, FullscreenState, SystemTheme, TerminationMode,
 };
 use warpui::text_layout::ClipConfig;
-use warpui::ui_components::button::{Button, ButtonVariant};
+use warpui::ui_components::button::Button;
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::windowing::state::ApplicationStage;
 use warpui::windowing::{StateEvent, WindowManager};
@@ -163,7 +163,7 @@ use crate::cloud_object::{
     CloudObject, CloudObjectLocation, GenericStringObjectFormat, JsonObjectType, ObjectType, Owner,
     Space,
 };
-use crate::cloud_object::{CloudObjectTypeAndId, DriveObjectType, OpenWarpDriveObjectSettings};
+use crate::cloud_object::{CloudObjectTypeAndId, OpenWarpDriveObjectSettings};
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code::editor::{add_color, remove_color};
 #[cfg(feature = "local_fs")]
@@ -195,7 +195,6 @@ use crate::palette::PaletteMode;
 #[cfg(feature = "local_fs")]
 use crate::pane_group::FilePane;
 use crate::pane_group::pane::ActionOrigin;
-use crate::settings::warp_drive::WarpDriveSettings;
 use crate::workflows::arguments_ui::modal::{WorkflowModal, WorkflowModalEvent};
 // LOCAL FORK: `AIFactPane`, `CodeDiffPane` and `ExecutionProfileEditorPane` removed with the agent.
 use crate::pane_group::{
@@ -228,7 +227,7 @@ use crate::search::command_search::view::{CommandSearchEvent, CommandSearchView}
 use crate::search::slash_command_menu::static_commands::commands;
 use crate::search::{self, QueryFilter};
 use crate::server::cloud_objects::update_manager::{
-    ObjectOperation, OperationSuccessType, UpdateManager, UpdateManagerEvent,
+    OperationSuccessType, UpdateManager, UpdateManagerEvent,
 };
 use crate::server::ids::{ObjectUid, ServerId, SyncId};
 use crate::server::network_log_pane_manager::NetworkLogPaneManager;
@@ -253,7 +252,7 @@ use crate::tab::{
     COMPACT_TAB_WIDTH_THRESHOLD, ColorPickerTarget, MOVE_TO_GROUP_LABEL, NewSessionMenuItem,
     PaneNameMenuTarget, SelectedTabColor, TAB_BAR_BORDER_HEIGHT, TAB_INDICATOR_HEIGHT,
     TAB_PIN_INDICATOR_ICON_SIZE, TAB_PIN_VANISH_THRESHOLD, TabBarState, TabComponent, TabData,
-    TabTelemetryAction, color_picker_menu_items, tab_position_id, uses_vertical_tabs,
+    color_picker_menu_items, tab_position_id, uses_vertical_tabs,
 };
 use crate::tab_configs::action_sidecar::SidecarItemKind;
 use crate::tab_configs::remove_confirmation_dialog::{
@@ -2388,7 +2387,7 @@ impl Workspace {
             model_event_sender,
             tips_completed,
             user_default_shell_unsupported_banner_model_handle,
-            referral_theme_status,
+            referral_theme_status: _,
             settings_file_error,
         } = global_resource_handles.clone();
 
@@ -5338,7 +5337,7 @@ impl Workspace {
         ctx: &mut ViewContext<Self>,
     ) {
         if tab_config.params.is_empty() {
-            let is_worktree_config = tab_config.is_worktree();
+            let _is_worktree_config = tab_config.is_worktree();
             let worktree_branch_name = self.maybe_generate_worktree_name(&tab_config);
             let param_values = tab_config.default_param_values();
             self.open_tab_config_with_params(
@@ -10111,7 +10110,7 @@ impl Workspace {
     fn add_tab_with_shell(
         &mut self,
         shell: AvailableShell,
-        source: AddTabWithShellSource,
+        _source: AddTabWithShellSource,
         ctx: &mut ViewContext<Self>,
     ) {
         self.add_new_session_tab_with_default_mode(
@@ -14075,7 +14074,7 @@ impl Workspace {
 
     fn open_prompt_editor(
         &mut self,
-        open_source: PromptEditorOpenSource,
+        _open_source: PromptEditorOpenSource,
         ctx: &mut ViewContext<Self>,
     ) {
         // Try to get a prompt preview from an active session. Otherwise, read it from the settings
@@ -15500,7 +15499,7 @@ impl Workspace {
         &self,
         target: &mut Flex,
         config: &crate::workspace::tab_settings::HeaderToolbarChipSelection,
-        is_web_anonymous_user: bool,
+        _is_web_anonymous_user: bool,
         appearance: &Appearance,
         ctx: &AppContext,
     ) {
@@ -18513,7 +18512,7 @@ impl TypedActionView for Workspace {
                 ctx.notify();
             }
             ToggleVerticalTabsShowPrLink => {
-                let new_value = TabSettings::handle(ctx).update(ctx, |settings, ctx| {
+                let _new_value = TabSettings::handle(ctx).update(ctx, |settings, ctx| {
                     let new_value = !*settings.vertical_tabs_show_pr_link.value();
                     let _ = settings
                         .vertical_tabs_show_pr_link
@@ -18523,7 +18522,7 @@ impl TypedActionView for Workspace {
                 ctx.notify();
             }
             ToggleVerticalTabsShowDiffStats => {
-                let new_value = TabSettings::handle(ctx).update(ctx, |settings, ctx| {
+                let _new_value = TabSettings::handle(ctx).update(ctx, |settings, ctx| {
                     let new_value = !*settings.vertical_tabs_show_diff_stats.value();
                     let _ = settings
                         .vertical_tabs_show_diff_stats
@@ -18533,7 +18532,7 @@ impl TypedActionView for Workspace {
                 ctx.notify();
             }
             ToggleVerticalTabsShowDetailsOnHover => {
-                let new_value = TabSettings::handle(ctx).update(ctx, |settings, ctx| {
+                let _new_value = TabSettings::handle(ctx).update(ctx, |settings, ctx| {
                     let new_value = !*settings.vertical_tabs_show_details_on_hover.value();
                     let _ = settings
                         .vertical_tabs_show_details_on_hover

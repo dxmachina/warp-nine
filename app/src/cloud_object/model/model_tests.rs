@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
-use cloud_object_client::MockObjectClient;
 use lazy_static::lazy_static;
 use mockall::Sequence;
 use rand::Rng;
@@ -27,7 +26,6 @@ use crate::notebooks::{CloudNotebookModel, NotebookId};
 use crate::server::cloud_objects::update_manager::InitialLoadResponse;
 use crate::server::ids::{ServerId, ServerIdAndType};
 use crate::server::server_api::ServerApiProvider;
-use crate::server::server_api::object::ObjectClient;
 use crate::server::server_api::team::MockTeamClient;
 use crate::settings::{Preference, init_and_register_user_preferences};
 use crate::system::SystemStats;
@@ -67,11 +65,9 @@ lazy_static! {
     );
 }
 
-fn initialize_app(
-    app: &mut App,
-    cached_objects: Vec<Box<dyn CloudObject>>,
-    cloud_object_server_api_mock: Arc<impl ObjectClient>,
-) {
+/// LOCAL FORK: no longer takes a mocked `ObjectClient`. Nothing in this module talks to a
+/// server, so there is no client to inject.
+fn initialize_app(app: &mut App, cached_objects: Vec<Box<dyn CloudObject>>) {
     let team_client_mock = Arc::new(MockTeamClient::new());
 
     // Add the necessary singleton models to the App
@@ -572,10 +568,6 @@ fn test_update_object_server_id_for_folder() {
     })
 }
 
-fn base_mock_cloud_object_server_api() -> MockObjectClient {
-    MockObjectClient::new()
-}
-
 fn check_cloud_folders(app: &mut App, number_of_folders: usize) {
     CloudModel::handle(app).read(app, |model, _| {
         assert_eq!(
@@ -622,8 +614,7 @@ fn check_cloud_notebooks(app: &mut App, number_of_notebooks: usize) {
 fn test_object_editor_timeout() {
     App::test((), |mut app| async move {
         // Setup the app and APIs
-        let cloud_object_server_api_mock = base_mock_cloud_object_server_api();
-        initialize_app(&mut app, Vec::new(), Arc::new(cloud_object_server_api_mock));
+        initialize_app(&mut app, Vec::new());
         let notebook_id: SyncId = SyncId::ServerId(1.into());
         let cloud_notebook = mock_cloud_notebook(notebook_id, "test1".into(), None);
 
@@ -686,12 +677,7 @@ fn test_breadcrumbs() {
     .collect::<Vec<_>>();
 
     App::test((), |mut app| async move {
-        let cloud_object_server_api_mock = base_mock_cloud_object_server_api();
-        initialize_app(
-            &mut app,
-            folders.clone(),
-            Arc::new(cloud_object_server_api_mock),
-        );
+        initialize_app(&mut app, folders.clone());
 
         CloudModel::handle(&app).read(&app, |_, ctx| {
             assert_eq!("Personal".to_string(), folders[0].breadcrumbs(ctx));
@@ -723,11 +709,7 @@ fn assert_sorting_timestamp(id: ServerId, expected_ts: impl Into<ServerTimestamp
 fn test_shared_personal_object() {
     let _guard = FeatureFlag::SharedWithMe.override_enabled(true);
     App::test((), |mut app| async move {
-        initialize_app(
-            &mut app,
-            Vec::new(),
-            Arc::new(base_mock_cloud_object_server_api()),
-        );
+        initialize_app(&mut app, Vec::new());
 
         let other_user = UserUid::new("other_user");
         let shared_notebook_id = SyncId::ServerId(123.into());
@@ -766,11 +748,7 @@ fn test_shared_personal_object() {
 fn test_unshared_personal_object() {
     let _guard = FeatureFlag::SharedWithMe.override_enabled(true);
     App::test((), |mut app| async move {
-        initialize_app(
-            &mut app,
-            Vec::new(),
-            Arc::new(base_mock_cloud_object_server_api()),
-        );
+        initialize_app(&mut app, Vec::new());
 
         let shared_notebook_id = SyncId::ServerId(123.into());
         let shared_notebook = CloudNotebook::new(
@@ -808,11 +786,7 @@ fn test_unshared_personal_object() {
 fn test_shared_team_object() {
     let _guard = FeatureFlag::SharedWithMe.override_enabled(true);
     App::test((), |mut app| async move {
-        initialize_app(
-            &mut app,
-            Vec::new(),
-            Arc::new(base_mock_cloud_object_server_api()),
-        );
+        initialize_app(&mut app, Vec::new());
 
         // The user is not on this team.
         let team_uid = ServerId::from(456);
@@ -852,11 +826,7 @@ fn test_unshared_team_object() {
     let _guard = FeatureFlag::SharedWithMe.override_enabled(true);
     App::test((), |mut app| async move {
         app.update(init_and_register_user_preferences);
-        initialize_app(
-            &mut app,
-            Vec::new(),
-            Arc::new(base_mock_cloud_object_server_api()),
-        );
+        initialize_app(&mut app, Vec::new());
 
         // Use the current user's team.
         let team_uid = TEST_TEAM.uid;
@@ -895,11 +865,7 @@ fn test_shared_object_in_unshared_folder() {
     let _guard = FeatureFlag::SharedWithMe.override_enabled(true);
     App::test((), |mut app| async move {
         app.update(init_and_register_user_preferences);
-        initialize_app(
-            &mut app,
-            Vec::new(),
-            Arc::new(base_mock_cloud_object_server_api()),
-        );
+        initialize_app(&mut app, Vec::new());
 
         let other_user = UserUid::new("other_user");
         let unshared_folder_id = SyncId::ServerId(567.into());

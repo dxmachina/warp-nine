@@ -7,9 +7,6 @@ use warpui::color::ColorU;
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{AppContext, SingletonEntity, WeakViewHandle};
 
-use crate::cloud_object::model::persistence::CloudModel;
-use crate::server::ids::ServerId;
-use crate::server::server_api::object::GuestIdentifier;
 use crate::terminal::TerminalView;
 use crate::terminal::shared_session::join_link;
 use crate::ui_components::avatar::{Avatar, AvatarContent};
@@ -49,7 +46,7 @@ pub enum ShareableObject {
 
 impl ShareableObject {
     /// The canonical link to this object.
-    pub fn link(&self, app: &AppContext) -> Option<String> {
+    pub fn link(&self, _app: &AppContext) -> Option<String> {
         match self {
             ShareableObject::Session { session_id, .. } => Some(join_link(session_id)),
         }
@@ -85,9 +82,6 @@ pub trait SubjectExt {
     fn email<'a>(&'a self, app: &'a AppContext) -> Option<&'a str>;
     /// Checks if this subject refers to the same user as an email address.
     fn matches_email(&self, email: &str, app: &AppContext) -> bool;
-    /// Converts this subject to a [`GuestIdentifier`] for guest removal.
-    /// Returns `Some` for team or user subjects (that have an email), `None` otherwise.
-    fn to_guest_identifier(&self, app: &AppContext) -> Option<GuestIdentifier>;
 }
 
 impl SubjectExt for Subject {
@@ -143,16 +137,6 @@ impl SubjectExt for Subject {
     fn matches_email(&self, email: &str, app: &AppContext) -> bool {
         self.email(app)
             .is_some_and(|subject_email| subject_email == email)
-    }
-
-    fn to_guest_identifier(&self, app: &AppContext) -> Option<GuestIdentifier> {
-        if let Some(team_uid) = self.team_uid() {
-            return Some(GuestIdentifier::TeamUid(team_uid));
-        }
-        if let Some(email) = self.email(app) {
-            return Some(GuestIdentifier::Email(email.to_owned()));
-        }
-        None
     }
 }
 

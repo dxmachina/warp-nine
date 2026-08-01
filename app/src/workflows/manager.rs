@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use warpui::{Entity, EntityId, ModelContext, ModelHandle, SingletonEntity};
+use warpui::{Entity, EntityId, ModelContext, SingletonEntity};
 
 use super::CloudWorkflowModel;
 use super::workflow::Workflow;
@@ -9,9 +9,6 @@ use crate::cloud_object::OpenWarpDriveObjectSettings;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{GenericCloudObject, Owner};
 use crate::pane_group::{PaneContent, WorkflowPane};
-use crate::server::cloud_objects::update_manager::{
-    ObjectOperation, OperationSuccessType, UpdateManager, UpdateManagerEvent,
-};
 use crate::server::ids::{ClientId, SyncId};
 use crate::workflows::WorkflowViewMode;
 use crate::workflows::workflow_view::WorkflowView;
@@ -44,7 +41,7 @@ pub enum WorkflowOpenSource {
 }
 
 impl WorkflowManager {
-    pub fn new(ctx: &mut ModelContext<Self>) -> Self {
+    pub fn new(_ctx: &mut ModelContext<Self>) -> Self {
         // LOCAL FORK: this model no longer listens to the UpdateManager. Its handler
         // existed for one thing: when the server answered a create with the id it had
         // minted, the pane keyed under the object's client id had to be rekeyed under the

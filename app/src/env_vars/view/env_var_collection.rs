@@ -15,7 +15,7 @@ use warpui::presenter::ChildView;
 use warpui::ui_components::components::UiComponent;
 use warpui::{
     AppContext, BlurContext, Element, Entity, FocusContext, ModelAsRef, ModelHandle,
-    SingletonEntity, TypedActionView, View, ViewContext, ViewHandle, WindowId, id,
+    SingletonEntity, TypedActionView, View, ViewContext, ViewHandle, id,
 };
 
 use super::command_dialog::EnvVarCommandDialog;
@@ -39,8 +39,8 @@ use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
 use crate::search::external_secrets::view::ExternalSecretsMenu;
 use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::ids::{ServerId, SyncId};
-use crate::sharing::{ContentEditability, ShareableObject};
+use crate::server::ids::SyncId;
+use crate::sharing::ContentEditability;
 use crate::terminal::model::secret_detection::find_secrets_in_text_with_levels;
 use crate::terminal::model::secrets::SecretLevel;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
@@ -51,8 +51,7 @@ use crate::ui_components::menu_button::{
 };
 use crate::util::bindings::CustomAction;
 use crate::view_components::alert::AlertConfig;
-use crate::view_components::{Alert, DismissibleToast, ToastType};
-use crate::workspace::ToastStack;
+use crate::view_components::{Alert, DismissibleToast};
 use crate::{Appearance, CloudObjectTypeAndId};
 
 // Universal

@@ -1,17 +1,13 @@
-use crate::settings::{
-    AISettings, QuakeModeSettings, apply_account_first_onboarding_settings,
-    apply_onboarding_settings,
-};
+use crate::settings::QuakeModeSettings;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 
 use anyhow::Result;
-use cfg_if::cfg_if;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use onboarding::{AgentOnboardingView, OfferVariant, OnboardingIntention, SelectedSettings};
+use onboarding::{OfferVariant, SelectedSettings};
 use parking_lot::Mutex;
 use pathfinder_geometry::rect::RectF;
 use pathfinder_geometry::vector::{Vector2F, vec2f};
@@ -38,8 +34,6 @@ use warpui::{
 
 use crate::app_state::{AppState, PaneUuid, WindowSnapshot};
 use crate::appearance::Appearance;
-use crate::auth::AuthStateProvider;
-use crate::auth::auth_state::AuthState;
 use crate::autoupdate::{AutoupdateState, AutoupdateStateEvent, RequestType, UpdateReady};
 use crate::changelog_model::ChangelogRequestType;
 use crate::cloud_object::export::ExportManager;
@@ -47,7 +41,6 @@ use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{GenericStringObjectFormat, JsonObjectType, ObjectType};
 use crate::cloud_object::{OpenWarpDriveObjectArgs, OpenWarpDriveObjectSettings};
 use crate::env_vars::manager::EnvVarCollectionSource;
-use crate::experiments::{BlockOnboarding, Experiment};
 use crate::features::FeatureFlag;
 use crate::interval_timer::IntervalTimer;
 use crate::launch_configs::launch_config;
@@ -55,9 +48,7 @@ use crate::linear::LinearIssueWork;
 use crate::notebooks::manager::NotebookSource;
 use crate::pane_group::{NewTerminalOptions, PanesLayout};
 use crate::persistence::ModelEvent;
-use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ServerId, SyncId};
-use crate::server::server_api::auth::UserAuthenticationError;
 use crate::server::server_api::{ServerApi, ServerApiProvider, ServerTime};
 use crate::server::telemetry::LaunchConfigUiLocation;
 use crate::settings_view::{SettingsSection, flags};
@@ -70,15 +61,13 @@ use crate::terminal::view::{TerminalAction, cell_size_and_padding};
 use crate::themes::theme::{AnsiColorIdentifier, Blend, Fill};
 use crate::uri::OpenSettingsArgs;
 use crate::util::bindings::{self, is_binding_pty_compliant};
-use crate::util::traffic_lights::{TrafficLightData, TrafficLightMouseStates, traffic_light_data};
+use crate::util::traffic_lights::{TrafficLightData, TrafficLightMouseStates};
 use crate::view_components::DismissibleToast;
 use crate::window_settings::WindowSettings;
-use crate::workspace::hoa_onboarding::mark_hoa_onboarding_completed;
 use crate::workspace::view::OnboardingTutorial;
 use crate::workspace::{PaneViewLocator, Workspace, WorkspaceAction, WorkspaceRegistry};
 use crate::workspaces::team_tester::TeamTesterStatus;
-use crate::workspaces::update_manager::TeamUpdateManager;
-use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
+use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::FtueAccountClass;
 use crate::{
     ChannelState, GlobalResourceHandles, GlobalResourceHandlesProvider, UpdateQuakeModeEventArg,

@@ -7,11 +7,13 @@ pub mod auth;
 // referenced them.
 // LOCAL FORK: `managed_mcp` went with the MCP client. `ManagedMcpClient` had no users
 // left once `get_managed_mcp_client` was removed.
-pub mod object;
+// LOCAL FORK: `object` held the cloud-object client -- the concrete `ObjectClient`
+// implementation, roughly 1,400 lines of GraphQL calls for creating, updating, fetching,
+// moving, trashing, deleting and sharing Warp Drive objects. Every write is local now, so
+// nothing constructs or calls it.
 pub mod team;
 
 use std::ops::Deref;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -21,7 +23,6 @@ use auth::AuthClient;
 use channel_versions::ChannelVersions;
 use chrono::{DateTime, FixedOffset};
 use instant::Instant;
-use object::ObjectClient;
 use parking_lot::Mutex;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -40,7 +41,6 @@ use warpui::{Entity, ModelContext, SingletonEntity};
 
 use super::experiments::{ServerExperiment, ServerExperiments};
 use crate::auth::auth_state::AuthState;
-use crate::settings::PrivacySettingsSnapshot;
 use crate::{ChannelState, settings_view};
 
 pub const FETCH_CHANNEL_VERSIONS_TIMEOUT: std::time::Duration = Duration::from_secs(60);
@@ -775,10 +775,6 @@ impl ServerApiProvider {
     }
 
     pub fn get_team_client(&self) -> Arc<dyn TeamClient> {
-        self.server_api.clone()
-    }
-
-    pub fn get_cloud_objects_client(&self) -> Arc<dyn ObjectClient> {
         self.server_api.clone()
     }
 

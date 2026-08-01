@@ -4,71 +4,43 @@ use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
+// LOCAL FORK: re-exported for tests, which build objects with server-shaped ids.
 #[cfg(test)]
 pub use cloud_object_client::GetCloudObjectResponse;
 pub use cloud_object_client::InitialLoadResponse;
-use futures::channel::oneshot::{self, Receiver};
-use futures::stream::AbortHandle;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 use warp_errors::report_error;
-use warp_graphql::mcp_gallery_template::MCPGalleryTemplate;
-use warp_graphql::object_permissions::AccessLevel;
 use warp_graphql::scalars::time::ServerTimestamp;
-use warp_util::sync::Condition;
-use warpui::r#async::{FutureId, Timer};
-use warpui::{
-    AppContext, Entity, ModelContext, ModelHandle, RequestState, RetryOption, SingletonEntity,
-    duration_with_jitter,
-};
+use warpui::r#async::FutureId;
+use warpui::{AppContext, Entity, ModelContext, RetryOption, SingletonEntity};
 
-use cloud_object_client::ObjectUpdateMessage;
 // LOCAL FORK: a `#[cfg(not(target_family = "wasm"))]` attribute sat here and was not ours to keep.
 // On `main` it belongs to an import the excision deleted; removing the item without
 // its attribute rebound it to the line below, which `main` leaves ungated. That hid
 // these symbols from every build where the condition is false.
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::CloudObjectTypeAndId;
-use crate::cloud_object::folders::{CloudFolderModel, FolderId};
-use crate::cloud_object::model::actions::{
-    ObjectAction, ObjectActionHistory, ObjectActionType, ObjectActions,
-};
+use crate::cloud_object::folders::CloudFolderModel;
+use crate::cloud_object::model::actions::{ObjectActionType, ObjectActions};
 use crate::cloud_object::model::generic_string_model::{
     GenericStringModel, GenericStringObjectId, Serializer, StringModel,
 };
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent, UpdateSource};
 use crate::cloud_object::model::view::{CloudViewModel, Editor, EditorState};
 use crate::cloud_object::{
-    CloudLinkSharing, CloudModelType, CloudObject, CloudObjectEventEntrypoint, CloudObjectLocation,
-    CloudObjectSyncStatus, CreateCloudObjectResult, CreateObjectRequest, GenericCloudObject,
-    GenericServerObject, GenericStringObjectFormat, JsonObjectType, NumInFlightRequests,
-    ObjectDeleteResult, ObjectIdType, ObjectMetadataUpdateResult, ObjectPermissionsUpdateData,
-    ObjectType, Owner, Revision, RevisionAndLastEditor, ServerCloudObject, ServerEnvVarCollection,
-    ServerMetadata, ServerPermissions, ServerPreference, ServerWorkflowEnum, Space,
-    UpdateCloudObjectResult,
+    CloudModelType, CloudObject, CloudObjectEventEntrypoint, CloudObjectLocation,
+    GenericCloudObject, GenericStringObjectFormat, JsonObjectType, ObjectIdType, Owner, Revision,
 };
 use crate::env_vars::{CloudEnvVarCollectionModel, EnvVarCollection};
-use crate::network::{NetworkStatus, NetworkStatusEvent, NetworkStatusKind};
 use crate::notebooks::{CloudNotebookModel, NotebookId};
 use crate::persistence::ModelEvent;
-use crate::server::ids::{
-    ClientId, HashableId, HashedSqliteId, ObjectUid, ServerId, SyncId, ToServerId,
-    parse_sqlite_id_to_uid,
-};
-use crate::server::retry_strategies::{
-    OUT_OF_BAND_REQUEST_RETRY_STRATEGY, PERIODIC_POLL, PERIODIC_POLL_RETRY_STRATEGY,
-};
-use crate::server::server_api::object::{GuestIdentifier, ObjectClient};
-use crate::settings::cloud_preferences::Preference;
-use crate::sharing::SharingAccessLevel;
+use crate::server::ids::{ClientId, HashableId, ObjectUid, SyncId, ToServerId};
 use crate::workflows::workflow::Workflow;
-use crate::workflows::workflow_enum::{CloudWorkflowEnum, CloudWorkflowEnumModel, WorkflowEnum};
+use crate::workflows::workflow_enum::{CloudWorkflowEnumModel, WorkflowEnum};
 use crate::workflows::{CloudWorkflowModel, WorkflowId};
-use crate::workspaces::team_tester::{TeamTesterStatus, TeamTesterStatusEvent};
-use crate::workspaces::update_manager::TeamUpdateManager;
-use crate::workspaces::user_profiles::{UserProfileWithUID, UserProfiles};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 
 lazy_static! {
@@ -745,10 +717,10 @@ impl UpdateManager {
         model: M,
         owner: Owner,
         client_id: ClientId,
-        entrypoint: CloudObjectEventEntrypoint,
+        _entrypoint: CloudObjectEventEntrypoint,
         force_expand: bool,
         initial_folder_id: Option<SyncId>,
-        initiated_by: InitiatedBy,
+        _initiated_by: InitiatedBy,
         ctx: &mut ModelContext<Self>,
     ) where
         K: HashableId
@@ -800,7 +772,7 @@ impl UpdateManager {
         &mut self,
         model: M,
         object_id: SyncId,
-        revision_ts: Option<Revision>,
+        _revision_ts: Option<Revision>,
         ctx: &mut ModelContext<Self>,
     ) where
         K: HashableId

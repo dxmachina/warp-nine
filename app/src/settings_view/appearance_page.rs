@@ -2441,7 +2441,7 @@ impl AppearanceSettingsPageView {
         new_value: WorkspaceDecorationVisibility,
         ctx: &mut ViewContext<Self>,
     ) {
-        let previous_value = TabSettings::handle(ctx).update(ctx, |tab_settings, ctx| {
+        let _previous_value = TabSettings::handle(ctx).update(ctx, |tab_settings, ctx| {
             let prev_value = *tab_settings.workspace_decoration_visibility.value();
             report_if_error!(
                 tab_settings
@@ -2454,7 +2454,7 @@ impl AppearanceSettingsPageView {
 
     /// Toggle among the supported workspace decoration visibility values.
     fn toggle_workspace_decoration_visiblity(&mut self, ctx: &mut ViewContext<Self>) {
-        let (new_value, previous_value) =
+        let (_new_value, _previous_value) =
             TabSettings::handle(ctx).update(ctx, |tab_settings, ctx| {
                 let previous_value = *tab_settings.workspace_decoration_visibility.value();
                 let new_value = previous_value.toggled();

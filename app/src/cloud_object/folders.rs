@@ -1,20 +1,12 @@
-use std::sync::Arc;
-
-use anyhow::Result;
 use async_trait::async_trait;
 pub use cloud_object_models::{CloudFolder, CloudFolderModel};
 // Re-exported from warp_server_client.
 pub use warp_server_client::ids::FolderId;
 
 use crate::cloud_object::CloudObjectTypeAndId;
-use crate::cloud_object::{
-    CloudModelType, CloudObjectEventEntrypoint, CloudObjectUpsertParams, CreateCloudObjectResult,
-    CreateObjectRequest, GenericServerObject, ObjectType, Revision, Space, UpdateCloudObjectResult,
-};
+use crate::cloud_object::{CloudModelType, CloudObjectUpsertParams, ObjectType, Space};
 use crate::persistence::ModelEvent;
-use crate::server::cloud_objects::update_manager::InitiatedBy;
-use crate::server::ids::{ServerId, SyncId};
-use crate::server::server_api::object::ObjectClient;
+use crate::server::ids::SyncId;
 use cloud_objects::cloud_object::SerializedModel;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
@@ -64,24 +56,6 @@ impl CloudModelType for CloudFolderModel {
 
     fn supports_linking(&self) -> bool {
         true
-    }
-
-    async fn send_create_request(
-        object_client: Arc<dyn ObjectClient>,
-        request: CreateObjectRequest,
-    ) -> Result<CreateCloudObjectResult> {
-        object_client.create_folder(request).await
-    }
-
-    async fn send_update_request(
-        &self,
-        object_client: Arc<dyn ObjectClient>,
-        server_id: ServerId,
-        _revision: Option<Revision>,
-    ) -> Result<UpdateCloudObjectResult<GenericServerObject<FolderId, Self>>> {
-        object_client
-            .update_folder(server_id.into(), self.name.clone().into())
-            .await
     }
 
     fn renders_in_warp_drive(&self) -> bool {

@@ -17,5 +17,3 @@ pub mod server_api;
 // replay. (`warp_core::sync_queue` is a different, unrelated type: a generic streaming task
 // queue that code review uses for file invalidation. It stays.)
 pub mod telemetry;
-
-pub use warp_core::operating_system_info::OperatingSystemInfo;

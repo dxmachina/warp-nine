@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::{
     CloudObjectMetadata, CloudObjectPermissions, CloudObjectStatuses, CloudObjectSyncStatus,
-    ConflictStatus, GenericServerObject, NumInFlightRequests, ObjectType, Owner,
+    ConflictStatus, GenericServerObject, ObjectType, Owner,
 };
 use crate::ids::{ClientId, SyncId};
 

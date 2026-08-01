@@ -108,7 +108,7 @@ pub(super) fn start_confirm(me: &mut GitDialog, ctx: &mut ViewContext<GitDialog>
 
 /// Shared push completion: toast + telemetry + close.
 pub(super) fn finish_push(
-    me: &GitDialog,
+    _me: &GitDialog,
     publish: bool,
     result: anyhow::Result<()>,
     ctx: &mut ViewContext<GitDialog>,

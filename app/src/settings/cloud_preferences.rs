@@ -5,7 +5,7 @@ use settings::{RespectUserSyncSetting, SupportedPlatforms, SyncToCloud};
 use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::cloud_object::model::json_model::JsonModel;
 use crate::cloud_object::{
-    GenericStringObjectFormat, GenericStringObjectUniqueKey, JsonObjectType, Revision, UniquePer,
+    GenericStringObjectFormat, GenericStringObjectUniqueKey, JsonObjectType, UniquePer,
 };
 define_settings_group!(CloudPreferencesSettings, settings: [
    settings_sync_enabled: IsSettingsSyncEnabled {

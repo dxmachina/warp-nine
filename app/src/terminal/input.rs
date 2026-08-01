@@ -125,9 +125,8 @@ use crate::ASSETS;
 // and skill machinery all came out with it. Only the terminal's own input editor is kept.
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::channel::{Channel, ChannelState};
+use crate::cloud_object::CloudObject;
 use crate::cloud_object::model::persistence::CloudModel;
-use crate::cloud_object::model::view::CloudViewModel;
-use crate::cloud_object::{CloudObject, Space};
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;
 use crate::code_review::diff_state::DiffMode;
@@ -157,7 +156,7 @@ use crate::persistence::{database_file_path_for_current_scope, establish_ro_conn
 use crate::prefix::longest_common_prefix;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search::QueryFilter;
-use crate::search::slash_command_menu::static_commands::commands::{self, COMMAND_REGISTRY};
+use crate::search::slash_command_menu::static_commands::commands::COMMAND_REGISTRY;
 use crate::server::ids::SyncId;
 use crate::server::server_api::ServerApi;
 use crate::server::telemetry::{CommandXRayTrigger, PaletteSource};
@@ -4479,7 +4478,7 @@ impl Input {
         match event {
             InputSuggestionsEvent::ConfirmSuggestion {
                 suggestion,
-                match_type,
+                match_type: _,
             } => {
                 if !self.confirm_suggestion(suggestion, ctx) {
                     return;
@@ -4489,7 +4488,7 @@ impl Input {
             }
             InputSuggestionsEvent::ConfirmAndExecuteSuggestion {
                 suggestion,
-                match_type,
+                match_type: _,
             } => {
                 if !self.confirm_and_execute_suggestion(suggestion, ctx) {
                     return;
@@ -5681,12 +5680,12 @@ impl Input {
                 let mut short_circuit_highlighting = false;
                 let mut check_alias_expansion = false;
 
-                let cursor_position = self.editor.read(ctx, |editor, editor_ctx| {
+                let _cursor_position = self.editor.read(ctx, |editor, editor_ctx| {
                     editor.start_byte_index_of_last_selection(editor_ctx)
                 });
 
-                let is_alias_expansion_enabled = self.should_expand_aliases(ctx);
-                let session_context = self.completion_session_context(ctx);
+                let _is_alias_expansion_enabled = self.should_expand_aliases(ctx);
+                let _session_context = self.completion_session_context(ctx);
 
                 self.editor.read(ctx, |editor, editor_ctx| {
                     let last_action = editor.get_last_action(editor_ctx);

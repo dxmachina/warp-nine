@@ -2,7 +2,6 @@ use crate::settings::{
     AISettings, AISettingsChangedEvent, CodeSettings, CodeSettingsChangedEvent, PrivacySettings,
 };
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use anyhow::Result;
 use regex::Regex;
@@ -15,6 +14,8 @@ use warpui::{
     WindowId,
 };
 
+use std::sync::Arc;
+
 use super::team::{DiscoverableTeam, MembershipRole, Team};
 #[cfg(test)]
 use super::workspace::WorkspaceMemberUsageInfo;
@@ -25,7 +26,7 @@ use super::workspace::{
 use crate::auth::{AuthStateProvider, UserUid};
 use crate::channel::ChannelState;
 use crate::cloud_object::model::persistence::CloudModel;
-use crate::cloud_object::{CloudObjectEventEntrypoint, ObjectType, Owner, Space};
+use crate::cloud_object::{Owner, Space};
 use crate::pricing::PricingInfoModel;
 use crate::server::experiments::{ServerExperiment, ServerExperiments, ServerExperimentsEvent};
 use crate::server::ids::ServerId;
@@ -33,7 +34,7 @@ use crate::server::ids::ServerId;
 #[cfg(test)]
 use crate::workspaces::workspace::{AIAutonomyPolicy, WorkspaceMember, WorkspaceSettings};
 use crate::workspaces::workspace::{
-    AiAutonomySettings, AiOverages, SandboxedAgentSettings, UsageBasedPricingSettings,
+    AiAutonomySettings, SandboxedAgentSettings, UsageBasedPricingSettings,
 };
 
 const STRIPE_SUBSCRIPTION_INTERVAL_PAGE_PREFIX: &str = "/upgrade";

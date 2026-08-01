@@ -418,11 +418,11 @@ impl<T: EventLoopSender> RemoteServerController<T> {
         // subsequently initializes, so it picks `RemoteServerCommandExecutor`.
         self.flush_stashed_bootstrap(session_info, ctx);
 
-        let duration_ms = Instant::now()
+        let _duration_ms = Instant::now()
             .duration_since(setup_start)
             .as_millis()
             .min(u64::MAX as u128) as u64;
-        let (remote_os, remote_arch) = self
+        let (_remote_os, _remote_arch) = self
             .remote_platform
             .as_ref()
             .map(|p| {
@@ -432,7 +432,7 @@ impl<T: EventLoopSender> RemoteServerController<T> {
                 )
             })
             .unwrap_or((None, None));
-        let remote_libc = self
+        let _remote_libc = self
             .preinstall_check
             .as_ref()
             .map(|check| describe_libc(&check.libc));
@@ -618,11 +618,11 @@ fn describe_libc(libc: &RemoteLibc) -> String {
 
 fn send_unsupported_telemetry<T: EventLoopSender>(
     remote_platform: Option<&RemotePlatform>,
-    unsupported_reason: &UnsupportedReason,
+    _unsupported_reason: &UnsupportedReason,
     detected_libc: Option<&RemoteLibc>,
-    ctx: &mut ModelContext<RemoteServerController<T>>,
+    _ctx: &mut ModelContext<RemoteServerController<T>>,
 ) {
-    let (remote_os, remote_arch) = remote_platform
+    let (_remote_os, _remote_arch) = remote_platform
         .map(|p| {
             (
                 Some(p.os.as_str().to_owned()),
@@ -630,7 +630,7 @@ fn send_unsupported_telemetry<T: EventLoopSender>(
             )
         })
         .unwrap_or((None, None));
-    let detected_libc = detected_libc
+    let _detected_libc = detected_libc
         .map(describe_libc)
         .unwrap_or_else(|| "unknown".to_string());
 }

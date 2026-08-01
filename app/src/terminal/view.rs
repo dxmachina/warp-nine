@@ -186,7 +186,6 @@ use super::ssh::util::{InteractiveSshCommand, SshWarpifyCommand, parse_interacti
 use super::warpify::WarpificationSource;
 use super::warpify::success_block::{WarpifySuccessBlock, WarpifySuccessBlockEvent};
 use super::warpify::trigger_state::{SshBlockState, WarpifyState};
-use crate::antivirus::AntivirusInfo;
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::auth::auth_state::AuthState;
 use crate::auth::{AuthStateProvider, UserUid};
@@ -224,9 +223,7 @@ use crate::pane_group::{
 use crate::persisted_workspace::PersistedWorkspace;
 use crate::persistence::{self, FinishedCommandMetadata};
 use crate::projects::ProjectManagementModel;
-use crate::remote_server::manager::{
-    RemoteServerInitPhase, RemoteServerManager, RemoteServerManagerEvent,
-};
+use crate::remote_server::manager::{RemoteServerManager, RemoteServerManagerEvent};
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::{ObjectUid, SyncId};
 use crate::server::server_api::ServerApi;
@@ -398,7 +395,6 @@ use crate::workflows::workflow::Workflow;
 use crate::workspace::sync_inputs::SyncedInputState;
 use crate::workspace::{CommandSearchOptions, OneTimeModalModel, ToastStack, WorkspaceAction};
 use crate::workspaces::user_workspaces::{UserWorkspaces, UserWorkspacesEvent};
-use crate::workspaces::workspace::CustomerType;
 use crate::{ActiveSession as WindowActiveSession, safe_warn};
 
 lazy_static! {
@@ -3268,7 +3264,7 @@ impl TerminalView {
                                 session_id: *session_id,
                             },
                         );
-                        let (remote_os, remote_arch) = RemoteServerManager::handle(ctx)
+                        let (_remote_os, _remote_arch) = RemoteServerManager::handle(ctx)
                             .as_ref(ctx)
                             .platform_for_session(*session_id)
                             .map(|p| {
@@ -3281,10 +3277,10 @@ impl TerminalView {
                     }
                     RemoteServerManagerEvent::SessionConnectionFailed {
                         session_id,
-                        phase,
+                        phase: _,
                         error,
-                        exit_status,
-                        proxy_stderr,
+                        exit_status: _,
+                        proxy_stderr: _,
                         is_cancelled,
                     } => {
                         me.model.lock().event_proxy.send_terminal_event(
@@ -3295,7 +3291,7 @@ impl TerminalView {
                         );
 
                         if !is_cancelled {
-                            let (remote_os, remote_arch) = RemoteServerManager::handle(ctx)
+                            let (_remote_os, _remote_arch) = RemoteServerManager::handle(ctx)
                                 .as_ref(ctx)
                                 .platform_for_session(*session_id)
                                 .map(|p| {
@@ -3321,11 +3317,11 @@ impl TerminalView {
                     }
                     RemoteServerManagerEvent::SessionDisconnected {
                         session_id,
-                        exit_status,
+                        exit_status: _,
                         was_reconnect_attempt,
                         ..
                     } => {
-                        let (remote_os, remote_arch) = RemoteServerManager::handle(ctx)
+                        let (_remote_os, _remote_arch) = RemoteServerManager::handle(ctx)
                             .as_ref(ctx)
                             .platform_for_session(*session_id)
                             .map(|p| {
@@ -3349,9 +3345,9 @@ impl TerminalView {
                     RemoteServerManagerEvent::BinaryInstallComplete {
                         session_id,
                         result,
-                        install_source,
+                        install_source: _,
                     } => {
-                        let (remote_os, remote_arch) = RemoteServerManager::handle(ctx)
+                        let (_remote_os, _remote_arch) = RemoteServerManager::handle(ctx)
                             .as_ref(ctx)
                             .platform_for_session(*session_id)
                             .map(|p| {
@@ -3378,7 +3374,7 @@ impl TerminalView {
                         remote_platform,
                         ..
                     } => {
-                        let (remote_os, remote_arch) = remote_platform
+                        let (_remote_os, _remote_arch) = remote_platform
                             .as_ref()
                             .map(|p| {
                                 (
@@ -3400,10 +3396,10 @@ impl TerminalView {
                     }
                     RemoteServerManagerEvent::ClientRequestFailed {
                         session_id,
-                        operation,
-                        error_kind,
+                        operation: _,
+                        error_kind: _,
                     } => {
-                        let (remote_os, remote_arch) = RemoteServerManager::handle(ctx)
+                        let (_remote_os, _remote_arch) = RemoteServerManager::handle(ctx)
                             .as_ref(ctx)
                             .platform_for_session(*session_id)
                             .map(|p| {
@@ -3415,7 +3411,7 @@ impl TerminalView {
                             .unwrap_or((None, None));
                     }
                     RemoteServerManagerEvent::ServerMessageDecodingError { session_id } => {
-                        let (remote_os, remote_arch) = RemoteServerManager::handle(ctx)
+                        let (_remote_os, _remote_arch) = RemoteServerManager::handle(ctx)
                             .as_ref(ctx)
                             .platform_for_session(*session_id)
                             .map(|p| {
@@ -3446,10 +3442,10 @@ impl TerminalView {
                     }
                     RemoteServerManagerEvent::SessionReconnected {
                         session_id,
-                        attempt,
+                        attempt: _,
                         ..
                     } => {
-                        let (remote_os, remote_arch) = RemoteServerManager::handle(ctx)
+                        let (_remote_os, _remote_arch) = RemoteServerManager::handle(ctx)
                             .as_ref(ctx)
                             .platform_for_session(*session_id)
                             .map(|p| {
@@ -5168,7 +5164,7 @@ impl TerminalView {
     fn trigger_subshell_bootstrap(
         &mut self,
         shell_type: Option<ShellType>,
-        triggered_by_rc_file_snippet: bool,
+        _triggered_by_rc_file_snippet: bool,
         ctx: &mut ViewContext<Self>,
     ) {
         self.dismiss_warpify_banner(&RememberForWarpification::DoNotRememberSubshellCommand, ctx);
@@ -5974,7 +5970,7 @@ impl TerminalView {
         }
     }
 
-    fn on_user_block_completed(&mut self, _block_id: &BlockId, ctx: &mut ViewContext<Self>) {
+    fn on_user_block_completed(&mut self, _block_id: &BlockId, _ctx: &mut ViewContext<Self>) {
         self.model.lock().end_notify_on_ssh_login_complete();
     }
 
@@ -6658,7 +6654,7 @@ impl TerminalView {
             ModelEvent::AfterBlockCompleted(AfterBlockCompletedEvent {
                 command_finished_to_precmd_delay,
                 block_type,
-                num_secrets_obfuscated,
+                num_secrets_obfuscated: _,
                 cloud_workflow_id,
                 cloud_env_var_collection_id,
             }) => {
@@ -6683,8 +6679,8 @@ impl TerminalView {
                 }
 
                 if let Some(delay) = command_finished_to_precmd_delay {
-                    let delay_ms = delay.as_millis() as u64;
-                    let honor_ps1_enabled = match &block_type {
+                    let _delay_ms = delay.as_millis() as u64;
+                    let _honor_ps1_enabled = match &block_type {
                         // If we have access to the value of honor_ps1 that the
                         // block was holding, use that.
                         BlockType::User(UserBlockCompleted {
@@ -6696,10 +6692,10 @@ impl TerminalView {
                         // Otherwise, grab the current value.
                         _ => *SessionSettings::as_ref(ctx).honor_ps1,
                     };
-                    if let BlockType::User(user_block_completed) = block_type {
-                        let is_universal_developer_input_enabled =
+                    if let BlockType::User(_user_block_completed) = block_type {
+                        let _is_universal_developer_input_enabled =
                             InputSettings::as_ref(ctx).is_universal_developer_input_enabled(ctx);
-                        let is_in_agent_view = false;
+                        let _is_in_agent_view = false;
 
                         // On dogfood only, we're interested in the block commands, durations,
                         // and exit codes to trial Warp Analytics.
@@ -8987,7 +8983,7 @@ impl TerminalView {
     /// Will send telemetry if the current session is not bootstrapped and will show a banner to
     /// the user if this is the first bootstrap in the session.
     fn on_bootstrap_failed_timer_complete(&mut self, _: (), ctx: &mut ViewContext<Self>) {
-        let (is_ssh, shell, is_subshell, was_triggered_by_rc_file, is_wsl, is_msys2) = {
+        let (is_ssh, shell, _is_subshell, _was_triggered_by_rc_file, _is_wsl, _is_msys2) = {
             let model = self.model.lock();
 
             // If we did actually bootstrap, or if the session is no longer usable
@@ -9030,7 +9026,7 @@ impl TerminalView {
         // the event if the user quits the app before the event queue is flushed and then
         // never reopens the app.
 
-        let bootstrap_block_contents = {
+        let _bootstrap_block_contents = {
             let model = self.model.lock();
             model.block_list().bootstrap_block_contents()
         };
@@ -9583,10 +9579,10 @@ impl TerminalView {
                 };
 
                 let is_single_selection = self.selected_blocks.is_singleton();
-                let is_active_block_selected = self
+                let _is_active_block_selected = self
                     .selected_blocks
                     .is_selected(model.block_list().active_block_index());
-                let is_active_block_running = model
+                let _is_active_block_running = model
                     .block_list()
                     .active_block()
                     .is_active_and_long_running();
@@ -10947,7 +10943,7 @@ impl TerminalView {
     fn toggle_rich_content_secret(
         &mut self,
         _tooltip_info: RichContentSecretTooltipInfo,
-        show_secret: bool,
+        _show_secret: bool,
         ctx: &mut ViewContext<Self>,
     ) {
         self.dismiss_tooltips(ctx);
@@ -11397,7 +11393,7 @@ impl TerminalView {
     }
 
     fn toggle_input_hint_text(&mut self, ctx: &mut ViewContext<Self>) {
-        let new_val = InputSettings::handle(ctx).update(ctx, |input_settings, ctx| {
+        let _new_val = InputSettings::handle(ctx).update(ctx, |input_settings, ctx| {
             report_if_error!(input_settings.show_hint_text.toggle_and_save_value(ctx));
             *input_settings.show_hint_text
         });
@@ -11406,7 +11402,7 @@ impl TerminalView {
     fn open_workflow_modal_with_command(
         &mut self,
         command: String,
-        source: SaveAsWorkflowModalSource,
+        _source: SaveAsWorkflowModalSource,
         ctx: &mut ViewContext<Self>,
     ) {
         ctx.emit(Event::OpenWorkflowModalWithCommand(command));
@@ -12377,7 +12373,7 @@ impl TerminalView {
     }
 
     fn bookmark_block(&mut self, index: &BlockIndex, ctx: &mut ViewContext<Self>) {
-        let enable_bookmark = match self.bookmarked_blocks.entry(*index) {
+        let _enable_bookmark = match self.bookmarked_blocks.entry(*index) {
             Entry::Occupied(occupied) => {
                 occupied.remove();
                 false
@@ -15098,7 +15094,7 @@ impl TerminalView {
             Troubleshoot => {
                 ctx.open_url(NOTIFICATIONS_TROUBLESHOOT_URL);
             }
-            TurnOn(trigger) => {
+            TurnOn(_trigger) => {
                 let current_settings = SessionSettings::as_ref(ctx).notifications.value().clone();
                 let new_settings = NotificationsSettings {
                     mode: NotificationsMode::Enabled,
@@ -15180,7 +15176,7 @@ impl TerminalView {
     /// inactive query, toggling on a filter will simply open the filter editor.
     fn toggle_block_filter_on_selected_or_last_block(
         &mut self,
-        source: ToggleBlockFilterSource,
+        _source: ToggleBlockFilterSource,
         ctx: &mut ViewContext<Self>,
     ) {
         let model = self.model.lock();
@@ -15743,7 +15739,7 @@ impl TerminalView {
     }
 
     /// Shows the warpify footer for a detected subshell command.
-    fn show_warpify_footer(&mut self, ctx: &mut ViewContext<Self>) {
+    fn show_warpify_footer(&mut self, _ctx: &mut ViewContext<Self>) {
         let model = self.model.lock();
 
         // Shared session viewers can't initiate warpification currently.

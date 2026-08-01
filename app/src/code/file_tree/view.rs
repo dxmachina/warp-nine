@@ -2472,7 +2472,7 @@ impl FileTreeView {
         let Some(root_dir) = self.root_directories.get(&id.root) else {
             return;
         };
-        let Some(item) = root_dir.items.get(id.index) else {
+        let Some(_item) = root_dir.items.get(id.index) else {
             return;
         };
 

@@ -288,7 +288,7 @@ impl RemoteCodebaseIndexModel {
             RemoteServerManagerEvent::CodebaseIndexStatusUpdated {
                 remote_path,
                 status,
-                mutation_kind,
+                mutation_kind: _,
                 session_id: _,
             } => {
                 if !should_use_codebase_indexing(ctx) {

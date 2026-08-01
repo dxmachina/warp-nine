@@ -1,6 +1,5 @@
 use crate::object::ObjectMetadata;
 use crate::object_permissions::ObjectPermissions;
-use crate::queries::get_conversation_usage::{TokenUsage, ToolUsageMetadata, convert_token_usage};
 use crate::scalars::Time;
 use crate::schema;
 use crate::user::PublicUserProfile;
@@ -149,7 +148,9 @@ pub struct AIConversation {
     pub harness: AgentHarness,
     pub title: String,
     pub working_directory: Option<String>,
-    pub usage: ConversationUsage,
+    // LOCAL FORK: a `usage: ConversationUsage` field sat here. Nothing reads it -- the only
+    // consumer was the agent's context-window and credit panel -- and selecting it in the
+    // query is what pulled the whole `ConversationUsage` fragment in.
     pub metadata: ObjectMetadata,
     pub creator: Option<PublicUserProfile>,
     pub permissions: ObjectPermissions,
@@ -157,40 +158,10 @@ pub struct AIConversation {
     pub artifacts: Option<Vec<AIConversationArtifact>>,
 }
 
-#[derive(cynic::QueryFragment, Debug, Clone)]
-pub struct ConversationUsage {
-    pub conversation_id: String,
-    pub last_updated: Time,
-    pub title: String,
-    pub usage_metadata: ConversationUsageMetadata,
-}
-
-#[derive(cynic::QueryFragment, Debug, Clone)]
-pub struct ConversationUsageMetadata {
-    pub context_window_usage: f64,
-    pub context_window_segments: Vec<ContextWindowSegment>,
-    pub credits_spent: f64,
-    pub platform_credits_spent: f64,
-    pub summarized: bool,
-    pub warp_token_usage: Vec<TokenUsage>,
-    pub byok_token_usage: Vec<TokenUsage>,
-    pub tool_usage_metadata: ToolUsageMetadata,
-}
-
-impl From<&ConversationUsageMetadata> for persistence::model::ConversationUsageMetadata {
-    fn from(gql: &ConversationUsageMetadata) -> Self {
-        Self {
-            was_summarized: gql.summarized,
-            context_window_usage: gql.context_window_usage as f32,
-            credits_spent: gql.credits_spent as f32,
-            platform_credits_spent: gql.platform_credits_spent as f32,
-            credits_spent_for_last_block: None,
-            token_usage: convert_token_usage(&gql.warp_token_usage, &gql.byok_token_usage),
-            tool_usage_metadata: (&gql.tool_usage_metadata).into(),
-            context_window_segments: gql.context_window_segments.iter().map(Into::into).collect(),
-        }
-    }
-}
+// LOCAL FORK: `ConversationUsage`, `ConversationUsageMetadata` and the conversion into
+// `persistence::model::ConversationUsageMetadata` stood here. They were the response shape
+// of the `get_conversation_usage` query, which fed the agent's context-window and credit
+// usage panel and went with the agent.
 
 #[derive(cynic::Enum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContextWindowSegmentType {
@@ -232,6 +203,5 @@ impl From<&ContextWindowSegment> for persistence::model::ContextWindowSegment {
     }
 }
 
-#[cfg(test)]
-#[path = "ai_tests.rs"]
-mod tests;
+// LOCAL FORK: the test module went with `ConversationUsageMetadata`; both of its tests
+// exercised that conversion.

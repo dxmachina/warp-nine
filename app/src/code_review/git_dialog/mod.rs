@@ -29,9 +29,7 @@ use warpui::{
 
 use crate::code::buffer_location::LocalOrRemotePath;
 use crate::code::editor::{add_color, remove_color};
-use crate::code_review::diff_state::{
-    CommitChainMode, DiffStateModel, DiffStateModelEvent, GitOpResult,
-};
+use crate::code_review::diff_state::{DiffStateModel, DiffStateModelEvent, GitOpResult};
 use crate::ui_components::dialog::{Dialog, dialog_styles};
 use crate::ui_components::icons::Icon;
 use crate::util::git::{Commit, FileChangeEntry};

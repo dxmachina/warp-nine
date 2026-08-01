@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use cloud_object_client::MockObjectClient;
 use warp_core::ui::appearance::Appearance;
 use warpui::elements::Empty;
 use warpui::platform::WindowStyle;

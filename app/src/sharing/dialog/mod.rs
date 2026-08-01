@@ -34,15 +34,11 @@ use super::{
     SubjectExt, TeamKind, UserKind, style,
 };
 use crate::auth::AuthStateProvider;
-use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
-use crate::cloud_object::model::view::CloudViewModel;
-use crate::cloud_object::{CloudObject, Owner};
+use crate::cloud_object::CloudObject;
 use crate::editor::PropagateAndNoOpNavigationKeys;
 use crate::menu::{self, Menu, MenuItem, MenuItemFields};
 use crate::server::ids::ServerId;
-use crate::server::telemetry::SharingDialogSource;
 use crate::terminal::TerminalView;
-use crate::terminal::shared_session::SharedSessionActionSource;
 use crate::terminal::shared_session::permissions_manager::{
     SessionPermissionsEvent, SessionPermissionsManager,
 };
@@ -349,7 +345,7 @@ impl SharingDialog {
     }
 
     /// The name of the targeted object.
-    fn targeted_object_name(&self, app: &AppContext) -> String {
+    fn targeted_object_name(&self, _app: &AppContext) -> String {
         self.target
             .as_ref()
             .and_then(|target| match target {
@@ -375,7 +371,7 @@ impl SharingDialog {
     /// * Users who can edit access have the full sharing dialog
     /// * Users who can edit object contents can see who the object is shared with
     /// * Users that are view-only do not need to see permissions
-    pub fn editability(&self, app: &AppContext) -> ContentEditability {
+    pub fn editability(&self, _app: &AppContext) -> ContentEditability {
         match self.target.as_ref() {
             // Always treat session contents as "editable," so that the sharing dialog is shown.
             Some(ShareableObject::Session { .. }) => ContentEditability::Editable,

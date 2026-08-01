@@ -18,9 +18,8 @@ use warp_util::standardized_path::StandardizedPath;
 use warpui::{ModelContext, SingletonEntity};
 
 use super::{
-    BackendOrigin, CommitChainMode, DiffMetadata, DiffMode, DiffOperation, DiffState,
-    DiffStateError, DiffStateModelEvent, DiffStats, FileDiffAndContent, GitDiffData,
-    GitDiffWithBaseContent,
+    CommitChainMode, DiffMetadata, DiffMode, DiffState, DiffStateError, DiffStateModelEvent,
+    DiffStats, FileDiffAndContent, GitDiffData, GitDiffWithBaseContent,
 };
 use crate::remote_server::diff_state_proto::{try_decode_file_delta, try_decode_snapshot};
 use crate::remote_server::proto;
@@ -402,7 +401,7 @@ impl RemoteDiffStateModel {
                 });
             }
             DiffState::Error(msg) => {
-                let load_duration = self
+                let _load_duration = self
                     .tracked_diff_load_start_time
                     .take()
                     .map(|start| start.elapsed());
@@ -416,7 +415,7 @@ impl RemoteDiffStateModel {
             }
             DiffState::Loaded => {
                 let Some(base_content) = diffs else {
-                    let load_duration = self
+                    let _load_duration = self
                         .tracked_diff_load_start_time
                         .take()
                         .map(|start| start.elapsed());

@@ -1,4 +1,7 @@
-pub mod get_warp_drive_updates;
+// LOCAL FORK: `get_warp_drive_updates` was the real-time subscription that told this
+// client about changes other clients made to shared drive objects. Its only consumer was
+// `object_update_message_from_gql`, which fed `UpdateManager::received_message_from_server`
+// -- both gone with the cloud-object client.
 
 use std::collections::HashMap;
 

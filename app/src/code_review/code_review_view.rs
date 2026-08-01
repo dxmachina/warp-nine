@@ -2409,7 +2409,7 @@ impl CodeReviewView {
     fn invalidate_all(
         &mut self,
         diff_data: Option<&GitDiffWithBaseContent>,
-        load_duration: Option<Duration>,
+        _load_duration: Option<Duration>,
         ctx: &mut ViewContext<Self>,
     ) {
         if self.active_repo.is_none() {
@@ -2479,8 +2479,8 @@ impl CodeReviewView {
         self.viewported_list_state = Self::create_list_state(ctx);
 
         let file_states_vec = self.build_view_state_for_file_diffs(&diff_data.files, ctx);
-        let is_local = self.repo_is_local();
-        let diff_mode = self.diff_state_model.as_ref(ctx).diff_mode(ctx);
+        let _is_local = self.repo_is_local();
+        let _diff_mode = self.diff_state_model.as_ref(ctx).diff_mode(ctx);
 
         if let Some(repo) = self.active_repo.as_mut() {
             repo.state = CodeReviewViewState::Loaded(LoadedState {

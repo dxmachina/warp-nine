@@ -5,7 +5,7 @@ pub use cloud_object_models::{
 use crate::cloud_object::model::generic_string_model::StringModel;
 use crate::cloud_object::model::json_model::JsonModel;
 use crate::cloud_object::{
-    GenericStringObjectFormat, GenericStringObjectUniqueKey, JsonObjectType, Revision,
+    GenericStringObjectFormat, GenericStringObjectUniqueKey, JsonObjectType,
 };
 
 impl StringModel for WorkflowEnum {

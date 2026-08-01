@@ -30,10 +30,9 @@ use warpui::ui_components::button::{Button, ButtonVariant, TextAndIcon, TextAndI
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::{
     AppContext, Element, Entity, FocusContext, ModelHandle, SingletonEntity, TypedActionView, View,
-    ViewContext, ViewHandle, WindowId,
+    ViewContext, ViewHandle,
 };
 
-use super::aliases::WorkflowAliases;
 use super::command_parser::WorkflowCommandDisplayData;
 use super::{CloudWorkflowModel, WorkflowSource, WorkflowType, WorkflowViewMode};
 use crate::FeatureFlag;
@@ -56,11 +55,11 @@ use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
 use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::ids::{ClientId, ServerId, SyncId};
+use crate::server::ids::{ClientId, SyncId};
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
 };
-use crate::sharing::{ContentEditability, ShareableObject, SharingAccessLevel};
+use crate::sharing::{ContentEditability, SharingAccessLevel};
 use crate::terminal::model::secret_detection::find_secrets_in_text;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
 use crate::ui_components::buttons::{accent_icon_button, icon_button};
@@ -69,7 +68,7 @@ use crate::ui_components::icons::Icon;
 #[cfg(target_family = "wasm")]
 use crate::uri::web_intent_parser::open_url_on_desktop;
 use crate::util::bindings::CustomAction;
-use crate::view_components::{DismissibleToast, ToastType};
+use crate::view_components::DismissibleToast;
 use crate::workflows::CloudWorkflow;
 use crate::workflows::arguments_ui::arguments::ArgumentsState;
 use crate::workflows::arguments_ui::enum_creation_dialog::{
@@ -80,7 +79,6 @@ use crate::workflows::arguments_ui::workflow_arg_selector::{
 };
 use crate::workflows::arguments_ui::workflow_arg_type_helpers::{self, ArgumentEditorRowIndex};
 use crate::workflows::workflow::{Argument, Workflow};
-use crate::workspace::ToastStack;
 
 mod alias_argument_selector;
 mod alias_bar;

@@ -4,13 +4,12 @@ use std::future::Future;
 use settings::Setting as _;
 use warp_core::features::FeatureFlag;
 use warp_util::sync::Condition;
-use warpui::{AppContext, Entity, ModelContext, SingletonEntity, WindowId};
+use warpui::{Entity, ModelContext, SingletonEntity, WindowId};
 
 use super::hoa_onboarding;
 use super::view::feature_intro_modal::{FEATURE_INTROS, FeatureIntroId};
 use crate::channel::{Channel, ChannelState};
 use crate::terminal::general_settings::GeneralSettings;
-use crate::workspaces::workspace::CustomerType;
 
 /// A generic model for managing one-time modals that should be shown to users only once.
 ///
@@ -56,7 +55,7 @@ impl OneTimeModalModel {
         // Subscribe to UserWorkspaces to detect when sunsetted_to_build_ts changes
         ctx.subscribe_to_model(
             &crate::workspaces::user_workspaces::UserWorkspaces::handle(ctx),
-            |me, _, event, ctx| {
+            |me, _, event, _ctx| {
                 use crate::workspaces::user_workspaces::UserWorkspacesEvent;
                 match event {
                     UserWorkspacesEvent::SunsettedToBuildDataUpdated => {

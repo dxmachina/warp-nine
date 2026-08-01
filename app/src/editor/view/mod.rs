@@ -56,8 +56,8 @@ use warpui::actions::StandardAction;
 use warpui::r#async::{SpawnedFutureHandle, Timer};
 use warpui::clipboard::ClipboardContent;
 use warpui::elements::{
-    ChildView, Container, CornerRadius, CrossAxisAlignment, DEFAULT_UI_LINE_HEIGHT_RATIO, Flex,
-    Hoverable, MainAxisSize, MouseStateHandle, ParentElement, Radius, Shrinkable,
+    Container, CornerRadius, CrossAxisAlignment, DEFAULT_UI_LINE_HEIGHT_RATIO, Flex, Hoverable,
+    MainAxisSize, MouseStateHandle, ParentElement, Radius, Shrinkable,
 };
 use warpui::fonts::{Cache as FontCache, FamilyId, Properties, Weight};
 use warpui::keymap::{EditableBinding, FixedBinding, Keystroke, PerPlatformKeystroke};
@@ -7825,7 +7825,7 @@ impl EditorView {
         }
         let input_settings = InputSettings::as_ref(ctx);
         let is_universal_input_enabled = input_settings.is_universal_developer_input_enabled(ctx);
-        let is_any_ai_enabled = AISettings::as_ref(ctx).is_any_ai_enabled(ctx);
+        let _is_any_ai_enabled = AISettings::as_ref(ctx).is_any_ai_enabled(ctx);
         let should_show_image = !FeatureFlag::AgentView.is_enabled()
             && self.image_context_options.should_show_button()
             && !is_universal_input_enabled;

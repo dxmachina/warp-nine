@@ -968,8 +968,8 @@ impl GlobalSearchView {
                 search_id,
                 total_match_count,
                 capped,
-                local_source_failed,
-                remote_source_failures,
+                local_source_failed: _,
+                remote_source_failures: _,
             } => {
                 if Some(*search_id) != self.current_search_id {
                     return;

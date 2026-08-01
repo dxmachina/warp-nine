@@ -1,7 +1,5 @@
 use std::fmt::Debug;
-use std::sync::Arc;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use cloud_objects::cloud_object::CloudObjectUpsertParams;
 // Re-exported from cloud_objects.
@@ -10,14 +8,11 @@ pub use warp_server_client::ids::GenericStringObjectId;
 
 use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::{
-    CloudModelType, CloudObject, CloudObjectEventEntrypoint, CreateCloudObjectResult,
-    CreateObjectRequest, GenericCloudObject, GenericServerObject, GenericStringObjectFormat,
-    GenericStringObjectUniqueKey, ObjectType, Revision, UpdateCloudObjectResult,
+    CloudModelType, CloudObject, GenericCloudObject, GenericStringObjectFormat,
+    GenericStringObjectUniqueKey, ObjectType,
 };
 use crate::persistence::ModelEvent;
-use crate::server::cloud_objects::update_manager::InitiatedBy;
-use crate::server::ids::{ServerId, SyncId};
-use crate::server::server_api::object::ObjectClient;
+use crate::server::ids::SyncId;
 use cloud_objects::cloud_object::SerializedModel;
 
 /// A trait that generic string-based objects should implement.
@@ -209,56 +204,6 @@ where
 
     fn serialized(&self) -> SerializedModel {
         S::serialize(&self.string_model)
-    }
-
-    async fn send_create_request(
-        object_client: Arc<dyn ObjectClient>,
-        request: CreateObjectRequest,
-    ) -> Result<CreateCloudObjectResult> {
-        let model_as_str = request
-            .serialized_model
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Missing serialized model"))?
-            .model_as_str();
-        let model = S::deserialize_owned(model_as_str)?;
-        object_client
-            .create_generic_string_object(M::model_format(), model.uniqueness_key(), request)
-            .await
-    }
-
-    async fn send_update_request(
-        &self,
-        object_client: Arc<dyn ObjectClient>,
-        server_id: ServerId,
-        revision: Option<Revision>,
-    ) -> Result<UpdateCloudObjectResult<GenericServerObject<GenericStringObjectId, Self>>> {
-        let revision =
-            if M::should_enforce_revisions() {
-                Some(revision.ok_or_else(|| {
-                    anyhow::anyhow!("Missing revision on update of generic object")
-                })?)
-            } else {
-                None
-            };
-        let res = object_client
-            .update_generic_string_object(server_id.into(), self.serialized(), revision)
-            .await;
-        res.and_then(|update_result| match update_result {
-            UpdateCloudObjectResult::Success {
-                revision_and_editor,
-            } => Ok(UpdateCloudObjectResult::Success {
-                revision_and_editor,
-            }),
-            UpdateCloudObjectResult::Rejected { object } => {
-                // Downcast to the concrete type to handle an update rejection (should be rare)
-                let concrete_object: Option<&GenericServerObject<GenericStringObjectId, Self>> =
-                    (&object).into();
-                let object = concrete_object
-                    .cloned()
-                    .ok_or_else(|| anyhow::anyhow!("Failed to convert object to concrete type"))?;
-                Ok(UpdateCloudObjectResult::Rejected { object })
-            }
-        })
     }
 
     fn renders_in_warp_drive(&self) -> bool {

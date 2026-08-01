@@ -707,7 +707,7 @@ impl InputSuggestions {
             .finish();
         }
         let handle = self.handle.clone();
-        let em_width = self.em_width(ctx.font_cache(), appearance);
+        let _em_width = self.em_width(ctx.font_cache(), appearance);
 
         let list = UniformList::new(
             self.list_state.clone(),

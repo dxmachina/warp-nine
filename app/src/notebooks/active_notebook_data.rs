@@ -1,6 +1,6 @@
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity};
 
-use super::{CloudNotebookModel, NotebookId};
+use super::CloudNotebookModel;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::cloud_object::model::view::{CloudViewModel, Editor, EditorState};
 use crate::cloud_object::{CloudObject, Owner, Space};

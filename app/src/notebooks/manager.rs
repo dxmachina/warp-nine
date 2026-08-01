@@ -16,9 +16,6 @@ use crate::cloud_object::OpenWarpDriveObjectSettings;
 use crate::cloud_object::Owner;
 use crate::cloud_object::model::persistence::{CloudModel, CloudModelEvent};
 use crate::pane_group::{NotebookPane, PaneContent};
-use crate::server::cloud_objects::update_manager::{
-    ObjectOperation, OperationSuccessType, UpdateManager, UpdateManagerEvent,
-};
 use crate::server::ids::SyncId;
 use crate::workspace::PaneViewLocator;
 use crate::{safe_debug, safe_warn};

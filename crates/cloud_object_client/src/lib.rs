@@ -1,19 +1,12 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
-use async_channel::Sender;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 pub use cloud_object_models::*;
 pub use cloud_objects::cloud_object::*;
-use cloud_objects::drive::sharing::SharingAccessLevel;
 use cloud_objects::ids::{
     FolderId, GenericStringObjectId, HashedSqliteId, ObjectUid, ServerId, SyncId,
 };
-#[cfg(any(test, feature = "test-util"))]
-use mockall::automock;
 use warp_graphql::mcp_gallery_template::MCPGalleryTemplate;
-use warp_graphql::object_permissions::AccessLevel;
 
 /// Identifies a guest to remove from an object.
 #[derive(Clone, Debug)]
@@ -195,178 +188,12 @@ pub enum ObjectDeleteResult {
     Failure,
 }
 
-#[cfg_attr(any(test, feature = "test-util"), automock)]
-#[cfg_attr(not(target_family = "wasm"), async_trait)]
-#[cfg_attr(target_family = "wasm", async_trait(?Send))]
-pub trait ObjectClient: 'static + Send + Sync {
-    /// This method saves a workflow for a given owner and returns it on success.
-    async fn create_workflow(
-        &self,
-        request: CreateObjectRequest,
-    ) -> Result<CreateCloudObjectResult>;
-
-    /// Updates a workflow with the new data. The update may be rejected if a revision
-    /// is specified _and_ that revision is not the current revision of the object in storage.
-    async fn update_workflow(
-        &self,
-        workflow_id: WorkflowId,
-        data: SerializedModel,
-        revision: Option<Revision>,
-    ) -> Result<UpdateCloudObjectResult<ServerWorkflow>>;
-
-    /// Creates n generic string objects in a single graphql request. Use
-    /// this rather than calling create_generic_string_object multiple times
-    /// in a loop.
-    async fn bulk_create_generic_string_objects(
-        &self,
-        owner: Owner,
-        objects: &[BulkCreateGenericStringObjectsRequest],
-    ) -> Result<BulkCreateCloudObjectResult>;
-
-    async fn create_generic_string_object(
-        &self,
-        format: GenericStringObjectFormat,
-        uniqueness_key: Option<GenericStringObjectUniqueKey>,
-        request: CreateObjectRequest,
-    ) -> Result<CreateCloudObjectResult>;
-
-    /// Creates a notebook on the server, returning the ID and revision of the object after
-    /// creation.
-    async fn create_notebook(
-        &self,
-        request: CreateObjectRequest,
-    ) -> Result<CreateCloudObjectResult>;
-
-    /// Updates a notebook with the new title and data. The update may be rejected if a revision
-    /// is specified _and_ that revision is not the current revision of the object in storage.
-    async fn update_notebook(
-        &self,
-        notebook_id: cloud_object_models::NotebookId,
-        title: Option<String>,
-        data: Option<SerializedModel>,
-        revision: Option<Revision>,
-    ) -> Result<UpdateCloudObjectResult<ServerNotebook>>;
-
-    async fn create_folder(&self, request: CreateObjectRequest) -> Result<CreateCloudObjectResult>;
-
-    async fn update_folder(
-        &self,
-        folder_id: FolderId,
-        name: SerializedModel,
-    ) -> Result<UpdateCloudObjectResult<ServerFolder>>;
-
-    async fn update_generic_string_object(
-        &self,
-        object_id: GenericStringObjectId,
-        model: SerializedModel,
-        revision: Option<Revision>,
-    ) -> Result<UpdateCloudObjectResult<Box<dyn ServerObject>>>;
-
-    /// Sets the current editor of the notebook to be the logged in user
-    async fn grab_notebook_edit_access(
-        &self,
-        notebook_id: cloud_object_models::NotebookId,
-    ) -> Result<ServerMetadata>;
-
-    /// Sets the current editor of the notebook to be null
-    async fn give_up_notebook_edit_access(
-        &self,
-        notebook_id: cloud_object_models::NotebookId,
-    ) -> Result<ServerMetadata>;
-
-    /// Gets updates for all Warp Drive actions.
-    async fn get_warp_drive_updates(
-        &self,
-        message_sender: Sender<ObjectUpdateMessage>,
-        stream_ready_sender: Sender<()>,
-    ) -> Result<()>;
-
-    async fn fetch_changed_objects(
-        &self,
-        objects_to_update: ObjectsToUpdate,
-        force_refresh: bool,
-    ) -> Result<InitialLoadResponse>;
-
-    async fn fetch_single_cloud_object(&self, id: ServerId) -> Result<GetCloudObjectResponse>;
-
-    // Transfers a notebook to the given owner
-    async fn transfer_notebook_owner(
-        &self,
-        notebook_id: cloud_object_models::NotebookId,
-        owner: Owner,
-    ) -> Result<bool>;
-
-    async fn transfer_workflow_owner(&self, workflow_id: WorkflowId, owner: Owner) -> Result<bool>;
-
-    async fn transfer_generic_string_object_owner(
-        &self,
-        workflow_id: GenericStringObjectId,
-        owner: Owner,
-    ) -> Result<bool>;
-
-    async fn trash_object(&self, id: ServerId) -> Result<bool>;
-
-    async fn untrash_object(&self, id: ServerId) -> Result<ObjectMetadataUpdateResult>;
-
-    async fn delete_object(&self, id: ServerId) -> Result<ObjectDeleteResult>;
-
-    async fn empty_trash(&self, owner: Owner) -> Result<ObjectDeleteResult>;
-
-    async fn move_object(
-        &self,
-        id: ServerId,
-        folder_id: Option<FolderId>,
-        owner: Owner,
-        object_type: ObjectType,
-    ) -> Result<bool>;
-
-    async fn record_object_action(
-        &self,
-        id: ServerId,
-        action_type: ObjectActionType,
-        timestamp: DateTime<Utc>,
-        data: Option<String>,
-    ) -> Result<ObjectActionHistory>;
-
-    async fn leave_object(&self, id: ServerId) -> Result<ObjectDeleteResult>;
-
-    async fn set_object_link_permissions(
-        &self,
-        object_id: ServerId,
-        access_level: SharingAccessLevel,
-    ) -> Result<ObjectPermissionUpdateResult>;
-
-    async fn remove_object_link_permissions(
-        &self,
-        object_id: ServerId,
-    ) -> Result<ObjectPermissionUpdateResult>;
-
-    async fn add_object_guests(
-        &self,
-        object_id: ServerId,
-        guest_emails: Vec<String>,
-        access_level: AccessLevel,
-    ) -> Result<ObjectPermissionsUpdateData>;
-
-    async fn update_object_guests(
-        &self,
-        object_id: ServerId,
-        guest_emails: Vec<String>,
-        access_level: AccessLevel,
-    ) -> Result<ServerPermissions>;
-
-    async fn remove_object_guest(
-        &self,
-        object_id: ServerId,
-        guest: GuestIdentifier,
-    ) -> Result<ServerPermissions>;
-
-    /// Fetches the last-used timestamps for all cloud environments.
-    ///
-    /// This is derived from `CloudEnvironment.lastTaskCreated.createdAt`, not `lastTaskRunTimestamp`, so that "Last used" reflects the most recently created task.
-    ///
-    /// Returns a map from environment UID to timestamp.
-    async fn fetch_environment_last_task_run_timestamps(
-        &self,
-    ) -> Result<HashMap<String, DateTime<Utc>>>;
-}
+// LOCAL FORK: the `ObjectClient` trait stood here, and with it the request and response
+// shapes only it used. It described the whole cloud-object API surface -- create, update,
+// fetch, the initial and incremental loads, move, trash, untrash, delete, empty trash, the
+// notebook edit baton and the guest and link-sharing calls -- and `automock` generated a
+// `MockObjectClient` from it for tests. Its one implementation was `server_api::object`,
+// which is gone, and nothing constructs a client any more.
+//
+// Everything above stays. Those types describe cloud objects and the events that change
+// them, which the local model still uses; only the transport went.

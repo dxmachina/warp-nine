@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, sync_channel};
 
-use cloud_object_client::{MockObjectClient, ObjectClient};
 use settings::manager::SettingsManager;
 use warp_core::execution_mode::{AppExecutionMode, ExecutionMode};
 use warpui::{App, ModelHandle, SingletonEntity};
@@ -80,21 +79,4 @@ pub fn create_update_manager_struct(app: &mut App) -> UpdateManagerStruct {
         receiver,
         cloud_model_events,
     }
-}
-
-/// Creates a baseline [`MockObjectClient`] with common mocks like:
-/// * The logged-in user
-/// * Background polling for updated objects
-pub fn mock_server_api() -> MockObjectClient {
-    let mut mock_object_client = MockObjectClient::new();
-    // Mock *failures* for background fetches. This prevents `UpdateManager` clearing out any
-    // objects that tests manually add to `CloudModel`.
-    mock_object_client
-        .expect_fetch_changed_objects()
-        .returning(|_, _| Err(anyhow::anyhow!("Ignoring background refresh in tests")));
-    // Mock environment timestamps fetch - return empty by default.
-    mock_object_client
-        .expect_fetch_environment_last_task_run_timestamps()
-        .returning(|| Ok(HashMap::new()));
-    mock_object_client
 }

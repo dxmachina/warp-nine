@@ -6,14 +6,12 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use settings::macros::{define_settings_group, maybe_define_setting, register_settings_events};
 use settings::{RespectUserSyncSetting, Setting, SupportedPlatforms, SyncToCloud};
-use warp_errors::{report_error, report_if_error};
+use warp_errors::report_error;
 use warp_graphql::mutations::update_user_settings::UpdateUserSettingsInput;
 use warpui::{AppContext, Entity, ModelContext, SingletonEntity, UpdateModel};
 
 use crate::auth::AuthStateProvider;
 use crate::auth::auth_state::AuthState;
-use crate::cloud_object::model::persistence::CloudModel;
-use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::server_api::ServerApiProvider;
 #[cfg(any(test, feature = "test-util"))]
 use crate::server::server_api::auth::MockAuthClient;
@@ -481,7 +479,7 @@ impl PrivacySettings {
     ///
     /// The returned snapshot is not stateful, thus its values should be used shortly after the
     /// snapshot is returned.
-    pub fn get_snapshot(&self, app: &AppContext) -> PrivacySettingsSnapshot {
+    pub fn get_snapshot(&self, _app: &AppContext) -> PrivacySettingsSnapshot {
         PrivacySettingsSnapshot {
             cloud_conversation_storage_enabled: (!self.is_cloud_conversation_storage_enabled)
                 .then_some(false),

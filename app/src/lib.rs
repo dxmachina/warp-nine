@@ -212,7 +212,7 @@ use crate::autoupdate::{AutoupdateState, RelaunchModel};
 use crate::changelog_model::ChangelogModel;
 use crate::cloud_object::CloudObjectTypeAndId;
 use crate::cloud_object::export::ExportManager;
-use crate::cloud_object::model::actions::{ObjectAction, ObjectActions};
+use crate::cloud_object::model::actions::ObjectActions;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::model::view::CloudViewModel;
 use crate::code::global_buffer_model::GlobalBufferModel;
@@ -1176,7 +1176,7 @@ pub(crate) fn initialize_app(
     // in `initialize_cloud_preferences_syncer`; InvalidSettings means TOML
     // parsed but individual values were wrong, which doesn't mean local
     // state is unusable.
-    let startup_toml_parse_error_for_syncer = user_defaults_on_startup
+    let _startup_toml_parse_error_for_syncer = user_defaults_on_startup
         .settings_file_error
         .as_ref()
         .and_then(|err| match err {
@@ -1284,7 +1284,7 @@ pub(crate) fn initialize_app(
         if #[cfg(feature = "crash_reporting")] {
             let is_crash_reporting_enabled = crash_reporting::init(ctx);
         } else {
-            let is_crash_reporting_enabled = false;
+            let _is_crash_reporting_enabled = false;
         }
     }
     // Send buffered pre-init errors to Sentry now that the client is ready.
@@ -1388,7 +1388,7 @@ pub(crate) fn initialize_app(
     // logged out left all three permanently unreachable. It now runs unconditionally.
     {
         ctx.on_first_frame_drawn(move |ctx| {
-            let timing_data = IntervalTimer::handle(ctx).update(ctx, |timer, _| {
+            let _timing_data = IntervalTimer::handle(ctx).update(ctx, |timer, _| {
                 timer.mark_interval_end("FIRST_FRAME_DRAWN");
                 timer.compute_stats()
             });
@@ -1583,7 +1583,7 @@ pub(crate) fn initialize_app(
     // once from the object actions still marked pending. Both were resumption of an
     // interrupted upload. Every write is complete when it is made now, so there is nothing
     // outstanding to resume and no queue to prime.
-    let cloud_model = ctx.add_singleton_model(|_ctx| {
+    let _cloud_model = ctx.add_singleton_model(|_ctx| {
         CloudModel::new(
             persistence_writer.sender(),
             cloud_objects,

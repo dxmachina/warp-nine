@@ -3,24 +3,18 @@ use std::sync::{Arc, Mutex};
 use ::settings::{Setting, ToggleableSetting};
 use lazy_static::lazy_static;
 use pathfinder_color::ColorU;
-use pathfinder_geometry::vector::vec2f;
 use warp_core::channel::ChannelState;
 use warp_core::context_flag::ContextFlag;
-use warp_core::features::FeatureFlag;
-use warp_core::ui::icons::Icon;
 use warp_errors::{report_error, report_if_error};
 #[cfg(not(target_family = "wasm"))]
 use warp_server_client::iap::{IapCredentialsState, IapManager, IapManagerEvent};
-use warpui::assets::asset_cache::AssetSource;
 use warpui::elements::{
-    Align, Border, CacheOption, ConstrainedBox, Container, CornerRadius, CrossAxisAlignment,
-    Element, Empty, Flex, Image, MainAxisAlignment, MainAxisSize, MouseStateHandle, ParentElement,
-    Radius, Shrinkable, Text,
+    Align, Border, Container, CrossAxisAlignment, Element, Empty, Flex, MouseStateHandle,
+    ParentElement, Shrinkable, Text,
 };
-use warpui::fonts::Weight;
 use warpui::keymap::ContextPredicate;
 use warpui::platform::Cursor;
-use warpui::ui_components::button::{ButtonVariant, TextAndIcon, TextAndIconAlignment};
+use warpui::ui_components::button::ButtonVariant;
 use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::ui_components::switch::SwitchStateHandle;
 use warpui::{
@@ -29,21 +23,17 @@ use warpui::{
 };
 
 use super::settings_page::{
-    AdditionalInfo, HEADER_PADDING, LocalOnlyIconState, MatchData, PageType, SettingsPageMeta,
+    AdditionalInfo, LocalOnlyIconState, MatchData, PageType, SettingsPageMeta,
     SettingsPageViewHandle, SettingsWidget, ToggleState, render_body_item,
-    render_customer_type_badge,
 };
 use super::{SettingsAction, SettingsSection, ToggleSettingActionPair, flags};
 use crate::appearance::Appearance;
+use crate::auth::AuthStateProvider;
 use crate::auth::auth_state::AuthState;
-use crate::auth::{AuthStateProvider, UserUid};
 use crate::autoupdate::{self, AutoupdateStage, AutoupdateState};
-use crate::server::ids::ServerId;
 use crate::settings::cloud_preferences::CloudPreferencesSettings;
 use crate::workspace::WorkspaceAction;
 use crate::workspaces::update_manager::TeamUpdateManager;
-use crate::workspaces::user_workspaces::UserWorkspaces;
-use crate::workspaces::workspace::CustomerType;
 
 const PHOTO_SIZE: f32 = 40.;
 const REGULAR_TEXT_FONT_SIZE: f32 = 12.;
@@ -155,7 +145,7 @@ impl TypedActionView for MainSettingsPageView {
                 ctx.notify();
             }
             MainPageAction::ToggleSettingsSync => {
-                let new_value =
+                let _new_value =
                     CloudPreferencesSettings::handle(ctx).update(ctx, |prefs_settings, ctx| {
                         report_if_error!(
                             prefs_settings

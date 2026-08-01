@@ -396,7 +396,7 @@ pub(super) fn start_confirm(me: &mut GitDialog, ctx: &mut ViewContext<GitDialog>
 /// Shared commit-chain completion for both backends: toast + telemetry + close.
 /// `Ok(Some)` means create-PR ran; `Ok(None)` is a plain commit / commit-and-push.
 pub(super) fn finish_commit_chain(
-    me: &GitDialog,
+    _me: &GitDialog,
     intent: CommitChainMode,
     result: Result<Option<PrInfo>, String>,
     ctx: &mut ViewContext<GitDialog>,

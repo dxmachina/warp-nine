@@ -8,23 +8,15 @@ pub mod notebook;
 mod styles;
 pub mod telemetry;
 
-use std::sync::Arc;
-
-use anyhow::Result;
 use async_trait::async_trait;
 pub use cloud_object_models::{CloudNotebook, CloudNotebookModel, NotebookId, SerializedNotebook};
 use serde::{Deserialize, Serialize};
 use warpui::AppContext;
 
 use crate::cloud_object::CloudObjectTypeAndId;
-use crate::cloud_object::{
-    CloudModelType, CloudObjectEventEntrypoint, CloudObjectUpsertParams, CreateCloudObjectResult,
-    CreateObjectRequest, GenericServerObject, ObjectType, Owner, Revision, UpdateCloudObjectResult,
-};
+use crate::cloud_object::{CloudModelType, CloudObjectUpsertParams, ObjectType, Owner};
 use crate::persistence::ModelEvent;
-use crate::server::cloud_objects::update_manager::InitiatedBy;
-use crate::server::ids::{ServerId, SyncId};
-use crate::server::server_api::object::ObjectClient;
+use crate::server::ids::SyncId;
 use cloud_objects::cloud_object::SerializedModel;
 
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
@@ -79,29 +71,6 @@ impl CloudModelType for CloudNotebookModel {
         };
         let json = serde_json::to_string(&serialized).expect("Failed to serialize notebook");
         SerializedModel::new(json)
-    }
-
-    async fn send_create_request(
-        object_client: Arc<dyn ObjectClient>,
-        request: CreateObjectRequest,
-    ) -> Result<CreateCloudObjectResult> {
-        object_client.create_notebook(request).await
-    }
-
-    async fn send_update_request(
-        &self,
-        object_client: Arc<dyn ObjectClient>,
-        server_id: ServerId,
-        revision: Option<Revision>,
-    ) -> Result<UpdateCloudObjectResult<GenericServerObject<NotebookId, Self>>> {
-        object_client
-            .update_notebook(
-                server_id.into(),
-                Some(self.title.clone()),
-                Some(self.data.clone().into()),
-                revision,
-            )
-            .await
     }
 
     fn renders_in_warp_drive(&self) -> bool {

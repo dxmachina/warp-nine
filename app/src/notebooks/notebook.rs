@@ -26,7 +26,7 @@ use warpui::ui_components::button::ButtonVariant;
 use warpui::ui_components::components::{UiComponent, UiComponentStyles};
 use warpui::{
     AppContext, BlurContext, Element, Entity, FocusContext, ModelAsRef, ModelHandle,
-    SingletonEntity, TypedActionView, View, ViewContext, ViewHandle, WindowId,
+    SingletonEntity, TypedActionView, View, ViewContext, ViewHandle,
 };
 
 use self::details_bar::DetailsBar;
@@ -41,7 +41,6 @@ use super::editor::NotebookWorkflow;
 use super::editor::view::{EditorViewEvent, RichTextEditorConfig, RichTextEditorView};
 use super::link::{NotebookLinks, SessionSource};
 use super::manager::NotebookManager;
-use super::telemetry::NotebookTelemetryAction;
 use super::{CloudNotebookModel, NotebookId, NotebookLocation, styles};
 use crate::appearance::Appearance;
 use crate::cloud_object::export::ExportManager;
@@ -64,7 +63,7 @@ use crate::pane_group::focus_state::{PaneFocusHandle, PaneGroupFocusEvent};
 use crate::pane_group::pane::view;
 use crate::pane_group::{BackingView, PaneConfiguration, PaneEvent};
 use crate::server::cloud_objects::update_manager::UpdateManager;
-use crate::server::ids::{ClientId, ServerId, SyncId};
+use crate::server::ids::{ClientId, SyncId};
 use crate::settings::app_installation_detection::{
     UserAppInstallDetectionSettings, UserAppInstallStatus,
 };
@@ -72,7 +71,6 @@ use crate::settings::{
     FontSettings, FontSettingsChangedEvent, NotebookFontSize, decrease_notebook_font_size,
     increase_notebook_font_size,
 };
-use crate::sharing::ShareableObject;
 use crate::terminal::model::secret_detection::find_secrets_in_text;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
 use crate::throttle::throttle;
@@ -80,7 +78,7 @@ use crate::ui_components::icons::{self, Icon};
 #[cfg(target_family = "wasm")]
 use crate::uri::web_intent_parser::open_url_on_desktop;
 use crate::util::bindings::{self, CustomAction};
-use crate::view_components::{DismissibleToast, ToastType};
+use crate::view_components::DismissibleToast;
 use crate::workflows::{WorkflowSource, WorkflowType};
 use crate::workspace::ToastStack;
 use crate::workspaces::user_workspaces::UserWorkspaces;
@@ -833,7 +831,7 @@ impl NotebookView {
 
         if self.send_edit_telemetry {
             let content = self.content(ctx);
-            let delta = content.len().abs_diff(self.last_content_length);
+            let _delta = content.len().abs_diff(self.last_content_length);
             self.last_content_length = content.len();
             self.send_edit_telemetry = false;
         }

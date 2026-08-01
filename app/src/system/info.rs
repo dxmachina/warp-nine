@@ -2,7 +2,7 @@ use std::ffi::OsStr;
 
 use byte_unit::Byte;
 use sysinfo::ProcessesToUpdate;
-use warpui::{App, AppContext, Entity, ModelContext, SingletonEntity};
+use warpui::{Entity, ModelContext, SingletonEntity};
 
 use crate::system::memory_footprint;
 

@@ -935,3 +935,130 @@ Builds require `export PATH="$HOME/.cargo/bin:$PATH"` (pins to 1.92.0 per
 
 Warp is AGPL v3 (except `warpui`/`warpui_core`, MIT). Fine for personal use;
 distributing a modified build triggers source-disclosure obligations.
+
+## Tier 1 (2026-08-01)
+
+Sizing a removal by grepping for a module name tells you what to delete, not what
+it costs. Four of the seven items surveyed as "tier 1: independent, removable
+now, ~4,000 lines" were not independent, and the one that was turned out to be
+half as large again as estimated. The survey was wrong in both directions.
+
+### What came out
+
+`crates/managed_secrets` and everything reached through it. Server-stored secrets
+via GCP Workload Identity Federation and HPKE envelope encryption, behind
+`FeatureFlag::WarpManagedSecrets`. Estimated at 2,332 lines; actually about 3,600
+once followed: the crate, `managed_secrets_wasm`, seven orphaned graphql
+operations, the `ActorProvider` adapter on `AuthState`, and 269 lines inside
+`warp_server_client::iap` implementing an STS token exchange and IAM
+`generateIdToken`. That WIF mint had exactly one caller, a sandboxed Oz runner
+detected by `OZ_RUN_ID`, which ships without gcloud and so could not use the
+ordinary refresh path. `IapManager` keeps the gcloud path it always took here.
+
+Cloud-agent OTLP tracing, 1,248 lines. `tracing::init` built an exporter only
+when `WARP_CLOUD_AGENT_OTLP_ENDPOINT` was set and installed a no-op subscriber
+otherwise, so the early return was the only reachable path in this fork.
+
+`server_api::download` and `server_api::integrations`, orphans. The referral
+fetch path and the reward modal it drove, 572 lines.
+
+### Two more accessor-vs-value findings
+
+The family now has five members. Both of these were found the same way: by asking
+what a removed predicate had been gating, rather than by reading the removed code.
+
+`ServerVoiceTranscriber` had already been reduced to a `transcribe` that always
+returns an error, because the endpoint went with the agent. But it was still
+registered, and `VoiceTranscriber::transcriber()` returning `Some` is precisely
+what `editor/view/voice.rs` reads to decide whether voice input is available. So
+the editor offered it, recorded the audio, ran the session to completion, and
+only then surfaced a failure, once per attempt. `None` is the disabled state the
+type already models. Neutralising an implementation is not neutralising what
+callers read to reach it.
+
+`ReferralThemeStatus` was nearly a bug I introduced rather than found. It looked
+like an obvious full delete with the two reward themes hard-coded hidden, since
+nothing can unlock them without a server. But `new()` reads `ReferralThemeActive`
+and `ReceivedReferralTheme` out of *persisted user preferences*, so anyone who
+earned a referral theme before this fork existed still has it recorded, and
+`theme_chooser` still offers it. Deleting the model would have quietly taken away
+a theme they had unlocked. The model is kept as a read-only view and only the
+fetch is gone. Same shape as `current_workspace()`: "always false today" was a
+claim about the fetch, not about the stored data behind it.
+
+### What was not tier 1, and why it is cheaper later
+
+- `server_api::auth` -- `UserAuthenticationError` feeds `sync_queue` and the
+  shared-session viewer, both tier 2. Genuinely blocked, not merely awkward.
+- `network_log_view` -- a full pane type wired into the pane enum, launch
+  configs, the settings view and vertical tabs. Trivially dead once the network
+  layer goes; unwinding a pane enum before then is strictly worse.
+- `server/experiments` -- fed by `server_api`, cached in sqlite (so a
+  pre-excision database has real rows), and consumed by `user_workspaces`.
+- `server_api::block` -- listed as a 163-line leaf. It pulls a 1,489-line
+  `share_block_modal` across eight files including the terminal action enum and
+  the `show_blocks_view` settings page. A feature removal, not a leaf.
+- `server_api::team` -- 108 lines, but `MockTeamClient` is threaded through seven
+  or more test files.
+
+`retry_strategies` and `ids::ServerId` remain load-bearing for the local object
+store, as recorded earlier.
+
+## Tooling: a helper that fails silently is worse than no helper
+
+`cutfn.py` is a library with no `__main__` block. Invoking it as a script ran the
+imports, defined the function, exited 0 and changed nothing. Three "successful"
+cuts later the functions were all still in the file. Nothing in the exit status
+said so.
+
+This is the same class as the attribute-rebinding and or-pattern traps that this
+file already records, and it is the reason the count of those stands at sixteen
+with three caused by tooling rather than found by it: the failure is silent and
+the signal that should have caught it reports success. Every cut since goes
+through a driver that re-reads the file afterwards and asserts the target string
+is gone. `cut.py` already did this, which is why it caught the `code_page.rs`
+ambiguity; `cutfn.py` did not.
+
+The general rule for this project: a deletion helper must verify its own
+postcondition, because the compiler cannot distinguish "nothing to delete" from
+"deleted nothing".
+
+## Signing and notarising this fork (2026-08-01)
+
+`script/macos/bundle --developer-id` signs with a Developer ID Application
+identity from the login keychain, using the production entitlements, hardened
+runtime and a secure timestamp. `--notarize --notary-profile <name>` submits and
+staples. Upstream's `--codesign` path is unusable here: it imports a base64 .p12
+from `WARP_DEVELOPER_ID_CERT` into a throwaway keychain and signs against
+upstream's hardcoded team. `--selfsign` cannot substitute either, because it
+signs with `Debug-Entitlements.plist`, whose `com.apple.security.get-task-allow`
+is rejected outright by the notary service.
+
+`Entitlements.plist` requested app group `2BBY89MBSN.dev.warp`, upstream's team.
+An app group must be prefixed with the signing certificate's own team ID, and on
+Developer ID it also needs an embedded provisioning profile. Removing it is
+behaviour-neutral: `app_group_container_path` probes the container by writing a
+temp file and returns `None` when that fails, so `secure_state_dir()` already
+returned `None` and all four callers fall back to `state_dir()`. Anyone re-adding
+it under a new team should know that turning the app group on relocates the
+sqlite database into the group container, so existing installs come up with no
+history.
+
+Three packaging defects, each found by inspecting an artifact rather than by
+reading code:
+
+A missing `create-dmg` aborted the run under `set -e` after a completed build and
+a valid signature. The Finder AppleScript inside `create-dmg` dies with
+`AppleEvent timed out (-1712)` on any machine whose controlling process lacks
+Automation permission for Finder, which is the normal state for a build started
+from a terminal; upstream's `--skip-jenkins` escape hatch was scoped to one CI
+runner. The image was assembled from `$BUNDLE_DIR`, which also contains the
+`dmg/` working directory, so it shipped a copy of that folder next to the app.
+
+The ordering one is the subtle one. Stapling writes the ticket *into* the bundle,
+so an image built from an unstapled app contains an unstapled app however
+thoroughly the image itself is stapled afterwards. Notarisation therefore runs
+before packaging. That in turn made any notarisation failure fatal to the whole
+run, and since the script clears the previous build's artifacts on startup, a
+credential that stopped resolving destroyed the prior notarised output too.
+Failure is now recorded, packaging still runs, and the script exits non-zero.

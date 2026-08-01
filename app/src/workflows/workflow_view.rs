@@ -582,46 +582,11 @@ impl WorkflowView {
         }
     }
 
-    pub fn wait_for_initial_load_then_load(
-        &mut self,
-        workflow_id: SyncId,
-        settings: &OpenWarpDriveObjectSettings,
-        mode: WorkflowViewMode,
-        window_id: WindowId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let initial_load_complete = UpdateManager::as_ref(ctx).initial_load_complete();
-        // TODO @ianhodge CLD-2002: it could be nice to have a loading screen here while we wait for the load
-        let settings = settings.clone();
-        ctx.spawn(initial_load_complete, move |me, _, ctx| {
-            let workflow = CloudModel::as_ref(ctx).get_workflow(&workflow_id).cloned();
-            // If either the focused folder or the workflow can't be found in cloudmodel, fetch the object from the server
-            let fetch_needed = workflow.is_none()
-                || settings
-                    .focused_folder_id
-                    .map(SyncId::ServerId)
-                    .map(|folder_id| CloudModel::as_ref(ctx).get_folder(&folder_id).is_none())
-                    .unwrap_or(false);
-            if fetch_needed {
-                if let Some(server_id) = workflow_id.into_server() {
-                    me.fetch_and_load_workflow(server_id, &settings, mode, window_id, ctx);
-                } else {
-                    log::warn!("Tried to load workflow without server id {workflow_id:?}");
-                }
-            } else if let Some(workflow) = workflow {
-                me.load(workflow, &settings, mode, ctx);
-            } else {
-                ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                    toast_stack.add_ephemeral_toast_by_type(
-                        ToastType::CloudObjectNotFound,
-                        window_id,
-                        ctx,
-                    );
-                });
-                log::warn!("Tried to open unknown workflow {workflow_id:?}");
-            }
-        });
-    }
+    // LOCAL FORK: `wait_for_initial_load_then_load` went with cloud sync. It was the
+    // fallback for opening an object that was not in `CloudModel` yet, waiting for the
+    // initial cloud load and then fetching from the server. Locally persisted objects
+    // are in the model at startup and take the direct `load` path, so only objects that
+    // would have come from the server ever reached this.
 
     fn fetch_and_load_workflow(
         &mut self,

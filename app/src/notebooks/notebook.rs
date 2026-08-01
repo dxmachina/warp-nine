@@ -1412,51 +1412,6 @@ impl NotebookView {
         NetworkStatus::as_ref(app).is_online()
     }
 
-    /// Takes a given `notebook_id`, and tries to load it into view after initial load completes.
-    /// If the notebook still does not exist in memory after initial load, displaces an error message in
-    /// the given window.
-    ///
-    /// Used for code paths such as link opening, where we are often trying to open notebooks before
-    /// the initial response from the server has completed.
-    pub fn wait_for_initial_load_then_load(
-        &mut self,
-        notebook_id: SyncId,
-        settings: &OpenWarpDriveObjectSettings,
-        window_id: WindowId,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        let initial_load_complete = UpdateManager::as_ref(ctx).initial_load_complete();
-        // TODO @ianhodge CLD-2002: it could be nice to have a loading screen here while we wait for the load
-        let settings = settings.clone();
-        ctx.spawn(initial_load_complete, move |me, _, ctx| {
-            let notebook = CloudModel::as_ref(ctx).get_notebook(&notebook_id).cloned();
-            let fetch_needed = notebook.is_none()
-                || settings
-                    .focused_folder_id
-                    .map(SyncId::ServerId)
-                    .map(|folder_id| CloudModel::as_ref(ctx).get_folder(&folder_id).is_none())
-                    .unwrap_or(false);
-            if fetch_needed {
-                if let Some(server_id) = notebook_id.into_server() {
-                    me.fetch_and_load_notebook(server_id, &settings, window_id, ctx);
-                } else {
-                    log::warn!("Tried to load notebook without server id {notebook_id:?}");
-                }
-            } else if let Some(notebook) = notebook {
-                me.load(notebook, &settings, ctx);
-            } else {
-                ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
-                    toast_stack.add_ephemeral_toast_by_type(
-                        ToastType::CloudObjectNotFound,
-                        window_id,
-                        ctx,
-                    );
-                });
-                log::warn!("Tried to open unknown notebook {notebook_id:?}");
-            }
-        });
-    }
-
     fn fetch_and_load_notebook(
         &mut self,
         notebook_id: ServerId,
@@ -1533,9 +1488,13 @@ impl NotebookView {
             editor.set_space(notebook.space(ctx), ctx);
         });
 
-        // Once we've received metadata from the server, check if we can eagerly edit the notebook.
-        let has_metadata = UpdateManager::as_ref(ctx).initial_load_complete();
-        let baton_future = ctx.spawn(has_metadata, |me, _, ctx| {
+        // LOCAL FORK: this waited on `UpdateManager::initial_load_complete()` for the
+        // server to say who currently holds the edit baton. Nothing arrives from a server,
+        // so the check runs immediately against what is already in the model. The outcome is
+        // unchanged for a local notebook: it has no `current_editor_uid`, so this takes the
+        // "unknown editor" branch and opens in view mode, and the user enters edit mode
+        // through `Mode::View => grab_edit_access_or_display_access_dialog` as before.
+        let baton_future = ctx.spawn(std::future::ready(()), |me, _, ctx| {
             let active_notebook_data = me.active_notebook_data.as_ref(ctx);
 
             if FeatureFlag::SharedWithMe.is_enabled() && !active_notebook_data.editability(ctx).can_edit() {

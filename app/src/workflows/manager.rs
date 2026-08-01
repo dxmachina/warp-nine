@@ -81,16 +81,9 @@ impl WorkflowManager {
                 if let Some(workflow) = workflow {
                     view.update(ctx, |view, ctx| view.load(workflow, settings, mode, ctx));
                 } else {
-                    // If the workflow doesn't exist, try waiting for initial load and trying again
-                    view.update(ctx, |view, ctx| {
-                        view.wait_for_initial_load_then_load(
-                            *workflow_id,
-                            settings,
-                            mode,
-                            window_id,
-                            ctx,
-                        )
-                    });
+                    // LOCAL FORK: the fallback waited for the initial cloud load and then
+                    // fetched the object from the server. A locally persisted object is
+                    // already in `CloudModel` above; anything missing here does not exist.
                 }
             }
             WorkflowOpenSource::New {

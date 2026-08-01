@@ -195,10 +195,9 @@ impl NotebookManager {
                 if let Some(notebook) = notebook {
                     view.update(ctx, |view, ctx| view.load(notebook, settings, ctx));
                 } else {
-                    // If the notebook doesn't exist yet, try waiting for initial load and check again
-                    view.update(ctx, |view, ctx| {
-                        view.wait_for_initial_load_then_load(*notebook_id, settings, window_id, ctx)
-                    });
+                    // LOCAL FORK: the fallback waited for the initial cloud load and then
+                    // fetched the object from the server. A locally persisted object is
+                    // already in `CloudModel` above; anything missing here does not exist.
                 }
             }
             NotebookSource::New {

@@ -960,11 +960,9 @@ fn open_codex_in_new_window(_: &(), ctx: &mut AppContext) {
         if let AuthOnboardingState::Terminal(workspace_view_handle) =
             &root_view.auth_onboarding_state
         {
-            let initial_load_complete = UpdateManager::as_ref(ctx).initial_load_complete();
+            // LOCAL FORK: this waited for the cloud load before opening the modal.
             workspace_view_handle.update(ctx, |_, ctx| {
-                let _ = ctx.spawn(initial_load_complete, move |workspace, _, ctx| {
-                    workspace.open_codex_modal(ctx)
-                });
+                ctx.notify();
             });
         }
     });

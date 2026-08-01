@@ -70,13 +70,9 @@ impl EnvVarCollectionManager {
                 if let Some(env_var_collection) = env_var_collection {
                     view.update(ctx, |view, ctx| view.load(env_var_collection, ctx));
                 } else {
-                    view.update(ctx, |view, ctx| {
-                        view.wait_for_initial_load_then_load(
-                            *env_var_collection_id,
-                            window_id,
-                            ctx,
-                        );
-                    });
+                    // LOCAL FORK: the fallback waited for the initial cloud load and then
+                    // fetched the object from the server. A locally persisted object is
+                    // already in `CloudModel` above; anything missing here does not exist.
                 }
             }
             EnvVarCollectionSource::New {

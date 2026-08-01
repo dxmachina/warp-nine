@@ -3418,43 +3418,10 @@ impl Workspace {
         self.add_tab_from_existing_pane(home_pane, 0, None, ctx);
         let initial_tab = self.active_tab_pane_group().clone();
 
-        let initial_load_complete = UpdateManager::as_ref(ctx).initial_load_complete();
-        ctx.spawn(initial_load_complete, move |me, _, ctx| {
-            // New Warp users can have non-welcome objects if they were directly invited OR if
-            // linked objects were copied over from an anonymous user.
-            if !CloudModel::as_ref(ctx).has_non_welcome_objects() {
-                return;
-            }
-
-            let cloud_model = CloudModel::as_ref(ctx);
-            let candidate_objects = cloud_model
-                .cloud_objects()
-                .filter(|object| {
-                    !object.is_trashed(cloud_model)
-                        && object.renders_in_warp_drive()
-                        && !object.metadata().is_welcome_object
-                })
-                .map(|object| object.cloud_object_type_and_id())
-                .collect_vec();
-            // Collect into a temporary Vec so that we can create a pane for the first
-            // supported object.
-            let target_object_pane = candidate_objects
-                .into_iter()
-                .find_map(|object_id| me.create_cloud_object_pane(object_id, ctx));
-
-            if let Some(target_object_pane) = target_object_pane {
-                initial_tab.update(ctx, |pane_group, ctx| {
-                    pane_group.add_pane_sibling(
-                        placeholder_pane,
-                        Direction::Left,
-                        target_object_pane,
-                        true,
-                        ctx,
-                    );
-                    pane_group.close_pane(placeholder_pane, ctx);
-                });
-            }
-        });
+        // LOCAL FORK: this waited for the cloud load, then opened the user's first
+        // non-welcome Drive object beside the placeholder pane. Warp Drive is gone and
+        // nothing arrives from a server, so the placeholder simply stays.
+        let _ = (placeholder_pane, initial_tab);
     }
 
     /// Joins a shared session as a viewer in a new tab. `is_ambient_agent` should be `true`

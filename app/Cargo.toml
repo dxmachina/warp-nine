@@ -264,7 +264,6 @@ repo_metadata.workspace = true
 vim.workspace = true
 warp_isolation_platform.workspace = true
 warp_ripgrep.workspace = true
-warp_managed_secrets.workspace = true
 warp_multi_agent_client.workspace = true
 local_control.workspace = true
 
@@ -316,14 +315,11 @@ http_server.workspace = true
 hyper.workspace = true
 libsqlite3-sys = { version = "0.33.0", features = ["bundled"] }
 mio = { version = "1.1.1", features = ["os-poll", "os-ext"] }
-opentelemetry.workspace = true
-opentelemetry-http.workspace = true
-opentelemetry-otlp.workspace = true
-opentelemetry_sdk.workspace = true
+# LOCAL FORK: the opentelemetry stack and tracing-subscriber went with
+# cloud-agent OTLP export. `crates/http_client` still depends on opentelemetry
+# for trace-context propagation, so the workspace entries stay.
 tokio.workspace = true
 tokio-util.workspace = true
-tracing-opentelemetry.workspace = true
-tracing-subscriber.workspace = true
 warp_errors = { workspace = true, features = ["tokio-errors", "websocket-errors"] }
 
 # AWS SDK (loading credentials for BYO LLM)
@@ -592,7 +588,6 @@ default = [
     "ambient_agents_command_line",
     "ambient_agents_image_upload",
     "scheduled_ambient_agents",
-    "warp_managed_secrets",
     "v4a_file_diffs",
     "classic_completions",
     "force_classic_completions",
@@ -947,7 +942,6 @@ revert_to_checkpoints = []
 rewind_slash_command = []
 agent_view = []
 agent_view_block_context = ["agent_view"]
-warp_managed_secrets = []
 v4a_file_diffs = []
 agent_tips = []
 agent_toolbar_editor = ["agent_view"]

@@ -42,6 +42,21 @@ impl VoiceTranscriber {
         }
     }
 
+    /// LOCAL FORK: registers the singleton with no transcriber behind it.
+    ///
+    /// The only implementation was `ServerVoiceTranscriber`, which posted the
+    /// audio to a server endpoint that went with the agent. It was left in place
+    /// returning an error from `transcribe`, but registering it still made
+    /// `transcriber()` return `Some`, and that is precisely what the editor reads
+    /// to decide whether voice input is available. The recording flow therefore
+    /// ran to completion and only then reported a failure, once per attempt.
+    ///
+    /// `None` is the disabled state this type already models, so the editor now
+    /// takes its unavailable path instead.
+    pub fn disabled() -> Self {
+        Self { transcriber: None }
+    }
+
     /// Returns the transcriber if one is set.
     pub fn transcriber(&self) -> Option<&Arc<dyn Transcriber>> {
         self.transcriber.as_ref()

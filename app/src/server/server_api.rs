@@ -1,16 +1,13 @@
 pub mod auth;
 pub mod block;
 #[cfg(not(target_family = "wasm"))]
-pub(crate) mod download;
 // LOCAL FORK: `factory` went with the agent's Factory harness client. `FactoryClient`
 // had no users left once `get_factory_client` was removed.
 // LOCAL FORK: mods harness_support and presigned_upload removed. They were the agent
 // harness's presigned-upload path; nothing outside those two modules and their own tests
 // referenced them.
-pub mod integrations;
 // LOCAL FORK: `managed_mcp` went with the MCP client. `ManagedMcpClient` had no users
 // left once `get_managed_mcp_client` was removed.
-pub mod managed_secrets;
 pub mod object;
 pub mod referral;
 pub mod team;
@@ -36,7 +33,6 @@ use team::TeamClient;
 use url::Url;
 use warp_core::context_flag::ContextFlag;
 use warp_errors::{AnyhowErrorExt, ErrorExt, register_error, report_error};
-use warp_managed_secrets::client::ManagedSecretsClient;
 use warp_server_client::auth::{AuthClientImpl, AuthEvent, EXPERIMENT_ID_HEADER};
 use warp_server_client::base_client::{
     AmbientHeaderPolicy, AuthenticatedGraphqlConfig, BaseClient, GraphqlRoutingConfig,
@@ -795,14 +791,6 @@ impl ServerApiProvider {
     }
 
     pub fn get_cloud_objects_client(&self) -> Arc<dyn ObjectClient> {
-        self.server_api.clone()
-    }
-
-    pub fn get_integrations_client(&self) -> Arc<dyn integrations::IntegrationsClient> {
-        self.server_api.clone()
-    }
-
-    pub fn get_managed_secrets_client(&self) -> Arc<dyn ManagedSecretsClient> {
         self.server_api.clone()
     }
 

@@ -56,7 +56,6 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
         IapManager::new(
             None,
             Box::new(|_| futures::FutureExt::boxed(futures::future::ready(None::<String>))),
-            None,
             ctx,
         )
     });

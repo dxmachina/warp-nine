@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use cloud_objects::UserUid;
 use cloud_objects::cloud_object::{
     CloudObjectMetadata, CloudObjectPermissions, CloudObjectStatuses, CloudObjectSyncStatus,
-    GENERIC_STRING_OBJECT_PREFIX, GenericStringObjectFormat, NumInFlightRequests, ObjectIdType,
-    ObjectType, Owner, Revision, RevisionAndLastEditor, ServerCreationInfo,
+    GENERIC_STRING_OBJECT_PREFIX, GenericStringObjectFormat, ObjectIdType, ObjectType, Owner,
+    Revision, RevisionAndLastEditor, ServerCreationInfo,
 };
 use cloud_objects::ids::{ClientId, FolderId, HashableId, SyncId, ToServerId};
 use diesel::result::Error;
@@ -568,11 +568,20 @@ pub fn to_cloud_object_metadata(metadata: &ObjectMetadata) -> CloudObjectMetadat
             .and_then(|epoch| Revision::from_unix_timestamp_micros(epoch).ok()),
         pending_changes_statuses: CloudObjectStatuses {
             pending_delete: false,
-            content_sync_status: if metadata.is_pending {
-                CloudObjectSyncStatus::InFlight(NumInFlightRequests(1))
-            } else {
-                CloudObjectSyncStatus::NoLocalChanges
-            },
+            // LOCAL FORK: an object read back from sqlite is never in flight.
+            //
+            // This used to map the persisted `is_pending` column onto `InFlight(1)`, so a
+            // write that had not reached the server before the last quit would be picked
+            // back up by the sync queue on the next start. There is no queue and no
+            // request to resume, and nothing decrements the count, so any row carrying
+            // `is_pending = true` -- which every row written by a build before this fork
+            // may -- would load as permanently unsaved and make
+            // `num_unsaved_objects_to_warn_about_before_quitting` warn on every quit,
+            // forever, about work that is already on disk.
+            //
+            // The column is still written, so downgrading to a build that has the sync
+            // queue keeps working.
+            content_sync_status: CloudObjectSyncStatus::NoLocalChanges,
             has_pending_metadata_change: false,
             has_pending_permissions_change: false,
             pending_untrash: false,

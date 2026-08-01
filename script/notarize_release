@@ -1,98 +1,22 @@
 #!/usr/bin/env bash
 #
-# LOCAL FORK: build, sign, notarise and verify a release bundle in one step.
+# LOCAL FORK: kept as the name this fork's notes and history refer to.
 #
-# Wraps `script/bundle` with the flags this fork uses, then does the check that
-# actually matters and that the bundle script does not do: mount the disk image,
-# copy the app out of it, apply the `com.apple.quarantine` attribute a browser
-# would set on a download, and confirm the extracted copy still validates. That
-# is the path a user takes, and it is the one that catches a ticket stapled to
-# the wrong artifact.
+# The implementation moved to `script/release`, which does the same thing and adds a
+# preflight on the signing identity, a `--signed-only` mode for when the notary
+# credential is unavailable, an optional `--verify-first` pass, and a summary with
+# sizes and hashes.
 #
-# Usage:
+# Usage is unchanged:
 #   script/notarize_release [profile-name]
-#
-# `profile-name` is an `xcrun notarytool store-credentials` profile and defaults
-# to $NOTARY_PROFILE_NAME. If notarytool cannot resolve it, this stops before
-# spending a build on a run that cannot finish, and prints the command that
-# creates one.
 
-set -e
+set -euo pipefail
 
 WORKSPACE_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WORKSPACE_ROOT_DIR"
 
-PROFILE="${1:-${NOTARY_PROFILE_NAME:-}}"
-if [[ -z "$PROFILE" ]]; then
-  echo "Usage: script/notarize_release <notarytool-profile-name>" >&2
-  echo "   or: NOTARY_PROFILE_NAME=<name> script/notarize_release" >&2
-  exit 2
-fi
-
-echo "Checking that notarytool can resolve the '$PROFILE' profile..."
-if ! xcrun notarytool history --keychain-profile "$PROFILE" > /dev/null 2>&1; then
-  echo "" >&2
-  echo "notarytool cannot resolve the profile '$PROFILE'." >&2
-  echo "" >&2
-  echo "Create it with:" >&2
-  echo "  xcrun notarytool store-credentials '$PROFILE' \\" >&2
-  echo "    --apple-id <your-apple-id> --team-id <your-team-id>" >&2
-  echo "" >&2
-  echo "It prompts for an app-specific password, which is not the Apple ID" >&2
-  echo "password. Generate one at appleid.apple.com under Sign-In and Security." >&2
-  echo "" >&2
-  echo "Stopping now rather than spending a build on a run that cannot finish." >&2
-  exit 1
-fi
-echo "Profile resolved."
-
-export PATH="$HOME/.cargo/bin:$PATH"
-./script/bundle -c oss --developer-id --notarize --notary-profile "$PROFILE" --arch aarch64
-
-OUT_DIR="target/release-lto/bundle/osx"
-APP="$OUT_DIR/WarpNine.app"
-DMG="$OUT_DIR/WarpNine.dmg"
-
-echo ""
-echo "=== Verifying $APP ==="
-codesign --verify --deep --strict --verbose=2 "$APP"
-xcrun stapler validate "$APP"
-spctl -a -vvv -t exec "$APP"
-
-if [[ -f "$DMG" ]]; then
-  echo ""
-  echo "=== Verifying $DMG ==="
-  xcrun stapler validate "$DMG"
-
-  # The check the bundle script cannot do for itself: does the app *inside* the
-  # image carry its own ticket? An image built from an unstapled app contains an
-  # unstapled app no matter how thoroughly the image is stapled afterwards, and
-  # nothing about the image's own signature reveals that.
-  echo ""
-  echo "=== Verifying the app inside the disk image, as a user would get it ==="
-  MOUNT_POINT="$(hdiutil attach "$DMG" -nobrowse -readonly -mountrandom /tmp \
-    | grep -o '/tmp/[^ ]*' | head -1)"
-  if [[ -z "$MOUNT_POINT" ]]; then
-    echo "Failed to mount $DMG" >&2
-    exit 1
-  fi
-  trap 'hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true' EXIT
-
-  STAGING="$(mktemp -d)"
-  cp -R "$MOUNT_POINT/WarpNine.app" "$STAGING/"
-  hdiutil detach "$MOUNT_POINT" -quiet
-  trap - EXIT
-
-  # What Safari sets on a download. Gatekeeper treats a quarantined copy far more
-  # strictly than one that has always been local.
-  xattr -w com.apple.quarantine "0081;00000000;Safari;" "$STAGING/WarpNine.app"
-  xcrun stapler validate "$STAGING/WarpNine.app"
-  spctl -a -vvv -t exec "$STAGING/WarpNine.app"
-  rm -rf "$STAGING"
-  echo "Extracted, quarantined copy validates."
+if [[ $# -gt 0 ]]; then
+  exec ./script/release --profile "$1"
 else
-  echo "No disk image was produced; see the create-dmg warnings above."
+  exec ./script/release
 fi
-
-echo ""
-echo "Done. Artifacts in $OUT_DIR"

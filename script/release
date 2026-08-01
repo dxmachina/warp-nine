@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+#
+# LOCAL FORK: build, sign, notarise, package and verify a release, in one step.
+#
+# Supersedes `script/notarize_release`, which still works and now delegates here.
+#
+#   script/release                    build, sign, notarise, package, verify
+#   script/release --signed-only      same but skip notarisation
+#   script/release --verify-first     run the check matrix and tests before building
+#   script/release --profile NAME     notarytool profile (default $NOTARY_PROFILE_NAME
+#                                     or "Sebastian Katz")
+#
+# Three things this does that `script/bundle` does not:
+#
+# 1. Preflight. Both credentials are checked *before* the build, not after: the
+#    Developer ID signing identity and, unless --signed-only, the notarytool profile.
+#    A ten minute build that dies at the signing step is a ten minute build wasted,
+#    and that is exactly how this series of builds failed twice.
+#
+# 2. The download check. It mounts the disk image, copies the app out, applies the
+#    `com.apple.quarantine` attribute a browser sets on a download, and confirms the
+#    extracted copy still validates. That is the path a user actually takes, and it
+#    is the only thing that catches a ticket stapled to the wrong artifact --
+#    stapling writes the ticket *into* the bundle, so an image built from an
+#    unstapled app contains an unstapled app however thoroughly the image itself is
+#    stapled afterwards. Notarisation therefore has to happen before packaging, and
+#    nothing about the image's own signature reveals when it did not.
+#
+# 3. `--signed-only`. Notarisation depends on a credential that can be absent for
+#    reasons that have nothing to do with the code, and when that happens a signed
+#    build is still worth having. Without this the fallback is to remember the right
+#    `script/bundle` invocation by hand.
+
+set -euo pipefail
+
+WORKSPACE_ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$WORKSPACE_ROOT_DIR"
+
+PROFILE="${NOTARY_PROFILE_NAME:-Sebastian Katz}"
+SIGNED_ONLY=false
+VERIFY_FIRST=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --signed-only)  SIGNED_ONLY=true; shift ;;
+    --verify-first) VERIFY_FIRST=true; shift ;;
+    --profile)      PROFILE="$2"; shift 2 ;;
+    -h|--help)      sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)              echo "Unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+OUT_DIR="target/release-lto/bundle/osx"
+APP="$OUT_DIR/WarpNine.app"
+DMG="$OUT_DIR/WarpNine.dmg"
+
+step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
+
+# ---------------------------------------------------------------------------
+# Preflight
+# ---------------------------------------------------------------------------
+
+step "Preflight"
+
+if ! security find-identity -p codesigning -v | grep -q "Developer ID Application"; then
+  echo "No 'Developer ID Application' identity in the login keychain." >&2
+  echo "Signing would fail after the build. Stopping now." >&2
+  exit 1
+fi
+SIGNING_ID="$(security find-identity -p codesigning -v \
+  | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/')"
+echo "Signing identity: $SIGNING_ID"
+
+if [[ "$SIGNED_ONLY" == "false" ]]; then
+  if ! xcrun notarytool history --keychain-profile "$PROFILE" > /dev/null 2>&1; then
+    echo "" >&2
+    echo "notarytool cannot resolve the profile '$PROFILE'." >&2
+    echo "" >&2
+    echo "Create it with:" >&2
+    echo "  xcrun notarytool store-credentials '$PROFILE' \\" >&2
+    echo "    --apple-id <your-apple-id> --team-id <your-team-id>" >&2
+    echo "" >&2
+    echo "It prompts for an app-specific password, which is not the Apple ID" >&2
+    echo "password. Generate one at appleid.apple.com under Sign-In and Security." >&2
+    echo "" >&2
+    echo "To build and sign without notarising, re-run with --signed-only." >&2
+    exit 1
+  fi
+  echo "Notary profile:   $PROFILE (resolved)"
+else
+  echo "Notary profile:   skipped (--signed-only)"
+fi
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Note: working tree is dirty; the build will not match any commit."
+fi
+echo "Commit:           $(git rev-parse --short HEAD)"
+
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# ---------------------------------------------------------------------------
+# Optional pre-build verification
+# ---------------------------------------------------------------------------
+
+if [[ "$VERIFY_FIRST" == "true" ]]; then
+  step "Verifying before building"
+  # The release feature set first: an import used only under those features looks
+  # unused to a default-feature check, and removing it fails at bundle time, after
+  # the full build.
+  cargo check -p warp --lib --features release_bundle,cocoa_sentry,extern_plist
+  cargo check -p warp --all-targets
+  cargo fmt --all -- --check
+  cargo test -p warp --lib
+fi
+
+# ---------------------------------------------------------------------------
+# Build
+# ---------------------------------------------------------------------------
+
+step "Building and signing"
+if [[ "$SIGNED_ONLY" == "true" ]]; then
+  ./script/bundle -c oss --developer-id --arch aarch64
+else
+  ./script/bundle -c oss --developer-id --notarize --notary-profile "$PROFILE" --arch aarch64
+fi
+
+# ---------------------------------------------------------------------------
+# Verify
+# ---------------------------------------------------------------------------
+
+step "Verifying $APP"
+codesign --verify --deep --strict --verbose=2 "$APP"
+spctl -a -vvv -t exec "$APP"
+if [[ "$SIGNED_ONLY" == "false" ]]; then
+  xcrun stapler validate "$APP"
+fi
+
+if [[ -f "$DMG" ]]; then
+  step "Verifying the app inside the disk image, as a user would get it"
+  if [[ "$SIGNED_ONLY" == "false" ]]; then
+    xcrun stapler validate "$DMG"
+  fi
+
+  MOUNT_POINT="$(hdiutil attach "$DMG" -nobrowse -readonly -mountrandom /tmp \
+    | grep -o '/tmp/[^ ]*' | head -1)"
+  if [[ -z "$MOUNT_POINT" ]]; then
+    echo "Failed to mount $DMG" >&2
+    exit 1
+  fi
+  trap 'hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true' EXIT
+
+  STAGING="$(mktemp -d)"
+  cp -R "$MOUNT_POINT/WarpNine.app" "$STAGING/"
+  hdiutil detach "$MOUNT_POINT" -quiet
+  trap - EXIT
+
+  # What Safari sets on a download. Gatekeeper treats a quarantined copy far more
+  # strictly than one that has always been local.
+  xattr -w com.apple.quarantine "0081;00000000;Safari;" "$STAGING/WarpNine.app"
+  codesign --verify --deep --strict "$STAGING/WarpNine.app"
+  if [[ "$SIGNED_ONLY" == "false" ]]; then
+    xcrun stapler validate "$STAGING/WarpNine.app"
+    spctl -a -vvv -t exec "$STAGING/WarpNine.app"
+  fi
+  rm -rf "$STAGING"
+  echo "Extracted, quarantined copy validates."
+else
+  echo "No disk image was produced; see the create-dmg warnings above." >&2
+fi
+
+# ---------------------------------------------------------------------------
+# Smoke test
+# ---------------------------------------------------------------------------
+
+step "Smoke test"
+SMOKE="$(mktemp -d)"
+cp -R "$APP" "$SMOKE/"
+"$SMOKE/WarpNine.app/Contents/MacOS/warp-nine" > "$SMOKE/out.log" 2> "$SMOKE/err.log" &
+SMOKE_PID=$!
+sleep 15
+if kill -0 "$SMOKE_PID" 2>/dev/null; then
+  # `wait` after the kill so the shell reaps the job quietly; without it job control
+  # prints "Terminated: 15", which reads like a failure in an otherwise clean run.
+  kill "$SMOKE_PID" 2>/dev/null || true
+  wait "$SMOKE_PID" 2>/dev/null || true
+  echo "Ran for 15s without exiting."
+  if [[ -s "$SMOKE/err.log" ]]; then
+    echo "stderr was not empty:"
+    head -20 "$SMOKE/err.log"
+  else
+    echo "stderr empty."
+  fi
+else
+  echo "The app exited within 15s. stderr:" >&2
+  head -40 "$SMOKE/err.log" >&2
+  rm -rf "$SMOKE"
+  exit 1
+fi
+rm -rf "$SMOKE"
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+
+step "Done"
+echo "Commit:    $(git rev-parse --short HEAD)"
+echo "Identity:  $SIGNING_ID"
+if [[ "$SIGNED_ONLY" == "true" ]]; then
+  echo "Notarised: NO (--signed-only). A downloaded copy will be blocked by"
+  echo "           Gatekeeper until it is opened once via right-click > Open."
+else
+  echo "Notarised: yes, ticket stapled to the app, the image, and the app inside it"
+fi
+echo ""
+printf '%-22s %10s  %s\n' "artifact" "size" "sha256"
+for f in "$APP/Contents/MacOS/warp-nine" "$DMG"; do
+  [[ -e "$f" ]] || continue
+  printf '%-22s %10s  %s\n' \
+    "$(basename "$f")" \
+    "$(du -h "$f" | cut -f1)" \
+    "$(shasum -a 256 "$f" | cut -d' ' -f1)"
+done
+echo ""
+echo "Artifacts in $OUT_DIR"

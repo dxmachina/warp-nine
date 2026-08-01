@@ -178,27 +178,20 @@ fn mock_server_notebook(title: impl Into<String>, data: impl Into<String>) -> Se
     )
 }
 
-/// Send changed objects to [`UpdateManager`] so that tests requiring "up-to-date" metadata can run.
+/// Puts notebooks into [`CloudModel`] so tests requiring "up-to-date" metadata can run.
+///
+/// LOCAL FORK: this went through `UpdateManager::mock_initial_load`, which replayed a
+/// server fetch response. That path went with cloud sync, so the notebooks are inserted
+/// directly through the same upsert the fetch handler used to call.
 async fn initial_load(app: &mut App, updated_notebooks: impl Into<Vec<ServerNotebook>>) {
-    let response = InitialLoadResponse {
-        updated_notebooks: updated_notebooks.into(),
-        deleted_notebooks: Default::default(),
-        updated_workflows: Default::default(),
-        deleted_workflows: Default::default(),
-        updated_folders: Default::default(),
-        deleted_folders: Default::default(),
-        user_profiles: Default::default(),
-        updated_generic_string_objects: Default::default(),
-        deleted_generic_string_objects: Default::default(),
-        action_histories: Default::default(),
-        mcp_gallery: Default::default(),
-    };
-
-    let load_complete = UpdateManager::handle(app).update(app, |update_manager, ctx| {
-        update_manager.mock_initial_load(response, ctx);
-        update_manager.initial_load_complete()
+    let notebooks = updated_notebooks.into();
+    app.update(|ctx| {
+        CloudModel::handle(ctx).update(ctx, |model, ctx| {
+            for notebook in notebooks {
+                model.upsert_from_server_notebook(notebook, ctx);
+            }
+        });
     });
-    load_complete.await
 }
 
 /// Wait for all edits to be saved.
@@ -563,109 +556,8 @@ fn test_not_eager_baton_grab_different_editor() {
     });
 }
 
-/// Test to make sure we do not eagerly enter edit mode when another editor took the baton
-/// while Warp was closed.
-#[test]
-fn test_baton_grab_editor_changed_offline() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let other_uid = "ben@warp.dev";
-        let other_email = "ben@warp.dev";
-
-        let (_, notebook_view, _) = create_notebook(&mut app);
-
-        // Create a notebook with no editor.
-        let mut server_notebook = mock_server_notebook("Test Notebook", "Some text");
-        let cloud_notebook = CloudNotebook::new_from_server(server_notebook.clone());
-
-        // Add the notebook to the cloud model, with no editor.
-        CloudModel::handle(&app).update(&mut app, |cloud_model, _| {
-            cloud_model.add_object(cloud_notebook.id, cloud_notebook.clone());
-        });
-
-        // Open the notebook, before initial load has finished.
-        let open_future = open_notebook(&mut app, &notebook_view, cloud_notebook);
-
-        // In the meantime, complete initial load with a new editor.
-        server_notebook.metadata.metadata_last_updated_ts =
-            (Utc::now() + Duration::seconds(1)).into();
-        server_notebook.metadata.current_editor_uid = Some(other_uid.to_string());
-        UserProfiles::handle(&app).update(&mut app, |user_profiles, _| {
-            user_profiles.insert_profiles(&vec![UserProfileWithUID {
-                firebase_uid: UserUid::new(other_uid),
-                display_name: Some(other_email.to_string()),
-                email: other_email.to_string(),
-                photo_url: "".to_string(),
-            }]);
-        });
-
-        initial_load(&mut app, vec![server_notebook]).await;
-
-        // The notebook should load and not take the baton.
-        open_future.await;
-        notebook_view.read(&app, |notebook, ctx| {
-            assert_eq!(
-                notebook
-                    .active_notebook_data
-                    .as_ref(ctx)
-                    .current_editor(ctx),
-                Some(Editor {
-                    state: EditorState::OtherUserActive,
-                    email: Some(other_email.to_string())
-                })
-            );
-            assert_eq!(notebook.mode_app_ctx(ctx), Mode::View);
-        })
-    });
-}
-
-/// Test to make sure we can eagerly grab the baton if the previous editor exits offline.
-#[test]
-fn test_baton_grab_editor_left_offline() {
-    App::test((), |mut app| async move {
-        initialize_app(&mut app);
-
-        let other_uid = "ben@warp.dev";
-
-        let (_, notebook_view, _) = create_notebook(&mut app);
-
-        // Create a notebook with an editor.
-        let mut server_notebook = mock_server_notebook("Test Notebook", "Some text");
-        server_notebook.metadata.current_editor_uid = Some(other_uid.to_string());
-        let cloud_notebook = CloudNotebook::new_from_server(server_notebook.clone());
-
-        // Add the notebook to the cloud model, with the saved editor.
-        CloudModel::handle(&app).update(&mut app, |cloud_model, _| {
-            cloud_model.add_object(cloud_notebook.id, cloud_notebook.clone());
-        });
-
-        // Open the notebook, before initial load has finished.
-        let open_future = open_notebook(&mut app, &notebook_view, cloud_notebook);
-
-        // In the meantime, complete initial load with no editor.
-        server_notebook.metadata.metadata_last_updated_ts =
-            (Utc::now() + Duration::seconds(1)).into();
-        server_notebook.metadata.current_editor_uid = None;
-        initial_load(&mut app, vec![server_notebook]).await;
-
-        // The notebook should load and take the baton.
-        open_future.await;
-        notebook_view.read(&app, |notebook, ctx| {
-            assert_eq!(
-                notebook
-                    .active_notebook_data
-                    .as_ref(ctx)
-                    .current_editor(ctx),
-                Some(Editor {
-                    state: EditorState::CurrentUser,
-                    email: Some(TEST_USER_EMAIL.to_string())
-                })
-            );
-            assert_eq!(notebook.mode_app_ctx(ctx), Mode::Editing);
-        })
-    });
-}
+// LOCAL FORK: two offline edit-baton tests went with the check they drove. Both set up a
+// second user holding the baton, a state that needs a server to reach.
 
 #[test]
 fn test_close_with_pending_changes() {

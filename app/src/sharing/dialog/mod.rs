@@ -318,7 +318,6 @@ impl SharingDialog {
                 CloudModelEvent::ObjectDeleted { .. } => return,
                 CloudModelEvent::ObjectForceExpanded { .. } => return,
                 CloudModelEvent::ObjectSynced { .. }
-                | CloudModelEvent::InitialLoadCompleted
                 | CloudModelEvent::EnvironmentLastTaskRunTimestampsUpdated => return,
             };
 

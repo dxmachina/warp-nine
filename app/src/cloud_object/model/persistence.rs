@@ -91,7 +91,6 @@ pub enum CloudModelEvent {
         server_id: ServerId,
     },
     /// The initial bulk load of cloud objects from the server has completed.
-    InitialLoadCompleted,
     /// Environment last-task timestamps fetched outside the generic cloud-object sync were merged.
     EnvironmentLastTaskRunTimestampsUpdated,
 }

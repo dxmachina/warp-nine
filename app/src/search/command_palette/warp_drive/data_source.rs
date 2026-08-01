@@ -71,17 +71,10 @@ impl DataSource {
         event: &CloudModelEvent,
         ctx: &mut ModelContext<Self>,
     ) {
-        // When the initial bulk load completes, rebuild the entire search index once.
-        // Per-object events are suppressed at the source during initial load, so this
-        // is the only event we receive from that batch.
-        if let CloudModelEvent::InitialLoadCompleted = event {
-            self.searcher
-                .refresh_search_index(ctx)
-                .unwrap_or_else(|err| {
-                    report_error!(err.context("Error refreshing search index after initial load"));
-                });
-            return;
-        }
+        // LOCAL FORK: an `InitialLoadCompleted` arm rebuilt the whole index once after the
+        // cloud bulk load, because per-object events were suppressed during that batch.
+        // There is no bulk load. The index is built in this data source's constructor from
+        // whatever the model already holds, and maintained per-object below.
 
         match event {
             CloudModelEvent::ObjectCreated { type_and_id }

@@ -1489,11 +1489,15 @@ impl NotebookView {
         });
 
         // LOCAL FORK: this waited on `UpdateManager::initial_load_complete()` for the
-        // server to say who currently holds the edit baton. Nothing arrives from a server,
-        // so the check runs immediately against what is already in the model. The outcome is
-        // unchanged for a local notebook: it has no `current_editor_uid`, so this takes the
-        // "unknown editor" branch and opens in view mode, and the user enters edit mode
-        // through `Mode::View => grab_edit_access_or_display_access_dialog` as before.
+        // server to say who currently holds the edit baton. Nothing resolves that without a
+        // server, so the check runs immediately against what the model already has.
+        //
+        // Production behaviour is unchanged. With no account, `object_current_editor`
+        // returns `None`, so this takes the "unknown editor" branch and opens in view mode;
+        // the user enters edit mode through
+        // `Mode::View => grab_edit_access_or_display_access_dialog` exactly as before. Tests
+        // run with an auth state that does have a user, which is why they still exercise the
+        // grab paths below.
         let baton_future = ctx.spawn(std::future::ready(()), |me, _, ctx| {
             let active_notebook_data = me.active_notebook_data.as_ref(ctx);
 

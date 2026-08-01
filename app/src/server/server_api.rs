@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod block;
 #[cfg(not(target_family = "wasm"))]
 // LOCAL FORK: `factory` went with the agent's Factory harness client. `FactoryClient`
 // had no users left once `get_factory_client` was removed.
@@ -19,7 +18,6 @@ use std::time::Duration;
 use ::http::header::CONTENT_LENGTH;
 use anyhow::{Context, Result, anyhow};
 use auth::AuthClient;
-use block::BlockClient;
 use channel_versions::ChannelVersions;
 use chrono::{DateTime, FixedOffset};
 use instant::Instant;
@@ -774,10 +772,6 @@ impl ServerApiProvider {
 
     pub fn get_auth_client(&self) -> Arc<dyn AuthClient> {
         self.auth_client.clone()
-    }
-
-    pub fn get_block_client(&self) -> Arc<dyn BlockClient> {
-        self.server_api.clone()
     }
 
     pub fn get_team_client(&self) -> Arc<dyn TeamClient> {

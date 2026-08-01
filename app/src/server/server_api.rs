@@ -9,7 +9,6 @@ pub mod block;
 // LOCAL FORK: `managed_mcp` went with the MCP client. `ManagedMcpClient` had no users
 // left once `get_managed_mcp_client` was removed.
 pub mod object;
-pub mod referral;
 pub mod team;
 
 use std::ops::Deref;
@@ -26,7 +25,6 @@ use chrono::{DateTime, FixedOffset};
 use instant::Instant;
 use object::ObjectClient;
 use parking_lot::Mutex;
-use referral::ReferralsClient;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use team::TeamClient;
@@ -776,10 +774,6 @@ impl ServerApiProvider {
 
     pub fn get_auth_client(&self) -> Arc<dyn AuthClient> {
         self.auth_client.clone()
-    }
-
-    pub fn get_referrals_client(&self) -> Arc<dyn ReferralsClient> {
-        self.server_api.clone()
     }
 
     pub fn get_block_client(&self) -> Arc<dyn BlockClient> {

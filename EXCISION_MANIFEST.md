@@ -1062,3 +1062,111 @@ before packaging. That in turn made any notarisation failure fatal to the whole
 run, and since the script clears the previous build's artifacts on startup, a
 credential that stopped resolving destroyed the prior notarised output too.
 Failure is now recorded, packaging still runs, and the script exits non-zero.
+
+## Tier 2: the cloud object write path (2026-08-01)
+
+Three commits, 20,473 lines. This is the stack that sat behind the thirteen
+`UpdateManager` methods left after tier 1.
+
+`UpdateManager` was the junction between three parties: the views that mutate
+workflows, notebooks, folders and env var collections; the sync queue that carried
+those mutations to the backend; and the real-time channel that carried other
+clients' mutations back. Both server-facing sides are gone, and every write now
+lands in the in-memory model and in sqlite, synchronously.
+
+### Five dead affordances, all the same shape
+
+Each of these methods opened with a guard that returned early when the object had
+no server ID, and an object created in this build never gets one. The guard was
+invisible: no error, no log line, nothing on screen. The affordance was enabled
+and did nothing.
+
+- Trash, in the workflow, notebook, env-var-collection and workflow-argument
+  menus. There was no way to remove a workflow you had made.
+- Untrash, so anything trashed before this fork stayed trashed.
+- Permanent delete.
+- The notebook edit baton. The common call hid it -- the caller switches to edit
+  mode itself -- but `grab_edit_access(false, ..)` is what the "someone else is
+  editing" modal's Take Access button dispatches, and that caller waits for the
+  server's answer before switching. Nothing creates that state locally, but a
+  notebook synced before this fork can still carry another user's uid in its
+  persisted metadata, and then the modal is reachable.
+- Drive sharing. `ShareableObject::WarpDriveObject` carries a `ServerId`, so it
+  could not even be constructed for a local object; the Share button never
+  appeared. Session sharing is a different feature on a different transport and
+  is untouched.
+
+The first four are local operations now. The fifth is gone.
+
+### Three bugs the removal would have introduced
+
+Removing a response handler is not free when something else was counting on it to
+run.
+
+`GenericCloudObject::new_local` started every object at `InFlight(1)`, counting the
+create request that used to follow. Nothing decrements it any more, so every object
+a user created would have been permanently "unsaved" -- which is what
+`num_unsaved_objects_to_warn_about_before_quitting` counts. Quitting after making a
+single workflow would have warned about unsaved work already on disk, every time,
+with no way to clear it. `update_object` incremented the same counter on every edit.
+
+Env var collections mark themselves `Unsaved` while editing and were marked `Saved`
+again by the server's answer. `should_disable_invoke` keeps the Load button disabled
+unless the status is `Saved`, so the button would have gone dead at the first
+keystroke and stayed dead.
+
+The general lesson: when you delete the half of a pair that clears a flag, find
+every reader of that flag before you delete the half that sets it.
+
+### Rebuilding rather than deleting
+
+The Warp Drive import queue existed because a file inside a folder could not be
+uploaded until the folder came back from the server with an id. A child points at
+its parent's client id now, so the import runs straight through; folder import is
+no longer gated on the queue running, and the "still syncing" spinner threaded
+through three call layers became the "saved locally" icon it always resolved to.
+
+`UserWorkspaces` and `Workspace` were kept when their fetch went, for the same
+reason the referral theme model was: they load from sqlite, so a user who belonged
+to a team before this fork still has that workspace and its settings. Deleting the
+model would have taken away data people already have.
+
+### Orphan detection: match the import path, not the name
+
+Thirty-nine GraphQL operations had no consumer. Name matching reported 27 of them
+as live, every one a false positive: `create_folder` matched
+`UpdateManager::create_folder`, `MoveObject` matched a comment, `TrashObject`
+matched an unrelated workflow-modal action, and the generated `User`, `Workspace`,
+`Block`, `Task` and `Space` types matched something in almost every file in the
+tree. A cynic operation is only reachable through `warp_graphql::mutations::<name>`
+or its grouped form, so that path is the only sound thing to search for.
+
+### Tooling: `cargo fix` is not usable here, and neither was my replacement
+
+`cargo fix --lib` strips imports that only `#[cfg(test)]` code reads. It did:
+`crate::auth::{credentials, user}`, `InitialLoadResponse`, `ServerIdAndType`, and
+`Arc`, `UserUid` and `MembershipRole` in `user_workspaces`. `cargo fix
+--all-targets` applies the lib fixes first and then fails on the tests it just
+broke. Both passes were reverted.
+
+The replacement read warnings from the all-targets build instead, which is the
+right input, and still went wrong: two warnings on the same line each deleted a
+line, so the second deletion took the neighbouring import with it, and in one case
+a closing brace inside a `cfg_if!`. Six files were damaged, one of them into a
+parse error. Everything was restored by hand and the sweep abandoned. Some
+unused-import warnings remain. A warning is not worth a broken build.
+
+The three re-exports that only tests read now carry `#[allow(unused_imports)]` and
+a comment saying so, to stop the next person removing them.
+
+### What is not behind the UpdateManager methods
+
+`warp_server_client` (3,022 lines) and `warp_server_auth` (1,391) survive. They
+were named as part of this tier, but they are not gated on the cloud-object path:
+they back shared terminal sessions, the remote-server SSH context, API key
+management, the multi-agent client and crash reporting. Removing them means
+removing session sharing, which is roughly 13,000 lines of live terminal
+functionality and a separate decision.
+
+`server_api` is reduced but not gone. What remains is the auth client (API keys,
+token refresh) and the HTTP client that session sharing and project init use.

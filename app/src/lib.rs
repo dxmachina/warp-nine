@@ -247,7 +247,6 @@ use crate::server::sync_queue::{QueueItem, SyncQueue};
 use crate::server::telemetry::PaletteSource;
 pub use crate::server::telemetry::{AgentModeEntrypoint, AgentModeEntrypointSelectionType};
 use crate::session_management::{RunningSessionSummary, SessionNavigationData};
-use crate::settings::cloud_preferences_syncer::initialize_cloud_preferences_syncer;
 use crate::settings::manager::SettingsManager;
 use crate::settings::{AccessibilitySettings, ScrollSettings, SelectionSettings};
 use crate::settings_view::DisplayCount;
@@ -1689,14 +1688,8 @@ pub(crate) fn initialize_app(
         )
     });
 
-    let toml_file_path = settings::user_preferences_toml_file_path();
-    ctx.add_singleton_model(move |ctx| {
-        initialize_cloud_preferences_syncer(
-            toml_file_path,
-            startup_toml_parse_error_for_syncer.as_deref(),
-            ctx,
-        )
-    });
+    // LOCAL FORK: the cloud preferences syncer went with cloud sync. It reconciled the
+    // settings file against cloud preference objects in both directions.
 
     // LogManager must be registered before any subsystem (e.g. MCP, LSP) that creates file-based loggers.
     ctx.add_singleton_model(|_| simple_logger::manager::LogManager::new());

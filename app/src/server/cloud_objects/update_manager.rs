@@ -117,9 +117,6 @@ pub struct ObjectOperationResult {
 #[derive(Debug)]
 pub enum UpdateManagerEvent {
     ObjectOperationComplete { result: ObjectOperationResult },
-    CloudPreferencesUpdated { updated: Vec<Preference> },
-    MCPGalleryUpdated { templates: Vec<MCPGalleryTemplate> },
-    AmbientTaskUpdated { timestamp: DateTime<Utc> },
 }
 
 /// An enum for choosing the behavior of the fetch_single_cloud_object function.
@@ -164,9 +161,6 @@ where
 pub struct UpdateManager {
     model_event_sender: Option<SyncSender<ModelEvent>>,
     object_client: Arc<dyn ObjectClient>,
-    next_poll_abort_handle: Option<AbortHandle>,
-    in_flight_request_abort_handle: Option<AbortHandle>,
-    should_poll_for_updated_objects: bool,
     spawned_futures: Vec<FutureId>,
     has_initial_load: Condition,
 }
@@ -182,9 +176,6 @@ impl UpdateManager {
             me.handle_network_status_changed(event, ctx);
         });
 
-        let team_tester_status = TeamTesterStatus::handle(ctx);
-        ctx.subscribe_to_model(&team_tester_status, Self::handle_team_tester_status_changed);
-
         let sync_queue = SyncQueue::handle(ctx);
         ctx.subscribe_to_model(&sync_queue, |me, _, event, ctx| {
             me.handle_model_event(event, ctx);
@@ -193,9 +184,6 @@ impl UpdateManager {
         Self {
             model_event_sender,
             object_client,
-            next_poll_abort_handle: None,
-            in_flight_request_abort_handle: None,
-            should_poll_for_updated_objects: false,
             spawned_futures: Default::default(),
             has_initial_load: Condition::new(),
         }
@@ -272,20 +260,6 @@ impl UpdateManager {
         self.save_to_db([ModelEvent::DeleteObjects {
             ids: object_ids_and_types,
         }]);
-    }
-
-    fn handle_team_tester_status_changed(
-        &mut self,
-        _: ModelHandle<TeamTesterStatus>,
-        event: &TeamTesterStatusEvent,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        let TeamTesterStatusEvent::InitiateDataPollers { force_refresh } = event;
-        if *force_refresh {
-            self.refresh_updated_objects(ctx);
-        }
-
-        self.start_polling_for_updated_objects(ctx);
     }
 
     fn handle_model_event(&mut self, event: &SyncQueueEvent, ctx: &mut ModelContext<Self>) {
@@ -590,122 +564,6 @@ impl UpdateManager {
         });
     }
 
-    pub fn start_polling_for_updated_objects(&mut self, ctx: &mut ModelContext<Self>) {
-        let is_online = NetworkStatus::as_ref(ctx).is_online();
-
-        if !self.should_poll_for_updated_objects && is_online {
-            self.should_poll_for_updated_objects = true;
-            self.poll_for_updated_objects(ctx);
-        }
-    }
-
-    /// Out-of-band (from the regular poll) refresh of updated objects.
-    pub fn refresh_updated_objects(&mut self, ctx: &mut ModelContext<Self>) {
-        let object_client = self.object_client.clone();
-        let cloud_model = CloudModel::as_ref(ctx);
-        let versions_for_all_objects = cloud_model.get_versions_for_all_objects(ctx);
-        let spawned_handle = ctx.spawn_with_retry_on_error(
-            move || {
-                let object_client = object_client.clone();
-                let cloned_objects_to_update = versions_for_all_objects.clone();
-                async move {
-                    object_client
-                        .fetch_changed_objects(
-                            cloned_objects_to_update,
-                            false, /* force_refresh */
-                        )
-                        .await
-                }
-            },
-            OUT_OF_BAND_REQUEST_RETRY_STRATEGY,
-            |update_manager, res, ctx| {
-                update_manager.handle_fetch_changed_objects_with_request_state(
-                    res, false, /* force_refresh */
-                    ctx,
-                );
-            },
-        );
-        self.spawned_futures.push(spawned_handle.future_id());
-    }
-
-    pub fn stop_polling_for_updated_objects(&mut self) {
-        self.should_poll_for_updated_objects = false;
-        self.abort_existing_poll();
-    }
-
-    fn abort_existing_poll(&mut self) {
-        if let Some(abort_handle) = self.in_flight_request_abort_handle.take() {
-            abort_handle.abort();
-        }
-
-        if let Some(abort_handle) = self.next_poll_abort_handle.take() {
-            abort_handle.abort();
-        }
-    }
-
-    fn poll_for_updated_objects(&mut self, ctx: &mut ModelContext<Self>) {
-        self.abort_existing_poll();
-
-        if !self.should_poll_for_updated_objects {
-            return;
-        }
-
-        // Don't poll when the user is logged out to avoid spamming auth errors in the logs.
-        // Polling will be restarted when the user logs in via `initiate_data_pollers`.
-        if !AuthStateProvider::as_ref(ctx).get().is_logged_in() {
-            self.should_poll_for_updated_objects = false;
-            return;
-        }
-
-        let object_client = self.object_client.clone();
-        let cloud_model = CloudModel::as_ref(ctx);
-        let versions_for_all_objects = cloud_model.get_versions_for_all_objects(ctx);
-
-        // If there's a force refresh for cloud objects pending, we'll execute the refresh now
-        let force_refresh = cloud_model.cloud_objects_force_refresh_pending();
-        // We retry a few times here in case there are any transient network errors.
-        let spawned_handle = ctx.spawn_with_retry_on_error(
-            move || {
-                let object_client = object_client.clone();
-                let cloned_objects_to_update = versions_for_all_objects.clone();
-                async move {
-                    object_client
-                        .fetch_changed_objects(cloned_objects_to_update, force_refresh)
-                        .await
-                }
-            },
-            PERIODIC_POLL_RETRY_STRATEGY,
-            move |update_manager, res, ctx| {
-                // Only poll if `spawn_with_retry_on_error` is not going to retry again so we don't end up with multiple
-                // polls running simultaneously.
-                let should_poll_again = !res.has_pending_retries();
-                update_manager.handle_fetch_changed_objects_with_request_state(
-                    res,
-                    force_refresh,
-                    ctx,
-                );
-
-                if should_poll_again {
-                    let next_poll_handle = ctx.spawn(
-                        async move {
-                            Timer::after(duration_with_jitter(
-                                PERIODIC_POLL,
-                                0.2, /* max_jitter_multiplier */
-                            ))
-                            .await
-                        },
-                        |update_manager, _, ctx| {
-                            update_manager.poll_for_updated_objects(ctx);
-                        },
-                    );
-                    update_manager.next_poll_abort_handle = Some(next_poll_handle.abort_handle());
-                }
-            },
-        );
-
-        self.in_flight_request_abort_handle = Some(spawned_handle.abort_handle());
-    }
-
     fn handle_network_status_changed(
         &mut self,
         event: &NetworkStatusEvent,
@@ -713,11 +571,10 @@ impl UpdateManager {
     ) {
         match event {
             NetworkStatusEvent::NetworkStatusChanged { new_status } => match new_status {
-                NetworkStatusKind::Online => {
-                    self.start_polling_for_updated_objects(ctx);
-                }
+                // LOCAL FORK: object polling went with cloud sync; only the sync queue
+                // still reacts to going offline.
+                NetworkStatusKind::Online => {}
                 NetworkStatusKind::Offline => {
-                    self.stop_polling_for_updated_objects();
                     SyncQueue::handle(ctx).update(ctx, |queue, _ctx| queue.stop_dequeueing())
                 }
             },
@@ -963,22 +820,8 @@ impl UpdateManager {
             });
         }
 
-        // Fetch environment "last used" timestamps separately and merge them into the environments.
-        // This is done as a separate call because the timestamps come from GetCloudEnvironments query
-        // rather than the generic object sync.
-        self.fetch_and_merge_environment_timestamps(ctx);
-
-        if !response.mcp_gallery.is_empty() {
-            ctx.emit(UpdateManagerEvent::MCPGalleryUpdated {
-                templates: response.mcp_gallery,
-            });
-        }
-
-        if !updated_preferences.is_empty() {
-            ctx.emit(UpdateManagerEvent::CloudPreferencesUpdated {
-                updated: updated_preferences,
-            });
-        }
+        // LOCAL FORK: the MCP-gallery and cloud-preference events went with cloud sync.
+        // Nothing subscribed to either once the preferences syncer was removed.
     }
 
     fn handle_team_memberships_changed(&mut self, ctx: &mut ModelContext<UpdateManager>) {
@@ -986,30 +829,6 @@ impl UpdateManager {
         TeamUpdateManager::handle(ctx).update(ctx, |manager, ctx| {
             std::mem::drop(manager.refresh_workspace_metadata(ctx));
         });
-        self.refresh_updated_objects(ctx);
-    }
-
-    /// Fetches environment "last used" timestamps from the server and merges them
-    /// into the in-memory environment objects.
-    fn fetch_and_merge_environment_timestamps(&mut self, ctx: &mut ModelContext<UpdateManager>) {
-        let object_client = self.object_client.clone();
-        let future = ctx.spawn(
-            async move {
-                object_client
-                    .fetch_environment_last_task_run_timestamps()
-                    .await
-            },
-            |_update_manager, result, ctx| {
-                if let Ok(timestamps) = result {
-                    CloudModel::handle(ctx).update(ctx, |cloud_model, ctx| {
-                        cloud_model.update_environment_last_task_run_timestamps(timestamps, ctx);
-                    });
-                } else if let Err(e) = result {
-                    log::warn!("Failed to fetch environment last task run timestamps: {e:#}");
-                }
-            },
-        );
-        self.spawned_futures.push(future.future_id());
     }
 
     /// Generic handler updating all objects of a given model type from the server (e.g. all updated/deleted notebooks or workflows).
@@ -1213,13 +1032,6 @@ impl UpdateManager {
         // Update sqlite.
         let cloud_model = CloudModel::as_ref(ctx);
         self.save_in_memory_object_to_sqlite(cloud_model, &uid);
-
-        if let ServerCloudObject::Preference(preference) = &cloud_object {
-            let preference = preference.model.string_model.clone();
-            ctx.emit(UpdateManagerEvent::CloudPreferencesUpdated {
-                updated: vec![preference],
-            });
-        }
     }
 
     /// Compare incoming metadata_ts and in_memory metadata_ts to determine whether to accept a new incoming metadata

@@ -9,9 +9,6 @@ use warpui::{AppContext, Entity, ModelContext, SingletonEntity, WindowId};
 use super::hoa_onboarding;
 use super::view::feature_intro_modal::{FEATURE_INTROS, FeatureIntroId};
 use crate::channel::{Channel, ChannelState};
-use crate::settings::cloud_preferences_syncer::{
-    CloudPreferencesSyncer, CloudPreferencesSyncerEvent,
-};
 use crate::terminal::general_settings::GeneralSettings;
 use crate::workspaces::workspace::CustomerType;
 

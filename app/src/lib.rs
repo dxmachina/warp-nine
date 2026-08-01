@@ -55,7 +55,6 @@ mod plugin;
 mod prefix;
 #[cfg(target_os = "macos")]
 mod preview_config_migration;
-mod pricing;
 mod profiling;
 mod projects;
 mod prompt;
@@ -1319,7 +1318,11 @@ pub(crate) fn initialize_app(
 
     ctx.add_singleton_model(|_| SettingsPaneManager::new());
     ctx.add_singleton_model(|_| NetworkLogPaneManager::default());
-    ctx.add_singleton_model(|_| pricing::PricingInfoModel::new());
+    // LOCAL FORK: `PricingInfoModel` went with the workspace-metadata fetch. It held the
+    // subscription plan and add-on credit price list, and its only writer was the handler
+    // for that response. Nothing read it: all five accessors -- `plans`, `plan_pricing`,
+    // `overage_cost_dollars`, `monthly_plan_cost_dollars` and `addon_credits_options` --
+    // had no call sites left once the billing UI went with the agent.
     #[cfg(target_os = "macos")]
     if !launch_mode.is_headless() {
         AppearanceManager::as_ref(ctx).set_app_icon(ctx);

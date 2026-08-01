@@ -31,7 +31,6 @@ use crate::editor::{DisplayPoint, EditorAction, Point, TextStyleOperation};
 use crate::input_suggestions::Item;
 use crate::network::NetworkStatus;
 use crate::persisted_workspace::PersistedWorkspace;
-use crate::pricing::PricingInfoModel;
 use crate::search::files::model::FileSearchModel;
 use crate::search::slash_command_menu::static_commands::commands;
 use crate::server::cloud_objects::update_manager::UpdateManager;
@@ -240,7 +239,6 @@ pub fn initialize_app(app: &mut App) {
     app.add_singleton_model(OneTimeModalModel::new);
     app.add_singleton_model(|_| WorkspaceRegistry::new());
     app.add_singleton_model(|_| ToastStack);
-    app.add_singleton_model(|_| PricingInfoModel::new());
     app.add_singleton_model(ByoLlmAuthBannerSessionState::new);
     app.add_singleton_model(PersistedWorkspace::new_for_test);
     // `LocalShellState` captures the user's interactive login-shell PATH (used

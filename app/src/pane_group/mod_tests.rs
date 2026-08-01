@@ -23,7 +23,6 @@ use crate::notebooks::editor::keys::NotebookKeybindings;
 use crate::notebooks::manager::NotebookManager;
 use crate::notebooks::notebook::NotebookView;
 use crate::persisted_workspace::PersistedWorkspace;
-use crate::pricing::PricingInfoModel;
 use crate::search::files::model::FileSearchModel;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::server_api::ServerApiProvider;
@@ -128,7 +127,6 @@ fn initialize_app(app: &mut App) {
     app.add_singleton_model(|_| WorkspaceRegistry::new());
     app.add_singleton_model(UndoCloseStack::new);
     app.add_singleton_model(|_| IgnoredSuggestionsModel::new(vec![]));
-    app.add_singleton_model(|_| PricingInfoModel::new());
     app.add_singleton_model(|_| History::new(vec![]));
     app.add_singleton_model(remote_server::manager::RemoteServerManager::new);
 }

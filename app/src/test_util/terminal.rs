@@ -17,7 +17,6 @@ use crate::context_chips::prompt::Prompt;
 use crate::experiments;
 use crate::network::NetworkStatus;
 use crate::persisted_workspace::PersistedWorkspace;
-use crate::pricing::PricingInfoModel;
 use crate::search::files::model::FileSearchModel;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::server_api::ServerApiProvider;
@@ -113,7 +112,6 @@ pub fn initialize_app_for_terminal_view(app: &mut App) {
     app.add_singleton_model(OneTimeModalModel::new);
     app.add_singleton_model(|_| WorkspaceRegistry::new());
     app.add_singleton_model(|_| IgnoredSuggestionsModel::new(vec![]));
-    app.add_singleton_model(|_| PricingInfoModel::new());
     app.add_singleton_model(ByoLlmAuthBannerSessionState::new);
     app.add_singleton_model(PersistedWorkspace::new_for_test);
 

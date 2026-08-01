@@ -30,7 +30,6 @@ use crate::notebooks::editor::keys::NotebookKeybindings;
 use crate::notebooks::notebook::NotebookView;
 use crate::pane_group::{Direction, PaneGroupAction, PaneId};
 use crate::persisted_workspace::PersistedWorkspace;
-use crate::pricing::PricingInfoModel;
 #[cfg(not(target_family = "wasm"))]
 use crate::remote_server::codebase_index_model::RemoteCodebaseIndexModel;
 use crate::server::cloud_objects::update_manager::UpdateManager;
@@ -152,7 +151,6 @@ pub(crate) fn initialize_app(app: &mut App) {
     // LOCAL FORK: the `CodebaseIndexManager` and `ProjectContextModel` singletons
     // registered here were removed with the codebase indexing surface.
     app.add_singleton_model(|ctx| PersistedWorkspace::new(vec![], HashMap::new(), None, ctx));
-    app.add_singleton_model(|_| PricingInfoModel::new());
     app.add_singleton_model(|_| History::new(vec![]));
 
     // Make sure to initialize the keybindings so that they are available for subviews

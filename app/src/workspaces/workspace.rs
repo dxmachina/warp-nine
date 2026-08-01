@@ -161,32 +161,6 @@ impl Workspace {
             false
         }
     }
-
-    /// Returns true if purchasing addon credits at the given price would reach or exceed the monthly limit.
-    pub fn would_addon_purchase_reach_limit(&self, price_cents: i32) -> bool {
-        if let Some(limit) = self.settings.addon_credits_settings.max_monthly_spend_cents {
-            self.bonus_grants_purchased_this_month.cents_spent + price_cents > limit
-        } else {
-            false
-        }
-    }
-
-    /// Returns the price in cents for the selected auto-reload credit denomination.
-    /// Returns None if auto-reload is not configured or if the denomination can't be found in pricing options.
-    pub fn get_auto_reload_price_cents(
-        &self,
-        addon_credits_options: &[warp_graphql::billing::AddonCreditsOption],
-    ) -> Option<i32> {
-        let selected_credits = self
-            .settings
-            .addon_credits_settings
-            .selected_auto_reload_credit_denomination?;
-
-        addon_credits_options
-            .iter()
-            .find(|option| option.credits == selected_credits)
-            .map(|option| option.price_usd_cents)
-    }
 }
 
 #[derive(Clone, Debug)]

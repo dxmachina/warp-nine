@@ -6,7 +6,13 @@ use std::collections::HashMap;
 use regex::Regex;
 use warp_core::features::FeatureFlag;
 
+// LOCAL FORK: `MembershipRole` and `WorkspaceMemberUsageInfo` below are read only by
+// `#[cfg(test)]` code, so the lib target reports them unused.
+#[allow(unused_imports)]
 use super::team::{MembershipRole, Team};
+#[allow(unused_imports)]
+use super::workspace::WorkspaceMemberUsageInfo;
+#[allow(unused_imports)]
 use crate::auth::{AuthStateProvider, UserUid};
 use warp_core::settings::{ChangeEventReason, Setting};
 use warpui::{
@@ -14,7 +20,6 @@ use warpui::{
     WindowId,
 };
 
-use super::workspace::WorkspaceMemberUsageInfo;
 use super::workspace::{
     AdminEnablementSetting, BillingMetadata, CustomerType, EnterpriseSecretRegex,
     HostEnablementSetting, UgcCollectionEnablementSetting, Workspace, WorkspaceUid,

@@ -40,9 +40,8 @@ use warp_server_client::network_logging::NetworkLogModel;
 use warpui::r#async::BoxFuture;
 use warpui::{Entity, ModelContext, SingletonEntity};
 
-use super::experiments::{ServerExperiment, ServerExperiments};
+use crate::ChannelState;
 use crate::auth::auth_state::AuthState;
-use crate::{ChannelState, settings_view};
 
 pub const FETCH_CHANNEL_VERSIONS_TIMEOUT: std::time::Duration = Duration::from_secs(60);
 #[derive(Serialize)]
@@ -739,19 +738,6 @@ impl ServerApiProvider {
             server_api,
             auth_client,
         }
-    }
-
-    /// Handles fetching server-side experiments by updating the appropriate app state.
-    pub fn handle_experiments_fetched(
-        &self,
-        experiments: Vec<ServerExperiment>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        ServerExperiments::handle(ctx).update(ctx, |state, ctx| {
-            state.apply_latest_state(experiments, ctx);
-        });
-
-        settings_view::handle_experiment_change(ctx);
     }
 
     /// Constructs a new SeverApiProvider for tests.

@@ -16,9 +16,25 @@
 	<true/>
 	<key>com.apple.security.personal-information.photos-library</key>
 	<true/>
-    <key>com.apple.security.application-groups</key>
-    <array>
-    <string>2BBY89MBSN.dev.warp</string>
-    </array>
+	<!--
+	  LOCAL FORK: the `com.apple.security.application-groups` entitlement was
+	  `2BBY89MBSN.dev.warp`, which is upstream's team ID. An app group must be
+	  prefixed with the team ID of the certificate signing it, and on Developer ID
+	  it additionally needs an embedded provisioning profile that provisions the
+	  group. Signing this fork under a different team with upstream's group is
+	  simply wrong, and notarisation is entitled to reject it.
+
+	  Dropping the key is behaviour-neutral here. `warp_core::paths::app_group_container_path`
+	  probes the container by writing a temp file into it and returns `None` when
+	  that fails, so `secure_state_dir()` already returns `None` without the
+	  entitlement. All four callers fall back to `state_dir()`: the sqlite
+	  database, the log manager, the profiler and the LSP logs. That fallback is
+	  what every build of this fork has run on, since `Debug-Entitlements.plist`
+	  never carried the key either.
+
+	  Note for anyone tempted to re-add it under a new team: turning the app group
+	  on moves the sqlite database out of `state_dir()` and into the group
+	  container, so existing installs would come up with no history.
+	-->
 </dict>
 </plist>

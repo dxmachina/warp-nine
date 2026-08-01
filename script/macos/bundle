@@ -96,11 +96,30 @@ function relpath() {
 # instead of uploading a duplicate artifact.
 function notarize_artifact() {
   local artifact="$1"
-  local auth_args=(
-    --apple-id "$WARP_NOTARIZATION_APPLE_ID"
-    --password "$WARP_NOTARIZATION_PASSWORD"
-    --team-id "$APPLE_TEAM_ID"
-  )
+  local auth_args
+  # LOCAL FORK: upstream authenticated only as its own Apple ID with its own
+  # team. A fork notarising under its own account needs one of the other two
+  # forms notarytool accepts, so pick whichever is configured. The original
+  # branch is last and unchanged.
+  if [[ -n "$NOTARY_PROFILE" ]]; then
+    auth_args=(--keychain-profile "$NOTARY_PROFILE")
+  elif [[ -n "${NOTARY_APPLE_ID:-}" ]]; then
+    if [[ -z "${NOTARY_PASSWORD:-}" || -z "${NOTARY_TEAM_ID:-}" ]]; then
+      echo "NOTARY_APPLE_ID is set, so NOTARY_PASSWORD and NOTARY_TEAM_ID must be too." >&2
+      return 1
+    fi
+    auth_args=(
+      --apple-id "$NOTARY_APPLE_ID"
+      --password "$NOTARY_PASSWORD"
+      --team-id "$NOTARY_TEAM_ID"
+    )
+  else
+    auth_args=(
+      --apple-id "$WARP_NOTARIZATION_APPLE_ID"
+      --password "$WARP_NOTARIZATION_PASSWORD"
+      --team-id "$APPLE_TEAM_ID"
+    )
+  fi
 
   local submission_output
   if ! submission_output="$(
@@ -221,6 +240,11 @@ DEBUG=false
 ARTIFACT="app"
 CODESIGN=true
 SELFSIGN=false
+# LOCAL FORK: see the --developer-id and --notarize flags below.
+DEVELOPER_ID_SIGN=false
+NOTARIZE=false
+NOTARY_PROFILE=""
+DMG_CREATED=false
 OPEN_AFTER_BUNDLE=false
 READ_PASSWORDS_FROM_ENV=false
 
@@ -260,6 +284,41 @@ while (( "$#" )); do
       CODESIGN=false
       SELFSIGN=true
       shift
+      ;;
+    # LOCAL FORK: sign with a Developer ID Application identity already in the
+    # login keychain, using the production entitlements.
+    #
+    # This is distinct from the `--codesign` path above, which is upstream's CI
+    # flow: that one imports a base64 .p12 from `WARP_DEVELOPER_ID_CERT` into a
+    # throwaway keychain and signs against upstream's hardcoded team. Neither
+    # applies to a fork signing with its own identity, and `--selfsign` cannot be
+    # used instead because it signs with `Debug-Entitlements.plist`, whose
+    # `com.apple.security.get-task-allow` key is rejected by the notary service.
+    --developer-id)
+      echo "Signing with a local Developer ID Application identity."
+      CODESIGN=false
+      SELFSIGN=false
+      DEVELOPER_ID_SIGN=true
+      shift
+      ;;
+    # LOCAL FORK: submit the signed app to Apple for notarisation and staple the
+    # ticket. Requires --developer-id; ad-hoc and Apple Development signatures
+    # are not eligible.
+    --notarize)
+      NOTARIZE=true
+      shift
+      ;;
+    # LOCAL FORK: name of an `xcrun notarytool store-credentials` keychain
+    # profile. Without it, --notarize falls back to NOTARY_APPLE_ID /
+    # NOTARY_PASSWORD / NOTARY_TEAM_ID from the environment.
+    --notary-profile)
+      if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+        NOTARY_PROFILE=$2
+        shift 2
+      else
+        echo "Error: Argument for $1 is missing" >&2
+        exit 1
+      fi
       ;;
     # Build only for the default target architecture instead of universal binary
     --nouniversal)
@@ -824,7 +883,29 @@ fi
 ## Step 3: Codesign the app ##
 ##############################
 
-if [[ $SELFSIGN = true ]]; then
+if [[ $DEVELOPER_ID_SIGN = true ]]; then
+  # LOCAL FORK: sign with the Developer ID Application identity from the login
+  # keychain. `--timestamp` is required for notarisation; without a secure
+  # timestamp Apple rejects the submission.
+  SIGNING_CERT="$(security find-identity -p codesigning -v | grep "Developer ID Application" | awk '{print $2}' | head -1)"
+  if [[ -z "$SIGNING_CERT" ]]; then
+    echo "No Developer ID Application identity found in the keychain." >&2
+    echo "Run 'security find-identity -v -p codesigning' to see what is available." >&2
+    exit 1
+  fi
+  echo "Found Developer ID Application certificate $SIGNING_CERT"
+  if [[ "$ARTIFACT" == app ]]; then
+    echo "Signing $BUNDLE_DIR/$WARP_APP_NAME.app with Developer ID..."
+    codesign --force --deep --options runtime --timestamp \
+      --sign "$SIGNING_CERT" "$BUNDLE_DIR/$WARP_APP_NAME.app" \
+      --entitlements script/Entitlements.plist
+  else
+    echo "Signing $OUT_DIR/$WARP_BIN with Developer ID..."
+    codesign --force --options runtime --timestamp \
+      --sign "$SIGNING_CERT" "$OUT_DIR/$WARP_BIN" \
+      --entitlements script/Entitlements.plist
+  fi
+elif [[ $SELFSIGN = true ]]; then
   SIGNING_CERT="$(security find-identity -p codesigning -v | grep "Apple Development" | awk '{print $2}' | head -1)"
   if [[ -z "$SIGNING_CERT" ]]; then
     echo "No Apple Development cert found, falling back to ad-hoc signing."
@@ -883,12 +964,88 @@ elif [[ "$ARTIFACT" == app ]]; then
     --entitlements script/Debug-Entitlements.plist
 fi
 
+##################################################
+## Step 3.5: Notarize and staple the app (fork) ##
+##################################################
+
+# LOCAL FORK: notarise a Developer ID signed build under this fork's own account.
+#
+# This runs before the disk image is built, not after, and the ordering is the
+# whole point. Stapling writes the ticket into the .app, so an image assembled
+# from an unstapled app contains an unstapled app no matter how thoroughly the
+# image itself is later stapled. Dragging that app out of the DMG yields a copy
+# with no ticket, which Gatekeeper can only clear by asking Apple over the
+# network; offline, first launch fails. Staple first, then package.
+#
+# Deliberately submits the .app rather than only the disk image. Upstream notarises
+# the DMG because the DMG is what it ships, which makes notarisation depend on
+# `create-dmg` being installed. Stapling works on a bundle directly, so this path
+# produces a distributable app whether or not an image was built.
+if [[ $NOTARIZE = true ]]; then
+  if [[ $DEVELOPER_ID_SIGN != true ]]; then
+    echo "--notarize requires --developer-id; Apple will not notarise an ad-hoc" >&2
+    echo "or Apple Development signature." >&2
+    exit 1
+  fi
+  if [[ -z "$NOTARY_PROFILE" && -z "${NOTARY_APPLE_ID:-}" ]]; then
+    echo "--notarize needs credentials: pass --notary-profile <name> for a profile" >&2
+    echo "stored by 'xcrun notarytool store-credentials', or set NOTARY_APPLE_ID," >&2
+    echo "NOTARY_PASSWORD and NOTARY_TEAM_ID in the environment." >&2
+    exit 1
+  fi
+
+  if [[ "$ARTIFACT" = app ]]; then
+    SIGNED_APP="$BUNDLE_DIR/$WARP_APP_NAME.app"
+    APP_NOTARIZATION_ZIP="$BUNDLE_DIR/${WARP_APP_NAME}_notarize.zip"
+    rm -f "$APP_NOTARIZATION_ZIP"
+    echo "Zipping $SIGNED_APP for notarization..."
+    # --keepParent so the archive contains the .app itself, not its contents.
+    ditto -c -k --keepParent "$SIGNED_APP" "$APP_NOTARIZATION_ZIP"
+
+    echo "Uploading $APP_NOTARIZATION_ZIP to Apple for notarization..."
+    notarize_artifact "$APP_NOTARIZATION_ZIP"
+
+    echo "Stapling the notarization ticket to $SIGNED_APP..."
+    xcrun stapler staple "$SIGNED_APP"
+    xcrun stapler validate "$SIGNED_APP"
+
+    echo "Verifying Gatekeeper acceptance..."
+    spctl -a -vvv -t exec "$SIGNED_APP"
+
+    rm -f "$APP_NOTARIZATION_ZIP"
+  else
+    BIN_NOTARIZATION_ZIP="$OUT_DIR/${WARP_BIN}_notarize.zip"
+    rm -f "$BIN_NOTARIZATION_ZIP"
+    ditto -c -k "$OUT_DIR/$WARP_BIN" "$BIN_NOTARIZATION_ZIP"
+    echo "Uploading $BIN_NOTARIZATION_ZIP to Apple for notarization..."
+    notarize_artifact "$BIN_NOTARIZATION_ZIP"
+    # Tickets cannot be stapled to a standalone binary, so verification reads the
+    # primary signature instead.
+    spctl -a -t open --context context:primary-signature -vv "$OUT_DIR/$WARP_BIN"
+    rm -f "$BIN_NOTARIZATION_ZIP"
+  fi
+fi
+
 ########################
 ## Step 4: Create DMG ##
 ########################
 
 if [[ "$ARTIFACT" = app ]]; then
   function create_warp_dmg() {
+    # LOCAL FORK: `create-dmg` is a Homebrew formula that upstream's CI images
+    # always carry. Locally it is often absent, and because this script runs under
+    # `set -e`, a missing binary aborted the whole run at the packaging step,
+    # discarding a build and signature that had both already succeeded. Warn and
+    # skip instead: the .app is the artifact that matters, and it is complete by
+    # this point.
+    if ! command -v create-dmg > /dev/null 2>&1; then
+      echo "WARNING: create-dmg is not installed, skipping DMG creation."
+      echo "         The signed .app is still available at $BUNDLE_DIR/$WARP_APP_NAME.app"
+      echo "         Install it with 'brew install create-dmg' to build a disk image."
+      DMG_CREATED=false
+      return 0
+    fi
+
     echo "Creating $DMG_DIR/$DMG_NAME..."
     rm "$DMG_DIR/$DMG_NAME" || true
     local source_folder="$1"
@@ -919,7 +1076,52 @@ if [[ "$ARTIFACT" = app ]]; then
 
     args+=("$DMG_DIR/$DMG_NAME" "$source_folder")
 
-    create-dmg "${args[@]}"
+    if create-dmg "${args[@]}"; then
+      DMG_CREATED=true
+      return 0
+    fi
+
+    # LOCAL FORK: retry without the Finder cosmetics.
+    #
+    # The `--skip-jenkins` escape hatch above was scoped to one CI runner, but the
+    # AppleScript it disables fails the same way on any machine that cannot drive
+    # Finder: `AppleEvent timed out (-1712)`. That happens locally whenever the
+    # controlling process lacks Automation permission for Finder, which is the
+    # normal state for a build started from a terminal or an agent rather than
+    # from the desktop session. Under `set -e` this took down the entire run at
+    # the very last step, after a full LTO build, a Developer ID signature and a
+    # successfully created disk image, purely because the window did not get its
+    # background picture.
+    #
+    # Retrying without it yields a functional but unstyled DMG: same contents,
+    # same signature, no background image or icon placement.
+    echo "WARNING: create-dmg failed. Retrying without the Finder formatting step."
+    cleanup_dmg_files "$DMG_DIR"
+    rm -f "$DMG_DIR/$DMG_NAME"
+
+    local plain_args=(
+      --volname Warp
+      --no-internet-enable
+      --format UDZO
+      --filesystem APFS
+      # Keep the /Applications symlink: only its on-screen placement needs the
+      # AppleScript, and without the link there is nothing to drag the app onto.
+      --app-drop-link 550 250
+      --skip-jenkins
+      "$DMG_DIR/$DMG_NAME"
+      "$source_folder"
+    )
+    if create-dmg "${plain_args[@]}"; then
+      echo "Created an unstyled DMG at $DMG_DIR/$DMG_NAME."
+      DMG_CREATED=true
+      return 0
+    fi
+
+    echo "WARNING: DMG creation failed. The signed .app is unaffected and is"
+    echo "         available at $BUNDLE_DIR/$WARP_APP_NAME.app"
+    DMG_CREATED=false
+    cleanup_dmg_files "$DMG_DIR"
+    return 0
   }
 
   # If we're codesigning, stage the signed app and use that to create the DMG.
@@ -947,13 +1149,40 @@ if [[ "$ARTIFACT" = app ]]; then
     echo "Cleaning up any existing DMG files before creating new ones..."
     cleanup_dmg_files "$DMG_DIR"
 
-    create_warp_dmg "$BUNDLE_DIR"
+    # LOCAL FORK: build the image from a staging directory holding only the .app.
+    #
+    # This branch passed `$BUNDLE_DIR` straight to create-dmg, but `$BUNDLE_DIR`
+    # also contains the `dmg/` working directory that the image is written into,
+    # so the resulting disk image shipped a copy of that folder sitting next to
+    # the application. Mount the DMG and it is visible. Staging into a directory
+    # that contains nothing but the .app is what the codesigning branch above
+    # already does.
+    DMG_STAGING_DIR="$BUNDLE_DIR/dmg-staging"
+    rm -rf "$DMG_STAGING_DIR"
+    mkdir -p "$DMG_STAGING_DIR"
+    cp -R "$BUNDLE_DIR/$WARP_APP_NAME.app" "$DMG_STAGING_DIR"
+
+    create_warp_dmg "$DMG_STAGING_DIR"
+
+    rm -rf "$DMG_STAGING_DIR"
   fi
 fi
 
 ##############################
 ## Step 5: Notarize the app ##
 ##############################
+
+# LOCAL FORK: the app itself was notarised and stapled in step 3.5, before the
+# image was assembled, so the copy inside already carries its ticket. The image
+# still needs one of its own, or opening the download prompts even though the app
+# it holds would not.
+if [[ $NOTARIZE = true && "$ARTIFACT" = app && $DMG_CREATED = true ]]; then
+  echo "Signing and notarizing $DMG_DIR/$DMG_NAME..."
+  codesign --force --timestamp --sign "$SIGNING_CERT" "$DMG_DIR/$DMG_NAME"
+  notarize_artifact "$DMG_DIR/$DMG_NAME"
+  xcrun stapler staple "$DMG_DIR/$DMG_NAME"
+  xcrun stapler validate "$DMG_DIR/$DMG_NAME"
+fi
 
 if [[ $CODESIGN = true ]]; then
   echo "Uploading $NOTARIZATION_ARTIFACT to Apple for notarization..."
@@ -979,9 +1208,14 @@ fi
 #######################################
 
 if [[ "$ARTIFACT" = app ]]; then
-  echo "Copying dmg and app to $OUT_DIR"
+  echo "Copying app to $OUT_DIR"
   cp -R "$BUNDLE_DIR/$WARP_APP_NAME.app" "$OUT_DIR"
-  cp "$DMG_DIR/$DMG_NAME" "$OUT_DIR/$FINAL_DMG_NAME"
+  # LOCAL FORK: only copy the disk image if one was actually produced. See the
+  # create-dmg guard in `create_warp_dmg`.
+  if [[ $DMG_CREATED = true ]]; then
+    echo "Copying dmg to $OUT_DIR"
+    cp "$DMG_DIR/$DMG_NAME" "$OUT_DIR/$FINAL_DMG_NAME"
+  fi
 fi
 
 # If this is being run within a GitHub action, set an output variable with the

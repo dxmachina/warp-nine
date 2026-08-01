@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, sync_channel};
 
 use settings::manager::SettingsManager;

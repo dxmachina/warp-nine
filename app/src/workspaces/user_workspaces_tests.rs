@@ -1,11 +1,9 @@
-use std::time::Duration;
-
-use mockall::Sequence;
 use settings::{PrivatePreferences, PublicPreferences};
 use warpui::{AddSingletonModel, App, WindowId};
 use warpui_extras::user_preferences;
 
 use super::*;
+use crate::auth::UserUid;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{CloudObject, CloudObjectGuest};
 use crate::features::FeatureFlag;
@@ -13,7 +11,6 @@ use crate::network::NetworkStatus;
 use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::ClientId;
 use crate::server::server_api::ServerApiProvider;
-use crate::server::server_api::team::{MockTeamClient, TeamClient};
 use crate::settings::{AISettings, CodeSettings, FocusedTerminalInfo};
 use crate::sharing::{SharingAccessLevel, Subject, UserKind};
 use crate::system::SystemStats;
@@ -30,19 +27,15 @@ struct CachedResources {
     workspaces: Vec<Workspace>,
 }
 
-fn initialize_app(app: &mut App, resources: CachedResources, team_client: Arc<dyn TeamClient>) {
-    initialize_app_with_auth(
-        app,
-        resources,
-        team_client,
-        AuthStateProvider::new_for_test(),
-    );
+/// LOCAL FORK: both helpers took an `Arc<dyn TeamClient>` to hand to the
+/// `TeamUpdateManager`, which no longer takes one.
+fn initialize_app(app: &mut App, resources: CachedResources) {
+    initialize_app_with_auth(app, resources, AuthStateProvider::new_for_test());
 }
 
 fn initialize_app_with_auth(
     app: &mut App,
     resources: CachedResources,
-    team_client: Arc<dyn TeamClient>,
     auth_state_provider: AuthStateProvider,
 ) {
     // Add the necessary singleton models to the App
@@ -51,7 +44,7 @@ fn initialize_app_with_auth(
     app.add_singleton_model(TeamTesterStatus::new);
     app.add_singleton_model(CloudModel::mock);
     app.add_singleton_model(|ctx| UserWorkspaces::mock(resources.workspaces, ctx));
-    app.add_singleton_model(|ctx| TeamUpdateManager::new(team_client.clone(), None, ctx));
+    app.add_singleton_model(|ctx| TeamUpdateManager::new(None, ctx));
     app.add_singleton_model(UpdateManager::mock);
     app.add_singleton_model(PrivacySettings::mock);
     app.add_singleton_model(|_| ServerApiProvider::new_for_test());
@@ -80,125 +73,9 @@ fn initialize_window_team_test_app(app: &mut App, workspaces: Vec<Workspace>) {
 }
 
 #[test]
-fn test_loading_all_spaces_after_switching_from_offline() {
-    let _flag = FeatureFlag::KnowledgeSidebar.override_enabled(true);
-
-    let team = Team {
-        uid: 123.into(),
-        name: "test".to_string(),
-        invite_code: None,
-        members: vec![],
-        pending_email_invites: vec![],
-        invite_link_domain_restrictions: vec![],
-        billing_metadata: Default::default(),
-        stripe_customer_id: None,
-        organization_settings: Default::default(),
-        is_eligible_for_discovery: false,
-        has_billing_history: false,
-    };
-
-    let workspace = Workspace {
-        uid: "workspace_uid123456789".to_string().into(),
-        name: "test".to_string(),
-        stripe_customer_id: None,
-        teams: vec![team.clone()],
-        billing_metadata: Default::default(),
-        bonus_grants_purchased_this_month: Default::default(),
-        billing_cycle_usage: None,
-        has_billing_history: false,
-        settings: Default::default(),
-        invite_code: None,
-        invite_link_domain_restrictions: vec![],
-        pending_email_invites: vec![],
-        is_eligible_for_discovery: false,
-        members: vec![],
-        total_requests_used_since_last_refresh: 0,
-    };
-
-    App::test((), |mut app| async move {
-        // Sequences used for ordering requests (so first call will return something different than
-        // next etc.)
-        let mut team_sequence = Sequence::new();
-
-        // Lets start by initializing the server api mock
-        let mut team_client = MockTeamClient::new();
-
-        // On first call to workspaces_metadata we return no workspaces (and expect it to be called just once)
-        team_client
-            .expect_workspaces_metadata()
-            .times(1)
-            .in_sequence(&mut team_sequence)
-            .returning(|| {
-                Ok(WorkspacesMetadataWithPricing {
-                    metadata: WorkspacesMetadataResponse {
-                        workspaces: vec![],
-                        joinable_teams: vec![],
-                        experiments: None,
-                        feature_model_choices: None,
-                    },
-                    pricing_info: None,
-                })
-            });
-
-        // Second call will return list of teams (one team specifically) and we also expect only 1
-        team_client
-            .expect_workspaces_metadata()
-            .times(1)
-            .in_sequence(&mut team_sequence)
-            .returning(move || {
-                Ok(WorkspacesMetadataWithPricing {
-                    metadata: WorkspacesMetadataResponse {
-                        workspaces: vec![workspace.clone()],
-                        joinable_teams: vec![],
-                        experiments: None,
-                        feature_model_choices: None,
-                    },
-                    pricing_info: None,
-                })
-            });
-
-        initialize_app(
-            &mut app,
-            CachedResources { workspaces: vec![] },
-            Arc::new(team_client),
-        );
-
-        // We also ensure that UserWorkspaces stores no teams.
-        UserWorkspaces::handle(&app).read(&app, |teams, _| {
-            assert!(!teams.has_teams());
-        });
-
-        // Spend time waiting for the initial load to finish etc.
-        warpui::r#async::Timer::after(Duration::from_secs(1)).await;
-
-        // Lets go offline
-        NetworkStatus::handle(&app).update(&mut app, |network_status, ctx| {
-            network_status.reachability_changed(false, ctx);
-        });
-
-        // Lets go back online
-        NetworkStatus::handle(&app).update(&mut app, |network_status, ctx| {
-            network_status.reachability_changed(true, ctx);
-        });
-
-        // Spend time waiting for the load to finish etc.
-        warpui::r#async::Timer::after(Duration::from_secs(1)).await;
-
-        // We also ensure that UserWorkspaces stores a team
-        UserWorkspaces::handle(&app).read(&app, |teams, _| {
-            assert!(teams.has_teams());
-        });
-    })
-}
-
-#[test]
 fn test_codebase_context_enabled_with_no_workspace() {
     App::test((), |mut app| async move {
-        initialize_app(
-            &mut app,
-            CachedResources { workspaces: vec![] },
-            Arc::new(MockTeamClient::new()),
-        );
+        initialize_app(&mut app, CachedResources { workspaces: vec![] });
 
         app.read(|ctx| {
             let codebase_context_enabled =
@@ -514,7 +391,6 @@ fn test_codebase_context_enabled_by_team_disabled_by_user() {
             CachedResources {
                 workspaces: vec![workspace],
             },
-            Arc::new(MockTeamClient::new()),
         );
 
         app.read(|ctx| {
@@ -543,7 +419,6 @@ fn test_codebase_context_enabled_by_team_and_user() {
             CachedResources {
                 workspaces: vec![workspace],
             },
-            Arc::new(MockTeamClient::new()),
         );
 
         app.read(|ctx| {
@@ -573,7 +448,6 @@ fn test_codebase_context_disabled_by_workspace() {
             CachedResources {
                 workspaces: vec![workspace],
             },
-            Arc::new(MockTeamClient::new()),
         );
 
         app.read(|ctx| {
@@ -602,7 +476,6 @@ fn test_codebase_context_respect_user_setting() {
             CachedResources {
                 workspaces: vec![workspace],
             },
-            Arc::new(MockTeamClient::new()),
         );
 
         app.read(|ctx| {
@@ -673,11 +546,7 @@ fn test_joining_team_moves_objects() {
     let object_id = shared_object.id;
 
     App::test((), |mut app| async move {
-        initialize_app(
-            &mut app,
-            CachedResources { workspaces: vec![] },
-            Arc::new(MockTeamClient::new()),
-        );
+        initialize_app(&mut app, CachedResources { workspaces: vec![] });
         CloudModel::handle(&app).update(&mut app, |cloud_model, _| {
             cloud_model.add_object(object_id, shared_object);
         });
@@ -712,11 +581,7 @@ fn test_joining_team_moves_objects() {
 #[test]
 fn test_agent_attribution_default_with_no_workspace() {
     App::test((), |mut app| async move {
-        initialize_app(
-            &mut app,
-            CachedResources { workspaces: vec![] },
-            Arc::new(MockTeamClient::new()),
-        );
+        initialize_app(&mut app, CachedResources { workspaces: vec![] });
 
         app.read(|ctx| {
             let setting = UserWorkspaces::as_ref(ctx).get_agent_attribution_setting();
@@ -741,7 +606,6 @@ fn test_agent_attribution_forced_on_by_team() {
             CachedResources {
                 workspaces: vec![workspace],
             },
-            Arc::new(MockTeamClient::new()),
         );
 
         app.read(|ctx| {
@@ -767,7 +631,6 @@ fn test_agent_attribution_forced_off_by_team() {
             CachedResources {
                 workspaces: vec![workspace],
             },
-            Arc::new(MockTeamClient::new()),
         );
 
         app.read(|ctx| {
@@ -793,7 +656,6 @@ fn test_agent_attribution_respects_user_setting() {
             CachedResources {
                 workspaces: vec![workspace],
             },
-            Arc::new(MockTeamClient::new()),
         );
 
         app.read(|ctx| {
@@ -859,7 +721,6 @@ fn test_leaving_team_moves_objects() {
             CachedResources {
                 workspaces: vec![workspace],
             },
-            Arc::new(MockTeamClient::new()),
         );
         CloudModel::handle(&app).update(&mut app, |cloud_model, _| {
             cloud_model.add_object(object_id, shared_object);

@@ -5,7 +5,6 @@ use anyhow::Result;
 use base64::Engine;
 use blocking::unblock;
 use instant::Instant;
-use serde::{Deserialize, Serialize};
 use warp_core::channel::IapConfig;
 use warpui_core::r#async::{BoxFuture, FutureExt as _, Timer};
 use warpui_core::{AppContext, Entity, ModelContext, SingletonEntity};

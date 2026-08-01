@@ -57,7 +57,6 @@ use crate::ui_components::avatar::{Avatar, AvatarContent, StatusElementTypes};
 use crate::ui_components::buttons::icon_button;
 use crate::ui_components::icons::Icon;
 use crate::workspace::tab_settings::TabSettings;
-use crate::workspaces::update_manager::TeamUpdateManager;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::AdminEnablementSetting;
 
@@ -2262,11 +2261,10 @@ impl SettingsPageMeta for CodeSettingsPageView {
     }
 
     fn on_page_selected(&mut self, _: bool, ctx: &mut ViewContext<Self>) {
-        // We want to immediately see if the user is part of a workspace rather than wait for the next poll.
-        std::mem::drop(
-            TeamUpdateManager::handle(ctx)
-                .update(ctx, |manager, ctx| manager.refresh_workspace_metadata(ctx)),
-        );
+        // LOCAL FORK: this refreshed workspace metadata from the server so the page would
+        // not wait for the next poll to show which teams the user belongs to. There is no
+        // poll and no fetch; the workspaces shown come from sqlite.
+        let _ = ctx;
     }
 
     fn scroll_to_widget(&mut self, widget_id: &'static str) {

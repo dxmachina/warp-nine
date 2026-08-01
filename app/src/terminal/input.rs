@@ -125,7 +125,6 @@ use crate::ASSETS;
 // and skill machinery all came out with it. Only the terminal's own input editor is kept.
 use crate::appearance::{Appearance, AppearanceEvent};
 use crate::channel::{Channel, ChannelState};
-use crate::cloud_object::CloudObject;
 use crate::cloud_object::model::persistence::CloudModel;
 #[cfg(feature = "local_fs")]
 use crate::code::editor_management::CodeSource;

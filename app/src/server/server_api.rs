@@ -11,8 +11,10 @@ pub mod auth;
 // implementation, roughly 1,400 lines of GraphQL calls for creating, updating, fetching,
 // moving, trashing, deleting and sharing Warp Drive objects. Every write is local now, so
 // nothing constructs or calls it.
-pub mod team;
-
+// LOCAL FORK: `team` held the `TeamClient` trait and its one method,
+// `workspaces_metadata`, which polled `get_workspaces_metadata_for_user` for the user's
+// teams, their policies and the active experiment arms. Both of `TeamUpdateManager`'s
+// entry points into it already returned early when logged out, so it never ran.
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,7 +28,6 @@ use instant::Instant;
 use parking_lot::Mutex;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use team::TeamClient;
 use url::Url;
 use warp_core::context_flag::ContextFlag;
 use warp_errors::{AnyhowErrorExt, ErrorExt, register_error, report_error};
@@ -772,10 +773,6 @@ impl ServerApiProvider {
 
     pub fn get_auth_client(&self) -> Arc<dyn AuthClient> {
         self.auth_client.clone()
-    }
-
-    pub fn get_team_client(&self) -> Arc<dyn TeamClient> {
-        self.server_api.clone()
     }
 
     /// Returns the shared HTTP client. This client is wired into network logging

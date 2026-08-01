@@ -3,31 +3,25 @@ use crate::settings::{
 };
 use std::collections::HashMap;
 
-use anyhow::Result;
 use regex::Regex;
 use warp_core::features::FeatureFlag;
+
+use super::team::{MembershipRole, Team};
+use crate::auth::{AuthStateProvider, UserUid};
 use warp_core::settings::{ChangeEventReason, Setting};
-use warp_errors::report_error;
-use warp_graphql::workspace::FeatureModelChoice;
 use warpui::{
     AppContext, Entity, ModelContext, SingletonEntity, Tracked, ViewContext, WeakViewHandle,
     WindowId,
 };
 
-use std::sync::Arc;
-
-use super::team::{DiscoverableTeam, MembershipRole, Team};
-#[cfg(test)]
 use super::workspace::WorkspaceMemberUsageInfo;
 use super::workspace::{
     AdminEnablementSetting, BillingMetadata, CustomerType, EnterpriseSecretRegex,
     HostEnablementSetting, UgcCollectionEnablementSetting, Workspace, WorkspaceUid,
 };
-use crate::auth::{AuthStateProvider, UserUid};
 use crate::channel::ChannelState;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{Owner, Space};
-use crate::pricing::PricingInfoModel;
 use crate::server::experiments::{ServerExperiment, ServerExperiments, ServerExperimentsEvent};
 use crate::server::ids::ServerId;
 #[cfg(test)]
@@ -57,30 +51,6 @@ pub struct UserWorkspaces {
     current_workspace_uid: Tracked<Option<WorkspaceUid>>,
     workspaces: Tracked<Vec<Workspace>>,
     window_team_uids: HashMap<WindowId, Option<ServerId>>,
-}
-
-/// Represents the workspaces a user potentially has access to.
-#[derive(Clone)]
-pub struct WorkspacesMetadataResponse {
-    /// The list of workspaces the user is currently on.
-    pub workspaces: Vec<Workspace>,
-    /// The list of discoverable teams that the user can join.
-    pub joinable_teams: Vec<DiscoverableTeam>,
-    /// The list of experiments applicable to the user.
-    pub experiments: Option<Vec<ServerExperiment>>,
-    /// TODO(Tyler): Post-workspaces, move this into the workspace object.
-    /// Feature model choices may change from user to user and while the app is open, so we need to periodically update this list.
-    /// It makes most sense to fetch this in workspaces which is queried every 10 minutes.
-    /// This is list of available LLM models for the user.
-    pub feature_model_choices: Option<FeatureModelChoice>,
-}
-
-// A representation of all data we fetch at a single time via our 10 minute poll.
-// Prefer adding to this struct if you need relatively fresh data vs making
-// independent queries.
-pub struct WorkspacesMetadataWithPricing {
-    pub metadata: WorkspacesMetadataResponse,
-    pub pricing_info: Option<warp_graphql::billing::PricingInfo>,
 }
 
 pub struct CreateTeamResponse {
@@ -753,45 +723,6 @@ impl UserWorkspaces {
         ctx.emit(UserWorkspacesEvent::TeamsChanged);
         ctx.emit(UserWorkspacesEvent::CodebaseContextEnablementChanged);
         ctx.notify();
-    }
-
-    // TODO follow up with moving other modifying calls out of UserWorkspaces to TeamUpdateManager
-    fn on_workspaces_updated(
-        &mut self,
-        result: Result<WorkspacesMetadataWithPricing>,
-        ctx: &mut ModelContext<Self>,
-    ) {
-        match result {
-            Ok(response) => {
-                if let Some(pricing_info) = response.pricing_info {
-                    PricingInfoModel::handle(ctx).update(ctx, |model, ctx| {
-                        model.update_pricing_info(pricing_info, ctx);
-                    });
-                }
-
-                let workspaces = response.metadata.workspaces;
-
-                self.update_workspaces(workspaces.clone(), ctx);
-
-                // Check if the current workspace is still in the list of workspaces.
-                // If it's not, then set the current workspace to the first workspace in the list.
-                if let Some(current_workspace) = self.current_workspace() {
-                    if !self
-                        .workspaces
-                        .iter()
-                        .any(|w| w.uid == current_workspace.uid)
-                        && let Some(workspace_uid) = workspaces.first().map(|w| w.uid)
-                    {
-                        self.set_current_workspace_uid(workspace_uid, ctx);
-                    }
-                } else if let Some(workspace_uid) = workspaces.first().map(|w| w.uid) {
-                    self.set_current_workspace_uid(workspace_uid, ctx);
-                }
-            }
-            Err(e) => {
-                report_error!(e.context("Failed to load user workspaces"));
-            }
-        }
     }
 
     pub fn team_created(

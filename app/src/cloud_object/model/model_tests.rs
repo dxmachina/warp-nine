@@ -1,9 +1,5 @@
-use std::sync::Arc;
-use std::time::Duration;
-
 use chrono::Utc;
 use lazy_static::lazy_static;
-use mockall::Sequence;
 use rand::Rng;
 use settings::{RespectUserSyncSetting, SyncToCloud};
 use warpui::{App, ModelHandle};
@@ -23,10 +19,8 @@ use crate::cloud_object::{
 };
 use crate::features::FeatureFlag;
 use crate::notebooks::{CloudNotebookModel, NotebookId};
-use crate::server::cloud_objects::update_manager::InitialLoadResponse;
 use crate::server::ids::{ServerId, ServerIdAndType};
 use crate::server::server_api::ServerApiProvider;
-use crate::server::server_api::team::MockTeamClient;
 use crate::settings::{Preference, init_and_register_user_preferences};
 use crate::system::SystemStats;
 use crate::workflows::CloudWorkflowModel;
@@ -36,7 +30,6 @@ use crate::workspaces::user_profiles::UserProfiles;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::{Workspace, WorkspaceUid};
 use crate::{NetworkStatus, UpdateManager};
-use cloud_object_client::ObjectUpdateMessage;
 
 fn create_cloud_model(
     app: &mut App,
@@ -68,8 +61,6 @@ lazy_static! {
 /// LOCAL FORK: no longer takes a mocked `ObjectClient`. Nothing in this module talks to a
 /// server, so there is no client to inject.
 fn initialize_app(app: &mut App, cached_objects: Vec<Box<dyn CloudObject>>) {
-    let team_client_mock = Arc::new(MockTeamClient::new());
-
     // Add the necessary singleton models to the App
     app.add_singleton_model(|_| NetworkStatus::new());
     app.add_singleton_model(|_| SystemStats::new());

@@ -15,8 +15,9 @@ use std::marker::Copy;
 use std::ops::Range;
 use std::str::FromStr;
 
+pub use block_onboarding_layer::BLOCK_ONBOARDING_LAYER;
+
 use anyhow::Result;
-pub use block_onboarding_layer::{BLOCK_ONBOARDING_LAYER, BlockOnboarding};
 use dashmap::DashMap;
 pub use improved_palette_search_layer::{IMPROVED_PALETTE_SEARCH_LAYER, ImprovedPaletteSearch};
 use lazy_static::lazy_static;

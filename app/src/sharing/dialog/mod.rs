@@ -34,6 +34,7 @@ use super::{
     SubjectExt, TeamKind, UserKind, style,
 };
 use crate::auth::AuthStateProvider;
+// LOCAL FORK: kept for the `uid()` method the team-permissions call resolves through.
 use crate::cloud_object::CloudObject;
 use crate::editor::PropagateAndNoOpNavigationKeys;
 use crate::menu::{self, Menu, MenuItem, MenuItemFields};

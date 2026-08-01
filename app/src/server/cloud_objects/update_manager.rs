@@ -1,13 +1,13 @@
 use std::collections::HashSet;
-use std::future::Future;
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
 use chrono::Utc;
-// LOCAL FORK: re-exported for tests, which build objects with server-shaped ids.
+// LOCAL FORK: re-exported for `#[cfg(test)]` code only, which builds objects with
+// server-shaped ids; the lib target reports them unused.
 #[cfg(test)]
-pub use cloud_object_client::GetCloudObjectResponse;
+#[allow(unused_imports)]
 pub use cloud_object_client::InitialLoadResponse;
 use itertools::Itertools;
 use lazy_static::lazy_static;

@@ -33,7 +33,6 @@ use crate::auth::auth_state::AuthState;
 use crate::autoupdate::{self, AutoupdateStage, AutoupdateState};
 use crate::settings::cloud_preferences::CloudPreferencesSettings;
 use crate::workspace::WorkspaceAction;
-use crate::workspaces::update_manager::TeamUpdateManager;
 
 const PHOTO_SIZE: f32 = 40.;
 const REGULAR_TEXT_FONT_SIZE: f32 = 12.;
@@ -676,11 +675,10 @@ impl SettingsPageMeta for MainSettingsPageView {
     }
 
     fn on_page_selected(&mut self, _: bool, ctx: &mut ViewContext<Self>) {
-        // We want to immediately see if the user is part of a workspace rather than wait for the next poll.
-        std::mem::drop(
-            TeamUpdateManager::handle(ctx)
-                .update(ctx, |manager, ctx| manager.refresh_workspace_metadata(ctx)),
-        );
+        // LOCAL FORK: this refreshed workspace metadata from the server so the page would
+        // not wait for the next poll to show which teams the user belongs to. There is no
+        // poll and no fetch; the workspaces shown come from sqlite.
+        let _ = ctx;
     }
 
     fn update_filter(&mut self, query: &str, ctx: &mut ViewContext<Self>) -> MatchData {

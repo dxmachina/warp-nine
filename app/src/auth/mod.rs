@@ -18,6 +18,10 @@
 //! every shared session. With no way to log in there is no second account to swap to, so
 //! the entry points are gone rather than left as buttons that wipe local state.
 
+// LOCAL FORK: `credentials` and `user` are re-exported for `#[cfg(test)]` code only, so
+// the lib target reports them unused. Removing them breaks the test build; this is what
+// `cargo fix` did twice.
+#[allow(unused_imports)]
 pub use warp_server_auth::{auth_state, credentials, user, user_uid};
 
 pub use auth_state::AuthStateProvider;

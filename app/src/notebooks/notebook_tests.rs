@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use chrono::{Duration, Utc};
 use futures_util::future::BoxFuture;
 use itertools::Itertools;
 use warp_core::ui::appearance::Appearance;
@@ -34,7 +33,7 @@ use crate::notebooks::notebook::FocusedComponent;
 use crate::notebooks::{CloudNotebook, CloudNotebookModel, NotebookLocation};
 use crate::pane_group::PaneEvent;
 use crate::search::files::model::FileSearchModel;
-use crate::server::cloud_objects::update_manager::{InitialLoadResponse, UpdateManager};
+use crate::server::cloud_objects::update_manager::UpdateManager;
 use crate::server::ids::ClientId;
 use crate::server::ids::SyncId::ServerId;
 use crate::server::server_api::ServerApiProvider;
@@ -48,6 +47,7 @@ use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_profiles::{UserProfileWithUID, UserProfiles};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{GlobalResourceHandles, GlobalResourceHandlesProvider, PrivacySettings};
+use chrono::{Duration, Utc};
 
 fn initialize_app(app: &mut App) {
     initialize_settings_for_tests(app);

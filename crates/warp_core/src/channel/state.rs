@@ -132,19 +132,6 @@ impl ChannelState {
         Ok(())
     }
 
-    pub fn override_session_sharing_server_url(
-        url: impl Into<Cow<'static, str>>,
-    ) -> Result<(), ParseError> {
-        let url = url.into();
-        Url::parse(&url)?;
-        CHANNEL_STATE
-            .lock()
-            .config
-            .server_config
-            .session_sharing_server_url = Some(url);
-        Ok(())
-    }
-
     pub fn uses_staging_server() -> bool {
         let Ok(url) = Url::parse(Self::server_root_url().as_ref()) else {
             return false;
@@ -282,16 +269,6 @@ impl ChannelState {
                     Some(origin) => Cow::Owned(origin),
                     None => Self::server_root_url(),
                 }
-            }
-        }
-    }
-
-    pub fn session_sharing_server_url() -> Option<Cow<'static, str>> {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "test-util")] {
-                Some(Cow::Borrowed("fake_session_sharing_url"))
-            } else {
-                CHANNEL_STATE.lock().config.server_config.session_sharing_server_url.clone()
             }
         }
     }

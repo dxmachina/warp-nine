@@ -178,7 +178,6 @@
 /crates/warp_server_client/ @ianhodge
 
 # Session sharing
-/app/src/terminal/shared_session/ @szgupta @bnavetta
 
 # Environment setup / agent management view
 /app/src/ai/agent_management/ @liliwilson

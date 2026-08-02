@@ -1278,3 +1278,33 @@ lib-only unused-import list is not the same as an unused-import list.
 The lesson stands from last time and now has a second data point. Repairing
 malformed Rust with regex produces new malformed Rust. If a sweep needs a repair
 pass, the sweep was wrong.
+
+### The endpoint that survived the excision
+
+The tier-3 pass removed every caller of the session sharing server and then
+declared itself done. It was not. `WarpServerConfig::production` still carried
+
+```rust
+session_sharing_server_url: Some("wss://sessions.app.warp.dev".into()),
+```
+
+and `strings` on the signed binary found it. A fork whose entire premise is not
+talking to someone else's servers had that server's address compiled into the
+shipped artifact.
+
+Nothing read it. `ChannelState::session_sharing_server_url()` had no callers, the
+`--session-sharing-server-url` flag had no consumer, and
+`WITH_LOCAL_SESSION_SHARING_SERVER` pointed at a build step that no longer
+produced anything. It was inert, and it was still there, because "no callers"
+was checked in Rust and the constant is data.
+
+Removed with it: the CLI flag and its `WARP_SESSION_SHARING_SERVER_URL` env
+override, the `rerun-if-env-changed` line in `app/build.rs`, the feature-to-env
+mapping in `script/run` and `script/wasm/bundle`, two `.vscode` tasks that
+invoked a feature that no longer exists, and the `.github/STAKEHOLDERS` entry
+for a deleted directory.
+
+The lesson generalises past this fork. Checking that a subsystem has no remaining
+callers proves the code is unreachable, not that its configuration is gone.
+Endpoints, keys and bucket names live in constants that compile in whether or not
+anything reads them. `grep` the built artifact, not just the source.

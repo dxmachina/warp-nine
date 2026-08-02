@@ -83,8 +83,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::CloudRunners,
         #[cfg(feature = "cloud_agent_runners")]
         FeatureFlag::CloudAgentRunners,
-        #[cfg(feature = "account_first_onboarding")]
-        FeatureFlag::AccountFirstOnboarding,
         #[cfg(all(feature = "simulate_github_unauthed", debug_assertions))]
         FeatureFlag::SimulateGithubUnauthed,
         #[cfg(feature = "full_screen_zen_mode")]
@@ -129,8 +127,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::AgentModePrimaryXML,
         #[cfg(feature = "agent_mode_pre_plan_xml")]
         FeatureFlag::AgentModePrePlanXML,
-        #[cfg(feature = "agent_onboarding")]
-        FeatureFlag::AgentOnboarding,
         #[cfg(feature = "suggested_rules")]
         FeatureFlag::SuggestedRules,
         #[cfg(feature = "suggested_agent_mode_workflows")]
@@ -375,8 +371,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::OzChangelogUpdates,
         #[cfg(feature = "bundled_skills")]
         FeatureFlag::BundledSkills,
-        #[cfg(feature = "oz_launch_modal")]
-        FeatureFlag::OzLaunchModal,
         #[cfg(feature = "open_warp_launch_modal")]
         FeatureFlag::OpenWarpLaunchModal,
         #[cfg(feature = "orchestration_launch_modal")]
@@ -445,8 +439,6 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         FeatureFlag::GPTConfigurableContextWindow,
         #[cfg(feature = "skip_firebase_anonymous_user")]
         FeatureFlag::SkipFirebaseAnonymousUser,
-        #[cfg(feature = "hoa_onboarding_flow")]
-        FeatureFlag::HOAOnboardingFlow,
         #[cfg(feature = "git_operations_in_code_review")]
         FeatureFlag::GitOperationsInCodeReview,
         #[cfg(feature = "hoa_remote_control")]

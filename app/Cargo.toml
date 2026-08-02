@@ -247,7 +247,6 @@ warp_terminal.workspace = true
 websocket.workspace = true
 wgpu = { workspace = true, optional = true }
 natural_language_detection.workspace = true
-onboarding.workspace = true
 aho-corasick = "1.1.3"
 strum.workspace = true
 strum_macros.workspace = true
@@ -465,8 +464,6 @@ agent_mode = []
 agent_mode_debug = []
 agent_mode_primary_xml = []
 agent_mode_pre_plan_xml = []
-agent_onboarding = []
-account_first_onboarding = []
 ask_user_question = []
 async_find = []
 changelog = []
@@ -588,8 +585,6 @@ default = [
     "named_agents",
     "agent_tips",
     "pluggable_notifications",
-    "agent_onboarding",
-    "account_first_onboarding",
     "global_search",
     "cloud_conversations",
     "list_skills",
@@ -609,7 +604,6 @@ default = [
     "inline_slash_commands",
     "inline_history_menu",
     "inline_model_selector",
-    "oz_launch_modal",
     "open_warp_launch_modal",
     "orchestration_launch_modal",
     "new_tab_styling",
@@ -649,7 +643,6 @@ default = [
     "grouped_tabs",
     "pinned_tabs",
     "agent_harness",
-    "hoa_onboarding_flow",
     "hoa_remote_control",
     "codex_notifications",
     "codex_plugin",
@@ -954,7 +947,6 @@ inline_profile_selector = ["agent_view"]
 restore_prompt_on_inline_model_selector_search = []
 oz_platform_skills = []
 oz_identity_federation = []
-oz_launch_modal = []
 open_warp_launch_modal = []
 orchestration_launch_modal = []
 new_tab_styling = []
@@ -988,7 +980,6 @@ billing_and_usage_page_v2 = []
 gpt_configurable_context_window = []
 configurable_toolbar = []
 warpify_footer = []
-hoa_onboarding_flow = []
 git_operations_in_code_review = []
 hoa_remote_control = []
 codex_notifications = []
@@ -1005,7 +996,9 @@ category = "public.app-category.developer-tools"
 copyright = "© 2025 Denver Technologies, Inc. Fork © 2026 Sebastian Katz"
 identifier = "dev.warp.WarpNine"
 name = "WarpNine"
-resources = ["assets/onboarding"]
+# LOCAL FORK: `resources = ["assets/onboarding"]` dropped. The directory was already
+# gone -- the onboarding imagery was the 47 MB `rust-embed` excluded from this build --
+# so the entry named a path that did not exist. It went with the onboarding crate.
 icon = ["channels/oss/icon/no-padding/512x512.png", "channels/oss/icon/no-padding/icon.ico"]
 short_description = "A local-only, Apple-Silicon Warp fork with no account, telemetry, or agent."
 

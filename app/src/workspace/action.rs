@@ -15,7 +15,7 @@ use super::tab_settings::{
     VerticalTabsCompactSubtitle, VerticalTabsDisplayGranularity, VerticalTabsPrimaryInfo,
     VerticalTabsTabItemMode, VerticalTabsViewMode,
 };
-use super::view::{OnboardingTutorial, WorkspaceBanner};
+use super::view::WorkspaceBanner;
 // LOCAL FORK: a `#[cfg(not(target_family = "wasm"))]` attribute sat here and was not ours to keep.
 // On `main` it belongs to an import the excision deleted; removing the item without
 // its attribute rebound it to the line below, which `main` leaves ungated. That hid
@@ -609,13 +609,11 @@ pub enum WorkspaceAction {
     DebugResetAwsBedrockLoginBannerDismissed,
     /// Open the Oz Launch Modal (for debugging)
     #[cfg(debug_assertions)]
-    OpenOzLaunchModal,
     /// Reset the Oz launch modal dismissed state (for debugging)
     #[cfg(debug_assertions)]
     ResetOzLaunchModalState,
     /// Open the OpenWarp Launch Modal (for debugging)
     #[cfg(debug_assertions)]
-    OpenOpenWarpLaunchModal,
     /// Reset the OpenWarp launch modal dismissed state (for debugging)
     #[cfg(debug_assertions)]
     ResetOpenWarpLaunchModalState,
@@ -684,14 +682,12 @@ pub enum WorkspaceAction {
         index: usize,
         image: lightbox::LightboxImage,
     },
-    StartAgentOnboardingTutorial(OnboardingTutorial),
     ShowSessionConfigModal,
     DismissSessionConfigTabConfigChip,
     /// Dismiss the non-blocking feature-intro popover without requiring it to hold focus.
     DismissFeatureIntroModal,
     /// Start the HOA onboarding flow (for debugging)
     #[cfg(debug_assertions)]
-    ShowHoaOnboardingFlow,
     /// Open the "New worktree" modal for creating a reusable worktree tab config.
     OpenNewWorktreeModal,
     /// Open the native folder picker for the repo field in the new-worktree modal.
@@ -967,7 +963,6 @@ impl WorkspaceAction {
             | ExecuteDeleteConversation { .. }
             | OpenLightbox { .. }
             | UpdateLightboxImage { .. }
-            | StartAgentOnboardingTutorial(_)
             | ShowSessionConfigModal
             | DismissSessionConfigTabConfigChip
             | DismissFeatureIntroModal
@@ -981,12 +976,9 @@ impl WorkspaceAction {
             | ShowCloudModeV2EnvironmentCreationModal
             | OpenNetworkLogPane => false,
             #[cfg(debug_assertions)]
-            ShowHoaOnboardingFlow => false,
             #[cfg(debug_assertions)]
             DebugResetAwsBedrockLoginBannerDismissed
-            | OpenOzLaunchModal
             | ResetOzLaunchModalState
-            | OpenOpenWarpLaunchModal
             | ResetOpenWarpLaunchModalState
             | OpenOrchestrationLaunchModal
             | ResetOrchestrationLaunchModalState

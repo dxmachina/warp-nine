@@ -5,10 +5,7 @@ use warpui::keymap::{
 use warpui::platform::OperatingSystem;
 use warpui::units::IntoLines;
 
-use super::{
-    AgentOnboardingVersion, AskAISource, ContextMenuAction, OnboardingIntention, OnboardingVersion,
-    TerminalAction,
-};
+use super::{AskAISource, ContextMenuAction, TerminalAction};
 use crate::channel::{Channel, ChannelState};
 use crate::features::FeatureFlag;
 use crate::server::telemetry::{InteractionSource, ToggleBlockFilterSource};
@@ -830,74 +827,9 @@ pub fn init(app: &mut AppContext) {
         .with_context_predicate(id!("Terminal"))]);
     }
 
-    app.register_editable_bindings([
-        // UniversalInput callout debug bindings
-        EditableBinding::new(
-            "terminal:agent_onboarding_flow_universal_input_project",
-            "[Debug] Onboarding Callout: WarpInput - Project",
-            TerminalAction::OnboardingFlow(OnboardingVersion::Agent(
-                AgentOnboardingVersion::UniversalInput { has_project: true },
-            )),
-        )
-        .with_enabled(|| {
-            FeatureFlag::AgentOnboarding.is_enabled() && ChannelState::enable_debug_features()
-        })
-        .with_context_predicate(id!("Terminal")),
-        EditableBinding::new(
-            "terminal:agent_onboarding_flow_universal_input_no_project",
-            "[Debug] Onboarding Callout: WarpInput - No Project",
-            TerminalAction::OnboardingFlow(OnboardingVersion::Agent(
-                AgentOnboardingVersion::UniversalInput { has_project: false },
-            )),
-        )
-        .with_enabled(|| {
-            FeatureFlag::AgentOnboarding.is_enabled() && ChannelState::enable_debug_features()
-        })
-        .with_context_predicate(id!("Terminal")),
-        // AgentModality callout debug bindings
-        EditableBinding::new(
-            "terminal:agent_onboarding_flow_modality_project",
-            "[Debug] Onboarding Callout: Modality - Project",
-            TerminalAction::OnboardingFlow(OnboardingVersion::Agent(
-                AgentOnboardingVersion::AgentModality {
-                    has_project: true,
-                    intention: OnboardingIntention::AgentDrivenDevelopment,
-                },
-            )),
-        )
-        .with_enabled(|| {
-            FeatureFlag::AgentOnboarding.is_enabled() && ChannelState::enable_debug_features()
-        })
-        .with_context_predicate(id!("Terminal")),
-        EditableBinding::new(
-            "terminal:agent_onboarding_flow_modality_no_project",
-            "[Debug] Onboarding Callout: Modality - No Project",
-            TerminalAction::OnboardingFlow(OnboardingVersion::Agent(
-                AgentOnboardingVersion::AgentModality {
-                    has_project: false,
-                    intention: OnboardingIntention::AgentDrivenDevelopment,
-                },
-            )),
-        )
-        .with_enabled(|| {
-            FeatureFlag::AgentOnboarding.is_enabled() && ChannelState::enable_debug_features()
-        })
-        .with_context_predicate(id!("Terminal")),
-        EditableBinding::new(
-            "terminal:agent_onboarding_flow_modality_terminal",
-            "[Debug] Onboarding Callout: Modality - Terminal",
-            TerminalAction::OnboardingFlow(OnboardingVersion::Agent(
-                AgentOnboardingVersion::AgentModality {
-                    has_project: false,
-                    intention: OnboardingIntention::Terminal,
-                },
-            )),
-        )
-        .with_enabled(|| {
-            FeatureFlag::AgentOnboarding.is_enabled() && ChannelState::enable_debug_features()
-        })
-        .with_context_predicate(id!("Terminal")),
-    ]);
+    // LOCAL FORK: five `[Debug] Onboarding Callout` bindings stood here, registering
+    // `TerminalAction::OnboardingFlow` for each agent-onboarding callout variant. They
+    // went with the onboarding crate.
 
     app.register_editable_bindings([EditableBinding::new(
         "workspace:open_settings_import_page",

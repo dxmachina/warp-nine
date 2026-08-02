@@ -7,7 +7,6 @@ pub mod delete_conversation_confirmation_dialog;
 mod global_actions;
 pub mod header_toolbar_editor;
 pub mod header_toolbar_item;
-pub mod hoa_onboarding;
 mod home;
 mod lightbox_view;
 mod native_modal;
@@ -81,10 +80,7 @@ pub fn init(app: &mut AppContext) {
     rewind_confirmation_dialog::init(app);
     delete_conversation_confirmation_dialog::init(app);
     crate::tab_configs::remove_confirmation_dialog::init(app);
-    hoa_onboarding::init(app);
     tab_configs::session_config_modal::init(app);
-    view::launch_modal::oz_launch::init(app);
-    view::openwarp_launch_modal::init(app);
     view::orchestration_launch_modal::init(app);
     view::feature_intro_modal::init(app);
     view::auto_handoff_sleep_modal::init(app);
@@ -171,21 +167,9 @@ pub fn init(app: &mut AppContext) {
                 )
                 .with_context_predicate(id!("Workspace")),
                 EditableBinding::new(
-                    "workspace:open_oz_launch_modal",
-                    "[Debug] Open Oz Launch Modal",
-                    WorkspaceAction::OpenOzLaunchModal,
-                )
-                .with_context_predicate(id!("Workspace")),
-                EditableBinding::new(
                     "workspace:reset_oz_launch_modal_state",
                     "[Debug] Reset Oz Launch Modal State",
                     WorkspaceAction::ResetOzLaunchModalState,
-                )
-                .with_context_predicate(id!("Workspace")),
-                EditableBinding::new(
-                    "workspace:open_openwarp_launch_modal",
-                    "[Debug] Open OpenWarp Launch Modal",
-                    WorkspaceAction::OpenOpenWarpLaunchModal,
                 )
                 .with_context_predicate(id!("Workspace")),
                 EditableBinding::new(
@@ -252,12 +236,6 @@ pub fn init(app: &mut AppContext) {
                     "workspace:open_session_config_modal",
                     "[Debug] Open Session Config Modal",
                     WorkspaceAction::ShowSessionConfigModal,
-                )
-                .with_context_predicate(id!("Workspace")),
-                EditableBinding::new(
-                    "workspace:show_hoa_onboarding_flow",
-                    "[Debug] Start HOA Onboarding Flow",
-                    WorkspaceAction::ShowHoaOnboardingFlow,
                 )
                 .with_context_predicate(id!("Workspace")),
             ]);

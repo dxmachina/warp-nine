@@ -4,10 +4,7 @@ pub(crate) mod codex_modal;
 mod crash_recovery;
 pub(crate) mod feature_intro_modal;
 pub mod global_search;
-pub(crate) mod launch_modal;
 pub(crate) mod left_panel;
-pub(crate) mod onboarding;
-pub(crate) mod openwarp_launch_modal;
 pub(crate) mod orchestration_launch_modal;
 pub(crate) mod right_panel;
 mod startup_directory;
@@ -45,7 +42,6 @@ use autoupdate::AutoupdateStage;
 use command::blocking::Command;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-pub(crate) use onboarding::OnboardingTutorial;
 use parking_lot::FairMutex;
 use pathfinder_color::ColorU;
 use pathfinder_geometry::rect::RectF;
@@ -117,9 +113,6 @@ use super::action::{
 use super::delete_conversation_confirmation_dialog::{
     DeleteConversationConfirmationDialog, DeleteConversationConfirmationEvent,
     DeleteConversationDialogSource,
-};
-use super::hoa_onboarding::{
-    HoaOnboardingFlow, HoaOnboardingFlowEvent, HoaOnboardingStep, mark_hoa_onboarding_completed,
 };
 use super::lightbox_view::{LightboxParams, LightboxView, LightboxViewEvent};
 use super::native_modal::{NativeModal, NativeModalEvent};
@@ -291,8 +284,7 @@ use crate::tips::{
 };
 // LOCAL FORK: `ConversationRestorationInNewPaneType` removed with the agent.
 use crate::terminal::view::{
-    AgentOnboardingVersion, LeftPanelTargetView, NOTIFICATIONS_TROUBLESHOOT_URL,
-    OnboardingIntention, OnboardingVersion, SyncEvent, SyncInputType, TerminalAction,
+    LeftPanelTargetView, NOTIFICATIONS_TROUBLESHOOT_URL, SyncEvent, SyncInputType,
 };
 use crate::terminal::warpify::settings::WarpifySettings;
 use crate::terminal::{self, BlockListSettings, SizeInfo, TerminalModel, TerminalView};
@@ -375,12 +367,8 @@ use crate::workspace::view::feature_intro_modal::{
     feature_intro_by_id,
 };
 use crate::workspace::view::global_search::view::GlobalSearchEntryFocus;
-use crate::workspace::view::launch_modal::{LaunchModal, LaunchModalEvent, OzLaunchSlide};
 use crate::workspace::view::left_panel::{
     LeftPanelAction, LeftPanelEvent, LeftPanelView, ToolPanelView,
-};
-use crate::workspace::view::openwarp_launch_modal::{
-    OpenWarpLaunchModal, OpenWarpLaunchModalEvent,
 };
 use crate::workspace::view::orchestration_launch_modal::{
     OrchestrationLaunchModal, OrchestrationLaunchModalEvent,
@@ -752,16 +740,6 @@ struct ModalWithTab<V> {
 struct PendingSessionConfigReplacement {
     old_pane_group_id: EntityId,
 }
-enum PendingSessionConfigTabConfigChipTutorial {
-    WhenBootstrapped {
-        has_project: bool,
-        intention: OnboardingIntention,
-    },
-    AfterSetupCommands {
-        intention: OnboardingIntention,
-    },
-}
-
 // LOCAL FORK: `query_for_rewind_prefill` was removed with the agent.
 
 /// Snapshot of a tab used to move it between workspaces or into a new window.
@@ -858,13 +836,9 @@ pub struct Workspace {
     tab_config_params_modal: ModalViewState<Modal<TabConfigParamsModal>>,
     session_config_modal: ModalViewState<Modal<SessionConfigModal>>,
     pending_session_config_replacement: Option<PendingSessionConfigReplacement>,
-    /// When set, the guided onboarding tutorial will start after the session
     /// config modal is closed (submitted or dismissed).
-    pending_onboarding_intention: Option<OnboardingIntention>,
     pending_session_config_tab_config_chip: bool,
     show_session_config_tab_config_chip: bool,
-    pending_session_config_tab_config_chip_tutorial:
-        Option<PendingSessionConfigTabConfigChipTutorial>,
     new_worktree_modal: ModalViewState<Modal<NewWorktreeModal>>,
     rewind_confirmation_dialog: ViewHandle<RewindConfirmationDialog>,
     delete_conversation_confirmation_dialog: ViewHandle<DeleteConversationConfirmationDialog>,
@@ -881,8 +855,6 @@ pub struct Workspace {
     show_header_toolbar_context_menu: Option<Vector2F>,
     theme_creator_modal: ViewHandle<ThemeCreatorModal>,
     theme_deletion_modal: ViewHandle<ThemeDeletionModal>,
-    oz_launch_modal: ModalWithTab<LaunchModal<OzLaunchSlide>>,
-    openwarp_launch_modal: ViewHandle<OpenWarpLaunchModal>,
     orchestration_launch_modal: ViewHandle<OrchestrationLaunchModal>,
     feature_intro_modal: ViewHandle<FeatureIntroModal>,
     /// Tab that first received the feature-intro popover. The popover stays
@@ -921,7 +893,6 @@ pub struct Workspace {
     right_panel_view: ViewHandle<RightPanelView>,
     working_directories_model: ModelHandle<pane_group::WorkingDirectoriesModel>,
     lightbox_view: Option<ViewHandle<LightboxView>>,
-    hoa_onboarding_flow: Option<ViewHandle<HoaOnboardingFlow>>,
     /// Pinned position for the vertical tabs callout so it doesn't move when
     /// the user toggles between vertical and horizontal tabs.
     hoa_vtabs_callout_pinned_position: Option<Vector2F>,
@@ -1813,51 +1784,13 @@ impl Workspace {
     ) {
         match event {
             SessionConfigModalEvent::Completed(selection) => {
-                let pending_intention = self.pending_onboarding_intention.take();
                 self.close_session_config_modal(ctx);
-                let has_worktree = selection.enable_worktree;
-                let has_params = {
-                    use crate::tab_configs::session_config::build_tab_config;
-                    let config = build_tab_config(
-                        &selection.session_type,
-                        &selection.directory,
-                        selection.enable_worktree,
-                        selection.autogenerate_worktree_branch_name,
-                    );
-                    !config.params.is_empty()
-                };
                 self.handle_session_config_completed(selection, ctx);
 
-                if let Some(intention) = pending_intention {
-                    if has_worktree && has_params {
-                        // Worktree with params modal: the tab hasn't been
-                        // created yet. Keep the intention so the params modal
-                        // handler can queue the tutorial after it closes.
-                        self.pending_onboarding_intention = Some(intention);
-                    } else if has_worktree {
-                        self.queue_onboarding_tutorial_after_session_config_tab_config_chip(
-                            PendingSessionConfigTabConfigChipTutorial::AfterSetupCommands {
-                                intention,
-                            },
-                            ctx,
-                        );
-                    } else {
-                        // No worktree: tab is ready. Start the tutorial after
-                        // the tab-config chip is dismissed.
-                        // TODO(roland): We do have a directory in this case so we could consider passing has_project = true
-                        // which has an optional /init flow. But the behavior of /init needs to be revisited:
-                        // 1. Sends /init as a query which differs in behavior from /init slash command
-                        // 2. Sends /init even if not in a git repo - unclear if this should happen (depends on desired behavior from 1)
-                        // 3. With no free AI, /init will not work.
-                        self.queue_onboarding_tutorial_after_session_config_tab_config_chip(
-                            PendingSessionConfigTabConfigChipTutorial::WhenBootstrapped {
-                                has_project: false,
-                                intention,
-                            },
-                            ctx,
-                        );
-                    }
-                }
+                // LOCAL FORK: the onboarding tutorial was queued here, branching on
+                // worktree/params to pick when to start it. `pending_onboarding_intention`
+                // could only ever be `None` (its sole assignment required it to already be
+                // `Some`), so every branch was unreachable before the onboarding removal.
 
                 // Show the chip only when no params modal followed.
                 if !self.current_workspace_state.is_tab_config_params_modal_open {
@@ -1865,16 +1798,9 @@ impl Workspace {
                 }
             }
             SessionConfigModalEvent::Dismissed => {
-                let pending_intention = self.pending_onboarding_intention.take();
-
                 // No tab config was created, so don't show the chip.
                 self.pending_session_config_tab_config_chip = false;
                 self.close_session_config_modal(ctx);
-
-                // Start the onboarding tutorial without project context.
-                if let Some(intention) = pending_intention {
-                    self.dispatch_tutorial_when_bootstrapped(false, intention, ctx);
-                }
             }
         }
     }
@@ -1946,70 +1872,6 @@ impl Workspace {
         }
     }
 
-    fn show_hoa_onboarding_flow(&mut self, ctx: &mut ViewContext<Self>) {
-        // Mark as completed immediately so the flow is never shown again,
-        // even if the user quits mid-flow.
-        mark_hoa_onboarding_completed(ctx);
-
-        // Enable vertical tabs and open the panel so Step 2 has something to anchor to.
-        TabSettings::handle(ctx).update(ctx, |settings, ctx| {
-            let _ = settings.use_vertical_tabs.set_value(true, ctx);
-        });
-        self.vertical_tabs_panel_open = true;
-        self.sync_window_button_visibility(ctx);
-
-        // The pinned position is captured lazily on the first step change
-        // (when the user advances past the welcome banner). At that point the
-        // vertical tabs panel has been rendered for several frames and the save
-        // position is accurate.
-        self.hoa_vtabs_callout_pinned_position = None;
-
-        let flow = ctx.add_typed_action_view(HoaOnboardingFlow::new);
-        ctx.subscribe_to_view(&flow, |me, _, event, ctx| match event {
-            HoaOnboardingFlowEvent::StepChanged | HoaOnboardingFlowEvent::TabLayoutToggled => {
-                if me.hoa_vtabs_callout_pinned_position.is_none() {
-                    me.hoa_vtabs_callout_pinned_position = ctx
-                        .element_position_by_id(VERTICAL_TABS_PANEL_POSITION_ID)
-                        .map(|rect| vec2f(rect.max_x(), rect.min_y() + 8.));
-                }
-                if let Some(flow) = &me.hoa_onboarding_flow {
-                    ctx.focus(flow);
-                }
-                ctx.notify();
-            }
-            _ => me.handle_hoa_onboarding_event(event, ctx),
-        });
-        self.hoa_onboarding_flow = Some(flow.clone());
-        ctx.focus(&flow);
-        ctx.notify();
-    }
-
-    fn handle_hoa_onboarding_event(
-        &mut self,
-        event: &HoaOnboardingFlowEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
-            model.mark_hoa_onboarding_dismissed(ctx);
-        });
-
-        match event {
-            HoaOnboardingFlowEvent::Completed(Some(selection)) => {
-                self.hoa_onboarding_flow = None;
-                self.handle_session_config_completed(selection, ctx);
-            }
-            HoaOnboardingFlowEvent::Completed(None) | HoaOnboardingFlowEvent::Dismissed => {
-                self.hoa_onboarding_flow = None;
-            }
-            HoaOnboardingFlowEvent::StepChanged | HoaOnboardingFlowEvent::TabLayoutToggled => {
-                return;
-            }
-        }
-
-        self.focus_active_tab(ctx);
-        ctx.notify();
-    }
-
     pub(crate) fn show_session_config_modal(&mut self, ctx: &mut ViewContext<Self>) {
         // Configure the modal to hide Oz when AI is disabled.
         let show_oz = AISettings::as_ref(ctx).is_any_ai_enabled(ctx);
@@ -2022,7 +1884,7 @@ impl Workspace {
 
         self.session_config_modal.open();
         self.current_workspace_state.is_session_config_modal_open = true;
-        self.pending_session_config_tab_config_chip = self.pending_onboarding_intention.is_some();
+        self.pending_session_config_tab_config_chip = false;
         self.show_session_config_tab_config_chip = false;
         ctx.focus(&self.session_config_modal.view);
         ctx.notify();
@@ -2057,40 +1919,11 @@ impl Workspace {
             && !self.current_workspace_state.is_tab_config_params_modal_open
     }
 
-    fn queue_onboarding_tutorial_after_session_config_tab_config_chip(
-        &mut self,
-        pending_tutorial: PendingSessionConfigTabConfigChipTutorial,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        if matches!(
-            pending_tutorial,
-            PendingSessionConfigTabConfigChipTutorial::AfterSetupCommands { .. }
-        ) && let Some(terminal_view) = self.active_session_view(ctx)
-        {
-            terminal_view.update(ctx, |view, _| {
-                view.clear_enter_agent_view_after_pending_commands();
-            });
-        }
-        self.pending_session_config_tab_config_chip_tutorial = Some(pending_tutorial);
-    }
-
     fn dismiss_session_config_tab_config_chip(&mut self, ctx: &mut ViewContext<Self>) {
         self.pending_session_config_tab_config_chip = false;
         self.show_session_config_tab_config_chip = false;
-        if let Some(pending_tutorial) = self.pending_session_config_tab_config_chip_tutorial.take()
-        {
-            match pending_tutorial {
-                PendingSessionConfigTabConfigChipTutorial::WhenBootstrapped {
-                    has_project,
-                    intention,
-                } => {
-                    self.dispatch_tutorial_when_bootstrapped(has_project, intention, ctx);
-                }
-                PendingSessionConfigTabConfigChipTutorial::AfterSetupCommands { intention } => {
-                    self.dispatch_tutorial_after_setup_commands(intention, ctx);
-                }
-            }
-        }
+        // LOCAL FORK: dismissing the chip used to start whichever onboarding tutorial had
+        // been queued behind it. The queue went with the onboarding crate.
         ctx.notify();
     }
 
@@ -2461,16 +2294,6 @@ impl Workspace {
 
         let theme_deletion_modal = Self::build_theme_deletion_modal(ctx);
 
-        let oz_launch_view = ctx.add_typed_action_view(LaunchModal::<OzLaunchSlide>::new);
-        ctx.subscribe_to_view(&oz_launch_view, |me, _, event, ctx| {
-            me.handle_oz_launch_modal_event(event, ctx);
-        });
-
-        let openwarp_launch_view = ctx.add_typed_action_view(OpenWarpLaunchModal::new);
-        ctx.subscribe_to_view(&openwarp_launch_view, |me, _, event, ctx| {
-            me.handle_openwarp_launch_modal_event(event, ctx);
-        });
-
         let orchestration_launch_view = ctx.add_typed_action_view(OrchestrationLaunchModal::new);
         ctx.subscribe_to_view(&orchestration_launch_view, |me, _, event, ctx| {
             me.handle_orchestration_launch_modal_event(event, ctx);
@@ -2649,16 +2472,10 @@ impl Workspace {
                 // The model has already determined which window should show the modal.
                 let model_ref = model.as_ref(ctx);
                 if model_ref.target_window_id() == Some(ctx.window_id()) {
-                    if model_ref.is_oz_launch_modal_open() {
-                        me.open_tab_and_focus_oz_launch_modal(ctx);
-                    } else if model_ref.is_openwarp_launch_modal_open() {
-                        me.focus_openwarp_launch_modal(ctx);
-                    } else if model_ref.is_orchestration_launch_modal_open() {
+                    if model_ref.is_orchestration_launch_modal_open() {
                         me.focus_orchestration_launch_modal(ctx);
                     } else if model_ref.is_auto_handoff_sleep_modal_open() {
                         me.focus_auto_handoff_sleep_modal(ctx);
-                    } else if model_ref.is_hoa_onboarding_open() {
-                        me.show_hoa_onboarding_flow(ctx);
                     } else if let Some(id) = model_ref.active_feature_intro() {
                         me.show_feature_intro_modal(id, ctx);
                     }
@@ -2711,10 +2528,8 @@ impl Workspace {
             tab_config_params_modal,
             session_config_modal,
             pending_session_config_replacement: None,
-            pending_onboarding_intention: None,
             pending_session_config_tab_config_chip: false,
             show_session_config_tab_config_chip: false,
-            pending_session_config_tab_config_chip_tutorial: None,
             new_worktree_modal,
             rewind_confirmation_dialog,
             delete_conversation_confirmation_dialog,
@@ -2756,18 +2571,12 @@ impl Workspace {
             #[cfg(target_family = "wasm")]
             open_in_warp_button,
             tab_fixed_width: None,
-            oz_launch_modal: ModalWithTab {
-                view: oz_launch_view,
-                tab_pane_group_id: None,
-            },
-            openwarp_launch_modal: openwarp_launch_view,
             orchestration_launch_modal: orchestration_launch_view,
             feature_intro_modal: feature_intro_view,
             feature_intro_tab_pane_group_id: None,
             auto_handoff_sleep_modal: auto_handoff_sleep_view,
             codex_modal,
             lightbox_view: None,
-            hoa_onboarding_flow: None,
             hoa_vtabs_callout_pinned_position: None,
             pending_pane_group_transfer: false,
             suppress_detach_panes_on_window_close: false,
@@ -2870,11 +2679,7 @@ impl Workspace {
             }
             TabSettingsChangedEvent::UseVerticalTabs { .. } => {
                 let vertical_tabs_enabled = *TabSettings::as_ref(ctx).use_vertical_tabs;
-                // During HOA onboarding, keep the vertical tabs panel open
-                // regardless of the setting so the callout stays anchored.
-                if self.hoa_onboarding_flow.is_none() {
-                    self.vertical_tabs_panel_open = vertical_tabs_enabled;
-                }
+                self.vertical_tabs_panel_open = vertical_tabs_enabled;
 
                 if vertical_tabs_enabled {
                     Self::ensure_tabs_panel_in_config(ctx);
@@ -6111,12 +5916,6 @@ impl Workspace {
             return false;
         }
 
-        // If AgentOnboarding is enabled and the user is NOT in the control group for the
-        // AgentOnboarding experiment, don't show Get Started onboarding.
-        if self.should_show_agent_onboarding(ctx) {
-            return false;
-        }
-
         true
     }
 
@@ -6136,52 +5935,12 @@ impl Workspace {
         }
 
         if !self.auth_state.is_onboarded().unwrap_or_default() {
-            if self.should_show_agent_onboarding(ctx) {
-                // If the user is anonymous, we shouldn't trigger agent onboarding.
-                // It will not display anyway, and we don't want to mark the user as onboarded.
-                if self.auth_state.is_anonymous_or_logged_out() {
-                    return false;
-                }
-                self.trigger_agent_onboarding(ctx);
-            }
-
+            // LOCAL FORK: this branch also fired the agent onboarding callout, behind an
+            // `is_anonymous_or_logged_out` guard that is always true without sign-in.
             return true;
         }
 
         false
-    }
-
-    fn trigger_agent_onboarding(&self, ctx: &mut ViewContext<Self>) {
-        report_error!(
-            "Triggering agent onboarding callout flow but not during initial login. This should not normally happen."
-        );
-        let version = if FeatureFlag::AgentView.is_enabled() {
-            AgentOnboardingVersion::AgentModality {
-                has_project: false,
-                intention: OnboardingIntention::AgentDrivenDevelopment,
-            }
-        } else {
-            AgentOnboardingVersion::UniversalInput { has_project: false }
-        };
-        self.dispatch_onboarding(
-            TerminalAction::OnboardingFlow(OnboardingVersion::Agent(version)),
-            ctx,
-        );
-    }
-
-    fn dispatch_onboarding(&self, action: TerminalAction, ctx: &mut ViewContext<Self>) {
-        if let Some(pane_group_handle) = self.get_pane_group_view(self.active_tab_index) {
-            pane_group_handle.update(ctx, |pane_group, ctx| {
-                if let Some(terminal_view_handle) = pane_group.active_session_view(ctx) {
-                    let window_id = ctx.window_id();
-                    ctx.dispatch_typed_action_for_view(
-                        window_id,
-                        terminal_view_handle.id(),
-                        &action,
-                    );
-                }
-            });
-        }
     }
 
     // LOCAL FORK: `open_suggested_agent_mode_workflow_modal` and `open_suggested_rule_modal`
@@ -8293,14 +8052,9 @@ impl Workspace {
     /// Cleans up pending state and closes the tab-config params modal without
     /// creating a tab config. Used when the modal is dismissed or cancelled.
     fn cancel_tab_config_params_modal(&mut self, ctx: &mut ViewContext<Self>) {
-        let pending_intention = self.pending_onboarding_intention.take();
         self.pending_session_config_replacement = None;
         self.pending_session_config_tab_config_chip = false;
         self.close_tab_config_params_modal(ctx);
-
-        if let Some(intention) = pending_intention {
-            self.dispatch_tutorial_when_bootstrapped(false, intention, ctx);
-        }
     }
 
     fn handle_tab_config_params_modal_body_event(
@@ -8310,7 +8064,6 @@ impl Workspace {
     ) {
         match event {
             TabConfigParamsModalEvent::Submit { config, params } => {
-                let pending_intention = self.pending_onboarding_intention.take();
                 let should_track_existing_config_open =
                     self.pending_session_config_replacement.is_none();
                 let worktree_name = self.maybe_generate_worktree_name(config);
@@ -8323,16 +8076,6 @@ impl Workspace {
                 if should_track_existing_config_open {}
                 self.close_tab_config_params_modal(ctx);
                 self.complete_pending_session_config_replacement(ctx);
-
-                // The new tab has setup commands (worktree creation); wait for
-                // them to finish before starting the onboarding tutorial, but
-                // only after the tab-config chip is dismissed.
-                if let Some(intention) = pending_intention {
-                    self.queue_onboarding_tutorial_after_session_config_tab_config_chip(
-                        PendingSessionConfigTabConfigChipTutorial::AfterSetupCommands { intention },
-                        ctx,
-                    );
-                }
 
                 // Params modal is now closed; show the chip if it was pending.
                 self.promote_session_config_tab_config_chip(ctx);
@@ -10446,10 +10189,7 @@ impl Workspace {
             return ShowTabBar::Stacked;
         }
 
-        // Always show the tab bar during HoA onboarding so that callouts
-        // pointing at tabs/inbox render correctly even when the user has
-        // "show tab bar on hover" enabled.
-        if self.hoa_onboarding_flow.is_some() || self.should_show_session_config_tab_config_chip() {
+        if self.should_show_session_config_tab_config_chip() {
             return ShowTabBar::Stacked;
         }
 
@@ -11438,7 +11178,6 @@ impl Workspace {
             pane_group::Event::OnboardingTutorialCompleted => {
                 self.pending_session_config_tab_config_chip = false;
                 self.show_session_config_tab_config_chip = false;
-                self.pending_session_config_tab_config_chip_tutorial = None;
                 ctx.notify();
             }
             pane_group::Event::InvalidatedActiveConversation => {
@@ -13534,22 +13273,6 @@ impl Workspace {
 
     // LOCAL FORK: `handle_ai_assistant_panel_event` was removed with the agent.
 
-    fn handle_openwarp_launch_modal_event(
-        &mut self,
-        event: &OpenWarpLaunchModalEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            OpenWarpLaunchModalEvent::Close => {
-                OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.mark_openwarp_launch_modal_dismissed(ctx);
-                });
-                self.focus_active_tab(ctx);
-                ctx.notify();
-            }
-        }
-    }
-
     fn handle_orchestration_launch_modal_event(
         &mut self,
         event: &OrchestrationLaunchModalEvent,
@@ -13614,40 +13337,6 @@ impl Workspace {
         });
         self.focus_active_tab(ctx);
         ctx.notify();
-    }
-
-    fn handle_oz_launch_modal_event(
-        &mut self,
-        event: &LaunchModalEvent,
-        ctx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            LaunchModalEvent::Close => {
-                OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.mark_oz_launch_modal_dismissed(ctx);
-                });
-
-                // Clear the "Introducing Oz" custom tab name so normal tab naming rules apply.
-                if let Some(pane_group_id) = self.oz_launch_modal.tab_pane_group_id.take()
-                    && let Some(tab) = self
-                        .tabs
-                        .iter()
-                        .find(|tab| tab.pane_group.id() == pane_group_id)
-                {
-                    tab.pane_group.update(ctx, |view, ctx| {
-                        view.clear_title(ctx);
-                    });
-                }
-
-                self.focus_active_tab(ctx);
-            }
-            LaunchModalEvent::ToggleCheckbox => {
-                PrivacySettings::handle(ctx).update(ctx, |settings, ctx| {
-                    let current_value = settings.is_cloud_conversation_storage_enabled;
-                    settings.set_is_cloud_conversation_storage_enabled(!current_value, ctx);
-                });
-            }
-        }
     }
 
     fn handle_codex_modal_event(&mut self, event: &CodexModalEvent, ctx: &mut ViewContext<Self>) {
@@ -17258,10 +16947,6 @@ impl Workspace {
         self.on_window_closed(ctx);
     }
 
-    fn focus_openwarp_launch_modal(&mut self, ctx: &mut ViewContext<Self>) {
-        ctx.focus(&self.openwarp_launch_modal);
-    }
-
     fn focus_orchestration_launch_modal(&mut self, ctx: &mut ViewContext<Self>) {
         ctx.focus(&self.orchestration_launch_modal);
     }
@@ -17301,25 +16986,6 @@ impl Workspace {
 
     fn focus_auto_handoff_sleep_modal(&mut self, ctx: &mut ViewContext<Self>) {
         ctx.focus(&self.auto_handoff_sleep_modal);
-    }
-
-    fn open_tab_and_focus_oz_launch_modal(&mut self, ctx: &mut ViewContext<Self>) {
-        // Create a new tab with one terminal session titled "Introducing Oz"
-        self.add_tab_with_pane_layout(
-            PanesLayout::SingleTerminal(Box::new(NewTerminalOptions {
-                shell: None,
-                initial_directory: None,
-                hide_homepage: false,
-                ..Default::default()
-            })),
-            Some("Introducing Oz".to_string()),
-            ctx,
-        );
-        self.oz_launch_modal.tab_pane_group_id = self
-            .tabs
-            .get(self.active_tab_index)
-            .map(|tab| tab.pane_group.id());
-        ctx.focus(&self.oz_launch_modal.view);
     }
 
     fn open_left_panel_view(&mut self, action: &LeftPanelAction, ctx: &mut ViewContext<Self>) {
@@ -17646,9 +17312,6 @@ impl TypedActionView for Workspace {
             AddAmbientAgentTab => {}
             AddAgentTab => {}
             AddDockerSandboxTab => self.add_docker_sandbox_tab(ctx),
-            StartAgentOnboardingTutorial(tutorial) => {
-                self.start_agent_onboarding_tutorial(tutorial.clone(), ctx)
-            }
             OpenNewSessionMenu { anchor } => self.open_new_session_dropdown_menu(*anchor, ctx),
             ToggleTabConfigsMenu => self.toggle_tab_configs_menu(ctx),
             ShowSessionConfigModal => self.show_session_config_modal(ctx),
@@ -17663,7 +17326,6 @@ impl TypedActionView for Workspace {
                 ctx.notify();
             }
             #[cfg(debug_assertions)]
-            ShowHoaOnboardingFlow => self.show_hoa_onboarding_flow(ctx),
             SaveCurrentTabAsNewConfig(tab_index) => {
                 self.save_current_tab_as_new_config(*tab_index, ctx)
             }
@@ -18589,14 +18251,6 @@ impl TypedActionView for Workspace {
                 log::info!("AWS Bedrock login banner dismissed state has been reset");
             }
             #[cfg(debug_assertions)]
-            OpenOzLaunchModal => {
-                // Force open the Oz launch modal for debugging
-                OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.force_open_oz_launch_modal(ctx);
-                });
-                ctx.notify();
-            }
-            #[cfg(debug_assertions)]
             ResetOzLaunchModalState => {
                 // Reset the Oz launch modal dismissed state for debugging
                 let old_value = *AISettings::as_ref(ctx).did_check_to_trigger_oz_launch_modal;
@@ -18615,14 +18269,6 @@ impl TypedActionView for Workspace {
                     new_value,
                     FeatureFlag::OzLaunchModal.is_enabled()
                 );
-            }
-            #[cfg(debug_assertions)]
-            OpenOpenWarpLaunchModal => {
-                // Force open the OpenWarp launch modal for debugging
-                OneTimeModalModel::handle(ctx).update(ctx, |model, ctx| {
-                    model.force_open_openwarp_launch_modal(ctx);
-                });
-                ctx.notify();
             }
             #[cfg(debug_assertions)]
             ResetOpenWarpLaunchModalState => {
@@ -19856,14 +19502,6 @@ impl View for Workspace {
         let one_time_modal_model = OneTimeModalModel::as_ref(app);
         let should_show_modal = one_time_modal_model.target_window_id() == Some(self.window_id);
 
-        if should_show_modal && one_time_modal_model.is_oz_launch_modal_open() {
-            stack.add_child(ChildView::new(&self.oz_launch_modal.view).finish());
-        }
-
-        if should_show_modal && one_time_modal_model.is_openwarp_launch_modal_open() {
-            stack.add_child(ChildView::new(&self.openwarp_launch_modal).finish());
-        }
-
         if should_show_modal && one_time_modal_model.is_orchestration_launch_modal_open() {
             stack.add_child(ChildView::new(&self.orchestration_launch_modal).finish());
         }
@@ -19872,121 +19510,9 @@ impl View for Workspace {
             stack.add_child(ChildView::new(&self.auto_handoff_sleep_modal).finish());
         }
 
-        if let Some(hoa_flow) = &self.hoa_onboarding_flow {
-            let step = hoa_flow.as_ref(app).step();
-
-            // Block all mouse events from reaching the workspace underneath.
-            // The onboarding flow elements are rendered on top and receive events normally.
-            stack.add_child(
-                Dismiss::new(Empty::new().finish())
-                    .prevent_interaction_with_other_elements()
-                    .finish(),
-            );
-
-            match step {
-                HoaOnboardingStep::WelcomeBanner => {
-                    stack.add_child(ChildView::new(hoa_flow).finish());
-                }
-                HoaOnboardingStep::VerticalTabsCallout => {
-                    if let Some(pinned) = self.hoa_vtabs_callout_pinned_position {
-                        let use_vertical = *TabSettings::as_ref(app).use_vertical_tabs;
-                        // The pinned position is the bubble body's top-left when
-                        // using a Left arrow. With Left arrow, the element origin
-                        // is at (0, 0) and the body starts at (~21, 0) due to the
-                        // arrow width. With Up arrow, the body starts at (0, ~21).
-                        // To keep the body in the same window position:
-                        // - Left arrow: element origin = pinned (arrow is to the left)
-                        // - Up arrow: shift left by ~21 (no arrow width) and up by ~21 (arrow height)
-                        let offset = if use_vertical {
-                            pinned
-                        } else {
-                            // Left arrow: body at (21, 0) from origin.
-                            // Up arrow: body at (0, 21) from origin.
-                            // To keep body fixed: origin.x += 21, origin.y -= 21.
-                            vec2f(pinned.x() + 21., pinned.y() - 21.)
-                        };
-                        stack.add_positioned_child(
-                            ChildView::new(hoa_flow).finish(),
-                            OffsetPositioning::offset_from_parent(
-                                offset,
-                                ParentOffsetBounds::WindowByPosition,
-                                ParentAnchor::TopLeft,
-                                ChildAnchor::TopLeft,
-                            ),
-                        );
-                    } else {
-                        stack.add_positioned_child(
-                            ChildView::new(hoa_flow).finish(),
-                            OffsetPositioning::offset_from_save_position_element(
-                                VERTICAL_TABS_PANEL_POSITION_ID,
-                                vec2f(0., 8.),
-                                PositionedElementOffsetBounds::WindowByPosition,
-                                PositionedElementAnchor::TopRight,
-                                ChildAnchor::TopLeft,
-                            ),
-                        );
-                    }
-                }
-                HoaOnboardingStep::AgentInboxCallout => {
-                    // Up arrow with End(24.) = arrow center ~36px from right edge.
-                    // The save position wraps the icon + left margin. The icon is
-                    // ~14px wide near the right edge. Shift right by ~22px so the
-                    // arrow center lands on the icon center.
-                    stack.add_positioned_child(
-                        ChildView::new(hoa_flow).finish(),
-                        OffsetPositioning::offset_from_save_position_element(
-                            NOTIFICATIONS_MAILBOX_POSITION_ID,
-                            vec2f(24., 4.),
-                            PositionedElementOffsetBounds::WindowByPosition,
-                            PositionedElementAnchor::BottomRight,
-                            ChildAnchor::TopRight,
-                        ),
-                    );
-                }
-                HoaOnboardingStep::TabConfig => {
-                    let use_vertical = *TabSettings::as_ref(app).use_vertical_tabs;
-                    if use_vertical {
-                        // Left arrow: anchor to the vertical tabs panel.
-                        if let Some(pinned) = self.hoa_vtabs_callout_pinned_position {
-                            stack.add_positioned_child(
-                                ChildView::new(hoa_flow).finish(),
-                                OffsetPositioning::offset_from_parent(
-                                    pinned,
-                                    ParentOffsetBounds::WindowByPosition,
-                                    ParentAnchor::TopLeft,
-                                    ChildAnchor::TopLeft,
-                                ),
-                            );
-                        } else {
-                            stack.add_positioned_child(
-                                ChildView::new(hoa_flow).finish(),
-                                OffsetPositioning::offset_from_save_position_element(
-                                    VERTICAL_TABS_PANEL_POSITION_ID,
-                                    vec2f(0., 8.),
-                                    PositionedElementOffsetBounds::WindowByPosition,
-                                    PositionedElementAnchor::TopRight,
-                                    ChildAnchor::TopLeft,
-                                ),
-                            );
-                        }
-                    } else {
-                        // Up arrow centered: anchor the callout's top-center
-                        // to the + button's bottom-center so the arrow points
-                        // at the button.
-                        stack.add_positioned_child(
-                            ChildView::new(hoa_flow).finish(),
-                            OffsetPositioning::offset_from_save_position_element(
-                                NEW_SESSION_MENU_BUTTON_POSITION_ID,
-                                vec2f(0., 8.),
-                                PositionedElementOffsetBounds::WindowByPosition,
-                                PositionedElementAnchor::BottomMiddle,
-                                ChildAnchor::TopMiddle,
-                            ),
-                        );
-                    }
-                }
-            }
-        }
+        // LOCAL FORK: the HOA onboarding flow rendered here, anchoring callouts to the
+        // vertical tabs panel, the notifications mailbox and the new-session button across
+        // four steps. It went with `hoa_onboarding`.
 
         if self.current_workspace_state.is_codex_modal_open {
             stack.add_child(ChildView::new(&self.codex_modal).finish());

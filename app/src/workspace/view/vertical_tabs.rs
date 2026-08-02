@@ -57,7 +57,6 @@ use crate::util::bindings::keybinding_name_to_display_string;
 use crate::util::color::Opacity;
 use crate::workspace::action::{NewSessionMenuAnchor, WorkspaceAction};
 use crate::workspace::cross_window_tab_drag::CrossWindowTabDrag;
-use crate::workspace::hoa_onboarding::HoaOnboardingStep;
 use crate::workspace::tab_group::{TabGroup, TabGroupId};
 use crate::workspace::tab_settings::{
     TabSettings, VerticalTabsCompactSubtitle, VerticalTabsDisplayGranularity,
@@ -1518,13 +1517,12 @@ fn render_new_tab_button(
     // Only highlight the `+` button when the menu was opened from it, not when
     // it was opened via right-click on the panel chrome (which floats at the
     // pointer and isn't anchored to the button).
+    // LOCAL FORK: this was also active during the HOA onboarding TabConfig step, which
+    // anchored a callout to the `+` button. That flow went with `hoa_onboarding`.
     let is_active = matches!(
         workspace.show_new_session_dropdown_menu,
         Some(NewSessionMenuAnchor::AddTabButton(_))
-    ) || workspace
-        .hoa_onboarding_flow
-        .as_ref()
-        .is_some_and(|flow| flow.as_ref(app).step() == HoaOnboardingStep::TabConfig);
+    );
 
     Hoverable::new(state.new_tab_hover_state.clone(), move |hover_state| {
         let plus_button = combo_inner_button(

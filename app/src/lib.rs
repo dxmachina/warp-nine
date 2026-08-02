@@ -1507,7 +1507,6 @@ pub(crate) fn initialize_app(
     terminal::init(ctx);
     input::init(ctx);
     editor::init(ctx);
-    onboarding::init(ctx);
     menu::init(ctx);
     tips::tip_view::init(ctx);
     launch_configs::init(ctx);

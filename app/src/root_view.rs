@@ -1,6 +1,7 @@
-// `AISettings` is read only under the release feature set, so a default-feature check
-// reports it unused. Removing it breaks the release bundle after a ten minute build.
-use crate::settings::{AISettings, QuakeModeSettings};
+// LOCAL FORK: `AISettings` was imported here alongside `QuakeModeSettings`, read only
+// under the release feature set. Its last reader was the account-first onboarding offer
+// routing, which went with the onboarding crate.
+use crate::settings::QuakeModeSettings;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -9,7 +10,6 @@ use std::sync::mpsc::SyncSender;
 use anyhow::Result;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use onboarding::{OfferVariant, SelectedSettings};
 use parking_lot::Mutex;
 use pathfinder_geometry::rect::RectF;
 use pathfinder_geometry::vector::{Vector2F, vec2f};
@@ -65,11 +65,9 @@ use crate::util::bindings::{self, is_binding_pty_compliant};
 use crate::util::traffic_lights::{TrafficLightData, TrafficLightMouseStates};
 use crate::view_components::DismissibleToast;
 use crate::window_settings::WindowSettings;
-use crate::workspace::view::OnboardingTutorial;
 use crate::workspace::{PaneViewLocator, Workspace, WorkspaceAction, WorkspaceRegistry};
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
-use crate::workspaces::workspace::FtueAccountClass;
 use crate::{
     ChannelState, GlobalResourceHandles, GlobalResourceHandlesProvider, UpdateQuakeModeEventArg,
 };
@@ -93,14 +91,6 @@ pub(crate) fn unthemed_window_border() -> Border {
         Border::all(1.).with_border_fill(Fill::black().blend(&Fill::white().with_opacity(15)))
     } else {
         Border::all(1.).with_border_fill(Fill::black().with_opacity(0))
-    }
-}
-
-fn offer_variant_for_account_class(account_class: FtueAccountClass) -> Option<OfferVariant> {
-    match account_class {
-        FtueAccountClass::Paid => None,
-        FtueAccountClass::FreeIcp => Some(OfferVariant::HeadStart),
-        FtueAccountClass::FreeStandard => Some(OfferVariant::ChooseHowToStart),
     }
 }
 
@@ -485,31 +475,6 @@ fn open_launch_config(arg: &OpenLaunchConfigArg, ctx: &mut AppContext) {
             );
         }
     }
-}
-
-fn requires_post_onboarding_login(
-    is_logged_in: bool,
-    ai_enabled: bool,
-    warp_drive_enabled: bool,
-) -> bool {
-    !is_logged_in
-        && (FeatureFlag::AccountFirstOnboarding.is_enabled()
-            || ((ai_enabled || warp_drive_enabled)
-                && FeatureFlag::OpenWarpNewSettingsModes.is_enabled()))
-}
-/// Replaces the settings and tutorial snapshots consumed when post-auth
-/// onboarding eventually completes.
-///
-/// Account-first users can navigate Back from the offer to Theme/Customize and
-/// change their choices. Re-snapshotting both values keeps the eventual settings
-/// application and guided tutorial aligned with the latest visible selections.
-fn refresh_pending_onboarding_choices(
-    selected_settings: &SelectedSettings,
-    pending_settings: &mut Option<SelectedSettings>,
-    pending_tutorial: &mut Option<OnboardingTutorial>,
-) {
-    *pending_settings = Some(selected_settings.clone());
-    *pending_tutorial = Some(OnboardingTutorial::from(selected_settings.clone()));
 }
 
 fn send_feedback(_: &(), ctx: &mut AppContext) {
@@ -1532,13 +1497,6 @@ pub struct RootView {
     /// in the [`Self::render`] method, but there is no [`ViewContext`] available there. So, we
     /// need to store it in a field instead.
     window_id: WindowId,
-    /// Stores the tutorial from onboarding when the user needs to log in before
-    /// the guided tour can start. Consumed after auth completes.
-    pending_tutorial: Option<OnboardingTutorial>,
-    /// settings to apply after a new user login / initial cloud load completes
-    pending_post_auth_onboarding_settings: Option<SelectedSettings>,
-    pending_account_first_settings_class: Option<FtueAccountClass>,
-    pending_account_first_tutorial_after_settings: bool,
 }
 
 impl RootView {
@@ -1578,10 +1536,6 @@ impl RootView {
             model_event_sender,
             mouse_states: Default::default(),
             window_id: ctx.window_id(),
-            pending_tutorial: None,
-            pending_post_auth_onboarding_settings: None,
-            pending_account_first_settings_class: None,
-            pending_account_first_tutorial_after_settings: false,
         };
 
         match &root_view.auth_onboarding_state {
@@ -1702,16 +1656,6 @@ impl RootView {
         UserWorkspaces::as_ref(ctx)
             .current_workspace()
             .is_some_and(|workspace| workspace.billing_metadata.is_user_on_paid_plan())
-    }
-
-    fn account_first_class(is_paid: bool, fresh_request_limit: Option<usize>) -> FtueAccountClass {
-        if is_paid {
-            FtueAccountClass::Paid
-        } else if fresh_request_limit.is_some_and(|request_limit| request_limit > 0) {
-            FtueAccountClass::FreeIcp
-        } else {
-            FtueAccountClass::FreeStandard
-        }
     }
 
     fn minimize_window(&mut self, _: &(), ctx: &mut ViewContext<Self>) -> bool {
@@ -2256,7 +2200,3 @@ impl WorkspaceArgs {
 // LOCAL FORK: `AuthOnboardingState::log_out` and `AuthOnboardingTarget::to_workspace` went
 // with logging out. `log_out` tore down the workspace and pushed the root view back to the
 // login wall so the next user got a fresh one. There is no next user.
-
-#[cfg(test)]
-#[path = "root_view_tests.rs"]
-mod tests;

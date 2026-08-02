@@ -56,8 +56,20 @@ use warpui::actions::StandardAction;
 use warpui::r#async::{SpawnedFutureHandle, Timer};
 use warpui::clipboard::ClipboardContent;
 use warpui::elements::{
-    Container, CornerRadius, CrossAxisAlignment, DEFAULT_UI_LINE_HEIGHT_RATIO, Flex, Hoverable,
-    MainAxisSize, MouseStateHandle, ParentElement, Radius, Shrinkable,
+    // `ChildView` is used only under `voice_input`, so a build without that feature
+    // reports it unused. Removing it breaks the release bundle after a ten minute build.
+    ChildView,
+    Container,
+    CornerRadius,
+    CrossAxisAlignment,
+    DEFAULT_UI_LINE_HEIGHT_RATIO,
+    Flex,
+    Hoverable,
+    MainAxisSize,
+    MouseStateHandle,
+    ParentElement,
+    Radius,
+    Shrinkable,
 };
 use warpui::fonts::{Cache as FontCache, FamilyId, Properties, Weight};
 use warpui::keymap::{EditableBinding, FixedBinding, Keystroke, PerPlatformKeystroke};

@@ -72,9 +72,15 @@ SIGNING_ID="$(security find-identity -p codesigning -v \
 echo "Signing identity: $SIGNING_ID"
 
 if [[ "$SIGNED_ONLY" == "false" ]]; then
-  if ! xcrun notarytool history --keychain-profile "$PROFILE" > /dev/null 2>&1; then
+  # Capture the output rather than discarding it. `notarytool history` fails both
+  # when the profile is absent and when the call to Apple fails, and those want
+  # different responses: create a credential, versus wait and retry. The first
+  # version of this check conflated them and reported a network blip as a missing
+  # profile.
+  NOTARY_OUT="$(xcrun notarytool history --keychain-profile "$PROFILE" 2>&1)" || true
+  if grep -q "No Keychain password item found" <<< "$NOTARY_OUT"; then
     echo "" >&2
-    echo "notarytool cannot resolve the profile '$PROFILE'." >&2
+    echo "No notarytool credential named '$PROFILE' in the keychain." >&2
     echo "" >&2
     echo "Create it with:" >&2
     echo "  xcrun notarytool store-credentials '$PROFILE' \\" >&2
@@ -84,6 +90,15 @@ if [[ "$SIGNED_ONLY" == "false" ]]; then
     echo "password. Generate one at appleid.apple.com under Sign-In and Security." >&2
     echo "" >&2
     echo "To build and sign without notarising, re-run with --signed-only." >&2
+    exit 1
+  elif ! grep -qi "createdDate\|No submission history\|id:" <<< "$NOTARY_OUT"; then
+    echo "" >&2
+    echo "The credential '$PROFILE' exists but notarytool did not answer cleanly:" >&2
+    echo "" >&2
+    sed 's/^/  /' <<< "$NOTARY_OUT" >&2
+    echo "" >&2
+    echo "This is usually Apple's service being unreachable or slow. Stopping before" >&2
+    echo "the build rather than failing after it. Retry, or use --signed-only." >&2
     exit 1
   fi
   echo "Notary profile:   $PROFILE (resolved)"
@@ -104,10 +119,12 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 if [[ "$VERIFY_FIRST" == "true" ]]; then
   step "Verifying before building"
-  # The release feature set first: an import used only under those features looks
-  # unused to a default-feature check, and removing it fails at bundle time, after
-  # the full build.
-  cargo check -p warp --lib --features release_bundle,cocoa_sentry,extern_plist
+  # The exact invocation the bundle makes, first. An import used only under these
+  # features looks unused to a default-feature check, and removing it fails at bundle
+  # time, after the full build. Note `--bin` and the absence of `cocoa_sentry`: the oss
+  # channel drops it, and checking the stable channel's feature set instead let exactly
+  # this class of breakage through.
+  cargo check -p warp --bin warp-nine --features release_bundle,extern_plist
   cargo check -p warp --all-targets
   cargo fmt --all -- --check
   cargo test -p warp --lib

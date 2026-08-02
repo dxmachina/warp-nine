@@ -1,4 +1,6 @@
-use crate::settings::QuakeModeSettings;
+// `AISettings` is read only under the release feature set, so a default-feature check
+// reports it unused. Removing it breaks the release bundle after a ten minute build.
+use crate::settings::{AISettings, QuakeModeSettings};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

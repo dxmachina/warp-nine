@@ -1364,3 +1364,107 @@ code cites live-looking constants right up until it is deleted.
 The check that works is the one applied at the end: read the strings out of the
 built artifact and account for every remaining service address. `grep` the
 binary, then justify what is left.
+
+## Tier 4: onboarding and the launch modals (2026-08-02)
+
+Removed in `02e354b27`: 74 files, 17,613 deletions.
+
+`crates/onboarding` (12,907 lines) was still linked and still compiled, despite the
+README claiming onboarding was gone. What had actually gone was only the *branch*:
+`AuthOnboardingState` has had a single variant, `Terminal`, since the login wall was
+removed, so the root view can only boot to a shell.
+
+### The flags were on
+
+The first assumption to check was whether the feature flags were off. They were not.
+Both `agent_onboarding` and `account_first_onboarding` are in `app/Cargo.toml`'s
+`default` list, so `FeatureFlag::AgentOnboarding.is_enabled()` returned true. Reading
+liveness off a flag would have got this backwards in both directions -- flag on, code
+dead.
+
+### Three independent reasons it was unreachable
+
+1. `refresh_pending_onboarding_choices` and `requires_post_onboarding_login` had no
+   production callers. Every call site was in `root_view_tests.rs`. The test file was
+   the only thing keeping them alive, which is the same trap as `cargo fix --lib`
+   removing an import the tests need, run in reverse.
+
+2. Every tutorial entry point sat behind `auth_state.is_anonymous_or_logged_out()`,
+   which is `!is_logged_in() || is_user_anonymous().unwrap_or(true)`. `is_logged_in()`
+   is `self.credentials.read().is_some()`, and without sign-in nothing sets them. Worth
+   noting for later passes: two live `set_credentials` callers do remain, the API-key
+   path in `warp_server_client/src/base_client.rs` and the remote-server daemon
+   handshake in `auth_state.rs`. Neither runs in ordinary GUI use.
+
+3. `pending_onboarding_intention` was assigned in exactly one place
+   (`workspace/view.rs`, the session-config `Completed` arm) inside a branch that
+   required it to already be `Some`. It is initialised to `None` and nothing else
+   writes it, so it could only ever be `None`, and every tutorial-queueing path off it
+   was dead on arrival. A field whose sole assignment is guarded by its own value is
+   worth grepping for as a pattern; the compiler says nothing.
+
+### What came with it
+
+The Oz launch modal was the last live constructor of `OnboardingTutorial`, so it went,
+and took the generic `LaunchModal<S>` with it -- `OzLaunchSlide` was its only `Slide`
+implementation. The OpenWarp modal went alongside. Both advertised Warp's cloud agent
+product inside a fork with no agent.
+
+Also gone: the HOA onboarding flow and its four callout steps, the onboarding callout
+view and `build_onboarding_keybindings`, `experiments/block_onboarding_layer`,
+`TerminalAction::OnboardingFlow` with its five `[Debug] Onboarding Callout` bindings,
+`settings/onboarding.rs` (both `apply_*_onboarding_settings` functions were test-only),
+and the `agent_onboarding`, `account_first_onboarding`, `oz_launch_modal` and
+`hoa_onboarding_flow` features.
+
+`app/Cargo.toml` also loses `resources = ["assets/onboarding"]` from the warp-nine
+bundle target. That directory does not exist -- the imagery is the 47 MB `rust-embed`
+this build already excluded -- so the entry named a path that was not there.
+
+### The one thing deleting too much caught
+
+`app/src/terminal/view/block_onboarding` was deleted and then restored. Despite the
+name, `onboarding_prompt_block` is not agent onboarding: it renders the fake prompt the
+**settings-import flow** shows when it finishes, reached from
+`TerminalAction::ImportSettings` via `add_settings_import_block`. That is live.
+
+Only `onboarding_drive_sharing_block` went, and it was already orphaned --
+`insert_drive_sharing_onboarding_block` had no callers left after the drive-sharing
+removal. Directory names are not a reliable guide to what a module is for; the caller
+graph is.
+
+### Verification
+
+`cargo check` clean on the bundle feature set (`--bin warp-nine --features
+release_bundle,extern_plist`), on `--all-targets`, `cargo fmt --check` clean, 2,902
+tests pass. The bundle feature set is checked first and separately for the reason
+recorded under Tier 3: the oss channel drops `cocoa_sentry`, so a default-feature check
+is a different build.
+
+## Notebooks: why this one did not happen (2026-08-02)
+
+Attempted and reverted. `app/src/notebooks` is 21,638 lines, but 14,340 of them are
+`notebooks/editor`, and that is not a notebook feature -- it is the application's
+rich-text editor:
+
+```
+code_review/comment_list_view.rs:50   RichTextEditorView, EditorViewEvent
+code_review/comment_rendering.rs:33   RichTextEditorView
+code/editor/comment_editor.rs:24-26   NotebooksEditorModel, RichTextEditorConfig
+code/editor/view.rs:79                rich_text_styles
+code/editor/model.rs:76               word_unit
+lib.rs:227                            NotebookKeybindings
+```
+
+The editor additionally pulls `notebooks::{file, link, styles, telemetry}` and
+`search::notebook_embedding`, so the split is not at the directory boundary either.
+Deleting the subsystem produced 43 errors concentrated in `code_review` and
+`code/editor`, both live features nobody asked to remove.
+
+Two coherent options, both product decisions rather than sweeps: remove the notebook
+product surface (object, panes, Warp Drive import/export, notebook search, persistence
+wiring -- roughly 9K lines) and re-home the editor under a name that says what it is;
+or remove `code_review` (23,937 lines) as well and take the whole 21,638.
+
+The general lesson, third time in this manifest: a subsystem's name describes where its
+code lives, not what depends on it.

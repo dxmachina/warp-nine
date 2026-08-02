@@ -43,6 +43,9 @@ completions, workflows, keybindings, settings. Without the product around it.
 
 Launches to a shell. `--version` reports a real build stamp.
 
+Measured at `3cb1ec862`, the last notarized build. Excisions after that commit move
+these numbers by well under a megabyte, for the reason immediately below.
+
 The excisions below are worth ~2 MB between them. Deleting call-path code removes
 lines, not bytes; the binary is dominated by dependencies that stay. This is the
 same point the size table makes and it keeps needing restating.
@@ -99,6 +102,16 @@ megabytes.
 - **Sign-in and onboarding.** `root_view.rs` branched between a login wall, agent
   onboarding, and the terminal. It now always boots to the terminal. The startup
   Keychain read is gone too; it raised an OS prompt on every freshly signed build.
+- **The onboarding crate** (~16.9K LOC): the guided tutorial, its callout view and
+  keybinding builder, the HOA onboarding flow, and the Oz and OpenWarp launch
+  modals. Only the *branch* had gone previously; the crate stayed linked, and the
+  `agent_onboarding` and `account_first_onboarding` flags were still in the default
+  feature set. Three separate things made it unreachable anyway: `AuthOnboardingState`
+  has had one variant since the login wall went, every tutorial entry point sits
+  behind `is_anonymous_or_logged_out()`, and `pending_onboarding_intention` had a
+  single assignment guarded by it already being `Some`, so it could only ever be
+  `None`. The Oz modal was the last live constructor of `OnboardingTutorial`, and
+  took the generic `LaunchModal<S>` with it: `OzLaunchSlide` was its only `Slide`.
 - **Telemetry and crash reporting.** Hard-off in `settings/privacy.rs`. Upstream's
   `should_disable_telemetry()` could be overridden by a force flag or the
   `AgentModeAnalytics` experiment. Both are ignored.
@@ -135,10 +148,27 @@ above), secret detection in terminal output.
 
 ## What's left
 
-`remote_server` (~8.9K LOC) is the last large subsystem that talks to Warp's
-infrastructure. It installs and drives a Warp-built helper binary on an SSH host
-so blocks and Warpify work remotely. It is a real feature, not dead code, so
-removing it is a product decision rather than a sweep.
+`remote_server` (~20.6K LOC across `app/src/remote_server`, `crates/remote_server`,
+the SSH choice/failed-banner views, the PTY controller and the command executor) is
+the last large subsystem that talks to Warp's infrastructure. It installs and drives
+a Warp-built helper binary on an SSH host so blocks and Warpify work remotely.
+Removing it degrades SSH to the wrapper-only warpification path, which stays.
+
+A removal is part-done and parked as a patch, not committed: the deletions and the
+`warp_files` half are complete (`FileBackend::Remote` is gone, and
+`register_remote_file`, its only constructor, had no callers), but 74 unresolved-module
+errors across 24 files remain. Every one is an `E0432`/`E0433`, so it is mechanical in
+kind, but each site needs a decision about the code that used it rather than just the
+import.
+
+**Notebooks are not separable.** `app/src/notebooks/editor` is 14,340 of the
+subsystem's 21,638 lines and is not notebook-specific: it is the app's rich-text
+editor, imported by `code_review/comment_list_view.rs`, `code_review/comment_rendering.rs`,
+`code/editor/comment_editor.rs`, `code/editor/{view,model}.rs` and `lib.rs`. It also
+needs `notebooks::{file, link, styles, telemetry}` and `search::notebook_embedding`.
+Removing notebooks whole would take the in-app git diff review with it. Either the
+product surface goes and the editor is re-homed under a truthful name, or code review
+goes too. That is a product decision.
 
 `warp_server_client` (3,022 lines) and `warp_server_auth` (1,391) stay. They were
 originally named as part of the cloud-object excision, but they are not gated on

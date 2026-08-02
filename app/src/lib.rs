@@ -566,12 +566,6 @@ pub fn run() -> Result<()> {
         {
             eprintln!("Error: Invalid server root URL: {e:#}");
         }
-
-        if let Some(url) = args.ws_server_url()
-            && let Err(e) = ChannelState::override_ws_server_url(url.to_owned())
-        {
-            eprintln!("Error: Invalid websocket server URL: {e:#}");
-        }
     }
 
     if let Some(command) = args.command() {

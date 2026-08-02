@@ -33,7 +33,6 @@ pub const OZ_PARENT_RUN_ID_ENV: &str = "OZ_PARENT_RUN_ID";
 pub const OZ_CLI_ENV: &str = "OZ_CLI";
 pub const OZ_HARNESS_ENV: &str = "OZ_HARNESS";
 pub const SERVER_ROOT_URL_OVERRIDE_ENV: &str = "WARP_SERVER_ROOT_URL";
-pub const WS_SERVER_URL_OVERRIDE_ENV: &str = "WARP_WS_SERVER_URL";
 
 /// Options related to the parent process that spawned this Warp instance.
 #[derive(Debug, Default, Clone, clap::Args)]
@@ -126,15 +125,6 @@ pub struct Args {
         env = "WARP_SERVER_ROOT_URL"
     )]
     server_root_url: Option<String>,
-
-    /// Override the websocket server URL.
-    #[arg(
-        long = "ws-server-url",
-        global = true,
-        hide = true,
-        env = "WARP_WS_SERVER_URL"
-    )]
-    ws_server_url: Option<String>,
 
     /// Override the session sharing server URL.
 
@@ -259,10 +249,6 @@ impl Args {
 
     pub fn server_root_url(&self) -> Option<&str> {
         self.server_root_url.as_deref()
-    }
-
-    pub fn ws_server_url(&self) -> Option<&str> {
-        self.ws_server_url.as_deref()
     }
 }
 

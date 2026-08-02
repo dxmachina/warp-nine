@@ -1308,3 +1308,59 @@ The lesson generalises past this fork. Checking that a subsystem has no remainin
 callers proves the code is unreachable, not that its configuration is gone.
 Endpoints, keys and bucket names live in constants that compile in whether or not
 anything reads them. `grep` the built artifact, not just the source.
+
+## Tier 3 follow-up: what the excision orphaned (2026-08-02)
+
+Asked whether the branch was ready to merge, and checked rather than answering
+from memory. It was not, because of a defect the excision itself introduced.
+
+### The dialog left standing
+
+Removing the sharer check from `close_pane_with_confirmation` deleted the only
+emitter of `pane_group::Event::CloseSharedSessionPaneRequested`. The event was
+still declared and still handled, so:
+
+- `show_close_session_confirmation_dialog` had one caller, unreachable
+- `is_close_session_confirmation_dialog_open` could never become true
+- the whole `workspace/close_session_confirmation_dialog` module (219 lines),
+  its view handle, builder, event subscription and render branch were dead
+- `OpenDialogSource` was threaded through `close_tabs` purely to be handed back
+  to `close_tabs` on confirm, its value never read
+
+This is the manifest's own lesson from the other direction. Tier 2 recorded that
+deleting a flag-*clearing* handler orphans its flag-*setting* half. Here the
+setting half was deleted and the entire clearing apparatus was left behind. The
+symmetry is worth stating: removing either end of a state machine strands the
+other, and the compiler reports neither, because both halves still typecheck.
+
+Nothing caught it. The tests that would have were the shared-session tests
+deleted alongside the feature -- correctly, since the dialog only ever opened for
+a shared pane. A feature's tests dying with the feature is expected; what is not
+expected is that they were also the only coverage of the machinery around it.
+
+### The endpoints kept alive by dead code
+
+`https://oz.warp.dev` had no callers at all. `wss://rtc.app.warp.dev/graphql/v2`
+had two: `ServerApiClient::stream_agent_events` and
+`stream_agent_events_for_ancestor`, the agent event SSE streams, neither of which
+anything called since the agent came out. The endpoint looked live because dead
+code referenced it.
+
+Removing those two methods made `rtc_http_url()` reachable only from
+`is_warp_server_origin`, an allowlist deciding whether to attach credentials to a
+request. Narrowing an allowlist is the safe direction, so the RTC origin came out
+of it, and the test asserting RTC matched became a test asserting it does not.
+
+Also gone: the `--ws-server-url` flag and `WARP_WS_SERVER_URL`,
+`override_ws_server_url`, `derive_http_origin_from_ws_url` and its three tests.
+
+### The generalisation
+
+An endpoint's liveness cannot be judged from its reference count. Two of the
+three URLs shipping in this binary had references; one had none; all three were
+unreachable. The reference graph tells you what compiles, not what runs, and dead
+code cites live-looking constants right up until it is deleted.
+
+The check that works is the one applied at the end: read the strings out of the
+built artifact and account for every remaining service address. `grep` the
+binary, then justify what is left.

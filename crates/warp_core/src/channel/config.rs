@@ -40,8 +40,9 @@ pub struct IapConfig {
 pub struct WarpServerConfig {
     /// The root URL for the standard server pool.
     pub server_root_url: Cow<'static, str>,
-    /// The URL for the RTC server, which serves real-time updates for Warp Drive objects.
-    pub rtc_server_url: Cow<'static, str>,
+    // LOCAL FORK: `rtc_server_url` held `wss://rtc.app.warp.dev/graphql/v2`, the
+    // real-time update channel for Warp Drive objects. Drive sync went in tier 2 and the
+    // agent event stream it also served went with the agent.
     // LOCAL FORK: `session_sharing_server_url` held `wss://sessions.app.warp.dev`. It
     // went with session sharing, along with the `--session-sharing-server-url` flag and
     // the `WITH_LOCAL_SESSION_SHARING_SERVER` build variable that pointed it elsewhere.
@@ -57,7 +58,6 @@ impl WarpServerConfig {
     pub fn production() -> Self {
         Self {
             server_root_url: "https://app.warp.dev".into(),
-            rtc_server_url: "wss://rtc.app.warp.dev/graphql/v2".into(),
             firebase_auth_api_key: "AIzaSyBdy3O3S9hrdayLJxJ7mriBR4qgUaUygAs".into(),
             iap_config: None,
         }
@@ -66,9 +66,8 @@ impl WarpServerConfig {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct OzConfig {
-    /// Root URL for the Oz (ambient agent management) dashboard.
-    pub oz_root_url: Cow<'static, str>,
-
+    // LOCAL FORK: `oz_root_url` held `https://oz.warp.dev`, the ambient agent dashboard.
+    // It went with the agent; nothing read it, and it was still compiled in.
     /// URL to use as the audience when issuing workload identity tokens. If [`None`], falls back
     /// to [`WarpServerConfig::server_root_url`]. This exists so the audience is not overridden
     /// when a custom server root URL is provided (e.g. an ngrok URL for local development).
@@ -78,7 +77,6 @@ pub struct OzConfig {
 impl OzConfig {
     pub fn production() -> Self {
         Self {
-            oz_root_url: "https://oz.warp.dev".into(),
             workload_audience_url: None,
         }
     }

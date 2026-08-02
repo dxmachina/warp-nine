@@ -125,13 +125,6 @@ impl ChannelState {
         Ok(())
     }
 
-    pub fn override_ws_server_url(url: impl Into<Cow<'static, str>>) -> Result<(), ParseError> {
-        let url = url.into();
-        Url::parse(&url)?;
-        CHANNEL_STATE.lock().config.server_config.rtc_server_url = url;
-        Ok(())
-    }
-
     pub fn uses_staging_server() -> bool {
         let Ok(url) = Url::parse(Self::server_root_url().as_ref()) else {
             return false;
@@ -241,40 +234,6 @@ impl ChannelState {
 
     pub fn iap_config() -> Option<IapConfig> {
         CHANNEL_STATE.lock().config.server_config.iap_config.clone()
-    }
-
-    pub fn ws_server_url() -> Cow<'static, str> {
-        CHANNEL_STATE
-            .lock()
-            .config
-            .server_config
-            .rtc_server_url
-            .clone()
-    }
-
-    /// Returns the HTTP(S) root URL for the RTC server. Used for HTTP endpoints
-    /// served by warp-server-rtc (e.g. the agent event SSE stream).
-    ///
-    /// Derived from [`ws_server_url`] by rewriting the scheme (`wss`→`https`,
-    /// `ws`→`http`) and stripping the path. Falls back to [`server_root_url`]
-    /// when the WS URL cannot be parsed or uses an unexpected scheme — this
-    /// keeps override paths (e.g. `WARP_WS_SERVER_URL=...`) working without a
-    /// separate override for the HTTP variant.
-    pub fn rtc_http_url() -> Cow<'static, str> {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "test-util")] {
-                Cow::Owned(MOCK_SERVER_URL.clone())
-            } else {
-                match derive_http_origin_from_ws_url(&Self::ws_server_url()) {
-                    Some(origin) => Cow::Owned(origin),
-                    None => Self::server_root_url(),
-                }
-            }
-        }
-    }
-
-    pub fn oz_root_url() -> Cow<'static, str> {
-        CHANNEL_STATE.lock().config.oz_config.oz_root_url.clone()
     }
 
     pub fn server_root_url() -> Cow<'static, str> {
@@ -407,30 +366,6 @@ impl ChannelState {
         }
     }
 }
-
-/// Derives an HTTP(S) origin URL from a WebSocket URL by rewriting the scheme
-/// (`wss`→`https`, `ws`→`http`) and stripping the path, query, and fragment.
-/// Returns [`None`] when the input cannot be parsed as a URL or uses a scheme
-/// other than `ws` or `wss`.
-#[cfg(not(feature = "test-util"))]
-fn derive_http_origin_from_ws_url(ws_url: &str) -> Option<String> {
-    let url = Url::parse(ws_url).ok()?;
-    let http_scheme = match url.scheme() {
-        "wss" => "https",
-        "ws" => "http",
-        _ => return None,
-    };
-    let host = url.host_str()?;
-    let mut origin = format!("{http_scheme}://{host}");
-    if let Some(port) = url.port() {
-        origin.push_str(&format!(":{port}"));
-    }
-    Some(origin)
-}
-
-#[cfg(all(test, not(feature = "test-util")))]
-#[path = "state_tests.rs"]
-mod tests;
 
 fn app_id_from_bundle() -> Option<AppId> {
     // On macOS, attempt to determine the app ID from the containing bundle,

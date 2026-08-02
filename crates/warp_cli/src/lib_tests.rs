@@ -118,13 +118,10 @@ fn agent_and_cloud_subcommands_are_absent() {
 #[serial_test::serial]
 fn hidden_server_overrides_parse_from_env() {
     let previous_server_root = set_env_var(SERVER_ROOT_URL_OVERRIDE_ENV, "http://localhost:8080");
-    let previous_ws = set_env_var(WS_SERVER_URL_OVERRIDE_ENV, "ws://localhost:8082/graphql/v2");
 
     let args = Args::try_parse_from(["warp", "dump-debug-info"]).unwrap();
 
     restore_env_var(SERVER_ROOT_URL_OVERRIDE_ENV, previous_server_root);
-    restore_env_var(WS_SERVER_URL_OVERRIDE_ENV, previous_ws);
 
     assert_eq!(args.server_root_url(), Some("http://localhost:8080"));
-    assert_eq!(args.ws_server_url(), Some("ws://localhost:8082/graphql/v2"));
 }

@@ -400,14 +400,13 @@ impl Client {
     }
 }
 
+/// LOCAL FORK: this allowlist also contained the RTC server origin, which served the
+/// agent event SSE stream. That stream went with the agent and the origin went with it,
+/// so the allowlist is narrower than upstream's -- the safe direction for a check that
+/// decides whether to attach credentials.
 fn is_warp_server_origin(url: &reqwest::Url) -> bool {
-    [
-        ChannelState::server_root_url(),
-        ChannelState::rtc_http_url(),
-    ]
-    .iter()
-    .filter_map(|candidate| reqwest::Url::parse(candidate.as_ref()).ok())
-    .any(|candidate| candidate.origin() == url.origin())
+    reqwest::Url::parse(ChannelState::server_root_url().as_ref())
+        .is_ok_and(|candidate| candidate.origin() == url.origin())
 }
 
 /// Returns the current OTEL span context formatted as a W3C `traceparent` value
@@ -822,16 +821,19 @@ mod origin_tests {
     use super::*;
 
     #[test]
-    fn server_and_rtc_origins_match() {
-        // Derive the expected origins from `ChannelState` so the assertion holds
+    fn server_origin_matches() {
+        // Derive the expected origin from `ChannelState` so the assertion holds
         // regardless of which channel config the test build resolves to.
         let server = reqwest::Url::parse(ChannelState::server_root_url().as_ref()).unwrap();
         assert!(is_warp_server_origin(&server.join("/graphql/v2").unwrap()));
+    }
 
-        let rtc = reqwest::Url::parse(ChannelState::rtc_http_url().as_ref()).unwrap();
-        assert!(is_warp_server_origin(
-            &rtc.join("/api/v1/agent/events/stream").unwrap()
-        ));
+    /// LOCAL FORK: the RTC origin used to be allowlisted for the agent event stream.
+    #[test]
+    fn rtc_origin_does_not_match() {
+        let url =
+            reqwest::Url::parse("https://rtc.app.warp.dev/api/v1/agent/events/stream").unwrap();
+        assert!(!is_warp_server_origin(&url));
     }
 
     #[test]

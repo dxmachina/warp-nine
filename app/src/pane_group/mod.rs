@@ -493,9 +493,6 @@ pub enum Event {
         env_var_collection: Arc<EnvVarCollectionType>,
         in_subshell: bool,
     },
-    CloseSharedSessionPaneRequested {
-        pane_id: PaneId,
-    },
     /// Dirty the workspace so the tab indicator shows.
     MaximizePaneToggled,
     /// A remote server resolved the repo root for a session in this pane group.

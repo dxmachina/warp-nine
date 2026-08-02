@@ -3,7 +3,7 @@
 A personal fork of [Warp](https://github.com/warpdotdev/warp) with the account
 system, coding agent, and cloud backend removed.
 
-857 MB to 100 MB. Apple Silicon only. No sign-in, no telemetry.
+857 MB to 78 MB. Apple Silicon only. No sign-in, no telemetry.
 
 Maintained by Sebastian Katz. Not affiliated with or endorsed by Warp Dev, Inc.
 
@@ -30,17 +30,22 @@ completions, workflows, keybindings, settings. Without the product around it.
 
 | | Stock Warp | WarpNine |
 |---|---|---|
-| App bundle | 857 MB | **100 MB** |
+| App bundle | 857 MB | **78 MB** |
+| Disk image | n/a | 31 MB |
 | Architectures | x86_64 + arm64 | arm64 only |
-| `__text` (code) | 126 MB | 54 MB |
-| `__const` (data) | 167 MB | 42 MB |
-| Unwinding tables | 25 MB | 0.3 MB |
-| `__LINKEDIT` (symbols) | ~75 MB | 1.4 MB |
+| `__text` (code) | 126 MB | 33 MB |
+| `__const` (data) | 167 MB | 41 MB |
+| Unwinding tables | 25 MB | 0.2 MB |
+| `__LINKEDIT` (symbols) | ~75 MB | 0.4 MB |
 | Login wall | yes | no |
 | Telemetry | yes | no |
 | Dock tile plugin | 4.4 MB, universal | removed |
 
 Launches to a shell. `--version` reports a real build stamp.
+
+The excisions below are worth ~2 MB between them. Deleting call-path code removes
+lines, not bytes; the binary is dominated by dependencies that stay. This is the
+same point the size table makes and it keeps needing restating.
 
 ## Where the size was
 

@@ -17325,7 +17325,6 @@ impl TypedActionView for Workspace {
                 self.feature_intro_tab_pane_group_id = None;
                 ctx.notify();
             }
-            #[cfg(debug_assertions)]
             SaveCurrentTabAsNewConfig(tab_index) => {
                 self.save_current_tab_as_new_config(*tab_index, ctx)
             }

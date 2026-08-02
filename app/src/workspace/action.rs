@@ -607,13 +607,9 @@ pub enum WorkspaceAction {
     /// Reset the AWS Bedrock login banner dismissed state (for debugging).
     #[cfg(debug_assertions)]
     DebugResetAwsBedrockLoginBannerDismissed,
-    /// Open the Oz Launch Modal (for debugging)
-    #[cfg(debug_assertions)]
     /// Reset the Oz launch modal dismissed state (for debugging)
     #[cfg(debug_assertions)]
     ResetOzLaunchModalState,
-    /// Open the OpenWarp Launch Modal (for debugging)
-    #[cfg(debug_assertions)]
     /// Reset the OpenWarp launch modal dismissed state (for debugging)
     #[cfg(debug_assertions)]
     ResetOpenWarpLaunchModalState,
@@ -686,8 +682,6 @@ pub enum WorkspaceAction {
     DismissSessionConfigTabConfigChip,
     /// Dismiss the non-blocking feature-intro popover without requiring it to hold focus.
     DismissFeatureIntroModal,
-    /// Start the HOA onboarding flow (for debugging)
-    #[cfg(debug_assertions)]
     /// Open the "New worktree" modal for creating a reusable worktree tab config.
     OpenNewWorktreeModal,
     /// Open the native folder picker for the repo field in the new-worktree modal.
@@ -975,7 +969,6 @@ impl WorkspaceAction {
             | OpenSettingsFile
             | ShowCloudModeV2EnvironmentCreationModal
             | OpenNetworkLogPane => false,
-            #[cfg(debug_assertions)]
             #[cfg(debug_assertions)]
             DebugResetAwsBedrockLoginBannerDismissed
             | ResetOzLaunchModalState

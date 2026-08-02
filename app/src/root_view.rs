@@ -1,7 +1,8 @@
-// LOCAL FORK: `AISettings` was imported here alongside `QuakeModeSettings`, read only
-// under the release feature set. Its last reader was the account-first onboarding offer
-// routing, which went with the onboarding crate.
-use crate::settings::QuakeModeSettings;
+// `AISettings` is read only under `voice_input`, which the release bundle enables and a
+// plain `--features release_bundle,extern_plist` check does not. Removing it breaks the
+// release bundle after a ten minute build. This comment stood here before and was deleted
+// on the strength of a check that could not see the reader; that cost a build.
+use crate::settings::{AISettings, QuakeModeSettings};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

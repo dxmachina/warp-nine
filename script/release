@@ -119,12 +119,19 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 if [[ "$VERIFY_FIRST" == "true" ]]; then
   step "Verifying before building"
-  # The exact invocation the bundle makes, first. An import used only under these
-  # features looks unused to a default-feature check, and removing it fails at bundle
-  # time, after the full build. Note `--bin` and the absence of `cocoa_sentry`: the oss
-  # channel drops it, and checking the stable channel's feature set instead let exactly
-  # this class of breakage through.
-  cargo check -p warp --bin warp-nine --features release_bundle,extern_plist
+  # The exact invocation the bundle makes, first -- profile and target included.
+  #
+  # Getting the features right is not enough. This line previously read
+  #   cargo check -p warp --bin warp-nine --features release_bundle,extern_plist
+  # which has the bundle's features but the *dev* profile, so `debug_assertions` is on.
+  # Half this codebase's debug-only actions are `#[cfg(debug_assertions)]`, so a dev-profile
+  # check compiles enum variants and match arms that the release build does not, and it
+  # cannot see a `#[cfg]` that has been orphaned onto the wrong item. That passed clean and
+  # the bundle then failed on a non-exhaustive match, after a full build.
+  #
+  # `--profile release-lto` and `--target` are what make this the same build. Keep them.
+  cargo check --profile release-lto --bin warp-nine --target aarch64-apple-darwin \
+    --features release_bundle,extern_plist
   cargo check -p warp --all-targets
   cargo fmt --all -- --check
   cargo test -p warp --lib

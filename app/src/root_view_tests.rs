@@ -1,7 +1,7 @@
 use onboarding::{OfferVariant, SelectedSettings, UICustomizationSettings};
 use warp_core::features::FeatureFlag;
-use warp_core::user_preferences::GetUserPreferences as _;
-use warpui::{App, SingletonEntity};
+
+use warpui::App;
 
 use super::{
     RootView, offer_variant_for_account_class, refresh_pending_onboarding_choices,

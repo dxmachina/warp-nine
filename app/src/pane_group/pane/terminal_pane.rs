@@ -1,7 +1,6 @@
 //! Implementation of terminal panes.
 use std::sync::mpsc::SyncSender;
 
-use url::Url;
 use warp_core::execution_mode::AppExecutionMode;
 use warp_errors::report_error;
 use warpui::{
@@ -24,9 +23,6 @@ use crate::pane_group::{self, Direction, PaneGroup};
 use crate::persistence::{BlockCompleted, ModelEvent};
 use crate::session_management::SessionNavigationData;
 use crate::terminal::general_settings::GeneralSettings;
-use crate::terminal::shared_session::manager::{Manager, ManagerEvent};
-use crate::terminal::shared_session::role_change_modal::RoleChangeOpenSource;
-use crate::terminal::shared_session::{SharedSessionStatus, join_link};
 use crate::terminal::view::Event;
 use crate::terminal::{TerminalManager, TerminalView};
 use crate::view_components::ToastFlavor;
@@ -143,7 +139,6 @@ impl TerminalPane {
             view.last_focus_ts(),
             view.is_read_only(),
             window_id,
-            view.model.lock().shared_session_status().clone(),
         )
     }
 
@@ -195,22 +190,6 @@ impl PaneContent for TerminalPane {
             group.send_sync_event_to_session(terminal_pane_id, &event, ctx);
         }
 
-        let terminal_view_id = self.terminal_view(ctx).id();
-        let manager_model = Manager::handle(ctx);
-        ctx.subscribe_to_model(&manager_model, move |group, model_handle, event, ctx| {
-            if let ManagerEvent::JoinedSession {
-                session_id: _,
-                view_id,
-            } = event
-            {
-                // only take action if the view id is ours
-                if *view_id == terminal_view_id {
-                    let url = retrieve_shared_session_link(model_handle.as_ref(ctx), view_id);
-                    group.handle_pane_link_updated(terminal_pane_id.into(), url, ctx);
-                }
-            }
-        });
-
         // LOCAL FORK: the agent conversation history subscription, the agent view
         // controller wiring and the active agent views registration all went with the
         // agent.
@@ -247,8 +226,6 @@ impl PaneContent for TerminalPane {
         ctx.unsubscribe_to_model(&pane_stack);
 
         ctx.unsubscribe_to_view(&self.view);
-
-        ctx.unsubscribe_to_model(&Manager::handle(ctx));
     }
 
     fn snapshot(&self, app: &AppContext) -> LeafContents {
@@ -259,28 +236,15 @@ impl PaneContent for TerminalPane {
         // input config, the base model override and the active execution profile all
         // came out with the agent, so every terminal pane now snapshots as a plain
         // terminal.
-        if view.model.lock().shared_session_status().is_viewer() {
-            // Shared-session viewers have no local shell state worth restoring.
-            LeafContents::Terminal(TerminalPaneSnapshot {
-                uuid: self.uuid.clone(),
-                cwd: None,
-                is_active,
-                is_read_only: false,
-                shell_launch_data: None,
-                llm_model_override: None,
-                active_profile_id: None,
-            })
-        } else {
-            LeafContents::Terminal(TerminalPaneSnapshot {
-                uuid: self.uuid.clone(),
-                cwd: view.pwd_if_local(app),
-                is_active,
-                is_read_only: view.model.lock().is_read_only(),
-                shell_launch_data: view.shell_launch_data_if_local(app),
-                llm_model_override: None,
-                active_profile_id: None,
-            })
-        }
+        LeafContents::Terminal(TerminalPaneSnapshot {
+            uuid: self.uuid.clone(),
+            cwd: view.pwd_if_local(app),
+            is_active,
+            is_read_only: view.model.lock().is_read_only(),
+            shell_launch_data: view.shell_launch_data_if_local(app),
+            llm_model_override: None,
+            active_profile_id: None,
+        })
     }
 
     fn has_application_focus(&self, ctx: &mut ViewContext<PaneGroup>) -> bool {
@@ -296,30 +260,11 @@ impl PaneContent for TerminalPane {
         &self,
         ctx: &mut ViewContext<PaneGroup>,
     ) -> Result<ShareableLink, ShareableLinkError> {
-        let manager = self.terminal_manager(ctx);
-        let the_model = manager.as_ref(ctx).model();
-        let lock = the_model.lock();
-
         // LOCAL FORK: a conversation transcript viewer used to resolve its share link from
-        // the agent's history model; that pane kind no longer exists.
-
-        // Check for shared session status
-        let session_status = lock.shared_session_status();
-        match session_status {
-            SharedSessionStatus::NotShared => Ok(ShareableLink::Base),
-            SharedSessionStatus::ActiveViewer { role: _ } => {
-                let manager = Manager::as_ref(ctx);
-                let terminal_view_id = self.terminal_view(ctx).id();
-                if let Some(url) = retrieve_shared_session_link(manager, &terminal_view_id) {
-                    Ok(ShareableLink::Pane { url })
-                } else {
-                    Err(ShareableLinkError::Unexpected(String::from(
-                        "Failed to retreive shared session link",
-                    )))
-                }
-            }
-            _ => Err(ShareableLinkError::Expected),
-        }
+        // the agent's history model, and a shared-session viewer from the session manager.
+        // Neither pane kind exists now, so a terminal pane's only link is the base one.
+        let _ = ctx;
+        Ok(ShareableLink::Base)
     }
 
     fn pane_configuration(&self) -> ModelHandle<PaneConfiguration> {
@@ -329,17 +274,6 @@ impl PaneContent for TerminalPane {
     fn is_pane_being_dragged(&self, ctx: &AppContext) -> bool {
         self.view.as_ref(ctx).is_being_dragged()
     }
-}
-
-fn retrieve_shared_session_link(manager: &Manager, terminal_view_id: &EntityId) -> Option<Url> {
-    let Some(session_id) = manager.session_id(terminal_view_id) else {
-        log::warn!("Failed to get join link args for updating browser url");
-        return None;
-    };
-    if let Ok(url) = Url::parse(&join_link(&session_id)) {
-        return Some(url);
-    }
-    None
 }
 
 // LOCAL FORK: the agent conversation action surface (`AgentConversationActionState`,
@@ -588,55 +522,9 @@ fn handle_terminal_view_event(
             Event::ToggleCodeReviewPane(arg) => {
                 ctx.emit(pane_group::Event::ToggleCodeReviewPane(arg.clone()));
             }
-            Event::OpenShareSessionModal { open_source } => {
-                group.open_share_session_modal(terminal_pane_id, *open_source, ctx)
-            }
-            // When the host's manual share stops, also stop the share on
-            // any local children whose share was auto-created via
-            // `inherit_share_for_local_child`. Skipped on wasm because the
-            // transitive-share tracker is only populated on non-wasm
-            // dispatch paths.
-            #[cfg(not(target_family = "wasm"))]
-            Event::StopSharingCurrentSession { .. } => {
-                group.stop_transitively_shared_child_shares(pane_id, ctx);
-            }
-            Event::OpenShareSessionDeniedModal => {
-                group.open_share_session_denied_modal(terminal_pane_id, ctx);
-            }
             Event::FocusSession => {
                 group.focus_pane(terminal_pane_id.into(), true, ctx);
                 ctx.emit(pane_group::Event::FocusPaneGroup);
-            }
-            Event::OpenSharedSessionRoleChangeModal { source } => match source {
-                RoleChangeOpenSource::ViewerRequest { role } => {
-                    group.open_shared_session_viewer_request_modal(terminal_pane_id, *role, ctx)
-                }
-                RoleChangeOpenSource::SharerResponse {
-                    participant_id,
-                    role_request_id,
-                    role,
-                } => group.open_shared_session_sharer_response_modal(
-                    terminal_pane_id,
-                    participant_id.clone(),
-                    role_request_id.clone(),
-                    *role,
-                    ctx,
-                ),
-                RoleChangeOpenSource::SharerGrant { participant_id } => group
-                    .open_shared_session_sharer_grant_modal(
-                        terminal_pane_id,
-                        participant_id.clone(),
-                        ctx,
-                    ),
-            },
-            Event::CloseSharedSessionRoleChangeModal(source) => {
-                group.close_shared_session_role_change_modal(*source, ctx);
-            }
-            Event::RoleRequestInFlight { role_request_id } => {
-                group.set_shared_session_role_change_modal_request_id(role_request_id.clone(), ctx);
-            }
-            Event::RoleRequestCancelled(role_request_id) => {
-                group.remove_shared_session_role_request(role_request_id.clone(), ctx);
             }
             Event::OpenWarpDriveObjectInPane(uid) => {
                 ctx.emit(pane_group::Event::OpenWarpDriveObjectInPane(uid.clone()));

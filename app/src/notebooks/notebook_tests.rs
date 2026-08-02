@@ -20,10 +20,8 @@ use crate::cloud_object::OpenWarpDriveObjectSettings;
 use crate::cloud_object::model::actions::ObjectActions;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::model::view::{CloudViewModel, Editor, EditorState};
-use crate::cloud_object::{
-    Owner, Revision, ServerCloudObject, ServerMetadata, ServerNotebook, ServerPermissions,
-};
-use crate::editor::{DisplayPoint, EditorAction, InteractionState, SelectAction};
+use crate::cloud_object::{Owner, Revision, ServerMetadata, ServerNotebook, ServerPermissions};
+use crate::editor::{DisplayPoint, EditorAction, SelectAction};
 use crate::network::NetworkStatus;
 use crate::notebooks::active_notebook_data::Mode;
 use crate::notebooks::editor::keys::NotebookKeybindings;
@@ -47,7 +45,7 @@ use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_profiles::{UserProfileWithUID, UserProfiles};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{GlobalResourceHandles, GlobalResourceHandlesProvider, PrivacySettings};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 
 fn initialize_app(app: &mut App) {
     initialize_settings_for_tests(app);

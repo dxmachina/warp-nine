@@ -56,8 +56,8 @@ use warpui::actions::StandardAction;
 use warpui::r#async::{SpawnedFutureHandle, Timer};
 use warpui::clipboard::ClipboardContent;
 use warpui::elements::{
-    ChildView, Container, CornerRadius, CrossAxisAlignment, DEFAULT_UI_LINE_HEIGHT_RATIO, Flex,
-    Hoverable, MainAxisSize, MouseStateHandle, ParentElement, Radius, Shrinkable,
+    Container, CornerRadius, CrossAxisAlignment, DEFAULT_UI_LINE_HEIGHT_RATIO, Flex, Hoverable,
+    MainAxisSize, MouseStateHandle, ParentElement, Radius, Shrinkable,
 };
 use warpui::fonts::{Cache as FontCache, FamilyId, Properties, Weight};
 use warpui::keymap::{EditableBinding, FixedBinding, Keystroke, PerPlatformKeystroke};

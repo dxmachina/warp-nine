@@ -952,11 +952,7 @@ fn all_commands(settings_mode: settings::SettingsMode) -> Vec<StaticCommand> {
         commands.push(CREATE_DOCKER_SANDBOX);
     }
 
-    if FeatureFlag::CreatingSharedSessions.is_enabled()
-        && FeatureFlag::HOARemoteControl.is_enabled()
-    {
-        commands.push(REMOTE_CONTROL);
-    }
+    // LOCAL FORK: /remote-control went with session sharing.
 
     if FeatureFlag::Changelog.is_enabled() {
         commands.push(CHANGELOG);

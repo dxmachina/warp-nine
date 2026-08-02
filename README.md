@@ -14,11 +14,12 @@ completions, workflows, keybindings, settings. Without the product around it.
 
 ## What this isn't
 
-- **Not a supported build.** Ad-hoc signed, not notarized. macOS gates first launch.
+- **Not a supported build.** Developer ID signed and notarized, so it opens without
+  a Gatekeeper prompt, but nobody supports it.
 - **Not upstream-compatible.** Whole subsystems are deleted. Rebasing gets harder
   over time. That's the trade.
 - **Not a smaller Warp with the features intact.** Sign-in, the agent, Warp Drive,
-  cloud sessions, settings sync, notifications, and the onboarding panel are gone,
+  shared sessions, settings sync, notifications, and the onboarding panel are gone,
   not hidden.
 - **Not cross-platform.** macOS arm64 only. Linux and Windows paths are untouched
   but unexercised.
@@ -105,6 +106,21 @@ megabytes.
   `/tmp/warp_docktile_<timestamp>.log` on every init.
 - **Referral and changelog menu items**, one of which rendered as
   `<NO DESCRIPTION>` because its label lookup no longer resolved.
+- **The agent** (~220K LOC): `app/src/ai` and the `ai`, `mcp`, `computer_use` and
+  `input_classifier` crates.
+- **The cloud object write path** (~20.6K LOC): the sync queue, the live GraphQL
+  mutations, and the thirteen `UpdateManager` methods behind them. Five affordances
+  were already dead before this: Trash, Untrash, permanent delete, the notebook
+  edit baton, and drive sharing all sat behind a `let Some(server_id) = ... else
+  { return; }` guard that a locally created object can never satisfy. The button
+  stayed enabled and did nothing.
+- **Shared sessions** (~19.1K LOC): the real-time collaborative terminal. A
+  WebSocket to `wss://sessions.app.warp.dev` streamed scrollback, PTY reads,
+  selections and presence to viewers who joined by link, with Reader / Executor /
+  Full roles and a CRDT-shared input line. Sharing had already been unreachable
+  since sign-in was closed off; joining someone else's session had not. Gone with
+  it: the `session-sharing-protocol` dependency, five feature flags, and the
+  `warp://shared_session/{id}` URI host.
 
 ## What's kept
 
@@ -112,20 +128,22 @@ Terminal and blocks, themes, Warpify, local completions (496 command specs),
 workflows, keybindings, settings, the code editor (unhighlighted, see grammars
 above), secret detection in terminal output.
 
-## In progress
+## What's left
 
-The agent UI is gone but the agent code still compiles in: `app/src/ai` (~220K
-LOC) plus the `ai`, `mcp`, `computer_use`, `input_classifier` crates. That is the
-remaining gap between what this fork claims and what it ships. A terminal that
-advertises no agent should not carry an agent's inference stack, model clients,
-and tool-call plumbing in its address space.
+`remote_server` (~8.9K LOC) is the last large subsystem that talks to Warp's
+infrastructure. It installs and drives a Warp-built helper binary on an SSH host
+so blocks and Warpify work remotely. It is a real feature, not dead code, so
+removing it is a product decision rather than a sweep.
 
-Worth ~22 MB, mostly mechanical. `terminal/` and `ai/blocklist/` import each
-other, so there is no small first step. An earlier attempt split it into six
-phases and proved they were not independent; `app/src/ai` has to come out
-wholesale. See [`EXCISION_MANIFEST.md`](EXCISION_MANIFEST.md).
+`warp_server_client` (3,022 lines) and `warp_server_auth` (1,391) stay. They were
+originally named as part of the cloud-object excision, but they are not gated on
+it: they back `remote_server`, API key management, the multi-agent client, and
+crash reporting.
 
-`script/fork_separability` predicts those cascades. Distrust its name-frequency
+See [`EXCISION_MANIFEST.md`](EXCISION_MANIFEST.md) for what each pass removed and
+what it broke on the way.
+
+`script/fork_separability` predicts removal cascades. Distrust its name-frequency
 signal: it over-reports on generic identifiers, and once predicted a 24-file
 cascade for a type with zero external users.
 

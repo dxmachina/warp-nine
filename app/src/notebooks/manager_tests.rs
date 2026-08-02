@@ -21,7 +21,6 @@ use crate::server::server_api::ServerApiProvider;
 use crate::settings::PrivacySettings;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::terminal::keys::TerminalKeybindings;
-use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::workspace::ActiveSession;
 use crate::workspaces::team_tester::TeamTesterStatus;
@@ -86,7 +85,6 @@ fn initialize_app(app: &mut App) -> TestState {
     app.add_singleton_model(FileSearchModel::new);
     app.add_singleton_model(NotebookKeybindings::new);
     app.add_singleton_model(TerminalKeybindings::new);
-    app.add_singleton_model(SessionPermissionsManager::new);
     app.add_singleton_model(|_| AuthStateProvider::new_for_test());
     #[cfg(feature = "voice_input")]
     app.add_singleton_model(voice_input::VoiceInput::new);

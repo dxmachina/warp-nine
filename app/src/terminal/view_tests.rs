@@ -6,10 +6,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use parking_lot::FairMutex;
-use warp_terminal::model::escape_sequences::C0;
+
 use warpui::notification::UserNotification;
 use warpui::platform::WindowStyle;
-use warpui::{App, EntityIdSet, Presenter, ReadModel, WindowInvalidation};
+use warpui::{App, EntityIdSet, Presenter, WindowInvalidation};
 
 use super::*;
 use crate::context_chips::prompt::Prompt;
@@ -18,9 +18,9 @@ use crate::features::FeatureFlag;
 // `BackingView` is the trait that gives `TerminalView::set_focus_handle`; without it
 // in scope the call sites below fail to resolve even though the impl is unchanged.
 use crate::pane_group::focus_state::PaneGroupFocusState;
-use crate::pane_group::pane::PaneStack;
+
 use crate::pane_group::{BackingView, TerminalPaneId};
-use crate::settings::import::model::ImportedConfigModel;
+
 use crate::settings::{AppEditorSettings, WarpPromptSeparator};
 use crate::terminal::alt_screen::should_intercept_mouse;
 use crate::terminal::block_list_element::{SnackbarPoint, SnackbarTranslationMode};
@@ -35,7 +35,6 @@ use crate::test_util::terminal::{
 };
 use crate::test_util::{add_window_with_terminal, assert_eventually};
 use crate::view_components::find::FindWithinBlockState;
-use crate::workspace::ToastStack;
 
 fn add_window_with_cloud_mode_terminal(app: &mut App) -> ViewHandle<TerminalView> {
     let tips_model = app.add_model(|_| Default::default());

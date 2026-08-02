@@ -40,7 +40,6 @@ use crate::terminal::model::block::BlockMetadata;
 use crate::terminal::model::session::SessionType;
 use crate::terminal::model::session::Sessions;
 use crate::terminal::session_settings::{SessionSettings, SessionSettingsChangedEvent};
-use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::ui_components::icons::Icon;
 use crate::view_components::action_button::{
     ActionButton, ActionButtonTheme, ButtonSize, NakedTheme, TooltipAlignment,
@@ -396,10 +395,8 @@ impl UniversalDeveloperInputButtonBar {
 
         // LOCAL FORK: the execution-profile, conversation-history and input models are gone.
 
-        // Keep the control disabled state in sync with role changes
-        ctx.subscribe_to_model(&SessionPermissionsManager::handle(ctx), |me, _, _, ctx| {
-            me.update_segmented_control_disabled_state(ctx);
-        });
+        // LOCAL FORK: the segmented control's disabled state also tracked shared-session
+        // role changes, since a reader cannot use the input.
 
         let mut me = Self {
             terminal_view_id,
@@ -445,16 +442,14 @@ impl UniversalDeveloperInputButtonBar {
     }
 
     pub fn update_segmented_control_disabled_state(&mut self, ctx: &mut ViewContext<Self>) {
-        let (is_reader, is_agent_in_control) = {
-            let terminal_model = self.terminal_model.lock();
-            (
-                terminal_model.shared_session_status().is_reader(),
-                terminal_model
-                    .block_list()
-                    .active_block()
-                    .is_active_and_long_running(),
-            )
-        };
+        // LOCAL FORK: `is_reader` was true for a read-only shared-session viewer.
+        let is_reader = false;
+        let is_agent_in_control = self
+            .terminal_model
+            .lock()
+            .block_list()
+            .active_block()
+            .is_active_and_long_running();
 
         let tooltip = if is_reader {
             Some("Request edit access to change input mode".to_string())
@@ -601,15 +596,8 @@ impl View for UniversalDeveloperInputButtonBar {
 
             buttons = buttons.with_child(ChildView::new(&self.at_button).finish());
 
-            // Viewers cannot attach files in shared sessions at this point.
-            if !self
-                .terminal_model
-                .lock()
-                .shared_session_status()
-                .is_viewer()
-            {
-                buttons = buttons.with_child(ChildView::new(&self.file_button).finish());
-            }
+            // LOCAL FORK: a shared-session viewer could not attach files.
+            buttons = buttons.with_child(ChildView::new(&self.file_button).finish());
 
             // LOCAL FORK: the model selector and prompt alert were agent surfaces.
 

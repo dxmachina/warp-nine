@@ -41,9 +41,6 @@ use crate::terminal::model::mouse::{MouseAction, MouseButton, MouseState};
 use crate::terminal::model::selection::{SelectAction, SelectionPoint};
 use crate::terminal::model::terminal_model::WithinModel;
 use crate::terminal::safe_mode_settings::get_secret_obfuscation_mode;
-use crate::terminal::shared_session::presence_manager::{
-    MUTED_PARTICIPANT_COLOR, PresenceManager, text_selection_color,
-};
 use crate::terminal::view::{
     ActiveSessionState, TerminalAction, TerminalEditor, TerminalViewRenderContext,
 };
@@ -73,8 +70,6 @@ pub struct AltScreenElement {
     pane_state: SplitPaneState,
     active_session_state: ActiveSessionState,
     selection_range: Option<Vec1<Range<Point>>>,
-
-    presence_manager: Option<ModelHandle<PresenceManager>>,
 
     // Fields needed for vertical scrolling for shared session viewer when window is smaller than sharer's
     scroll_top: Lines,
@@ -150,7 +145,6 @@ impl AltScreenElement {
                 use_ligature_rendering: false,
                 hide_cursor_cell: false,
             },
-            presence_manager: None,
             scroll_top,
             visible_lines: None,
             max_scroll_top: None,
@@ -167,14 +161,6 @@ impl AltScreenElement {
 
     pub fn with_hide_cursor_cell(mut self) -> Self {
         self.grid_render_params.hide_cursor_cell = true;
-        self
-    }
-
-    pub fn with_shared_session_presence(
-        mut self,
-        presence_manager: Option<ModelHandle<PresenceManager>>,
-    ) -> Self {
-        self.presence_manager = presence_manager;
         self
     }
 
@@ -455,11 +441,8 @@ impl AltScreenElement {
             delta.y().into_lines()
         };
 
-        // The alt screen can be vertically scrollable iff we're a shared session reader
-        // and our window is smaller than the sharer's.
-        if self.model.lock().shared_session_status().is_reader() {
-            ScrollableElement::scroll(self, delta.to_pixels(cell_height), ctx);
-        }
+        // LOCAL FORK: the alt screen was vertically scrollable only for a shared-session
+        // reader whose window was smaller than the sharer's.
 
         ctx.dispatch_typed_action(TerminalAction::MaybeDismissToolTip {
             from_keybinding: false,
@@ -530,61 +513,6 @@ impl AltScreenElement {
                 );
             }
         };
-    }
-
-    /// Renders any shared session participants' selections.
-    fn render_participant_selections(
-        &self,
-        size_info: &SizeInfo,
-        origin: Vector2F,
-        ctx: &mut PaintContext,
-        app: &AppContext,
-    ) {
-        if let Some(presence_manager) = &self.presence_manager {
-            let is_self_reconnecting = presence_manager.as_ref(app).is_reconnecting();
-            for participant in presence_manager.as_ref(app).all_present_participants() {
-                let session_sharing_protocol::common::Selection::AltScreenText {
-                    start,
-                    end,
-                    is_reversed,
-                } = &participant.info.selection
-                else {
-                    continue;
-                };
-                let start = SelectionPoint {
-                    row: start.row.into_lines(),
-                    col: start.col,
-                };
-                let end = SelectionPoint {
-                    row: end.row.into_lines(),
-                    col: end.col,
-                };
-                let participant_color = if is_self_reconnecting {
-                    MUTED_PARTICIPANT_COLOR
-                } else {
-                    participant.color
-                };
-                grid_renderer::render_selection(
-                    &start,
-                    &end,
-                    size_info,
-                    Lines::zero(),
-                    origin,
-                    text_selection_color(participant_color),
-                    ctx,
-                );
-                let cursor_point = if *is_reversed { &start } else { &end };
-                grid_renderer::render_selection_cursor(
-                    cursor_point,
-                    size_info,
-                    Lines::zero(),
-                    origin,
-                    participant_color,
-                    !*is_reversed,
-                    ctx,
-                );
-            }
-        }
     }
 
     fn total_lines(&self) -> Lines {
@@ -779,13 +707,6 @@ impl Element for AltScreenElement {
             adjusted_grid_origin,
             ctx,
         );
-        self.render_participant_selections(
-            &self.grid_render_params.size_info,
-            adjusted_grid_origin,
-            ctx,
-            app,
-        );
-
         if let Some(cli_subagent_view) = &mut self.cli_subagent_view {
             ctx.scene.start_layer(ClipBounds::ActiveLayer);
             let size = cli_subagent_view
@@ -1016,8 +937,8 @@ impl ScrollableElement for AltScreenElement {
         self.scroll_top = (self.scroll_top - delta.to_lines(self.line_height()))
             .max(Lines::zero())
             .min(self.max_scroll_top.unwrap());
-        ctx.dispatch_typed_action(TerminalAction::SharedSessionViewerAltScroll {
-            new_scroll_top: self.scroll_top,
-        });
+        // LOCAL FORK: the scroll top was mirrored back to the terminal view so a
+        // shared-session viewer's alt-screen scroll survived a re-render.
+        let _ = ctx;
     }
 }

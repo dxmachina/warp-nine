@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use session_sharing_protocol::common::{ProfileData as SessionSharingProfileData, Role};
 use warp_graphql::object_permissions::AccessLevel;
 
 use crate::auth::UserUid;
@@ -95,25 +94,6 @@ impl From<SharingAccessLevel> for AccessLevel {
     }
 }
 
-impl From<Role> for SharingAccessLevel {
-    fn from(role: Role) -> Self {
-        match role {
-            Role::Reader => Self::View,
-            Role::Executor => Self::Edit,
-            Role::Full => Self::Full,
-        }
-    }
-}
-
-impl From<SharingAccessLevel> for Role {
-    fn from(access_level: SharingAccessLevel) -> Self {
-        match access_level {
-            SharingAccessLevel::View => Self::Reader,
-            SharingAccessLevel::Edit | SharingAccessLevel::Full => Self::Executor,
-        }
-    }
-}
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum LinkSharingSubjectType {
     None,
@@ -137,24 +117,19 @@ pub enum Subject {
 #[derive(Debug, Clone)]
 pub enum UserKind {
     /// A Warp user account, tracked in the [`UserProfiles`] model.
+    ///
+    /// LOCAL FORK: the other variant was `SharedSessionParticipant(ProfileData)`, a
+    /// participant in a shared session, who has no Firebase uid of their own. It went
+    /// with session sharing, and with it the last use of `session-sharing-protocol` in
+    /// this crate.
     Account(UserUid),
-    /// A session-sharing participant.
-    // TODO(CLD-2283): Remove this once we have Firebase UIDs for shared session participants.
-    SharedSessionParticipant(SessionSharingProfileData),
 }
 
 /// A kind of team. Team permission updates are propagated differently for
 /// shared sessions, so we need to store different info in certain cases.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TeamKind {
-    Team {
-        team_uid: ServerId,
-    },
-    /// The team of the shared session sharer.
-    SharedSessionTeam {
-        team_uid: ServerId,
-        name: String,
-    },
+    Team { team_uid: ServerId },
 }
 
 impl TeamKind {
@@ -162,7 +137,6 @@ impl TeamKind {
     pub fn team_uid(&self) -> ServerId {
         match self {
             TeamKind::Team { team_uid } => *team_uid,
-            TeamKind::SharedSessionTeam { team_uid, .. } => *team_uid,
         }
     }
 }
@@ -179,12 +153,7 @@ impl Subject {
     /// Gets the user UID for this subject, if it has one.
     pub fn user_uid(&self) -> Option<UserUid> {
         match self {
-            Subject::User(user_kind) => match user_kind {
-                UserKind::Account(user_uid) => Some(*user_uid),
-                UserKind::SharedSessionParticipant(profile_data) => {
-                    Some(UserUid::new(profile_data.firebase_uid.as_str()))
-                }
-            },
+            Subject::User(UserKind::Account(user_uid)) => Some(*user_uid),
             Subject::PendingUser { .. } => None,
             Subject::Team(_) => None,
             Subject::AnyoneWithLink(_) => None,
@@ -195,9 +164,6 @@ impl Subject {
     pub fn is_user(&self, other_uid: UserUid) -> bool {
         match self {
             Subject::User(UserKind::Account(user_uid)) => *user_uid == other_uid,
-            Subject::User(UserKind::SharedSessionParticipant(profile_data)) => {
-                profile_data.firebase_uid.as_str() == other_uid.as_str()
-            }
             _ => false,
         }
     }
@@ -215,9 +181,6 @@ impl PartialEq for UserKind {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Account(self_uid), Self::Account(other_uid)) => self_uid == other_uid,
-            // Shared session participant data does not implement `PartialEq`. We only compare
-            // `UserKind`s in tests, so support isn't yet needed.
-            _ => false,
         }
     }
 }

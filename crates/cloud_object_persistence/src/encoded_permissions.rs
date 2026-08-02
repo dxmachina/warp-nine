@@ -101,27 +101,15 @@ impl PersistedSubject {
     /// may be direct object guests.
     pub fn try_from_subject(subject: &Subject) -> anyhow::Result<Self> {
         match subject {
-            Subject::User(user_kind) => match user_kind {
-                UserKind::Account(user_uid) => Ok(PersistedSubject::User {
-                    firebase_uid: user_uid.to_string(),
-                }),
-                UserKind::SharedSessionParticipant(_) => {
-                    // Shared sessions are transient, so we don't persist their ACLs to SQLite.
-                    Err(anyhow!("Session-sharing participants not supported"))
-                }
-            },
+            Subject::User(UserKind::Account(user_uid)) => Ok(PersistedSubject::User {
+                firebase_uid: user_uid.to_string(),
+            }),
             Subject::PendingUser { email } => Ok(PersistedSubject::PendingUser {
                 email: email.clone(),
             }),
-            Subject::Team(team_kind) => match team_kind {
-                TeamKind::Team { team_uid } => Ok(PersistedSubject::Team {
-                    team_uid: *team_uid,
-                }),
-                TeamKind::SharedSessionTeam { .. } => {
-                    // Shared sessions are transient, so we don't persist their ACLs to SQLite.
-                    Err(anyhow!("Session-sharing teams not supported"))
-                }
-            },
+            Subject::Team(TeamKind::Team { team_uid }) => Ok(PersistedSubject::Team {
+                team_uid: *team_uid,
+            }),
             Subject::AnyoneWithLink(_) => {
                 // Link sharing is persisted separately in the schema.
                 Err(anyhow!("Anyone with the link not supported"))

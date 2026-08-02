@@ -1165,8 +1165,116 @@ a comment saying so, to stop the next person removing them.
 were named as part of this tier, but they are not gated on the cloud-object path:
 they back shared terminal sessions, the remote-server SSH context, API key
 management, the multi-agent client and crash reporting. Removing them means
-removing session sharing, which is roughly 13,000 lines of live terminal
-functionality and a separate decision.
+removing session sharing, which is a separate decision.
+
+(Tier 3 made that decision and removed session sharing. Both crates still stay:
+`remote_server`, API keys, the multi-agent client and crash reporting were always
+the larger share of their callers.)
 
 `server_api` is reduced but not gone. What remains is the auth client (API keys,
 token refresh) and the HTTP client that session sharing and project init use.
+
+## Tier 3: shared sessions (2026-08-02)
+
+26,715 lines removed, 606 added, across 141 files. 19,584 of those lines were the
+`shared_session` and `sharing` trees themselves; the rest was call-path code
+threaded through the terminal view, the input, the pane group and the workspace.
+
+### What it was
+
+A real-time collaborative terminal, not a link to a recording. The sharer opened a
+WebSocket to `wss://sessions.app.warp.dev` (hardcoded in `WarpServerConfig::production`)
+and streamed scrollback on join, PTY reads batched at 50ms, ordered terminal
+events, text selections throttled at 20ms, participant presence and window size.
+Viewers joined through `warp://shared_session/{id}` and, depending on role, could
+type. Roles were `Reader`, `Executor`, `Full`; access came by link, by invited
+guest, or by team ACL. The input line was a CRDT, so participants co-edited the
+prompt rather than watching a mirror.
+
+Server-relayed, not peer-to-peer. The wire format lived in a separate git
+dependency, `warpdotdev/session-sharing-protocol` pinned at `b30fdd06`, which is
+now gone from `Cargo.toml` along with its `[patch]` stanza.
+
+### The half that was already dead, and the half that was not
+
+Creating a shared session was unreachable. `open_share_session_modal` had an
+`is_anonymous_or_logged_out()` early return added when sign-in was closed off, and
+`creating_shared_sessions` was not in the default feature set, so
+`FeatureFlag::CreatingSharedSessions` was off in every build this fork produces.
+
+Joining one was not. `viewing_shared_sessions` was on by default, the URI host
+parsed, and the join payload sent `anonymous_id` with `access_token: None`. Whether
+the server accepted an anonymous joiner is a server-side question that cannot be
+answered from this tree. Either way, an outbound WebSocket to Warp's
+infrastructure is exactly what this fork exists to not have.
+
+That asymmetry is why this needed a decision rather than a sweep, and it corrects
+an earlier claim in these notes that shared sessions were "roughly 13,000 lines of
+live terminal functionality."
+
+### What came out with it
+
+- `app/src/terminal/shared_session/` (13,107 lines) and
+  `app/src/terminal/view/shared_session/` (3,073): the sharer and viewer network
+  layers, the presence manager, the permissions manager, the role-change modal,
+  the share modal, the participant avatars.
+- `app/src/sharing/dialog/` (2,442) plus its QR code renderer and style module.
+  `app/src/sharing/mod.rs` survives as a re-export shim for `ContentEditability`
+  and the `cloud_objects` ACL types, which the notebook, workflow and env-var views
+  still speak.
+- `app/src/pane_group/pane/view/header/sharing.rs`, the pane header's share button
+  and view-only indicator, and the `HeaderRenderContext::sharing_controls` closure
+  that fed it.
+- Five feature flags: `CreatingSharedSessions`, `ViewingSharedSessions`,
+  `SharedSessionWriteToLongRunningCommands`, `SessionSharingAcls`,
+  `AgentSharedSessions`.
+- `UserKind::SharedSessionParticipant` and `TeamKind::SharedSessionTeam` in
+  `cloud_objects`, the last things in that crate that needed the protocol.
+
+### What the model layer lost, and what that changes
+
+`TerminalModel` held `shared_session_status`, `shared_session_source`, and two
+outbound channels. Removing them collapsed a set of conditionals that are worth
+recording, because each one was a behaviour difference that no longer exists:
+
+- Resize no longer takes the max of the local size and the sharer's, and no longer
+  suppresses reflow. Every remaining resize is a genuine local pane or font change.
+- The alt screen and the blocklist are no longer horizontally scrollable. Both were
+  scrollable only for a viewer whose pane was narrower than the sharer's terminal.
+- Secret obfuscation is no longer force-disabled. Sharing turned it off for the
+  whole session; a local session honours the setting.
+- `should_validate_dcs_hook_session_id` is unconditionally true. Only a viewer
+  skipped it, because the session ids in a replayed scrollback belong to someone
+  else's shell.
+- Closing a tab no longer prompts. The only thing that made a tab require
+  confirmation was an active share in one of its panes, so
+  `should_confirm_close_session` now reduces to the user's setting alone.
+
+### Three tests that were nearly lost
+
+`cut_tests` matched on any mention of `shared_session` and took
+`normal_lifecycle_pipeline_emits_completion_and_prompt_side_effects_once` and two
+siblings with it. They are lifecycle tests: they assert that a command's completion
+and prompt side effects fire exactly once. They mentioned shared sessions only
+because they used the ordered-event channel as a second observation point. All
+three were restored with that one assertion dropped and a comment explaining the
+gap. A needle that matches the observation mechanism is not a needle that matches
+the subject.
+
+### The unused-import sweep, second attempt
+
+The first attempt at this (see the tier-2 notes) corrupted six files. This one used
+the compiler's own JSON spans rather than line numbers, blanked exactly the flagged
+columns, and then ran a second pass to repair the resulting `use X::{, };`. That
+second pass was itself the problem: a regex over `^use [^;]*;` flattened multi-line
+statements onto one line, and a `//` comment inside one of them commented out the
+rest of the import list. One file broke that way and was repaired from `HEAD`.
+
+Two imports were removed that the lib genuinely did not use but the tests did
+(`AuthStateProvider`, `ShellName`, and the `Subject`/`UserKind` re-exports). This
+is the same trap as `cargo fix --lib`, arrived at by a different route: a
+lib-only unused-import list is not the same as an unused-import list.
+
+The lesson stands from last time and now has a second data point. Repairing
+malformed Rust with regex produces new malformed Rust. If a sweep needs a repair
+pass, the sweep was wrong.

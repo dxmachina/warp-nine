@@ -2,7 +2,6 @@ use std::fmt::Debug;
 
 use pathfinder_geometry::rect::RectF;
 use pathfinder_geometry::vector::{Vector2F, vec2f};
-use sharing::SharedPaneContent;
 use warp_core::features::FeatureFlag;
 use warp_core::settings::Setting;
 use warp_errors::report_error;
@@ -32,14 +31,12 @@ use crate::pane_group::pane::{
 use crate::pane_group::{
     BackingView, Direction, PaneDragDropLocation, PaneId, TabBarAxis, TabBarHoverIndex,
 };
-use crate::server::telemetry::SharingDialogSource;
+
 use crate::settings::CodeSettings;
 use crate::tab::tab_position_id;
 use crate::terminal::view::TerminalAction;
 use crate::view_components::{FeaturePopup, NewFeaturePopupEvent, NewFeaturePopupLabel};
 use crate::workspace::{TabBarDropTargetData, TabBarLocation, VerticalTabsPaneDropTargetData};
-
-mod sharing;
 
 pub(crate) mod components;
 
@@ -98,7 +95,6 @@ pub enum PaneHeaderAction<A: ActionPayload, B: ActionPayload> {
     OverflowMenuAction(A),
     CustomAction(B),
     OpenOverflowMenu,
-    ShareContents,
     Close,
     PaneHeaderDragStarted,
     PaneHeaderDragged {
@@ -130,7 +126,6 @@ pub struct PaneHeader<P: BackingView> {
     overflow_menu:
         ViewHandle<Menu<PaneHeaderAction<P::PaneHeaderOverflowMenuAction, P::CustomAction>>>,
     toolbelt_buttons: Vec<ToolbeltButton>,
-    shared_content: SharedPaneContent,
     open_overlay: OpenOverlay,
     is_visible_in_pane_group: bool, // If this pane header is being dragged along the tab bar, then it is not visible in the pane group
     toolbelt_feature_popup: ViewHandle<FeaturePopup>,
@@ -146,8 +141,6 @@ impl<P: BackingView> PaneHeader<P> {
         ctx.subscribe_to_view(&overflow_menu, move |me, _, event, ctx| {
             me.handle_overflow_menu_action(event, ctx);
         });
-
-        let shared_content = SharedPaneContent::new(ctx);
 
         let toolbelt_feature_popup = ctx.add_view(|_| {
             FeaturePopup::new_feature(NewFeaturePopupLabel::FromString(
@@ -167,7 +160,6 @@ impl<P: BackingView> PaneHeader<P> {
             focus_handle: None,
             mouse_state_handles: Default::default(),
             overflow_menu,
-            shared_content,
             open_overlay: Default::default(),
             toolbelt_buttons: Default::default(),
             is_visible_in_pane_group: true,
@@ -403,7 +395,6 @@ struct MouseStateHandles {
 #[derive(Default, Debug, PartialEq, Eq)]
 enum OpenOverlay {
     OverflowMenu,
-    SharingDialog,
     #[default]
     None,
 }
@@ -517,11 +508,6 @@ impl<P: BackingView> PaneHeader<P> {
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
             .with_main_axis_size(MainAxisSize::Min);
 
-        if should_show_on_header {
-            let appearance = Appearance::as_ref(app);
-            self.render_sharing_controls(&mut optional_controls, appearance, None, None, app);
-        }
-
         let optional_controls =
             Shrinkable::new(1., Clipped::new(optional_controls.finish()).finish()).finish();
 
@@ -556,19 +542,6 @@ impl<P: BackingView> PaneHeader<P> {
                             vec2f(0., 0.),
                             PositionedElementOffsetBounds::WindowByPosition,
                             PositionedElementAnchor::BottomRight,
-                            ChildAnchor::TopRight,
-                        ),
-                    );
-                }
-            }
-            OpenOverlay::SharingDialog => {
-                if self.is_sharing_dialog_enabled(app) {
-                    stack.add_positioned_overlay_child(
-                        ChildView::new(self.sharing_dialog()).finish(),
-                        OffsetPositioning::offset_from_parent(
-                            vec2f(-8., 0.),
-                            ParentOffsetBounds::WindowByPosition,
-                            ParentAnchor::BottomRight,
                             ChildAnchor::TopRight,
                         ),
                     );
@@ -624,7 +597,6 @@ impl<P: BackingView> PaneHeader<P> {
                 let should_show_on_header = hover_state.is_hovered()
                     || self.open_overlay != OpenOverlay::None
                     || options.has_open_menu
-                    || self.has_shareable_shared_session(app)
                     || options.always_show_icons;
 
                 let (right_justified_row, min_right_width) = self.render_right_justified_row(
@@ -761,16 +733,6 @@ impl<P: BackingView> View for PaneHeader<P> {
             overflow_button_position_id: self.overflow_button_position_id(),
             has_overflow_items,
             header_left_inset,
-            render_sharing_controls_fn: Box::new(|app, icon_color, button_size| {
-                if !self.is_sharing_dialog_enabled(app) {
-                    return None;
-                }
-
-                let appearance = Appearance::as_ref(app);
-                let mut row = Flex::row();
-                self.render_sharing_controls(&mut row, appearance, icon_color, button_size, app);
-                Some(row.finish())
-            }),
         };
         let header_content = self
             .pane_stack
@@ -915,9 +877,6 @@ impl<P: BackingView> TypedActionView for PaneHeader<P> {
                 self.open_overlay = OpenOverlay::OverflowMenu;
                 ctx.emit(Event::PaneHeaderOverflowMenuToggled(true));
                 ctx.notify();
-            }
-            PaneHeaderAction::ShareContents => {
-                self.share_pane_contents(SharingDialogSource::PaneHeader, ctx)
             }
             PaneHeaderAction::PaneHeaderDragStarted => {}
             PaneHeaderAction::PaneHeaderDragged {

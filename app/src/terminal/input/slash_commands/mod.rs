@@ -633,23 +633,9 @@ impl Input {
             SlashCommandKind::Usage => {
                 ctx.dispatch_typed_action(&TerminalAction::OpenBillingAndUsagePane);
             }
-            SlashCommandKind::RemoteControl => {
-                if !FeatureFlag::CreatingSharedSessions.is_enabled()
-                    || !FeatureFlag::HOARemoteControl.is_enabled()
-                {
-                    return false;
-                }
-                if self
-                    .model
-                    .lock()
-                    .shared_session_status()
-                    .is_sharer_or_viewer()
-                {
-                    show_error_toast("Session is already being shared".to_owned(), ctx);
-                    return true;
-                }
-                ctx.emit(Event::StartRemoteControl);
-            }
+            // LOCAL FORK: /remote-control started a shared session with remote control
+            // granted, and went with session sharing.
+            SlashCommandKind::RemoteControl => return false,
             // LOCAL FORK: /cost, /handoff, /fork, /fork-from, /continue-locally,
             // /fork-and-compact, /compact-and and /queue all acted on an agent
             // conversation and came out with the agent.

@@ -2311,7 +2311,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_regex",
- "session-sharing-protocol",
  "settings",
  "settings_value",
  "uuid",
@@ -2336,7 +2335,6 @@ dependencies = [
  "log",
  "persistence",
  "serde",
- "session-sharing-protocol",
  "warp_core",
  "warp_graphql",
 ]
@@ -2354,7 +2352,6 @@ dependencies = [
  "pathfinder_geometry",
  "schemars 1.0.4",
  "serde",
- "session-sharing-protocol",
  "settings_value",
  "thiserror 2.0.17",
  "uuid",
@@ -11083,17 +11080,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "session-sharing-protocol"
-version = "0.0.0"
-source = "git+https://github.com/warpdotdev/session-sharing-protocol.git?rev=b30fdd06379a3d073b398eabd106abed5b443aae#b30fdd06379a3d073b398eabd106abed5b443aae"
-dependencies = [
- "byte-unit",
- "serde",
- "serde_json",
- "uuid",
-]
-
-[[package]]
 name = "settings"
 version = "0.0.0"
 dependencies = [
@@ -13538,7 +13524,6 @@ dependencies = [
  "serde_with",
  "serde_yaml 0.8.26",
  "serial_test",
- "session-sharing-protocol",
  "settings",
  "settings_value",
  "sha2 0.10.9",
@@ -14135,7 +14120,6 @@ dependencies = [
  "schemars 1.0.4",
  "serde",
  "serde_json",
- "session-sharing-protocol",
  "settings_value",
  "tempfile",
  "thiserror 2.0.17",
@@ -14168,7 +14152,6 @@ dependencies = [
  "pathfinder_color",
  "regex",
  "serde",
- "session-sharing-protocol",
  "smol_str",
  "static_assertions",
  "string-offset",

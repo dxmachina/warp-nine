@@ -1482,7 +1482,7 @@ impl BackingView for EnvVarCollectionView {
 
     fn render_header_content(
         &self,
-        _ctx: &view::HeaderRenderContext<'_>,
+        _ctx: &view::HeaderRenderContext,
         app: &AppContext,
     ) -> view::HeaderContent {
         let title = self.title_editor.as_ref(app).buffer_text(app);

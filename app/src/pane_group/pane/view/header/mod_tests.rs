@@ -11,7 +11,6 @@ use crate::pane_group::focus_state::PaneFocusHandle;
 use crate::pane_group::{BackingView, PaneConfiguration, PaneId, PaneView};
 use crate::server::server_api::ServerApiProvider;
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
-use crate::terminal::shared_session::permissions_manager::SessionPermissionsManager;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::{NetworkStatus, TeamTesterStatus, UpdateManager, UserProfiles, UserWorkspaces};
 
@@ -89,7 +88,7 @@ impl BackingView for TestView {
 
     fn render_header_content(
         &self,
-        _ctx: &super::HeaderRenderContext<'_>,
+        _ctx: &super::HeaderRenderContext,
         _app: &AppContext,
     ) -> super::HeaderContent {
         super::HeaderContent::simple("Test")
@@ -109,7 +108,6 @@ fn initialize_app(app: &mut App) {
     app.add_singleton_model(|_| UserProfiles::new(Vec::new()));
     app.add_singleton_model(CloudModel::mock);
     app.add_singleton_model(|ctx| UpdateManager::new(None, ctx));
-    app.add_singleton_model(SessionPermissionsManager::new);
     app.add_singleton_model(|_| KeybindingChangedNotifier::mock());
     #[cfg(feature = "voice_input")]
     app.add_singleton_model(voice_input::VoiceInput::new);

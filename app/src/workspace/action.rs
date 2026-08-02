@@ -2,14 +2,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use session_sharing_protocol::common::SessionId;
 use ui_components::lightbox;
 use warp_util::path::LineAndColumnArg;
 use warpui::accessibility::AccessibilityVerbosity;
 use warpui::geometry::rect::RectF;
 use warpui::geometry::vector::Vector2F;
 use warpui::platform::Cursor;
-use warpui::{EntityId, WeakViewHandle, WindowId};
+use warpui::{EntityId, WindowId};
 
 use super::global_actions::{ForkFromExchange, ForkedConversationDestination};
 use super::tab_settings::{
@@ -22,7 +21,7 @@ use super::view::{OnboardingTutorial, WorkspaceBanner};
 // its attribute rebound it to the line below, which `main` leaves ungated. That hid
 // these symbols from every build where the condition is false.
 use crate::palette::PaletteMode;
-use crate::pane_group::PaneGroup;
+
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search;
 use crate::server::ids::SyncId;
@@ -430,19 +429,6 @@ pub enum WorkspaceAction {
     #[cfg(target_family = "wasm")]
     OpenLinkOnDesktop(url::Url),
     ReopenClosedSession,
-    OpenShareSessionModal(usize),
-    StopSharingSessionFromTabMenu {
-        terminal_view_id: EntityId,
-    },
-    StopSharingAllSessionsInTab {
-        pane_group: WeakViewHandle<PaneGroup>,
-    },
-    CopySharedSessionLinkFromTab {
-        tab_index: usize,
-    },
-    OpenSharedSessionQrCode {
-        session_id: SessionId,
-    },
     AddWindow,
     AddWindowWithShell {
         shell: AvailableShell,
@@ -936,11 +922,6 @@ impl WorkspaceAction {
             | OpenHeaderToolbarEditor
             | ShowHeaderToolbarContextMenu { .. }
             | OpenLink(_)
-            | OpenShareSessionModal(_)
-            | StopSharingSessionFromTabMenu { .. }
-            | StopSharingAllSessionsInTab { .. }
-            | CopySharedSessionLinkFromTab { .. }
-            | OpenSharedSessionQrCode { .. }
             | ReopenClosedSession
             | FocusLeftPanel
             | FocusRightPanel

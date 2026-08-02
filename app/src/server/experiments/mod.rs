@@ -67,12 +67,10 @@ impl ServerExperiment {
     //    have been initialized and can thus be referenced.
     fn on_added_to(&self, _ctx: &mut AppContext) {
         match self {
-            Self::SessionSharingExperiment => {
-                FeatureFlag::CreatingSharedSessions.set_enabled(true);
-            }
-            Self::SessionSharingControl => {
-                FeatureFlag::CreatingSharedSessions.set_enabled(false);
-            }
+            // LOCAL FORK: the two session-sharing experiments toggled
+            // `CreatingSharedSessions`, which went with session sharing. The variants stay
+            // because the server can still send them and the enum must round-trip.
+            Self::SessionSharingExperiment | Self::SessionSharingControl => {}
             Self::DisableAgentModeExperiment => {
                 FeatureFlag::AgentMode.set_enabled(false);
             }

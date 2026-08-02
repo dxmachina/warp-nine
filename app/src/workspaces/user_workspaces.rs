@@ -27,7 +27,7 @@ use super::workspace::{
 use crate::channel::ChannelState;
 use crate::cloud_object::model::persistence::CloudModel;
 use crate::cloud_object::{Owner, Space};
-use crate::server::experiments::{ServerExperiment, ServerExperiments, ServerExperimentsEvent};
+
 use crate::server::ids::ServerId;
 #[cfg(test)]
 #[cfg(test)]
@@ -86,10 +86,8 @@ impl UserWorkspaces {
         current_workspace_uid: Option<WorkspaceUid>,
         ctx: &mut ModelContext<Self>,
     ) -> Self {
-        ctx.subscribe_to_model(&ServerExperiments::handle(ctx), |me, _, event, ctx| {
-            let ServerExperimentsEvent::ExperimentsUpdated = event;
-            me.update_session_sharing_enablement(ctx);
-        });
+        // LOCAL FORK: this subscription re-evaluated session-sharing enablement whenever
+        // the server experiment set changed.
 
         ctx.subscribe_to_model(
             &CodeSettings::handle(ctx),
@@ -709,10 +707,6 @@ impl UserWorkspaces {
     }
 
     fn notify_and_emit_teams_changed(&self, ctx: &mut ModelContext<Self>) {
-        // Update session-sharing enablement since it depends on what teams the user
-        // is part of.
-        self.update_session_sharing_enablement(ctx);
-
         // PrivacySettings can't observe UserWorkspaces for updates, as it's initialized too early in
         // the app initialization flow. So, we update it manually whenever teams data changes.
         PrivacySettings::handle(ctx).update(ctx, |settings, ctx| {
@@ -869,29 +863,6 @@ impl UserWorkspaces {
         self.current_workspace()
             .map(|workspace| workspace.settings.codebase_context_settings.setting.clone())
             .unwrap_or_default()
-    }
-
-    /// Updates whether or not session sharing is enabled based on the current team's tier policy.
-    fn update_session_sharing_enablement(&self, ctx: &AppContext) {
-        if cfg!(any(test, feature = "integration_tests")) {
-            return;
-        }
-
-        // If we have experiment state to unconditionally enable / disable the feature,
-        // then we defer to that.
-        let server_experiments = ServerExperiments::as_ref(ctx);
-        if server_experiments.is_experiment_enabled(&ServerExperiment::SessionSharingControl)
-            || server_experiments.is_experiment_enabled(&ServerExperiment::SessionSharingExperiment)
-        {
-            return;
-        }
-
-        let is_session_sharing_enabled_via_tier_policy = self
-            .current_workspace()
-            .and_then(|workspace| workspace.billing_metadata.tier.session_sharing_policy)
-            .map(|policy| policy.is_enabled)
-            .unwrap_or(true);
-        FeatureFlag::CreatingSharedSessions.set_enabled(is_session_sharing_enabled_via_tier_policy);
     }
 }
 

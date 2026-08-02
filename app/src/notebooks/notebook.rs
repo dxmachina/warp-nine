@@ -1983,7 +1983,7 @@ impl BackingView for NotebookView {
 
     fn render_header_content(
         &self,
-        _ctx: &view::HeaderRenderContext<'_>,
+        _ctx: &view::HeaderRenderContext,
         app: &AppContext,
     ) -> view::HeaderContent {
         view::HeaderContent::simple(self.pane_configuration.as_ref(app).title())

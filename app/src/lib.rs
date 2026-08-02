@@ -1534,7 +1534,6 @@ pub(crate) fn initialize_app(
     undo_close::init(ctx);
     tab_configs::new_worktree_modal::init(ctx);
     tab_configs::params_modal::init(ctx);
-    sharing::dialog::init(ctx);
     env_vars::env_var_collection_block::init(ctx);
     context_chips::display_menu::init(ctx);
     context_chips::node_version_popup::init(ctx);
@@ -1698,13 +1697,6 @@ pub(crate) fn initialize_app(
 
     // Add a singleton model for resizable modals whose size should be persisted through restarts.
     ctx.add_singleton_model(|_| ResizableData::default());
-
-    // Add a singleton model to maintain state of shared session across all windows.
-    ctx.add_singleton_model(terminal::shared_session::manager::Manager::new);
-
-    ctx.add_singleton_model(
-        terminal::shared_session::permissions_manager::SessionPermissionsManager::new,
-    );
 
     ctx.add_singleton_model(EnvVarCollectionManager::new);
     ctx.add_singleton_model(WorkflowManager::new);

@@ -9,7 +9,7 @@ use chrono::Utc;
 #[cfg(test)]
 #[allow(unused_imports)]
 pub use cloud_object_client::InitialLoadResponse;
-use itertools::Itertools;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 use warp_errors::report_error;

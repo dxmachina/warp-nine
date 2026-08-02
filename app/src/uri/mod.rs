@@ -11,7 +11,6 @@ use std::str::FromStr;
 
 use anyhow::{Result, anyhow, ensure};
 use itertools::Itertools;
-use session_sharing_protocol::common::SessionId;
 use url::Url;
 use warp_util::path::LineAndColumnArg;
 use warpui::notification::UserNotification;
@@ -80,8 +79,6 @@ pub enum UriHost {
     Action,
     /// A host prefix for all actions that involve launch configurations
     Launch,
-    /// Supports joining shared sessions via a warp:// URI.
-    SharedSession,
     /// Supports viewing AI conversations via a warp:// URI.
     Conversation,
     /// Supports WD object actions
@@ -114,9 +111,8 @@ impl FromStr for UriHost {
             "team" => Ok(Self::Team),
             "action" => Ok(Self::Action),
             "launch" => Ok(Self::Launch),
-            "shared_session" if FeatureFlag::ViewingSharedSessions.is_enabled() => {
-                Ok(Self::SharedSession)
-            }
+            // LOCAL FORK: `warp://shared_session/{id}` joined someone else's shared
+            // session as a viewer. Refusing to parse the host makes the link inert.
             "conversation" => Ok(Self::Conversation),
             "drive" => Ok(Self::Drive),
             "settings" => Ok(Self::Settings),
@@ -212,38 +208,6 @@ impl UriHost {
             }
             UriHost::TabConfig => {
                 handle_tab_config_uri(primary_window_id, url, ctx);
-            }
-            UriHost::SharedSession => {
-                // We expect the uri to have the ID of the session to join as the last segment.
-                // e.g. warp://shared_session/{id}
-                let session_id = url
-                    .path_segments()
-                    .into_iter()
-                    .flatten()
-                    .last()
-                    .and_then(|id| SessionId::from_str(id).ok());
-                if let Some(session_id) = session_id {
-                    // If there's an existing window, join the session inc a new tab. Otherwise, open a new window.
-                    match primary_window_id.and_then(|window_id| {
-                        ctx.root_view_id(window_id)
-                            .map(|view_id| (window_id, view_id))
-                    }) {
-                        Some((primary_window_id, root_view_id)) => {
-                            ctx.dispatch_action(
-                                primary_window_id,
-                                &[root_view_id],
-                                "root_view:join_shared_session_in_existing_window",
-                                &session_id,
-                                log::Level::Info,
-                            );
-                        }
-                        None => {
-                            ctx.dispatch_global_action("root_view:join_shared_session", &session_id)
-                        }
-                    }
-                } else {
-                    log::warn!("Failed to join shared session with uri={url}");
-                }
             }
             UriHost::Conversation => {
                 // LOCAL FORK: there are no agent conversations to open.
@@ -524,7 +488,7 @@ impl UriHost {
             }),
             Self::Team | Self::Drive | Self::Settings => W::default(),
             // These URLs always open new windows.
-            Self::Launch | Self::SharedSession | Self::Conversation | Self::Home => W::Nothing,
+            Self::Launch | Self::Conversation | Self::Home => W::Nothing,
             // This will actually be handled by [`Action::window_behavior_hint`].
             Self::Action => W::Nothing,
             // TODO(vorporeal): probably want to focus the window with the MCP pane open
@@ -1542,7 +1506,6 @@ fn validate_custom_uri(url: &Url) -> Result<UriHost> {
     let host_allows_arbitrary_path = match host {
         UriHost::Action
         | UriHost::Launch
-        | UriHost::SharedSession
         | UriHost::Conversation
         | UriHost::Drive
         | UriHost::Team

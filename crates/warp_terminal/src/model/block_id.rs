@@ -46,28 +46,6 @@ impl Default for BlockId {
     }
 }
 
-impl From<BlockId> for session_sharing_protocol::common::BlockId {
-    fn from(value: BlockId) -> Self {
-        value.to_string().into()
-    }
-}
-
-impl From<session_sharing_protocol::common::BlockId> for BlockId {
-    fn from(value: session_sharing_protocol::common::BlockId) -> Self {
-        value.to_string().into()
-    }
-}
-
-impl From<session_sharing_protocol::common::BufferId> for BlockId {
-    fn from(value: session_sharing_protocol::common::BufferId) -> Self {
-        let block_id = session_sharing_protocol::common::BlockId::from(value);
-        block_id.into()
-    }
-}
-
-impl From<BlockId> for session_sharing_protocol::common::BufferId {
-    fn from(value: BlockId) -> Self {
-        let block_id = session_sharing_protocol::common::BlockId::from(value);
-        block_id.into()
-    }
-}
+// LOCAL FORK: the four `From` impls converting between this `BlockId` and the session
+// sharing protocol's `BlockId`/`BufferId` went with session sharing, and with them this
+// crate's dependency on `session-sharing-protocol`.

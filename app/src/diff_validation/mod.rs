@@ -994,7 +994,6 @@ cfg_if! {
             }
         }
 
-        pub use test_util::{match_search_replace_block, SearchReplaceMatchStrategy};
     }
 }
 

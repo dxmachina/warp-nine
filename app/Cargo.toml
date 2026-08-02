@@ -184,7 +184,6 @@ serde_urlencoded.workspace = true
 strsim.workspace = true
 serde_with.workspace = true
 serde_yaml.workspace = true
-session-sharing-protocol.workspace = true
 settings.workspace = true
 settings_value = { workspace = true, features = ["derive"] }
 sha2.workspace = true
@@ -468,7 +467,6 @@ agent_mode_primary_xml = []
 agent_mode_pre_plan_xml = []
 agent_onboarding = []
 account_first_onboarding = []
-agent_shared_sessions = []
 ask_user_question = []
 async_find = []
 changelog = []
@@ -491,15 +489,12 @@ crash_reporting = [
     "warp_logging/crash_reporting",
     "warp_errors/crash_reporting",
 ]
-creating_shared_sessions = []
 cross_repo_context = []
 codebase_index_persistence = ["full_source_code_embedding"]
 default = [
     "agent_mode",
-    "viewing_shared_sessions",
     "render_continuous_block_selections_with_single_border",
     "shared_with_me",
-    "session_sharing_acls",
     "external_agent_mode_context",
     "shell_selector",
     "minimalist_ui",
@@ -574,7 +569,6 @@ default = [
     "summarize_conversation_command",
     "inline_code_review",
     "web_search_ui",
-    "agent_shared_sessions",
     "integration_command",
     "artifact_command",
     "conversation_api",
@@ -582,7 +576,6 @@ default = [
     "create_environment_slash_command",
     "code_review_find",
     "async_find",
-    "shared_session_long_running_commands",
     "fork_from_command",
     "context_window_usage_v2",
     "ambient_agents_command_line",
@@ -817,8 +810,6 @@ runtime_feature_flags = []
 selectable_prompt = []
 settings_file = []
 sequential_storage = []
-session_sharing = []
-session_sharing_acls = []
 skip_login = ["warp_server_client/skip_login"]
 # This feature should only be enabled when building a self-contained binary with the bundle script.
 standalone = ["warp_assets/standalone", "warp_core/standalone"]
@@ -846,7 +837,6 @@ integration_tests = [
     "warp_server_client/integration_tests",
 ]
 traces = []
-viewing_shared_sessions = []
 workflow_aliases = []
 rect_selection = []
 alacritty_settings_import = []
@@ -854,7 +844,6 @@ shared_with_me = []
 ai_rules = []
 am_workflows = []
 shell_selector = []
-shared_session_long_running_commands = []
 blocklist_markdown_table_rendering = []
 blocklist_markdown_images = []
 minimalist_ui = []

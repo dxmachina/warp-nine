@@ -1000,7 +1000,7 @@ name = "WarpNine"
 # gone -- the onboarding imagery was the 47 MB `rust-embed` excluded from this build --
 # so the entry named a path that did not exist. It went with the onboarding crate.
 icon = ["channels/oss/icon/no-padding/512x512.png", "channels/oss/icon/no-padding/icon.ico"]
-short_description = "A local-only, Apple-Silicon Warp fork with no account, telemetry, or agent."
+short_description = "A local-only macOS Warp fork with no account, telemetry, or agent."
 
 [package.metadata.bundle.bin.stable]
 category = "public.app-category.developer-tools"

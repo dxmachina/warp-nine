@@ -3,7 +3,7 @@
 A personal fork of [Warp](https://github.com/warpdotdev/warp) with the account
 system, coding agent, and cloud backend removed.
 
-857 MB to 78 MB. Apple Silicon only. No sign-in, no telemetry.
+857 MB to 78 MB. Separate arm64 and Intel builds. No sign-in, no telemetry.
 
 Maintained by Sebastian Katz. Not affiliated with or endorsed by Warp Dev, Inc.
 
@@ -21,8 +21,9 @@ completions, workflows, keybindings, settings. Without the product around it.
 - **Not a smaller Warp with the features intact.** Sign-in, the agent, Warp Drive,
   shared sessions, settings sync, notifications, and the onboarding panel are gone,
   not hidden.
-- **Not cross-platform.** macOS arm64 only. Linux and Windows paths are untouched
-  but unexercised.
+- **Not cross-platform.** macOS only. Linux and Windows paths are untouched but
+  unexercised. Both macOS architectures build, but only arm64 is run day to day;
+  the Intel build is verified as far as a signed, notarized launch under Rosetta.
 - **Not audited.** Telemetry and crash reporting are hard-off and verified in the
   logs, but this is one person's fork.
 
@@ -30,9 +31,9 @@ completions, workflows, keybindings, settings. Without the product around it.
 
 | | Stock Warp | WarpNine |
 |---|---|---|
-| App bundle | 857 MB | **78 MB** |
-| Disk image | n/a | 31 MB |
-| Architectures | x86_64 + arm64 | arm64 only |
+| App bundle | 857 MB | **78 MB** arm64 / 84 MB Intel |
+| Disk image | n/a | 31 MB arm64 / 34 MB Intel |
+| Architectures | one fat binary | two single-arch builds |
 | `__text` (code) | 126 MB | 33 MB |
 | `__const` (data) | 167 MB | 41 MB |
 | Unwinding tables | 25 MB | 0.2 MB |
@@ -43,8 +44,9 @@ completions, workflows, keybindings, settings. Without the product around it.
 
 Launches to a shell. `--version` reports a real build stamp.
 
-Measured at `3cb1ec862`, the last notarized build. Excisions after that commit move
-these numbers by well under a megabyte, for the reason immediately below.
+Measured at `4e8698693`, the last notarized build. Excisions since `3cb1ec862`,
+where the breakdown rows below were measured, move these numbers by well under a
+megabyte, for the reason immediately below.
 
 The excisions below are worth ~2 MB between them. Deleting call-path code removes
 lines, not bytes; the binary is dominated by dependencies that stay. This is the
@@ -61,7 +63,7 @@ What actually cost the megabytes:
 
 | Lever | Saved | Change |
 |---|---|---|
-| No x86_64 slice | 426 MB | one default flipped |
+| No fat binary | 426 MB | one default flipped; each image carries one slice |
 | `debug = 0` + `strip = "symbols"` | ~90 MB | upstream keeps line tables for Sentry |
 | Dropped 34 tree-sitter grammars | 51 MB | `arborium` features |
 | Excluded onboarding imagery | 47 MB | `rust-embed` inlined 57 MB of PNGs uncompressed |
@@ -198,6 +200,38 @@ export PATH="$HOME/.cargo/bin:$PATH"
 ```
 
 Output: `target/aarch64-apple-darwin/release-lto/bundle/osx/WarpNine.app`
+
+For a signed, notarized, verified release, use `script/release` instead. It checks
+both credentials before the build rather than after, and it mounts the finished
+image, copies the app out, applies the quarantine attribute a browser would set,
+and confirms the extracted copy still validates.
+
+```bash
+./script/release                 # arm64
+./script/release --arch x86_64   # Intel, cross-built; needs Rosetta for the smoke test
+./script/release --arch both     # both, each fully verified before the next starts
+./script/release --signed-only   # skip notarization
+```
+
+Disk images are named for their architecture and land in
+`target/release-lto/bundle/osx`:
+
+```
+WarpNine-arm64.dmg      31 MB
+WarpNine-x86_64.dmg     34 MB
+```
+
+That directory is not per-target, so the loose `.app` copy in it belongs to
+whichever architecture built last. The one each image was built from stays under
+`target/<rust-target>/release-lto/bundle/osx/`.
+
+**Minimum macOS: 11.0 on arm64, 10.14 on Intel.** `.cargo/config.toml` sets
+`MACOSX_DEPLOYMENT_TARGET = "10.14"`, which binds on Intel and is also what
+`crates/warpui/build.rs` pins the Metal AIR bytecode to. On arm64 it cannot bind:
+Rust's floor for Apple Silicon is 11.0 because Big Sur is where Apple Silicon
+started. Nothing sets `LSMinimumSystemVersion`, so the Mach-O load command is the
+only gate, and neither floor has been tested below the machine that builds them.
+One feature sits higher and says so: the login item uses `SMAppService`, macOS 13+.
 
 `cargo-about` matters more than it looks. It generates
 `THIRD_PARTY_LICENSES.txt`, and that step runs before code signing. When it was

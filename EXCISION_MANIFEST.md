@@ -3,8 +3,14 @@
 Author: Sebastian Katz
 
 Working notes for stripping login, agents, and cloud from the Warp OSS checkout
-(`warp/`, upstream `warpdotdev/warp` @ `3fdb2dec6`), targeting an
-Apple-Silicon-only local build.
+(`warp/`, upstream `warpdotdev/warp` @ `3fdb2dec6`), targeting a macOS local
+build.
+
+This read "Apple-Silicon-only" until 2026-08-03. The size levers below were all
+found and measured against arm64, and the "no x86_64 slice" row stays accurate --
+what it saved was the *fat* binary, and each image still carries one slice. Intel
+is now built as its own image rather than as half of a universal one. See
+"Per-architecture disk images (2026-08-03)".
 
 ## Login is gone (2026-07-31)
 
@@ -1468,3 +1474,54 @@ or remove `code_review` (23,937 lines) as well and take the whole 21,638.
 
 The general lesson, third time in this manifest: a subsystem's name describes where its
 code lives, not what depends on it.
+
+## Per-architecture disk images (2026-08-03)
+
+Not an excision. Three defects in how the shipped image was named and built, all
+of which made the artifact ambiguous rather than large.
+
+**The volume name was the literal string `Warp`.** `--volname Warp` was hardcoded
+in both `create_warp_dmg` paths, so mounting a WarpNine image gave you a disk
+called "Warp" holding a `WarpNine.app`. It follows `$WARP_APP_NAME` now, which
+also stops two mounted images collapsing into "Warp" and "Warp 1".
+
+**The file name carried no architecture.** `--dmg-name-suffix` already existed but
+nothing local passed it. `$BUNDLE_DIR` is per-target; `$OUT_DIR` is not. So an
+Intel build and an Apple Silicon build wrote the same `WarpNine.dmg` and the
+second replaced the first with no warning. The suffix now defaults to the
+architecture, spelled `arm64` rather than the Rust triple's `aarch64` because
+`lipo`, `uname -m` and the release workflow all use the Apple spelling. An
+explicit `--dmg-name-suffix` still wins, so upstream CI is unaffected.
+
+**`--arch x86_64` had never worked on this machine.** Only the universal-binary
+path ran `rustup target add`, on the assumption that a single-arch build is a
+native one. Cross-building Intel from Apple Silicon is not, and it died at the
+first `cargo bundle` with `can't find crate for 'std'` -- ten seconds in, with a
+message that reads like a source problem.
+
+`script/release` gained `--arch aarch64|x86_64|both`. Two things there were not
+obvious:
+
+- Verification had to move to the per-target bundle directory. The `$OUT_DIR`
+  copy is overwritten by whichever architecture built last, so on the second pass
+  the old code would have re-verified the first architecture's app and passed.
+- A `lipo -archs` assertion on the bundled binary, because `cargo bundle` will
+  package a stale binary from another target if anything upstream goes sideways
+  and nothing else in the script would notice.
+
+Rosetta is checked in the preflight beside the credentials, for the same reason
+they are: the smoke test runs the x86_64 build, and "Bad CPU type" is not a thing
+to discover after a full LTO build.
+
+Both notarized at `4e8698693`:
+
+| artifact | size | minos |
+|---|---|---|
+| `WarpNine-arm64.dmg` | 31 MB | 11.0 |
+| `WarpNine-x86_64.dmg` | 34 MB | 10.14 |
+
+The two floors differ because `.cargo/config.toml` sets
+`MACOSX_DEPLOYMENT_TARGET = "10.14"` and Rust cannot honour it on arm64 -- Big Sur
+is where Apple Silicon started. Nothing sets `LSMinimumSystemVersion`, so the
+Mach-O load command is the only gate, and neither floor has been tested below the
+machine that builds them.

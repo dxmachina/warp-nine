@@ -558,6 +558,24 @@ if [[ $UNIVERSAL_BINARY = true ]]; then
     rustup target add "$ADDITIONAL_TARGET"
 fi
 
+# LOCAL FORK: do the same for an explicit `--arch`.
+#
+# Only the universal path installed a target, on the assumption that a
+# single-arch build is always a native one. Cross-building the Intel bundle from
+# an Apple Silicon machine is not, and it failed at the first `cargo bundle` with
+# `can't find crate for 'std'` -- ten seconds in, but with a message that reads
+# like a source problem rather than a missing toolchain component.
+#
+# `rustup` is only consulted if it is on PATH: a Homebrew `rustc` has no rustup
+# to add targets with, and `script/release` puts `~/.cargo/bin` first precisely
+# so that this resolves.
+if [[ -n "$TARGET_ARCH" ]] && command -v rustup > /dev/null 2>&1; then
+    if ! rustup target list --installed | grep -qx "$DEFAULT_TARGET"; then
+        echo "Installing Rust target $DEFAULT_TARGET"
+        rustup target add "$DEFAULT_TARGET"
+    fi
+fi
+
 # If we only want to check that compilation will succeed, perform the checks
 # then exit.  We use this script to invoke `cargo check` to ensure that we are
 # using the same feature flags and profile that we would be using in production.
@@ -571,11 +589,32 @@ fi
 
 DMG_DIR="$BUNDLE_DIR/dmg/$WARP_BIN"
 DMG_NAME="$WARP_APP_NAME.dmg"
-if [[ -z "$FINAL_DMG_NAME" && -n "$DMG_NAME_SUFFIX" ]]; then
-  FINAL_DMG_NAME="$WARP_APP_NAME-$DMG_NAME_SUFFIX.dmg"
-else
-  FINAL_DMG_NAME="$WARP_APP_NAME.dmg"
+
+# LOCAL FORK: name the shipped image for the architecture it holds.
+#
+# `--dmg-name-suffix` already existed, but nothing local passed it, so every
+# build landed on `WarpNine.dmg`. `$BUNDLE_DIR` is per-target but `$OUT_DIR` is
+# not, so an Intel build and an Apple Silicon build wrote the same path and the
+# second silently replaced the first. The two are not interchangeable, and a
+# downloaded file that does not say which it is cannot be told apart without
+# mounting it and running `lipo -archs` on the binary inside.
+#
+# An explicit `--dmg-name-suffix` still wins, which is what upstream CI passes.
+if [[ -z "$DMG_NAME_SUFFIX" ]]; then
+  if [[ $UNIVERSAL_BINARY = true ]]; then
+    DMG_NAME_SUFFIX="universal"
+  else
+    # `arm64`, not `aarch64`. The Rust triple spells it `aarch64` but nothing a
+    # user of the download ever sees does: `uname -m`, `lipo -archs` and Apple's
+    # own documentation all say `arm64`, and it is what the release workflow
+    # passes explicitly for the same build.
+    case "$DEFAULT_TARGET" in
+      aarch64-*) DMG_NAME_SUFFIX="arm64" ;;
+      *)         DMG_NAME_SUFFIX="${DEFAULT_TARGET%%-*}" ;;
+    esac
+  fi
 fi
+FINAL_DMG_NAME="$WARP_APP_NAME-$DMG_NAME_SUFFIX.dmg"
 
 # First clean up and prep the outdir
 mkdir -p "$OUT_DIR"
@@ -1074,7 +1113,12 @@ if [[ "$ARTIFACT" = app ]]; then
     local source_folder="$1"
 
     local args=(
-      --volname Warp
+      # LOCAL FORK: the volume name is what Finder shows when the image is
+      # mounted and what appears under /Volumes. It read `Warp` regardless of
+      # channel, so mounting a WarpNine image gave you a disk called "Warp"
+      # holding a `WarpNine.app`, and two mounted images could not both be
+      # called Warp anyway -- the second gets `Warp 1`.
+      --volname "$WARP_APP_NAME"
       # For --no-internet-enable, see https://github.com/create-dmg/create-dmg/issues/179
       --no-internet-enable
       --background app/assets/resources/mac/warp_install_image.png
@@ -1123,7 +1167,7 @@ if [[ "$ARTIFACT" = app ]]; then
     rm -f "$DMG_DIR/$DMG_NAME"
 
     local plain_args=(
-      --volname Warp
+      --volname "$WARP_APP_NAME"
       --no-internet-enable
       --format UDZO
       --filesystem APFS

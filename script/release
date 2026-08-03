@@ -7,6 +7,7 @@
 #   script/release                    build, sign, notarise, package, verify
 #   script/release --signed-only      same but skip notarisation
 #   script/release --verify-first     run the check matrix and tests before building
+#   script/release --arch ARCH        aarch64 (default), x86_64, or both
 #   script/release --profile NAME     notarytool profile (default $NOTARY_PROFILE_NAME
 #                                     or "Sebastian Katz")
 #
@@ -30,6 +31,13 @@
 #    reasons that have nothing to do with the code, and when that happens a signed
 #    build is still worth having. Without this the fallback is to remember the right
 #    `script/bundle` invocation by hand.
+#
+# On `--arch`: each architecture is built, signed, packaged and verified in full
+# before the next one starts, so a failure in the second leaves a complete first.
+# The disk images are named for their architecture and coexist; the loose `.app`
+# copy in the output directory does not, and is whichever ran last. The
+# per-architecture app that each image was built from stays under
+# `target/<rust-target>/release-lto/bundle/osx/`.
 
 set -euo pipefail
 
@@ -39,20 +47,26 @@ cd "$WORKSPACE_ROOT_DIR"
 PROFILE="${NOTARY_PROFILE_NAME:-Sebastian Katz}"
 SIGNED_ONLY=false
 VERIFY_FIRST=false
+ARCHES=(aarch64)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --signed-only)  SIGNED_ONLY=true; shift ;;
     --verify-first) VERIFY_FIRST=true; shift ;;
     --profile)      PROFILE="$2"; shift 2 ;;
-    -h|--help)      sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --arch)
+      case "${2:-}" in
+        aarch64|x86_64) ARCHES=("$2") ;;
+        both)           ARCHES=(aarch64 x86_64) ;;
+        *) echo "--arch must be aarch64, x86_64, or both; got '${2:-}'" >&2; exit 2 ;;
+      esac
+      shift 2 ;;
+    -h|--help)      sed -n '2,41p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)              echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
 OUT_DIR="target/release-lto/bundle/osx"
-APP="$OUT_DIR/WarpNine.app"
-DMG="$OUT_DIR/WarpNine.dmg"
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 
@@ -106,12 +120,39 @@ else
   echo "Notary profile:   skipped (--signed-only)"
 fi
 
+# Cross-building the Intel bundle from Apple Silicon needs the target's std, and
+# the smoke test at the end needs Rosetta to run what comes out. Both are checked
+# here for the same reason the credentials are: neither failure is worth
+# discovering after a full LTO build.
+export PATH="$HOME/.cargo/bin:$PATH"
+HOST_ARCH="$(uname -m)"
+for arch in "${ARCHES[@]}"; do
+  rust_target="$arch-apple-darwin"
+  if command -v rustup > /dev/null 2>&1; then
+    if ! rustup target list --installed | grep -qx "$rust_target"; then
+      echo "Installing Rust target $rust_target"
+      rustup target add "$rust_target"
+    fi
+  elif [[ "$arch" != "$HOST_ARCH" ]]; then
+    echo "Cross-building $rust_target needs rustup to install the target's std," >&2
+    echo "and rustup is not on PATH (rustc resolves to $(command -v rustc))." >&2
+    exit 1
+  fi
+
+  if [[ "$arch" == "x86_64" && "$HOST_ARCH" == "arm64" ]]; then
+    if ! /usr/bin/arch -x86_64 /usr/bin/true > /dev/null 2>&1; then
+      echo "Rosetta 2 is not installed, so the x86_64 smoke test cannot run here." >&2
+      echo "Install it with: softwareupdate --install-rosetta --agree-to-license" >&2
+      exit 1
+    fi
+  fi
+done
+echo "Architectures:    ${ARCHES[*]}"
+
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "Note: working tree is dirty; the build will not match any commit."
 fi
 echo "Commit:           $(git rev-parse --short HEAD)"
-
-export PATH="$HOME/.cargo/bin:$PATH"
 
 # ---------------------------------------------------------------------------
 # Optional pre-build verification
@@ -129,98 +170,128 @@ if [[ "$VERIFY_FIRST" == "true" ]]; then
   # cannot see a `#[cfg]` that has been orphaned onto the wrong item. That passed clean and
   # the bundle then failed on a non-exhaustive match, after a full build.
   #
-  # `--profile release-lto` and `--target` are what make this the same build. Keep them.
-  cargo check --profile release-lto --bin warp-nine --target aarch64-apple-darwin \
-    --features release_bundle,extern_plist
+  # `--profile release-lto` and `--target` are what make this the same build. Keep them,
+  # and check every architecture that is about to be built: a `#[cfg(target_arch)]`
+  # difference is exactly the kind of thing the second build would otherwise find late.
+  for arch in "${ARCHES[@]}"; do
+    echo "Checking $arch-apple-darwin"
+    cargo check --profile release-lto --bin warp-nine --target "$arch-apple-darwin" \
+      --features release_bundle,extern_plist
+  done
   cargo check -p warp --all-targets
   cargo fmt --all -- --check
   cargo test -p warp --lib
 fi
 
 # ---------------------------------------------------------------------------
-# Build
+# Per-architecture build, verify, smoke test
 # ---------------------------------------------------------------------------
 
-step "Building and signing"
-if [[ "$SIGNED_ONLY" == "true" ]]; then
-  ./script/bundle -c oss --developer-id --arch aarch64
-else
-  ./script/bundle -c oss --developer-id --notarize --notary-profile "$PROFILE" --arch aarch64
-fi
+BUILT_DMGS=()
 
-# ---------------------------------------------------------------------------
-# Verify
-# ---------------------------------------------------------------------------
+for ARCH in "${ARCHES[@]}"; do
+  RUST_TARGET="$ARCH-apple-darwin"
+  # `aarch64` is the Rust triple's spelling; `arm64` is what `lipo`, `uname -m`
+  # and the disk image name use. Keep both, and do not conflate them.
+  APPLE_ARCH="$ARCH"
+  [[ "$ARCH" == "aarch64" ]] && APPLE_ARCH="arm64"
+  # The signed and stapled app lives in the per-target bundle directory. The copy
+  # in $OUT_DIR is overwritten by whichever architecture built last, so verifying
+  # that one would silently check the wrong build on the second pass.
+  APP="target/$RUST_TARGET/release-lto/bundle/osx/WarpNine.app"
+  DMG="$OUT_DIR/WarpNine-$APPLE_ARCH.dmg"
 
-step "Verifying $APP"
-codesign --verify --deep --strict --verbose=2 "$APP"
-spctl -a -vvv -t exec "$APP"
-if [[ "$SIGNED_ONLY" == "false" ]]; then
-  xcrun stapler validate "$APP"
-fi
-
-if [[ -f "$DMG" ]]; then
-  step "Verifying the app inside the disk image, as a user would get it"
-  if [[ "$SIGNED_ONLY" == "false" ]]; then
-    xcrun stapler validate "$DMG"
+  step "Building and signing ($ARCH)"
+  if [[ "$SIGNED_ONLY" == "true" ]]; then
+    ./script/bundle -c oss --developer-id --arch "$ARCH"
+  else
+    ./script/bundle -c oss --developer-id --notarize --notary-profile "$PROFILE" --arch "$ARCH"
   fi
 
-  MOUNT_POINT="$(hdiutil attach "$DMG" -nobrowse -readonly -mountrandom /tmp \
-    | grep -o '/tmp/[^ ]*' | head -1)"
-  if [[ -z "$MOUNT_POINT" ]]; then
-    echo "Failed to mount $DMG" >&2
+  step "Verifying $APP"
+  codesign --verify --deep --strict --verbose=2 "$APP"
+  spctl -a -vvv -t exec "$APP"
+  if [[ "$SIGNED_ONLY" == "false" ]]; then
+    xcrun stapler validate "$APP"
+  fi
+
+  # What the bundle actually contains, rather than what was asked for. `cargo
+  # bundle` is perfectly happy to package a stale binary from another target if
+  # anything upstream of it goes sideways, and nothing else here would notice.
+  ACTUAL_ARCHS="$(lipo -archs "$APP/Contents/MacOS/warp-nine")"
+  if [[ "$ACTUAL_ARCHS" != "$APPLE_ARCH" ]]; then
+    echo "Expected a $APPLE_ARCH binary, got '$ACTUAL_ARCHS'." >&2
     exit 1
   fi
-  trap 'hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true' EXIT
+  echo "Binary architecture: $ACTUAL_ARCHS"
 
-  STAGING="$(mktemp -d)"
-  cp -R "$MOUNT_POINT/WarpNine.app" "$STAGING/"
-  hdiutil detach "$MOUNT_POINT" -quiet
-  trap - EXIT
+  if [[ -f "$DMG" ]]; then
+    step "Verifying the app inside the disk image, as a user would get it ($ARCH)"
+    if [[ "$SIGNED_ONLY" == "false" ]]; then
+      xcrun stapler validate "$DMG"
+    fi
 
-  # What Safari sets on a download. Gatekeeper treats a quarantined copy far more
-  # strictly than one that has always been local.
-  xattr -w com.apple.quarantine "0081;00000000;Safari;" "$STAGING/WarpNine.app"
-  codesign --verify --deep --strict "$STAGING/WarpNine.app"
-  if [[ "$SIGNED_ONLY" == "false" ]]; then
-    xcrun stapler validate "$STAGING/WarpNine.app"
-    spctl -a -vvv -t exec "$STAGING/WarpNine.app"
-  fi
-  rm -rf "$STAGING"
-  echo "Extracted, quarantined copy validates."
-else
-  echo "No disk image was produced; see the create-dmg warnings above." >&2
-fi
+    MOUNT_POINT="$(hdiutil attach "$DMG" -nobrowse -readonly -mountrandom /tmp \
+      | grep -o '/tmp/[^ ]*' | head -1)"
+    if [[ -z "$MOUNT_POINT" ]]; then
+      echo "Failed to mount $DMG" >&2
+      exit 1
+    fi
+    trap 'hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true' EXIT
 
-# ---------------------------------------------------------------------------
-# Smoke test
-# ---------------------------------------------------------------------------
+    STAGING="$(mktemp -d)"
+    cp -R "$MOUNT_POINT/WarpNine.app" "$STAGING/"
+    hdiutil detach "$MOUNT_POINT" -quiet
+    trap - EXIT
 
-step "Smoke test"
-SMOKE="$(mktemp -d)"
-cp -R "$APP" "$SMOKE/"
-"$SMOKE/WarpNine.app/Contents/MacOS/warp-nine" > "$SMOKE/out.log" 2> "$SMOKE/err.log" &
-SMOKE_PID=$!
-sleep 15
-if kill -0 "$SMOKE_PID" 2>/dev/null; then
-  # `wait` after the kill so the shell reaps the job quietly; without it job control
-  # prints "Terminated: 15", which reads like a failure in an otherwise clean run.
-  kill "$SMOKE_PID" 2>/dev/null || true
-  wait "$SMOKE_PID" 2>/dev/null || true
-  echo "Ran for 15s without exiting."
-  if [[ -s "$SMOKE/err.log" ]]; then
-    echo "stderr was not empty:"
-    head -20 "$SMOKE/err.log"
+    # What Safari sets on a download. Gatekeeper treats a quarantined copy far more
+    # strictly than one that has always been local.
+    xattr -w com.apple.quarantine "0081;00000000;Safari;" "$STAGING/WarpNine.app"
+    codesign --verify --deep --strict "$STAGING/WarpNine.app"
+    if [[ "$SIGNED_ONLY" == "false" ]]; then
+      xcrun stapler validate "$STAGING/WarpNine.app"
+      spctl -a -vvv -t exec "$STAGING/WarpNine.app"
+    fi
+    rm -rf "$STAGING"
+    echo "Extracted, quarantined copy validates."
+    BUILT_DMGS+=("$DMG")
   else
-    echo "stderr empty."
+    echo "No disk image was produced for $ARCH; see the create-dmg warnings above." >&2
   fi
-else
-  echo "The app exited within 15s. stderr:" >&2
-  head -40 "$SMOKE/err.log" >&2
+
+  # -------------------------------------------------------------------------
+  # Smoke test
+  # -------------------------------------------------------------------------
+
+  step "Smoke test ($ARCH)"
+  SMOKE="$(mktemp -d)"
+  cp -R "$APP" "$SMOKE/"
+  # An x86_64 binary launched on Apple Silicon is translated by Rosetta, which the
+  # preflight already confirmed is present. No `arch -x86_64` wrapper is needed:
+  # the kernel picks the translator from the Mach-O header.
+  "$SMOKE/WarpNine.app/Contents/MacOS/warp-nine" > "$SMOKE/out.log" 2> "$SMOKE/err.log" &
+  SMOKE_PID=$!
+  sleep 15
+  if kill -0 "$SMOKE_PID" 2>/dev/null; then
+    # `wait` after the kill so the shell reaps the job quietly; without it job control
+    # prints "Terminated: 15", which reads like a failure in an otherwise clean run.
+    kill "$SMOKE_PID" 2>/dev/null || true
+    wait "$SMOKE_PID" 2>/dev/null || true
+    echo "Ran for 15s without exiting."
+    if [[ -s "$SMOKE/err.log" ]]; then
+      echo "stderr was not empty:"
+      head -20 "$SMOKE/err.log"
+    else
+      echo "stderr empty."
+    fi
+  else
+    echo "The app exited within 15s. stderr:" >&2
+    head -40 "$SMOKE/err.log" >&2
+    rm -rf "$SMOKE"
+    exit 1
+  fi
   rm -rf "$SMOKE"
-  exit 1
-fi
-rm -rf "$SMOKE"
+done
 
 # ---------------------------------------------------------------------------
 # Summary
@@ -236,13 +307,21 @@ else
   echo "Notarised: yes, ticket stapled to the app, the image, and the app inside it"
 fi
 echo ""
-printf '%-22s %10s  %s\n' "artifact" "size" "sha256"
-for f in "$APP/Contents/MacOS/warp-nine" "$DMG"; do
-  [[ -e "$f" ]] || continue
-  printf '%-22s %10s  %s\n' \
+printf '%-24s %10s  %s\n' "artifact" "size" "sha256"
+for ARCH in "${ARCHES[@]}"; do
+  BIN="target/$ARCH-apple-darwin/release-lto/bundle/osx/WarpNine.app/Contents/MacOS/warp-nine"
+  [[ -e "$BIN" ]] || continue
+  printf '%-24s %10s  %s\n' \
+    "warp-nine ($ARCH)" \
+    "$(du -h "$BIN" | cut -f1)" \
+    "$(shasum -a 256 "$BIN" | cut -d' ' -f1)"
+done
+for f in "${BUILT_DMGS[@]:-}"; do
+  [[ -n "$f" && -e "$f" ]] || continue
+  printf '%-24s %10s  %s\n' \
     "$(basename "$f")" \
     "$(du -h "$f" | cut -f1)" \
     "$(shasum -a 256 "$f" | cut -d' ' -f1)"
 done
 echo ""
-echo "Artifacts in $OUT_DIR"
+echo "Disk images in $OUT_DIR"

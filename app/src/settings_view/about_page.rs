@@ -115,7 +115,26 @@ impl SettingsWidget for AboutPageWidget {
                 .with_child(version_row.finish())
                 .with_child(
                     ui_builder
-                        .span("WarpNine — a fork of Warp\n© 2025 Denver Technologies, Inc.\nFork © 2026 Sebastian Katz")
+                        // LOCAL FORK: this is the Appropriate Legal Notice, and every
+                        // line of it is load-bearing under AGPL-3.0.
+                        //
+                        // §5(a) wants a prominent notice that the work was modified
+                        // *and a relevant date* -- "a fork of Warp" alone stated the
+                        // first and not the second. §5(b) wants the licence named, and
+                        // nothing in the app named it. §6(d) wants clear directions to
+                        // the Corresponding Source; the repository URL is those
+                        // directions, and it belongs somewhere a person holding only
+                        // the .app can find it.
+                        //
+                        // The bundled licence texts sit next to this in
+                        // Contents/Resources, copied by `script/prepare_bundled_resources`.
+                        .span(
+                            "WarpNine — a fork of Warp, modified 2026\n\
+                             © 2025 Denver Technologies, Inc.\n\
+                             Fork © 2026 Sebastian Katz\n\
+                             Licensed under AGPL-3.0; warpui and warpui_core under MIT.\n\
+                             Source: github.com/dxmachina/warp-nine",
+                        )
                         .build()
                         .with_margin_top(16.)
                         .finish(),

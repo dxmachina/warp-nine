@@ -13,18 +13,10 @@ Not affiliated with or endorsed by Warp Dev, Inc.
 | **[WarpNine-arm64.dmg](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNine-arm64.dmg)** | Apple Silicon (M1 and later) | 31 MB | 11.0 Big Sur |
 | **[WarpNine-x86_64.dmg](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNine-x86_64.dmg)** | Intel | 34 MB | 10.14 Mojave |
 
-Which one: Apple menu → About This Mac. "Apple M1" or later is arm64.
-
 Open the image, drag WarpNine to Applications, launch. Developer ID signed and
-notarized by Apple, so it opens on a double click — no Gatekeeper prompt.
-
-```bash
-shasum -a 256 ~/Downloads/WarpNine-arm64.dmg
-spctl -a -vvv -t exec /Volumes/WarpNine/WarpNine.app
-# source=Notarized Developer ID
-```
-
-Those links always resolve to the newest build; per-build checksums are on the
+notarized, so it opens on a double click — no Gatekeeper prompt. To check what you
+got, `spctl -a -vvv -t exec /Volumes/WarpNine/WarpNine.app` should report
+`source=Notarized Developer ID`; per-build checksums are on the
 [release page](https://github.com/dxmachina/warp-nine/releases/latest).
 
 ## What this is

@@ -157,6 +157,33 @@ if [ -z "$NO_LICENSES" ]; then
   done
 fi
 
+# LOCAL FORK: ship the program's own licence, not only its dependencies'.
+#
+# `THIRD_PARTY_LICENSES.txt` covers what Warp depends on and says nothing about
+# Warp itself. The bundle carried no copy of the AGPL at all --
+# `grep -rl "AFFERO GENERAL PUBLIC" WarpNine.app` returned nothing.
+#
+# AGPL-3.0 §6 conveys object code "under the terms of sections 4 and 5", and §4
+# requires giving all recipients a copy of the Licence along with the Program.
+# Somebody who downloads the disk image and never opens the repository is a
+# recipient. Publishing the source satisfies §6(d) -- object code and Corresponding
+# Source offered from the same place -- but §4 is a separate obligation that
+# publishing does not discharge.
+#
+# Deliberately outside the `NO_LICENSES` guard above. That flag exists so a missing
+# `cargo-about` cannot abort a local build, and generated third-party attribution is
+# a convenience. A file copy cannot fail for tooling reasons, and shipping without
+# the program's own licence is a violation rather than a missing nicety.
+for licence_file in LICENSE-AGPL LICENSE-MIT; do
+  if [ ! -f "$REPO_ROOT/$licence_file" ]; then
+    echo "Error: $licence_file is missing from the repository root." >&2
+    echo "       It has to ship inside the bundle; refusing to build without it." >&2
+    exit 1
+  fi
+  cp "$REPO_ROOT/$licence_file" "$DEST_DIR/$licence_file"
+done
+echo "Copied LICENSE-AGPL and LICENSE-MIT to $DEST_DIR"
+
 # Generate settings JSON schema unless explicitly skipped.
 if [ "${SKIP_SETTINGS_SCHEMA:-}" != "1" ]; then
   SCHEMA_OUTPUT="$DEST_DIR/settings_schema.json"

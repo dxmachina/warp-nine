@@ -7,6 +7,35 @@ system, coding agent, and cloud backend removed.
 
 Maintained by Sebastian Katz. Not affiliated with or endorsed by Warp Dev, Inc.
 
+## Download
+
+[**Releases**](https://github.com/dxmachina/warp-nine/releases) — signed with a
+Developer ID certificate and notarized by Apple, so they open without a Gatekeeper
+prompt.
+
+| | For | Size | Minimum macOS |
+|---|---|---|---|
+| [`WarpNine-arm64.dmg`](https://github.com/dxmachina/warp-nine/releases/download/v9.2026.08.03.09.12.4e8698693/WarpNine-arm64.dmg) | Apple Silicon (M1 and later) | 31 MB | 11.0 Big Sur |
+| [`WarpNine-x86_64.dmg`](https://github.com/dxmachina/warp-nine/releases/download/v9.2026.08.03.09.12.4e8698693/WarpNine-x86_64.dmg) | Intel | 34 MB | 10.14 Mojave |
+
+```
+615ae95b3a0999225083c3dacb6438b8b86c3c0eca59f31181843118594ccd1f  WarpNine-arm64.dmg
+c0c18bc1909bc25fa35e66b4e0bc6af2f77425348dfe254fe3aded2b570afdca  WarpNine-x86_64.dmg
+```
+
+Check what you got before opening it:
+
+```bash
+shasum -a 256 ~/Downloads/WarpNine-arm64.dmg
+spctl -a -vvv -t exec /Volumes/WarpNine/WarpNine.app
+# source=Notarized Developer ID
+```
+
+Those links are pinned to a version rather than to
+`/releases/latest/download/…`, because the current build is marked pre-release and
+GitHub excludes pre-releases from `latest`. They need updating each release until
+one is published as a full release.
+
 ## What this is
 
 Warp's terminal: blocks, block list, themes, Warpify shell integration, local

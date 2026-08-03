@@ -9,21 +9,18 @@ Maintained by Sebastian Katz. Not affiliated with or endorsed by Warp Dev, Inc.
 
 ## Download
 
-[**Releases**](https://github.com/dxmachina/warp-nine/releases) — signed with a
-Developer ID certificate and notarized by Apple, so they open without a Gatekeeper
-prompt.
-
 | | For | Size | Minimum macOS |
 |---|---|---|---|
-| [`WarpNine-arm64.dmg`](https://github.com/dxmachina/warp-nine/releases/download/v9.2026.08.03.09.12.4e8698693/WarpNine-arm64.dmg) | Apple Silicon (M1 and later) | 31 MB | 11.0 Big Sur |
-| [`WarpNine-x86_64.dmg`](https://github.com/dxmachina/warp-nine/releases/download/v9.2026.08.03.09.12.4e8698693/WarpNine-x86_64.dmg) | Intel | 34 MB | 10.14 Mojave |
+| **[WarpNine-arm64.dmg](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNine-arm64.dmg)** | Apple Silicon (M1 and later) | 31 MB | 11.0 Big Sur |
+| **[WarpNine-x86_64.dmg](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNine-x86_64.dmg)** | Intel | 34 MB | 10.14 Mojave |
 
-```
-615ae95b3a0999225083c3dacb6438b8b86c3c0eca59f31181843118594ccd1f  WarpNine-arm64.dmg
-c0c18bc1909bc25fa35e66b4e0bc6af2f77425348dfe254fe3aded2b570afdca  WarpNine-x86_64.dmg
-```
+Which one: Apple menu → About This Mac. "Apple M1" or later is arm64.
 
-Check what you got before opening it:
+Open the image, drag WarpNine to Applications, launch it. Signed with a Developer
+ID certificate and notarized by Apple, so it opens on a double click — no
+Gatekeeper prompt, no right-click-Open dance.
+
+To check what you got first:
 
 ```bash
 shasum -a 256 ~/Downloads/WarpNine-arm64.dmg
@@ -31,10 +28,8 @@ spctl -a -vvv -t exec /Volumes/WarpNine/WarpNine.app
 # source=Notarized Developer ID
 ```
 
-Those links are pinned to a version rather than to
-`/releases/latest/download/…`, because the current build is marked pre-release and
-GitHub excludes pre-releases from `latest`. They need updating each release until
-one is published as a full release.
+Those links always resolve to the newest build. Per-build checksums and notes are
+on the [release page](https://github.com/dxmachina/warp-nine/releases/latest).
 
 ## What this is
 
@@ -43,8 +38,8 @@ completions, workflows, keybindings, settings. Without the product around it.
 
 ## What this isn't
 
-- **Not a supported build.** Developer ID signed and notarized, so it opens without
-  a Gatekeeper prompt, but nobody supports it.
+- **Not a supported build.** Signed so it opens cleanly, not because anyone stands
+  behind it.
 - **Not upstream-compatible.** Whole subsystems are deleted. Rebasing gets harder
   over time. That's the trade.
 - **Not a smaller Warp with the features intact.** Sign-in, the agent, Warp Drive,
@@ -73,13 +68,9 @@ completions, workflows, keybindings, settings. Without the product around it.
 
 Launches to a shell. `--version` reports a real build stamp.
 
-Measured at `4e8698693`, the last notarized build. Excisions since `3cb1ec862`,
-where the breakdown rows below were measured, move these numbers by well under a
-megabyte, for the reason immediately below.
-
-The excisions below are worth ~2 MB between them. Deleting call-path code removes
-lines, not bytes; the binary is dominated by dependencies that stay. This is the
-same point the size table makes and it keeps needing restating.
+Measured at `4e8698693`; the breakdown rows below were measured at `3cb1ec862`.
+Everything excised between them is worth ~2 MB, because deleting call-path code
+removes lines, not bytes. The binary is dominated by dependencies that stay.
 
 ## Where the size was
 
@@ -120,10 +111,9 @@ Warp's cargo features are runtime flags, not compile gates.
 `agent_mode` appears as a `#[cfg(feature = ...)]` gate exactly once in the tree.
 
 Turning a feature off usually hides UI while still compiling it in. An earlier
-version of this README concluded from that: "there is no configuration that makes
-this smaller, only deletion does." That was wrong. The table above is the
-refutation. Build-profile and asset-embedding changes account for most of the
-reduction and delete no application code.
+version of this README concluded "only deletion makes this smaller." The table
+above refutes it: build-profile and asset-embedding changes account for most of
+the reduction and delete no application code.
 
 Deletion is still the only thing that removes the agent. It isn't what removes the
 megabytes.
@@ -187,10 +177,10 @@ Removing it degrades SSH to the wrapper-only warpification path, which stays.
 
 A removal is part-done and parked as a patch, not committed: the deletions and the
 `warp_files` half are complete (`FileBackend::Remote` is gone, and
-`register_remote_file`, its only constructor, had no callers), but 74 unresolved-module
-errors across 24 files remain. Every one is an `E0432`/`E0433`, so it is mechanical in
-kind, but each site needs a decision about the code that used it rather than just the
-import.
+`register_remote_file`, its only constructor, had no callers), but 74
+unresolved-module errors across 24 files remain. All are `E0432`/`E0433`, so
+mechanical in kind — but each site needs a decision about the code that used the
+import, not just the import.
 
 **Notebooks are not separable.** `app/src/notebooks/editor` is 14,340 of the
 subsystem's 21,638 lines and is not notebook-specific: it is the app's rich-text
@@ -230,10 +220,10 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 Output: `target/aarch64-apple-darwin/release-lto/bundle/osx/WarpNine.app`
 
-For a signed, notarized, verified release, use `script/release` instead. It checks
-both credentials before the build rather than after, and it mounts the finished
-image, copies the app out, applies the quarantine attribute a browser would set,
-and confirms the extracted copy still validates.
+For a signed, notarized release, use `script/release` instead. It checks both
+credentials before the build rather than after, then mounts the finished image,
+copies the app out, applies the quarantine attribute a browser would set, and
+confirms the extracted copy still validates.
 
 ```bash
 ./script/release                 # arm64
@@ -263,12 +253,11 @@ only gate, and neither floor has been tested below the machine that builds them.
 One feature sits higher and says so: the login item uses `SMAppService`, macOS 13+.
 
 `cargo-about` matters more than it looks. It generates
-`THIRD_PARTY_LICENSES.txt`, and that step runs before code signing. When it was
-missing, the bundle script aborted there and never signed, leaving a bundle whose
-executable carried the linker's ad-hoc signature while its resources were
-unsealed. macOS treats that as corrupt rather than unsigned.
-`prepare_bundled_resources` now warns and continues, and local builds get an
-ad-hoc signature.
+`THIRD_PARTY_LICENSES.txt`, a step that runs *before* code signing. When it was
+missing the bundle script aborted there and never signed, leaving an executable
+with the linker's ad-hoc signature and unsealed resources — which macOS treats as
+corrupt rather than unsigned. `prepare_bundled_resources` now warns and continues,
+and local builds get an ad-hoc signature.
 
 Verify:
 
@@ -282,12 +271,12 @@ Builds are slow. `lto = "fat"` with `codegen-units = 1` makes LLVM optimize the
 whole program as one largely single-threaded unit. Tens of minutes is normal. Use
 `lto = "thin"` in `[profile.release-lto]` for faster iteration.
 
-`target/` gets large. Two reasons, both addressed. Upstream generates the settings
-schema without `--target`, so that helper binary lands in a separate artifact tree
-and drags a second full copy of every dependency with it; the bundle script now
-passes the triple through. Separately, cargo never garbage-collects superseded
-artifacts, and each rebuild of the `warp` lib crate leaves a ~600 MB `.rlib`
-behind. Delete all but the newest when it gets out of hand, or use `cargo-sweep`.
+`target/` gets large, for two reasons. Upstream generates the settings schema
+without `--target`, so that helper binary lands in a separate artifact tree and
+drags a second full copy of every dependency with it; the bundle script now passes
+the triple through. And cargo never garbage-collects superseded artifacts, so each
+rebuild of the `warp` lib crate leaves a ~600 MB `.rlib` behind. Delete all but the
+newest when it gets out of hand, or use `cargo-sweep`.
 
 `./script/bootstrap` works but installs tooling this fork doesn't need (Docker,
 gcloud, PowerShell, Sentry CLI).

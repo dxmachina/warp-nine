@@ -417,6 +417,14 @@ fn copy_windows_assets(target_dir: &Path) {
 fn embed_resource_file(target_dir: &Path) {
     use std::io::Write;
 
+    // Without these, an incremental rebuild reuses the cached build-script
+    // output and the exe keeps the version resource from whatever tag (or
+    // "v0" default) the first build saw. CI never notices because it builds
+    // from scratch.
+    println!("cargo:rerun-if-env-changed=GIT_RELEASE_TAG");
+    println!("cargo:rerun-if-env-changed=WARP_APP_NAME");
+    println!("cargo:rerun-if-env-changed=CARGO_BIN_NAME");
+
     let version = env::var("GIT_RELEASE_TAG").unwrap_or("v0".to_owned());
     let app_name = env::var("WARP_APP_NAME").unwrap_or("Warp".to_owned());
     let bin_name = env::var("CARGO_BIN_NAME").unwrap_or("local".to_owned());

@@ -107,9 +107,15 @@ if ("$CHANNEL" -eq 'local') {
     $BINARY_NAME = 'warp.exe'
     $APP_NAME = 'Warp'
 } elseif ("$CHANNEL" -eq 'oss') {
-    $WARP_BIN = 'warp-oss'
-    $BINARY_NAME = 'warp-oss.exe'
-    $APP_NAME = 'WarpOss'
+    # LOCAL FORK: this channel builds WarpNine. The `oss` channel name is kept
+    # as the build-script selector, matching `script/macos/bundle`; the cargo
+    # bin target was renamed `warp-oss` -> `warp-nine` in app/Cargo.toml, and
+    # `app/src/bin/oss.rs` registers the app as `dev.warp.WarpNine`, which
+    # APP_NAME must match (it becomes the installer AppUserModelID and the
+    # `{userappdata}\warp\<name>` uninstall paths).
+    $WARP_BIN = 'warp-nine'
+    $BINARY_NAME = 'warp-nine.exe'
+    $APP_NAME = 'WarpNine'
     # The OSS channel does not ship Sentry, so drop the crash_reporting feature
     # (which would otherwise pull in the Sentry SDK as a dependency).
     $FEATURES = 'release_bundle,gui'

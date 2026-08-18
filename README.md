@@ -33,9 +33,12 @@ onboarding are deleted rather than disabled.
 - Nobody supports this build. It is signed so that it opens cleanly, not because
   anyone stands behind it.
 - Whole subsystems are deleted, so rebasing on upstream gets harder over time.
-- macOS only. Both architectures build, but only arm64 is used daily. The Intel
-  build has been verified as far as a notarized launch under Rosetta and has never
-  run on Intel hardware. Linux and Windows code is present but unexercised.
+- macOS is the primary platform. Both architectures build, but only arm64 is used
+  daily. The Intel build has been verified as far as a notarized launch under
+  Rosetta and has never run on Intel hardware. Windows x64 builds and runs
+  (terminal sessions, blocks, session restore, and the Inno Setup installer all
+  verified on one machine) but is unsigned and much less exercised. Linux code is
+  present but unexercised.
 - Telemetry and crash reporting are compiled out and verified in the logs, but this
   is one person's fork and has not been audited.
 
@@ -195,6 +198,30 @@ Three things that have cost time:
 
 `./script/bootstrap` works but installs tooling this fork does not need (Docker,
 gcloud, PowerShell, Sentry CLI).
+
+### Windows
+
+Needs the same pinned toolchain, plus MSVC (Visual Studio Build Tools or any
+edition with the C++ workload), LLVM (for `libclang`, used by bindgen), protoc,
+CMake, and Inno Setup for the installer. NASM is not needed if
+`AWS_LC_SYS_PREBUILT_NASM=1` is set. With those on `PATH` (and `LIBCLANG_PATH`
+pointing at LLVM's `bin`):
+
+```powershell
+.\script\windows\bundle.ps1 -CHANNEL oss
+# -> script\windows\Output\WarpNineSetup.exe
+```
+
+The binary lands in `target\x86_64-pc-windows-msvc\rlto\warp-nine.exe`. To run it
+from there rather than installing, copy `conpty.dll`, `dxcompiler.dll`,
+`dxil.dll`, and `x64\OpenConsole.exe` in from `app\assets\windows\x64`; the
+build script puts them in `target\rlto` instead because it does not account for
+`--target` (noted in the manifest). The installer stages them from the assets
+directory and is unaffected. The 663 PowerShell cmdlet completion specs removed
+from the macOS build are compiled in on Windows only.
+
+`.\script\windows\bootstrap.ps1` installs the dependency list above via winget
+but also wants gcloud; this fork does not need it.
 
 ## Layout
 

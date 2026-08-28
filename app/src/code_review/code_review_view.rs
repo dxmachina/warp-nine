@@ -1,5 +1,5 @@
 use crate::settings::{AISettings, CodeSettings};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -277,6 +277,51 @@ fn file_status_changed_deleted_state(
     new_status: &GitFileStatus,
 ) -> bool {
     matches!(current_status, GitFileStatus::Deleted) != matches!(new_status, GitFileStatus::Deleted)
+}
+
+/// A single row edit on the code review list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RowEdit {
+    Remove(usize),
+    Insert(usize),
+}
+
+/// Computes the row edits that turn the file order `previous` into `new`,
+/// in application order. Each index is valid at the point the edit is applied.
+///
+/// `Insert(i)` always places `new[i]`, so surviving rows keep their identity —
+/// and with it their measured height and any editor state hanging off them.
+fn list_row_edits(previous: &[String], new: &[String]) -> Vec<RowEdit> {
+    let mut edits = Vec::new();
+    let mut current: Vec<&str> = previous.iter().map(String::as_str).collect();
+    let wanted: HashSet<&str> = new.iter().map(String::as_str).collect();
+
+    // Drop rows that are gone. Descending, so earlier indices stay valid.
+    for index in (0..current.len()).rev() {
+        if !wanted.contains(current[index]) {
+            edits.push(RowEdit::Remove(index));
+            current.remove(index);
+        }
+    }
+
+    // Align the survivors with the new order, inserting rows that appeared.
+    for (index, path) in new.iter().enumerate() {
+        let path = path.as_str();
+        if current.get(index).copied() == Some(path) {
+            continue;
+        }
+        // Everything before `index` already matches, and paths are unique, so
+        // any existing occurrence is later in the list: a row that moved (e.g.
+        // a file leaving the untracked group after `git add`).
+        if let Some(from) = current.iter().position(|existing| *existing == path) {
+            edits.push(RowEdit::Remove(from));
+            current.remove(from);
+        }
+        edits.push(RowEdit::Insert(index));
+        current.insert(index, path);
+    }
+
+    edits
 }
 
 #[cfg(target_family = "wasm")]
@@ -2357,13 +2402,7 @@ impl CodeReviewView {
                 if status_changed {
                     diff_data.file_states.shift_remove_index(index);
                     self.viewported_list_state.remove(index);
-                    let new_states =
-                        self.build_view_state_for_file_diffs(std::slice::from_ref(diff), ctx);
-                    diff_data.file_states.extend(
-                        new_states
-                            .into_iter()
-                            .map(|state| (state.file_diff.file_path.clone(), state)),
-                    );
+                    self.insert_file_state(&mut diff_data.file_states, diff, ctx);
                 } else {
                     let current = &mut diff_data.file_states[index];
                     let should_apply = current
@@ -2383,13 +2422,7 @@ impl CodeReviewView {
                 self.viewported_list_state.remove(index);
             }
             (None, Some(diff)) => {
-                let new_states =
-                    self.build_view_state_for_file_diffs(std::slice::from_ref(diff.as_ref()), ctx);
-                diff_data.file_states.extend(
-                    new_states
-                        .into_iter()
-                        .map(|state| (state.file_diff.file_path.clone(), state)),
-                );
+                self.insert_file_state(&mut diff_data.file_states, diff.as_ref(), ctx);
             }
             (None, None) => {}
         }
@@ -2467,32 +2500,135 @@ impl CodeReviewView {
             return;
         };
 
-        // Deallocate global buffers that are going to be invalidated.
-        if let Some(repo) = self.active_repo.as_mut() {
-            repo.state = CodeReviewViewState::None;
-            GlobalBufferModel::handle(ctx).update(ctx, |model, ctx| {
-                model.remove_deallocated_buffers(ctx);
-            });
+        // Reconcile the incoming files against what is already on screen rather
+        // than rebuilding from scratch. A wholesale rebuild replaces the
+        // `ListState` — discarding the scroll position and every measured row
+        // height — and tears down every editor view, which is what made an
+        // ordinary reload visibly flash and jump to the top.
+        let previous_file_states = self
+            .active_repo
+            .as_mut()
+            .and_then(|repo| repo.pop_loaded_state())
+            .map(|loaded| loaded.file_states);
+
+        let mut reusable = match previous_file_states {
+            Some(file_states) => file_states,
+            None => {
+                // Nothing on screen to reuse: a first load, or a return from an
+                // error / no-repo state whose rows may describe a different
+                // repo. The list state can't be trusted either, so start clean.
+                self.viewported_list_state = Self::create_list_state(ctx);
+                IndexMap::new()
+            }
+        };
+        let previous_order: Vec<String> = reusable.keys().cloned().collect();
+
+        // Claim the rows that can be refreshed in place, and collect the rest
+        // so their view state can be built in one pass.
+        let mut plan: Vec<(&FileDiffAndContent, Option<FileState>)> =
+            Vec::with_capacity(diff_data.files.len());
+        let mut to_build: Vec<&FileDiffAndContent> = Vec::new();
+        for file in &diff_data.files {
+            let reused = reusable
+                .shift_remove(&file.file_diff.file_path)
+                .filter(|existing| {
+                    // Crossing into or out of the deleted state swaps the editor
+                    // between global-buffer and inline-content modes, so the row
+                    // has to be rebuilt rather than refreshed.
+                    !file_status_changed_deleted_state(
+                        &existing.file_diff.status,
+                        &file.file_diff.status,
+                    )
+                });
+            if reused.is_none() {
+                to_build.push(file);
+            }
+            plan.push((file, reused));
         }
 
-        // Create a new list state for this update
-        self.viewported_list_state = Self::create_list_state(ctx);
+        let mut built = self
+            .build_view_state_for_file_diffs(&to_build, ctx)
+            .into_iter();
 
-        let file_states_vec = self.build_view_state_for_file_diffs(&diff_data.files, ctx);
+        let repo_path = self.repo_path().cloned();
+        let mut file_states: IndexMap<String, FileState> = IndexMap::with_capacity(plan.len());
+        // Reused rows keep their measured height, so any whose diff actually
+        // moved must be re-measured. Recorded by path because the row indices
+        // are only final once the list state has been reconciled below.
+        let mut needs_remeasure: Vec<String> = Vec::new();
+        for (file, reused) in plan {
+            let state = match reused {
+                Some(mut existing) => {
+                    // Mirror the per-file path: don't clobber a diff the user is
+                    // still editing in place.
+                    let has_unsaved_changes = existing
+                        .editor_state
+                        .as_ref()
+                        .is_some_and(|editor_state| editor_state.has_unsaved_changes(ctx));
+                    if !has_unsaved_changes && existing.file_diff != file.file_diff {
+                        existing.file_diff = file.file_diff.clone();
+                        needs_remeasure.push(file.file_diff.file_path.clone());
+
+                        let editor = existing
+                            .editor_state
+                            .as_ref()
+                            .map(|state| state.editor.clone());
+                        if let (Some(editor), Some(repo_path)) = (editor, repo_path.as_ref()) {
+                            let location = repo_path.join(&file.file_diff.file_path);
+                            let comment_line_numbers =
+                                self.comment_line_numbers_for_file(&location, ctx);
+                            // `is_initial_setup: false` re-bases the existing
+                            // editor and restores the cursor instead of
+                            // recreating it.
+                            Self::apply_diff_to_code_editor(
+                                &editor,
+                                file,
+                                false,
+                                &comment_line_numbers,
+                                ctx,
+                            );
+                        }
+                    }
+                    existing.is_expanded = self.should_auto_expand_file(&file.file_diff);
+                    existing
+                }
+                None => match built.next() {
+                    Some(state) => state,
+                    None => continue,
+                },
+            };
+            file_states.insert(file.file_diff.file_path.clone(), state);
+        }
+
+        let new_order: Vec<String> = file_states.keys().cloned().collect();
+        self.reconcile_list_state(&previous_order, &new_order);
+
+        for path in needs_remeasure {
+            if let Some(index) = file_states.get_index_of(&path) {
+                self.viewported_list_state
+                    .invalidate_height_for_index(index);
+            }
+        }
+
         let _is_local = self.repo_is_local();
         let _diff_mode = self.diff_state_model.as_ref(ctx).diff_mode(ctx);
 
         if let Some(repo) = self.active_repo.as_mut() {
             repo.state = CodeReviewViewState::Loaded(LoadedState {
-                file_states: file_states_vec
-                    .into_iter()
-                    .map(|fs| (fs.file_diff.file_path.clone(), fs))
-                    .collect(),
+                file_states,
                 total_additions: diff_data.total_additions,
                 total_deletions: diff_data.total_deletions,
                 files_changed: diff_data.files_changed,
             });
         }
+
+        // Reclaim buffers for rows that were genuinely dropped. Runs after the
+        // new state is installed so buffers still referenced by a reused editor
+        // are not collected.
+        drop(reusable);
+        GlobalBufferModel::handle(ctx).update(ctx, |model, ctx| {
+            model.remove_deallocated_buffers(ctx);
+        });
 
         if self.all_editors_loaded() {
             let diff_mode = self.diff_state_model.as_ref(ctx).diff_mode(ctx);
@@ -2508,10 +2644,63 @@ impl CodeReviewView {
         ctx.notify();
     }
 
-    /// Builds view state for the given file diffs, returning the list of newly created file states.
+    /// Sort key matching the order `git status --porcelain=2` reports files in:
+    /// tracked changes first, then untracked files, each ordered by path.
+    fn file_order_key(file: &FileDiff) -> (bool, &str) {
+        (
+            matches!(file.status, GitFileStatus::Untracked),
+            file.file_path.as_str(),
+        )
+    }
+
+    /// Builds view state for `file` and inserts it at the position it belongs
+    /// in `file_states`, keeping `viewported_list_state` in step.
+    ///
+    /// Appending would leave a newly changed file stranded at the bottom of the
+    /// panel until the next full reload re-sorted it.
+    fn insert_file_state(
+        &self,
+        file_states: &mut IndexMap<String, FileState>,
+        file: &FileDiffAndContent,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        let key = Self::file_order_key(&file.file_diff);
+        let index = file_states
+            .values()
+            .position(|existing| Self::file_order_key(&existing.file_diff) > key)
+            .unwrap_or(file_states.len());
+
+        let Some(state) = self.build_view_state_for_file_diffs(&[file], ctx).pop() else {
+            return;
+        };
+        self.viewported_list_state.insert(index);
+        file_states.shift_insert(index, state.file_diff.file_path.clone(), state);
+    }
+
+    /// Applies the row edits that turn `previous` into `new` on
+    /// `viewported_list_state`.
+    ///
+    /// Editing in place (rather than rebuilding the list state) is what keeps
+    /// the scroll anchor and the measured heights of untouched rows: both
+    /// `remove` and `insert` shift the anchor along with the rows.
+    fn reconcile_list_state(&self, previous: &[String], new: &[String]) {
+        for edit in list_row_edits(previous, new) {
+            match edit {
+                RowEdit::Remove(index) => self.viewported_list_state.remove(index),
+                RowEdit::Insert(index) => self.viewported_list_state.insert(index),
+            }
+        }
+    }
+
+    /// Builds view state for the given file diffs, returning the list of newly
+    /// created file states in the same order.
+    ///
+    /// The caller owns `viewported_list_state` bookkeeping: rows must be added
+    /// with `add_item`/`insert` at the position the new state will occupy, so
+    /// that partial rebuilds can place a row without appending it to the end.
     fn build_view_state_for_file_diffs(
         &self,
-        files: &[FileDiffAndContent],
+        files: &[&FileDiffAndContent],
         ctx: &mut ViewContext<Self>,
     ) -> Vec<FileState> {
         let git_operation_blocked = self
@@ -2525,7 +2714,7 @@ impl CodeReviewView {
         };
 
         let mut file_states = vec![];
-        for file in files {
+        for &file in files {
             let editor_state = {
                 // `LocalCodeEditorView::new_with_global_buffer` natively
                 // supports both `LocalOrRemotePath::Local` and `Remote`
@@ -2642,10 +2831,6 @@ impl CodeReviewView {
             })
         }
 
-        // Populate the viewported list with file diffs
-        for _ in file_states.iter() {
-            self.viewported_list_state.add_item();
-        }
         file_states
     }
 

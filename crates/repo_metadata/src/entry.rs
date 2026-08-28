@@ -921,11 +921,26 @@ pub(crate) fn is_index_lock_file(path: &Path) -> bool {
     suffix.len() == 1 && suffix[0].as_os_str() == "index.lock"
 }
 
+/// Returns true for `.git/index`
+/// (and its worktree equivalent `.git/worktrees/*/index`).
+///
+/// The index is what `git status` reports staged-vs-unstaged state from, so
+/// consumers that surface file status (the code review panel) need a signal
+/// when it moves. Note that `git status` itself may rewrite the index to
+/// refresh its stat cache, so consumers should treat this as a hint to
+/// re-read status rather than as proof that anything user-visible changed.
+pub(crate) fn is_index_file(path: &Path) -> bool {
+    let Some(suffix) = git_suffix_components(path) else {
+        return false;
+    };
+    suffix.len() == 1 && suffix[0].as_os_str() == "index"
+}
+
 /// Determines if a git-related path should be ignored by the filesystem watcher.
 ///
 /// Uses an allowlist approach: only commit-related files (HEAD, refs/heads/*),
-/// loose remote-tracking refs, tracked-upstream state files, and the index lock
-/// file are allowed through. Everything else inside `.git/` is ignored.
+/// loose remote-tracking refs, tracked-upstream state files, the index, and the
+/// index lock file are allowed through. Everything else inside `.git/` is ignored.
 pub fn should_ignore_git_path(path: &Path) -> bool {
     if !is_git_internal_path(path) {
         return false; // Not a git path, don't ignore
@@ -933,6 +948,7 @@ pub fn should_ignore_git_path(path: &Path) -> bool {
     // Ignore everything inside .git/ except the allowlisted patterns.
     !is_commit_related_git_file(path)
         && !is_index_lock_file(path)
+        && !is_index_file(path)
         && !is_remote_tracking_ref(path)
         && !is_tracking_state_git_file(path)
 }

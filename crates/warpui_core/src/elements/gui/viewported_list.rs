@@ -92,6 +92,15 @@ impl<T> ListState<T> {
         self.0.borrow_mut().remove(index);
     }
 
+    /// Inserts an unmeasured item at `index`, shifting later items down.
+    ///
+    /// Use this instead of [`Self::add_item`] when the backing collection is
+    /// ordered and the new item does not belong at the end. The scroll anchor
+    /// is shifted with the items so the viewport stays on the same content.
+    pub fn insert(&self, index: usize) {
+        self.0.borrow_mut().insert(index);
+    }
+
     pub fn scroll_to(&self, index: usize) {
         self.0.borrow_mut().scroll_to(index, None);
     }
@@ -720,6 +729,25 @@ impl<T> ListStateInner<T> {
 
     fn add_item(&mut self) {
         self.content.push(ListItem { height: None });
+    }
+
+    fn insert(&mut self, index: usize) {
+        let (new_tree, last_measured) = {
+            let mut cursor = self.content.cursor::<Count, ()>();
+            let mut new_items = cursor.slice(&Count(index), sum_tree::SeekBias::Right);
+            // Items at and after `index` shift down, so nothing beyond the
+            // insertion point can still be considered measured.
+            let last_measured = new_items.summary().measured_count.saturating_sub(1);
+            new_items.push(ListItem { height: None });
+            new_items.push_tree(cursor.suffix());
+            (new_items, last_measured)
+        };
+
+        self.content = new_tree;
+        self.last_measured_index = self.last_measured_index.min(last_measured);
+        if self.scroll_top.list_item_index.0 >= index {
+            self.scroll_top.list_item_index.0 += 1;
+        }
     }
 
     fn scroll_to(&mut self, index: usize, offset_from_start: Option<Pixels>) {

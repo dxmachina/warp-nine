@@ -124,6 +124,16 @@ struct DiffsWithBaseContent {
     changes: Result<GitDiffWithBaseContent, String>,
 }
 
+/// How long to wait after the last `.git/index` or `.git/index.lock` event
+/// before re-reading the repository.
+///
+/// Git commands touch the index in bursts (lock, write, unlock — often several
+/// times for a rebase or an interactive add), and the intermediate states are
+/// not worth rendering. This debounce coalesces a burst into one reload while
+/// staying well below the threshold where the panel feels stale.
+#[cfg(feature = "local_fs")]
+const INDEX_SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
+
 /// Tracks state for in-flight file invalidation tasks and full-reload coordination.
 #[cfg(feature = "local_fs")]
 struct FileInvalidationState {
@@ -136,6 +146,10 @@ struct FileInvalidationState {
     /// Handle for the in-flight merge base computation spawned during full
     /// invalidation. Aborted when a new full invalidation starts.
     merge_base_handle: Option<SpawnedFutureHandle>,
+    /// Handle for the debounced reload armed by git index activity.
+    /// Re-armed by each index event and aborted whenever a full reload starts,
+    /// so at most one is outstanding.
+    index_settle_handle: Option<SpawnedFutureHandle>,
     /// Queue for per-file invalidation tasks
     queue: SyncQueue<FileInvalidationTask>,
 }
@@ -147,6 +161,7 @@ impl FileInvalidationState {
             invalidate_all_pending: false,
             merge_base: None,
             merge_base_handle: None,
+            index_settle_handle: None,
             queue,
         }
     }
@@ -155,6 +170,9 @@ impl FileInvalidationState {
         self.queue.cancel_all();
         self.merge_base = None;
         if let Some(handle) = self.merge_base_handle.take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.index_settle_handle.take() {
             handle.abort();
         }
     }
@@ -460,6 +478,36 @@ impl LocalDiffStateModel {
     fn queue_full_invalidation(&mut self) {
         self.file_invalidation.cancel_all();
         self.file_invalidation.invalidate_all_pending = true;
+    }
+
+    /// Arms (or re-arms) the debounced reload that follows git index activity.
+    ///
+    /// Callers pair this with [`Self::queue_full_invalidation`]: the former
+    /// suppresses the per-file queue while the index is in flux, this schedules
+    /// the catch-up that clears it again. Re-arming on every index event
+    /// collapses a burst of git activity into a single reload.
+    #[cfg(feature = "local_fs")]
+    fn schedule_index_settle(&mut self, ctx: &mut ModelContext<Self>) {
+        if let Some(handle) = self.file_invalidation.index_settle_handle.take() {
+            handle.abort();
+        }
+        let handle = ctx.spawn(
+            async { warpui::r#async::Timer::after(INDEX_SETTLE_DELAY).await },
+            |me, _, ctx| {
+                // Cleared before reloading: `load_diffs_for_current_repo` runs
+                // `cancel_all`, which would otherwise abort this very task from
+                // inside its own completion callback.
+                me.file_invalidation.index_settle_handle = None;
+                if !me.file_invalidation.invalidate_all_pending {
+                    // Something else (a commit event, a mode change, the pane
+                    // reopening) already reloaded and cleared the flag.
+                    return;
+                }
+                me.load_diffs_for_current_repo(false, false, ctx);
+                me.refresh_diff_metadata_for_current_repo(false, ctx);
+            },
+        );
+        self.file_invalidation.index_settle_handle = Some(handle);
     }
 
     /// Fetches branches for the active repository and emits
@@ -1026,6 +1074,7 @@ impl LocalDiffStateModel {
             moved,
             commit_updated,
             index_lock_detected,
+            index_updated,
             remote_ref_updated,
         } = update;
 
@@ -1044,22 +1093,29 @@ impl LocalDiffStateModel {
             // refresh, and the throttled metadata refresh will emit
             // MetadataRefreshed with fresh stats/git-operations data.
             return true;
-        } else if index_lock_detected {
-            if self.file_invalidation.invalidate_all_pending {
-                // Lock was released while a full invalidation was pending — reload now.
-                self.load_diffs_for_current_repo(false, false, ctx);
-                return true;
-            }
-            // Lock just appeared — suppress the per-file queue (data may be stale
-            // while the lock is held) and wait for the lock-release event.
+        } else if index_updated || index_lock_detected {
+            // The index moved, or a git command is holding its lock. Per-file
+            // invalidation cannot see staged-vs-unstaged transitions and may
+            // read a half-written index, so suppress the queue and re-read the
+            // whole repository once the index settles.
+            //
+            // This deliberately does not try to match the lock's create edge
+            // against its delete edge. The watcher debounces at
+            // `FILESYSTEM_WATCHER_DEBOUNCE_MILLI_SECS`, which is longer than a
+            // fast git command holds the lock, so both edges routinely arrive
+            // coalesced into a single `index_lock_detected`. A handshake that
+            // waits for a separate release event therefore waits forever,
+            // leaving `invalidate_all_pending` set — which silently defers
+            // every later per-file invalidation as well.
             self.queue_full_invalidation();
+            self.schedule_index_settle(ctx);
             return false;
         }
 
-        // If a previous index-lock event set `invalidate_all_pending` but the
-        // lock has since cleared without a commit (e.g. aborted merge), recover
-        // by forcing a full reload. Without this, all subsequent file
-        // invalidations would be silently deferred forever.
+        // Recovery for a full invalidation that was queued but never completed
+        // (e.g. an aborted merge, or a reload whose task was cancelled). The
+        // settle timer above is the primary path; this catches the remainder so
+        // file invalidations can't be deferred indefinitely.
         if self.file_invalidation.invalidate_all_pending {
             self.load_diffs_for_current_repo(false, false, ctx);
             return true;

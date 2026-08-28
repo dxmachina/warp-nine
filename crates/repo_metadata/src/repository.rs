@@ -532,6 +532,7 @@ fn merge_repository_updates(acc: &mut RepositoryUpdate, incoming: &RepositoryUpd
 
     acc.commit_updated |= incoming.commit_updated;
     acc.index_lock_detected |= incoming.index_lock_detected;
+    acc.index_updated |= incoming.index_updated;
     acc.remote_ref_updated |= incoming.remote_ref_updated;
 }
 

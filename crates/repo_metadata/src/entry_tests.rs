@@ -16,7 +16,7 @@ fn test_git_path_filtering_allowlist() {
     use std::path::Path;
 
     use super::{
-        is_commit_related_git_file, is_common_git_config, is_index_lock_file,
+        is_commit_related_git_file, is_common_git_config, is_index_file, is_index_lock_file,
         is_remote_tracking_ref, is_tracking_state_git_file, should_ignore_git_path,
     };
 
@@ -46,6 +46,11 @@ fn test_git_path_filtering_allowlist() {
     assert!(!should_ignore_git_path(Path::new(
         "/home/user/project/.git/index.lock"
     )));
+    // Allowlisted: the index itself is NOT ignored — staged-vs-unstaged state
+    // moves with it and consumers surface that.
+    assert!(!should_ignore_git_path(Path::new(
+        "/home/user/project/.git/index"
+    )));
     assert!(!should_ignore_git_path(Path::new(
         "/home/user/project/.git/config"
     )));
@@ -57,9 +62,6 @@ fn test_git_path_filtering_allowlist() {
     )));
 
     // Everything else in .git/ IS ignored
-    assert!(should_ignore_git_path(Path::new(
-        "/home/user/project/.git/index"
-    )));
     assert!(should_ignore_git_path(Path::new(
         "/home/user/project/.git/COMMIT_EDITMSG"
     )));
@@ -95,10 +97,10 @@ fn test_git_path_filtering_allowlist() {
     assert!(!should_ignore_git_path(Path::new(
         "/home/user/project/.git/worktrees/my-wt/config.worktree"
     )));
-    // Non-allowlisted worktree paths are still ignored
-    assert!(should_ignore_git_path(Path::new(
+    assert!(!should_ignore_git_path(Path::new(
         "/home/user/project/.git/worktrees/my-wt/index"
     )));
+    // Non-allowlisted worktree paths are still ignored
     assert!(should_ignore_git_path(Path::new(
         "/home/user/project/.git/worktrees/my-wt/COMMIT_EDITMSG"
     )));
@@ -132,6 +134,12 @@ fn test_git_path_filtering_allowlist() {
     )));
     assert!(!is_index_lock_file(Path::new("/repo/.git/HEAD")));
     assert!(!is_index_lock_file(Path::new("/repo/.git/index")));
+
+    // is_index_file
+    assert!(is_index_file(Path::new("/repo/.git/index")));
+    assert!(is_index_file(Path::new("/repo/.git/worktrees/wt/index")));
+    assert!(!is_index_file(Path::new("/repo/.git/index.lock")));
+    assert!(!is_index_file(Path::new("/repo/.git/HEAD")));
 
     // Remote-tracking refs
     assert!(is_remote_tracking_ref(Path::new(

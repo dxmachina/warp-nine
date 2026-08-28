@@ -18,7 +18,7 @@ cfg_if::cfg_if! {
         use watcher::{BulkFilesystemWatcher, BulkFilesystemWatcherEvent};
         use crate::entry::{
             extract_worktree_git_dir, is_commit_related_git_file, is_git_internal_path,
-            is_common_git_config, is_index_lock_file, is_remote_tracking_ref,
+            is_common_git_config, is_index_file, is_index_lock_file, is_remote_tracking_ref,
             is_shared_git_ref, is_tracking_state_git_file,
         };
         /// Duration between filesystem watch events in milliseconds
@@ -456,17 +456,21 @@ impl DirectoryWatcher {
         let affected = self.find_repos_for_git_event(path, ctx);
         let is_commit = is_commit_related_git_file(path);
         let is_lock = is_index_lock_file(path);
+        let is_index = is_index_file(path);
         let is_remote_ref = is_remote_tracking_ref(path);
         let is_tracking_state = is_tracking_state_git_file(path);
 
         for repo_handle in &affected {
-            if is_commit || is_lock || is_remote_ref {
+            if is_commit || is_lock || is_index || is_remote_ref {
                 let repo_update = repo_updates.entry(repo_handle.clone()).or_default();
                 if is_commit {
                     repo_update.commit_updated = true;
                 }
                 if is_lock {
                     repo_update.index_lock_detected = true;
+                }
+                if is_index {
+                    repo_update.index_updated = true;
                 }
                 if is_remote_ref {
                     repo_update.remote_ref_updated = true;
@@ -479,7 +483,7 @@ impl DirectoryWatcher {
 
         if !affected.is_empty() {
             log::debug!(
-                "[GIT_EVENT_ROUTING] dispatched path={} commit_updated={is_commit} remote_ref_updated={is_remote_ref} index_lock={is_lock} tracking_state={is_tracking_state} to {} repo(s)",
+                "[GIT_EVENT_ROUTING] dispatched path={} commit_updated={is_commit} remote_ref_updated={is_remote_ref} index_lock={is_lock} index_updated={is_index} tracking_state={is_tracking_state} to {} repo(s)",
                 path.display(),
                 affected.len()
             );
@@ -697,6 +701,12 @@ pub struct RepositoryUpdate {
     /// Whether the git index lock file was created or removed (`.git/index.lock`).
     pub index_lock_detected: bool,
 
+    /// Whether the git index itself changed (`.git/index`), i.e. staged-vs-unstaged
+    /// state may have moved. Set independently of `index_lock_detected`: a command
+    /// that writes the index always takes the lock, but the debounce window can
+    /// collapse both lock edges into a single update, so neither flag implies the other.
+    pub index_updated: bool,
+
     /// Whether the tracked upstream ref changed or the current tracked remote ref was updated.
     pub remote_ref_updated: bool,
 }
@@ -710,6 +720,7 @@ impl RepositoryUpdate {
             && self.moved.is_empty()
             && !self.commit_updated
             && !self.index_lock_detected
+            && !self.index_updated
             && !self.remote_ref_updated
     }
 

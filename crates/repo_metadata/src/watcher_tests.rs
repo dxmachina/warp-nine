@@ -721,3 +721,113 @@ fn test_commit_related_files_excluded_from_update_lists() {
         });
     });
 }
+
+#[test]
+fn test_index_changes_are_reported_and_excluded_from_update_lists() {
+    VirtualFS::test("index_updated", |dirs, mut vfs| {
+        log::info!("Start setting up test vfs");
+        stub_git_repository(&mut vfs, "test_repo");
+
+        vfs.with_files(vec![
+            Stub::FileWithContent("test_repo/.git/index", "initial index"),
+            Stub::FileWithContent("test_repo/regular_file.txt", "content"),
+        ]);
+
+        let repo_path = dirs.tests().join("test_repo");
+        App::test((), |mut app| async move {
+            let watcher_handle = app.add_singleton_model(DirectoryWatcher::new);
+
+            let repo_handle = watcher_handle
+                .update(&mut app, |watcher, ctx| {
+                    watcher.add_directory(
+                        StandardizedPath::from_local_canonicalized(&repo_path).unwrap(),
+                        ctx,
+                    )
+                })
+                .unwrap();
+
+            let (scan_tx, mut scan_rx) = mpsc::unbounded::<()>();
+            let (update_tx, mut update_rx) = mpsc::unbounded::<RepositoryUpdate>();
+            let active_scans = Arc::new(AtomicUsize::new(0));
+
+            let subscriber =
+                TestSubscriber::new(scan_tx.clone(), update_tx.clone(), active_scans.clone());
+
+            let start = repo_handle.update(&mut app, |repo, ctx| {
+                repo.start_watching(Box::new(subscriber), ctx)
+            });
+            start
+                .registration_future
+                .await
+                .expect("Failed to add subscriber");
+
+            futures::select! {
+                scan = scan_rx.next().fuse() => {
+                    scan.expect("Scan channel closed while waiting for initial repository scan");
+                }
+                _ = futures::FutureExt::fuse(Timer::after(Duration::from_secs(5))) => {
+                    panic!("Timed out waiting for initial repository scan");
+                }
+            }
+
+            // Staging a file rewrites `.git/index` without touching the working
+            // tree, so the index is the only signal that file status changed.
+            let index_path = repo_path.join(".git/index");
+            std::fs::write(&index_path, "rewritten index").expect("Updating index failed");
+
+            let update_timeout = Duration::from_secs(5);
+            let timeout = futures::FutureExt::fuse(Timer::after(update_timeout));
+            futures::pin_mut!(timeout);
+            let mut updates = Vec::new();
+
+            loop {
+                if updates
+                    .iter()
+                    .any(|update: &RepositoryUpdate| update.index_updated)
+                {
+                    break;
+                }
+                futures::select! {
+                    update = update_rx.next().fuse() => {
+                        match update {
+                            Some(update) => updates.push(update),
+                            None => panic!(
+                                "Update channel closed while waiting for an index update. Received {} update(s): {updates:#?}",
+                                updates.len()
+                            ),
+                        }
+                    }
+                    _ = timeout => {
+                        panic!(
+                            "Timed out after {update_timeout:?} waiting for index_updated after writing {}. Received {} update(s): {updates:#?}",
+                            index_path.display(),
+                            updates.len()
+                        );
+                    }
+                }
+            }
+
+            assert!(
+                updates.iter().any(|update| update.index_updated),
+                "index_updated should be true when .git/index changes"
+            );
+
+            // The index is reported through the flag, never as a changed file.
+            assert!(
+                updates.iter().all(|update| update
+                    .added_or_modified()
+                    .all(|file| file.path != index_path)),
+                "Git index file should NOT be in added/modified list"
+            );
+            assert!(
+                updates
+                    .iter()
+                    .any(|update| update.index_updated && !update.is_empty()),
+                "Update should not be considered empty when index_updated is true"
+            );
+
+            let queue = watcher_handle.read(&app, |watcher, _| watcher.processing_queue.clone());
+            wait_for_queue_complete(queue, &mut app).await;
+        });
+    });
+}

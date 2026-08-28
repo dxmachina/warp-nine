@@ -137,6 +137,7 @@ fn filesystem_event_to_repository_update(event: &BulkFilesystemWatcherEvent) -> 
             .collect(),
         commit_updated: false,
         index_lock_detected: false,
+        index_updated: false,
         remote_ref_updated: false,
     }
 }

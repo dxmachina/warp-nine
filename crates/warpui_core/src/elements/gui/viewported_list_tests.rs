@@ -683,3 +683,66 @@ fn test_scroll_position_clamp() {
         });
     });
 }
+
+/// Builds a bare `ListState` with `count` unmeasured rows. The row edit
+/// operations are pure sum-tree manipulation, so they need no window.
+fn list_state_with_rows(count: usize) -> ListState<TestScrollContext> {
+    let (list_state, _scroll_rx) = ListState::new_with_scroll_preservation(
+        |_index, _scroll_offset, _app| Rect::new().finish(),
+        |_index, _ctx, _app| None,
+    );
+    for _ in 0..count {
+        list_state.add_item();
+    }
+    list_state
+}
+
+fn row_count(list_state: &ListState<TestScrollContext>) -> usize {
+    list_state.0.borrow().content.summary().count
+}
+
+#[test]
+fn test_insert_adds_a_row_at_the_requested_position() {
+    let list_state = list_state_with_rows(3);
+
+    list_state.insert(0);
+    assert_eq!(row_count(&list_state), 4);
+
+    list_state.insert(2);
+    assert_eq!(row_count(&list_state), 5);
+
+    // Inserting at the end is the same as appending.
+    list_state.insert(5);
+    assert_eq!(row_count(&list_state), 6);
+}
+
+#[test]
+fn test_insert_shifts_the_scroll_anchor_with_the_rows() {
+    let list_state = list_state_with_rows(10);
+    list_state.scroll_to(5);
+    assert_eq!(list_state.get_scroll_index(), 5);
+
+    // A row appearing above the anchor keeps the viewport on the same content.
+    list_state.insert(2);
+    assert_eq!(list_state.get_scroll_index(), 6);
+
+    // A row appearing below it leaves the anchor alone.
+    list_state.insert(9);
+    assert_eq!(list_state.get_scroll_index(), 6);
+
+    // A row inserted at the anchor pushes the anchored row down.
+    list_state.insert(6);
+    assert_eq!(list_state.get_scroll_index(), 7);
+}
+
+#[test]
+fn test_insert_and_remove_round_trip_restores_the_anchor() {
+    let list_state = list_state_with_rows(10);
+    list_state.scroll_to(4);
+
+    list_state.insert(1);
+    list_state.remove(1);
+
+    assert_eq!(row_count(&list_state), 10);
+    assert_eq!(list_state.get_scroll_index(), 4);
+}

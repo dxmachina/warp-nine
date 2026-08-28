@@ -12,7 +12,7 @@ Not affiliated with or endorsed by Warp Dev, Inc.
 |---|---|---|---|
 | **[WarpNine-arm64.dmg](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNine-arm64.dmg)** | Apple Silicon | 31 MB | macOS 11.0 |
 | **[WarpNine-x86_64.dmg](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNine-x86_64.dmg)** | Intel | 34 MB | macOS 10.14 |
-| **[WarpNineSetup.exe](https://github.com/dxmachina/warp-nine/releases/download/v9.2026.08.18.11.41.f9b203958/WarpNineSetup.exe)** | Windows x64 | 35 MB | Windows 10 |
+| **[WarpNineSetup.exe](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNineSetup.exe)** | Windows x64 | 35 MB | Windows 10 |
 
 Open the image and drag WarpNine to Applications. The build is Developer ID signed
 and notarized, so it opens without a Gatekeeper prompt. To verify a download, run
@@ -21,10 +21,9 @@ and notarized, so it opens without a Gatekeeper prompt. To verify a download, ru
 [release page](https://github.com/dxmachina/warp-nine/releases/latest).
 
 The Windows installer is not code-signed, so SmartScreen warns on first run
-(More info, then Run anyway); its SHA-256 is on its release page. It installs
-per-user by default (a dialog offers all-users), has only been exercised on one
-Windows 11 machine, and is published as a pre-release pinned to its tag so the
-macOS `latest` links above keep working.
+(More info, then Run anyway); its SHA-256 is on the release page. It installs
+per-user by default (a dialog offers all-users) and has only been exercised on
+one Windows 11 machine.
 
 ## What it is
 

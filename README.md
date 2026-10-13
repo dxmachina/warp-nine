@@ -12,7 +12,7 @@ Not affiliated with or endorsed by Warp Dev, Inc.
 |---|---|---|---|
 | **[WarpNine-arm64.dmg](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNine-arm64.dmg)** | Apple Silicon | 31 MB | macOS 11.0 |
 | **[WarpNine-x86_64.dmg](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNine-x86_64.dmg)** | Intel | 34 MB | macOS 10.14 |
-| **[WarpNineSetup.exe](https://github.com/dxmachina/warp-nine/releases/latest/download/WarpNineSetup.exe)** | Windows x64 | 35 MB | Windows 10 |
+| **[WarpNineSetup.exe](https://github.com/dxmachina/warp-nine/releases/download/v9.2026.08.28.15.54.180d00cce/WarpNineSetup.exe)** | Windows x64 | 35 MB | Windows 10 |
 
 Open the image and drag WarpNine to Applications. The build is Developer ID signed
 and notarized, so it opens without a Gatekeeper prompt. To verify a download, run
@@ -20,10 +20,12 @@ and notarized, so it opens without a Gatekeeper prompt. To verify a download, ru
 `source=Notarized Developer ID`. Per-build checksums are on the
 [release page](https://github.com/dxmachina/warp-nine/releases/latest).
 
-The Windows installer is not code-signed, so SmartScreen warns on first run
-(More info, then Run anyway); its SHA-256 is on the release page. It installs
-per-user by default (a dialog offers all-users) and has only been exercised on
-one Windows 11 machine.
+The Windows installer is the August 28 build from the
+[`v9.2026.08.28` release](https://github.com/dxmachina/warp-nine/releases/tag/v9.2026.08.28.15.54.180d00cce),
+which predates the [latency work](#latency). It is not code-signed, so SmartScreen
+warns on first run (More info, then Run anyway); its SHA-256 is on that release
+page. It installs per-user by default (a dialog offers all-users) and has only
+been exercised on one Windows 11 machine.
 
 ## What it is
 
@@ -41,10 +43,11 @@ onboarding are deleted rather than disabled.
 - Whole subsystems are deleted, so rebasing on upstream gets harder over time.
 - macOS is the primary platform. Both architectures build, but only arm64 is used
   daily. The Intel build has been verified as far as a notarized launch under
-  Rosetta and has never run on Intel hardware. Windows x64 builds and runs
-  (terminal sessions, blocks, session restore, and the Inno Setup installer all
-  verified on one machine) but is unsigned and much less exercised. Linux code is
-  present but unexercised.
+  Rosetta and has never run on Intel hardware. Windows x64 built and ran at
+  `180d00cce` (terminal sessions, blocks, session restore, and the Inno Setup
+  installer all verified on one machine) but is unsigned and much less exercised;
+  nothing since has been compiled for Windows. Linux code is present but
+  unexercised.
 - Telemetry and crash reporting are compiled out and verified in the logs, but this
   is one person's fork and has not been audited.
 
@@ -96,6 +99,51 @@ gate once in the tree. Turning a feature off usually hides UI while still compil
 it in. Most of the reduction above is build-profile and asset changes, which delete
 no application code.
 
+## Latency
+
+Measured in the app on an M3 Max, `180d00cce` against `303272b45`, alternating the
+two builds run by run. Times run to frame submission rather than to light on the
+display, which an off-screen benchmark window cannot see. Most runs shared the
+machine with an unrelated heavy job, which inflates the absolute times more than
+the comparison.
+
+| | Before | After |
+|---|---|---|
+| Restore a 32-pane, 22-tab session to its prompt | 3.7 s | 0.6 s |
+| Launch to prompt, nothing to restore | 1.6 s | 0.87 s |
+| Enter to next prompt, zsh without rc files | 111 ms | 11 ms |
+| Enter to next prompt, zsh with oh-my-zsh | 134 ms | 35 ms |
+| New tab to prompt, zsh without rc files | 414 ms | 134 ms |
+| Keystroke to echo in `cat`, median / p90 | 3.7 / 17 ms | 1.6 / 8 ms |
+| Keystroke to first echo in a full-screen program, median | 11.5 ms | 1.7 ms |
+| Keystroke to settled redraw in a full-screen program | 27 ms | 15 ms |
+
+Throughput is unchanged within noise (`cat` of 40 MB).
+
+Most of the per-command cost was Warp's zsh integration. Its preexec and precmd
+hooks escaped and hex-encoded every value they report by forking `sed`, `tr`, and
+`od`, and looked up the git branch with two more forks and two `git` runs: about
+nine processes per command, even for `true`. They now use parameter expansion and
+`printf -v` and read the branch from `HEAD`, so an ordinary checkout starts no
+processes at all, and every message they send is unchanged. The bash integration
+still forks.
+
+Restore built every tab's terminals before the first frame, and each re-parsed saved
+output that wrapped every styled cell in its own escape sequence and reset (about
+35 bytes per truecolor cell). Output is now saved with one style per run, older
+output is compacted the first time it is restored, and background tabs are built
+after the first frame, nearest first, once input has been idle for half a second.
+
+Echo lost a frame in two places. Every key written to the PTY cleared the block
+selection, even an empty one, and that redraw took the display's next refresh ahead
+of the program's reply. PTY wakeups were also throttled to 60 Hz, which held back
+the second half of a reply sent as an echo and then a redraw. Output that keeps
+coming is still throttled to 60 wakeups a second.
+
+Launch also no longer runs the login shell to read `PATH`, opens a read-only SQLite
+connection per pane that nothing read, enumerates system fonts twice, or compiles 25
+regexes for a command allowlist left over from the agent's settings.
+
 ## What was removed
 
 | | LOC | |
@@ -109,6 +157,8 @@ no application code.
 | Telemetry and crash reporting | | hard-off in `settings/privacy.rs`; upstream's force flag and `AgentModeAnalytics` override are ignored |
 | The dock tile plugin | | 4.4 MB, shipped universal regardless of target arch, wrote `/tmp/warp_docktile_<timestamp>.log` on every init |
 | Referral and changelog menu items | | one rendered as `<NO DESCRIPTION>` because its label lookup no longer resolved |
+| Update checks | | off for the OSS channel, which has no update server; the app still asked `app.warp.dev` for a version at launch, for each window, and on every activation (about 3,300 failed requests in nine days) |
+| The local HTTP server | | not started in the OSS build; it bound port 9282 on every launch so warp.dev pages could detect the install |
 
 Several were already unreachable. Trash, Untrash, permanent delete, the notebook
 edit baton, and drive sharing all sat behind a
@@ -188,7 +238,11 @@ Big Sur is the first release supporting Apple Silicon. Nothing sets
 `LSMinimumSystemVersion`, so the Mach-O load command is the only gate, and neither
 floor has been tested below the machine that builds them.
 
-Three things that have cost time:
+Four things that have cost time:
+
+- Xcode 27 ships without the Metal toolchain, and `crates/warpui/build.rs` panics
+  without it, because it compiles the shaders with `xcrun metal`. Install it with
+  `xcodebuild -downloadComponent MetalToolchain`.
 
 - `cargo-about` is required. It generates `THIRD_PARTY_LICENSES.txt` in a step that
   runs before signing, and when it was missing the script aborted there and never

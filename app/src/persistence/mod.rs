@@ -299,6 +299,10 @@ pub struct PersistedData {
     /// rows. Drained by `sqlite::initialize`, which hands them to the writer
     /// thread for persistence; not intended for other consumers.
     pub conversation_summary_backfills: Vec<ConversationSummaryBackfill>,
+    /// Block output compacted at read time (see `block_list::get_all_restored_blocks`).
+    /// Drained by `sqlite::initialize`, which hands it to the writer thread for
+    /// persistence; not intended for other consumers.
+    pub block_output_compactions: Vec<(i32, Vec<u8>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -423,6 +427,10 @@ pub enum ModelEvent {
     /// before the `summary` column existed.
     BackfillConversationSummaries {
         backfills: Vec<ConversationSummaryBackfill>,
+    },
+    /// Persists block output compacted at read time, by block row id.
+    UpdateBlockOutputs {
+        outputs: Vec<(i32, Vec<u8>)>,
     },
     DeleteMultiAgentConversations {
         conversation_ids: Vec<String>,

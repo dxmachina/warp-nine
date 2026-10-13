@@ -52,7 +52,7 @@ use super::agent::{
 };
 use super::block_list::{
     delete_ai_conversation, delete_blocks, get_all_restored_blocks, save_block,
-    update_block_agent_view_visibility,
+    update_block_agent_view_visibility, update_block_outputs,
 };
 use super::model::{
     self, AI_DOCUMENT_PANE_KIND, AI_FACT_PANE_KIND, ActiveMCPServer, CODE_PANE_KIND,
@@ -139,11 +139,28 @@ pub fn initialize(
                 }
             };
 
-            // Persist any read-time-derived conversation summaries so the
-            // derivation only happens once per pre-`summary`-column row.
+            // Persist what was derived at read time (compacted block output, and
+            // conversation summaries for pre-`summary`-column rows) so the derivation
+            // only happens once.
             if let (Some(persisted_data), Some(writer_handles)) =
                 (persisted_data.as_mut(), writer_handles.as_ref())
             {
+                let compactions = std::mem::take(&mut persisted_data.block_output_compactions);
+                if !compactions.is_empty() {
+                    log::info!(
+                        "Compacting the stored output of {} blocks",
+                        compactions.len()
+                    );
+                    report_if_error!(
+                        writer_handles
+                            .sender
+                            .send(ModelEvent::UpdateBlockOutputs {
+                                outputs: compactions
+                            })
+                            .context("Error requesting block output compaction")
+                    );
+                }
+
                 let backfills = std::mem::take(&mut persisted_data.conversation_summary_backfills);
                 if !backfills.is_empty() {
                     log::info!("Backfilling {} conversation summaries", backfills.len());
@@ -750,6 +767,9 @@ fn handle_model_event(event: ModelEvent, connection: &mut SqliteConnection) -> a
                 .map_err(anyhow::Error::from)
                 .context("error backfilling conversation summaries")
         }
+        ModelEvent::UpdateBlockOutputs { outputs } => update_block_outputs(connection, outputs)
+            .map_err(anyhow::Error::from)
+            .context("error updating block outputs"),
         ModelEvent::DeleteMultiAgentConversations { conversation_ids } => {
             delete_agent_conversations(connection, conversation_ids)
                 .map_err(anyhow::Error::from)
@@ -2319,9 +2339,11 @@ fn read_sqlite_data(
             ignored_suggestions: Default::default(),
             mcp_servers_to_restore: Default::default(),
             conversation_summary_backfills: Default::default(),
+            block_output_compactions: Default::default(),
         });
     }
 
+    let mut block_output_compactions = Vec::new();
     let app_state = if data_scope.session_restoration() {
         use schema::windows::dsl::*;
 
@@ -2515,7 +2537,8 @@ fn read_sqlite_data(
             )
             .collect();
 
-        let restored_blocks = get_all_restored_blocks(conn)?;
+        let (restored_blocks, compactions) = get_all_restored_blocks(conn)?;
+        block_output_compactions = compactions;
 
         // Load active MCP servers from database
         let running_mcp_servers = load_active_mcp_servers(conn)?;
@@ -2716,6 +2739,7 @@ fn read_sqlite_data(
         ignored_suggestions,
         mcp_servers_to_restore,
         conversation_summary_backfills,
+        block_output_compactions,
     })
 }
 

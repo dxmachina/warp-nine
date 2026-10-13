@@ -9,6 +9,7 @@ use diesel::sqlite::SqliteConnection;
 use super::model::Block;
 use super::{model, schema};
 use crate::app_state::PaneUuid;
+use crate::terminal::model::block::stylized_output::merge_per_cell_styles;
 use crate::terminal::model::block::{SerializedAgentViewVisibility, SerializedBlock};
 
 const MAX_TERMINAL_BLOCKS_TO_PERSIST_PER_SESSION: i64 = 100;
@@ -21,20 +22,38 @@ const MAX_TERMINAL_BLOCKS_TO_PERSIST_PER_SESSION: i64 = 100;
 /// The wrapper went with the agent crate; command blocks are plain terminal state.
 type PersistedBlocks = HashMap<PaneUuid, Vec<SerializedBlock>>;
 
+/// Block output rewritten at read time, by block row id, for the writer thread to persist.
+pub type BlockOutputCompactions = Vec<(i32, Vec<u8>)>;
+
 /// Returns the most recent [`MAX_TERMINAL_BLOCKS_TO_PERSIST_PER_SESSION`] blocks for each
-/// session. The blocks are in chronological order.
+/// session, in chronological order, along with any block output that was compacted on the
+/// way and should be written back (see [`merge_per_cell_styles`]).
 pub(super) fn get_all_restored_blocks(
     conn: &mut SqliteConnection,
-) -> Result<PersistedBlocks, diesel::result::Error> {
+) -> Result<(PersistedBlocks, BlockOutputCompactions), diesel::result::Error> {
     let terminal_sessions = schema::terminal_panes::table
         .select(model::TerminalSession::as_select())
         .load::<model::TerminalSession>(conn)?;
 
-    let block_lists = Block::belonging_to(&terminal_sessions)
+    let mut blocks = Block::belonging_to(&terminal_sessions)
         .select(Block::as_select())
         .order_by(schema::blocks::columns::id.asc())
-        .load::<Block>(conn)?
-        .grouped_by(&terminal_sessions);
+        .load::<Block>(conn)?;
+
+    // Output saved with an escape sequence around every styled cell is many times larger
+    // than it needs to be, and restore parses all of it before the first frame. Merge it
+    // into per-run form here, and have it written back so this only happens once.
+    let mut compactions = BlockOutputCompactions::new();
+    for block in &mut blocks {
+        if let Some(merged) = merge_per_cell_styles(&block.stylized_output) {
+            if let Some(id) = block.id {
+                compactions.push((id, merged.clone()));
+            }
+            block.stylized_output = merged;
+        }
+    }
+
+    let block_lists = blocks.grouped_by(&terminal_sessions);
 
     let mut all_blocks_by_pane = block_lists
         .into_iter()
@@ -57,7 +76,23 @@ pub(super) fn get_all_restored_blocks(
         );
     }
 
-    Ok(all_blocks_by_pane)
+    Ok((all_blocks_by_pane, compactions))
+}
+
+/// Writes back block output compacted by [`get_all_restored_blocks`].
+pub(super) fn update_block_outputs(
+    conn: &mut SqliteConnection,
+    outputs: BlockOutputCompactions,
+) -> Result<(), Error> {
+    use schema::blocks::dsl::*;
+    conn.transaction::<_, Error, _>(|conn| {
+        for (block_row_id, output) in outputs {
+            diesel::update(blocks.filter(id.eq(block_row_id)))
+                .set(stylized_output.eq(output))
+                .execute(conn)?;
+        }
+        Ok(())
+    })
 }
 
 pub(super) fn save_block(

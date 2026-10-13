@@ -1,5 +1,6 @@
 mod interaction_mode;
 mod serialized_block;
+pub(crate) mod stylized_output;
 
 use std::borrow::Cow;
 use std::collections::HashMap;

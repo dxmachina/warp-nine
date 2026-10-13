@@ -20,6 +20,7 @@ use warpui::units::{IntoLines, IntoPixels, Lines};
 use warpui::{AppContext, EntityId, record_trace_event};
 
 use super::ansi::{Handler, InputBufferValue};
+use super::block::stylized_output::last_rows;
 use super::block::{BlockId, BlockSize, BlockState, SerializedAIMetadata};
 use super::early_output::EarlyOutput;
 use super::grid::RespectDisplayedOutput;
@@ -55,6 +56,11 @@ use crate::terminal::{BlockPadding, ShellHost, SizeInfo, SizeUpdate};
 
 #[cfg(feature = "local_fs")]
 const RESTORED_BLOCK_SEPARATOR_HEIGHT: f64 = 1.5;
+/// The most of a block's saved output that restoring it parses. Output is saved one escape
+/// sequence per style run and at most `MAX_SERIALIZED_STYLIZED_OUTPUT_LINES` rows, so this
+/// only trims outliers (output that changes color every cell, say), whose parse would
+/// otherwise hold up the first frame.
+const MAX_RESTORED_OUTPUT_BYTES: usize = 1 << 20;
 pub(in crate::terminal) const INLINE_BANNER_HEIGHT: f64 = 2.5;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ActiveBlockCompletion {
@@ -2785,7 +2791,11 @@ impl BlockList {
         }
 
         if block.did_execute || block.is_background {
-            processor.parse_bytes(self, &block.stylized_output, &mut io::sink());
+            processor.parse_bytes(
+                self,
+                last_rows(&block.stylized_output, MAX_RESTORED_OUTPUT_BYTES),
+                &mut io::sink(),
+            );
         }
 
         let completed_ts = match block.completed_ts {

@@ -141,7 +141,8 @@ pub use tree::{Direction, PaneData, PaneFlex, PaneNode, SplitDirection};
 use warp_errors::report_error;
 pub use working_directories::{WorkingDirectoriesEvent, WorkingDirectoriesModel};
 
-use self::pane::{DetachType, PaneViewEvent};
+use self::pane::deferred_terminal_pane::DeferredTerminalPane;
+use self::pane::{DetachType, IPaneType, PaneViewEvent};
 pub use crate::code_review::CodeReviewPanelArg;
 
 /// Binding name for the action that toggles maximizing the active pane. Shared so
@@ -747,6 +748,9 @@ pub enum PanesLayout {
         /// Per-pane command blocks from the previous session, keyed by pane UUID and
         /// read from the `blocks` table at startup.
         block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
+        /// Restore terminal panes as [`DeferredTerminalPane`]s, which build their terminals
+        /// when [`PaneGroup::materialize_deferred_panes`] is called.
+        defer_terminal_panes: bool,
     },
     Template(PaneTemplateType),
     AmbientAgent,
@@ -759,6 +763,7 @@ impl PanesLayout {
         Self::Snapshot {
             root: Box::new(root),
             block_lists: Default::default(),
+            defer_terminal_panes: false,
         }
     }
 }
@@ -1307,6 +1312,7 @@ impl PaneGroup {
     fn restore_pane_tree(
         root: PaneNodeSnapshot,
         block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
+        defer_terminal_panes: bool,
         resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
@@ -1318,6 +1324,7 @@ impl PaneGroup {
             PaneNodeSnapshot::Leaf(leaf) => Self::restore_pane_leaf(
                 leaf,
                 block_lists,
+                defer_terminal_panes,
                 resources,
                 ctx,
                 pane_contents,
@@ -1347,6 +1354,7 @@ impl PaneGroup {
                     match PaneGroup::restore_pane_tree(
                         node,
                         block_lists.clone(),
+                        defer_terminal_panes,
                         resources.clone(),
                         ctx,
                         pane_contents,
@@ -1381,6 +1389,7 @@ impl PaneGroup {
     fn restore_pane_leaf(
         leaf: LeafSnapshot,
         block_lists: Arc<HashMap<PaneUuid, Vec<SerializedBlock>>>,
+        defer_terminal_panes: bool,
         resources: TerminalViewResources,
         ctx: &mut ViewContext<PaneGroup>,
         pane_contents: &mut HashMap<PaneId, Box<dyn AnyPaneContent>>,
@@ -1396,46 +1405,34 @@ impl PaneGroup {
             LeafContents::AIDocument(_) => {
                 Err(anyhow::anyhow!("AI document panes are no longer supported"))
             }
-            LeafContents::Terminal(terminal_snapshot) => {
-                let uuid = PaneUuid(terminal_snapshot.uuid.clone());
-                let restored_blocks = block_lists.get(&uuid);
-
-                let chosen_shell = terminal_snapshot
-                    .shell_launch_data
-                    .as_ref()
-                    .and_then(|shell| {
-                        if FeatureFlag::ShellSelector.is_enabled() {
-                            AvailableShells::as_ref(ctx).get_from_shell_launch_data(shell)
-                        } else {
-                            None
-                        }
-                    });
-
-                let startup_directory = terminal_snapshot
-                    .cwd
-                    .map(PathBuf::from)
-                    .filter(|path| path.is_dir());
-
-                // LOCAL FORK: restored terminal panes used to re-hydrate their agent
-                // conversations here as well. Conversation restoration went with the
-                // agent; the pane's own command blocks are still restored.
-                let (terminal_view, terminal_manager) = PaneGroup::create_session(
-                    startup_directory,
-                    HashMap::new(),
-                    uuid.0.as_slice(),
-                    resources,
-                    restored_blocks.map(Vec::as_slice),
-                    user_default_shell_unsupported_banner_model_handle,
+            LeafContents::Terminal(terminal_snapshot) if defer_terminal_panes => {
+                let pane = DeferredTerminalPane::new(
+                    terminal_snapshot,
+                    block_lists,
                     view_size,
-                    model_event_sender.clone(),
-                    chosen_shell,
+                    model_event_sender,
                     ctx,
                 );
+                let pane_id = pane.id();
+                pane_contents.insert(pane_id, Box::new(pane));
 
-                let pane_data = TerminalPane::new(
-                    uuid.0,
-                    terminal_manager,
-                    terminal_view,
+                // The active session is set when the terminals are built.
+                let focus = InitialFocus {
+                    focused_pane: leaf.is_focused.then_some(pane_id),
+                    active_session: None,
+                };
+
+                Ok((PaneData::new(pane_id), focus))
+            }
+            LeafContents::Terminal(terminal_snapshot) => {
+                let uuid = PaneUuid(terminal_snapshot.uuid.clone());
+                let is_active = terminal_snapshot.is_active;
+                let pane_data = Self::restore_terminal_pane(
+                    terminal_snapshot,
+                    block_lists.get(&uuid).map(Vec::as_slice),
+                    resources,
+                    user_default_shell_unsupported_banner_model_handle,
+                    view_size,
                     model_event_sender,
                     ctx,
                 );
@@ -1444,13 +1441,9 @@ impl PaneGroup {
                 let pane_id = terminal_pane_id.into();
                 pane_contents.insert(pane_id, Box::new(pane_data));
 
-                // LOCAL FORK: a snapshot's base agent model override and active execution
-                // profile have nowhere to be restored to now that LLM preferences and the
-                // execution profiles model came out with the agent.
-
                 let focus = InitialFocus {
                     focused_pane: leaf.is_focused.then_some(pane_id),
-                    active_session: terminal_snapshot.is_active.then_some(terminal_pane_id),
+                    active_session: is_active.then_some(terminal_pane_id),
                 };
 
                 Ok((PaneData::new(pane_id), focus))
@@ -1629,6 +1622,174 @@ impl PaneGroup {
         }
 
         result
+    }
+
+    /// Builds the terminal pane for a restored terminal snapshot: its terminal, with the
+    /// saved blocks, and its shell.
+    #[allow(clippy::too_many_arguments)]
+    fn restore_terminal_pane(
+        terminal_snapshot: TerminalPaneSnapshot,
+        restored_blocks: Option<&[SerializedBlock]>,
+        resources: TerminalViewResources,
+        user_default_shell_unsupported_banner_model_handle: ModelHandle<BannerState>,
+        view_size: Vector2F,
+        model_event_sender: Option<SyncSender<ModelEvent>>,
+        ctx: &mut ViewContext<PaneGroup>,
+    ) -> TerminalPane {
+        let chosen_shell = terminal_snapshot
+            .shell_launch_data
+            .as_ref()
+            .and_then(|shell| {
+                if FeatureFlag::ShellSelector.is_enabled() {
+                    AvailableShells::as_ref(ctx).get_from_shell_launch_data(shell)
+                } else {
+                    None
+                }
+            });
+
+        let startup_directory = terminal_snapshot
+            .cwd
+            .map(PathBuf::from)
+            .filter(|path| path.is_dir());
+
+        // LOCAL FORK: restored terminal panes used to re-hydrate their agent
+        // conversations here as well. Conversation restoration went with the
+        // agent; the pane's own command blocks are still restored.
+        let (terminal_view, terminal_manager) = PaneGroup::create_session(
+            startup_directory,
+            HashMap::new(),
+            terminal_snapshot.uuid.as_slice(),
+            resources,
+            restored_blocks,
+            user_default_shell_unsupported_banner_model_handle,
+            view_size,
+            model_event_sender.clone(),
+            chosen_shell,
+            ctx,
+        );
+
+        // LOCAL FORK: a snapshot's base agent model override and active execution
+        // profile have nowhere to be restored to now that LLM preferences and the
+        // execution profiles model came out with the agent.
+        TerminalPane::new(
+            terminal_snapshot.uuid,
+            terminal_manager,
+            terminal_view,
+            model_event_sender,
+            ctx,
+        )
+    }
+
+    /// Whether any of this group's panes are restored terminals that haven't been built yet
+    /// (see [`DeferredTerminalPane`]).
+    pub fn has_deferred_panes(&self) -> bool {
+        self.pane_contents
+            .keys()
+            .any(|pane_id| pane_id.pane_type() == IPaneType::DeferredPlaceholder)
+    }
+
+    /// Builds the terminals of this group's restored panes that were deferred, swapping each
+    /// [`DeferredTerminalPane`] for a [`TerminalPane`] in place. The focused pane goes first,
+    /// so its shell starts first.
+    pub fn materialize_deferred_panes(&mut self, ctx: &mut ViewContext<Self>) {
+        let focused_pane_id = self.focused_pane_id(ctx);
+        let mut deferred_pane_ids = self
+            .pane_contents
+            .keys()
+            .copied()
+            .filter(|pane_id| pane_id.pane_type() == IPaneType::DeferredPlaceholder)
+            .collect_vec();
+        if deferred_pane_ids.is_empty() {
+            return;
+        }
+        let visible_pane_ids = self.visible_pane_ids();
+        deferred_pane_ids.sort_by_key(|pane_id| {
+            (
+                *pane_id != focused_pane_id,
+                visible_pane_ids
+                    .iter()
+                    .position(|visible| visible == pane_id)
+                    .unwrap_or(usize::MAX),
+            )
+        });
+
+        let resources = TerminalViewResources {
+            tips_completed: self.tips_completed.clone(),
+            server_api: self.server_api.clone(),
+            model_event_sender: self.model_event_sender.clone(),
+        };
+        for deferred_pane_id in deferred_pane_ids {
+            let Some(deferred) = self
+                .pane_contents
+                .get(&deferred_pane_id)
+                .and_then(|pane| pane.as_any().downcast_ref::<DeferredTerminalPane>())
+            else {
+                continue;
+            };
+            let snapshot = deferred.snapshot().clone();
+            let is_active = snapshot.is_active;
+            let deferred_configuration = deferred.pane_configuration();
+            let custom_vertical_tabs_title = deferred_configuration
+                .as_ref(ctx)
+                .custom_vertical_tabs_title()
+                .map(str::to_owned);
+            let terminal_pane = Self::restore_terminal_pane(
+                snapshot,
+                deferred.restored_blocks(),
+                resources.clone(),
+                self.user_default_shell_unsupported_banner_model_handle
+                    .clone(),
+                deferred.view_size(),
+                self.model_event_sender.clone(),
+                ctx,
+            );
+            let terminal_pane_id = terminal_pane.terminal_pane_id();
+            if let Some(title) = custom_vertical_tabs_title {
+                terminal_pane
+                    .pane_configuration()
+                    .update(ctx, |configuration, ctx| {
+                        configuration.set_custom_vertical_tabs_title(&title, ctx);
+                    });
+            }
+            let Some(pane_id) = self.init_pane(Box::new(terminal_pane), ctx) else {
+                continue;
+            };
+
+            self.panes.replace_pane(deferred_pane_id, pane_id, false);
+            for history_pane_id in &mut self.pane_history {
+                if *history_pane_id == deferred_pane_id {
+                    *history_pane_id = pane_id;
+                }
+            }
+            // Dropped without detaching: detaching it as closed would delete the blocks the
+            // terminal was just restored with.
+            self.pane_contents.remove(&deferred_pane_id);
+            ctx.unsubscribe_to_model(&deferred_configuration);
+
+            if deferred_pane_id == focused_pane_id {
+                self.focus_state.update(ctx, |focus_state, ctx| {
+                    focus_state.set_focused_pane(pane_id, ctx);
+                });
+            }
+            if is_active {
+                self.focus_state.update(ctx, |focus_state, ctx| {
+                    focus_state.set_active_session(Some(terminal_pane_id), ctx);
+                });
+            }
+        }
+
+        if self.active_session_id(ctx).is_none() {
+            let lowest_terminal = self
+                .pane_contents
+                .keys()
+                .filter_map(|pane_id| pane_id.as_terminal_pane_id())
+                .min();
+            self.focus_state.update(ctx, |focus_state, ctx| {
+                focus_state.set_active_session(lowest_terminal, ctx);
+            });
+        }
+        ctx.emit(Event::PaneTitleUpdated);
+        ctx.notify();
     }
 
     // LOCAL FORK: fn process_deferred_panes removed with the agent. AI document panes
@@ -2201,9 +2362,14 @@ impl PaneGroup {
                     view_bounds.size(),
                     model_event_sender_clone,
                 ),
-                PanesLayout::Snapshot { root, block_lists } => Self::restore_pane_tree(
+                PanesLayout::Snapshot {
+                    root,
+                    block_lists,
+                    defer_terminal_panes,
+                } => Self::restore_pane_tree(
                     *root,
                     block_lists,
+                    defer_terminal_panes,
                     resources.clone(),
                     ctx,
                     pane_contents,

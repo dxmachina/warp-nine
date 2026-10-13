@@ -3260,6 +3260,10 @@ fn resolve_icon_with_status_variant(
                 icon_color: main_text,
             }
         }
+        TypedPane::RestoredTerminal => IconWithStatusVariant::Neutral {
+            icon: WarpIcon::Terminal,
+            icon_color: main_text,
+        },
         TypedPane::Code(_) => match icon_from_file_path(title, appearance) {
             Some(icon_element) => IconWithStatusVariant::NeutralElement { icon_element },
             _ => IconWithStatusVariant::Neutral {
@@ -3434,6 +3438,9 @@ enum TypedPane<'a> {
     EnvVarCollection,
     // LOCAL FORK: `EnvironmentManagement` went with the cloud Environments settings page,
     // which was the only backing view for that pane kind.
+    // A restored terminal whose terminal hasn't been built yet. Shown as a terminal, titled
+    // with where the session was.
+    RestoredTerminal,
     Other,
 }
 
@@ -3457,6 +3464,7 @@ impl TypedPane<'_> {
             },
             TypedPane::Settings => SummaryPaneKind::Settings,
             TypedPane::EnvVarCollection => SummaryPaneKind::EnvVarCollection,
+            TypedPane::RestoredTerminal => SummaryPaneKind::Terminal,
             TypedPane::Other => SummaryPaneKind::Other,
         }
     }
@@ -3471,7 +3479,7 @@ impl TypedPane<'_> {
     }
     fn kind_label(&self) -> &'static str {
         match self {
-            TypedPane::Terminal(_) => "Terminal",
+            TypedPane::Terminal(_) | TypedPane::RestoredTerminal => "Terminal",
             TypedPane::Code(_) => "Code",
             TypedPane::File => "File",
             TypedPane::Notebook { .. } => "Notebook",
@@ -3495,13 +3503,14 @@ impl TypedPane<'_> {
             | TypedPane::Workflow { .. }
             | TypedPane::Settings
             | TypedPane::EnvVarCollection
+            | TypedPane::RestoredTerminal
             | TypedPane::Other => None,
         }
     }
 
     fn icon(&self) -> WarpIcon {
         match self {
-            TypedPane::Terminal(_) => WarpIcon::Terminal,
+            TypedPane::Terminal(_) | TypedPane::RestoredTerminal => WarpIcon::Terminal,
             TypedPane::Code(_) => WarpIcon::Code2,
             TypedPane::File => WarpIcon::File,
             TypedPane::Notebook { is_plan: true } => WarpIcon::Compass,
@@ -3650,6 +3659,7 @@ fn build_vertical_tabs_summary_data(
             | TypedPane::Workflow { .. }
             | TypedPane::Settings
             | TypedPane::EnvVarCollection
+            | TypedPane::RestoredTerminal
             | TypedPane::Other => {
                 push_normalized_unique_summary_label(
                     &mut primary_labels,
@@ -3780,6 +3790,7 @@ impl<'a> PaneProps<'a> {
             | TypedPane::Workflow { .. }
             | TypedPane::Settings
             | TypedPane::EnvVarCollection
+            | TypedPane::RestoredTerminal
             | TypedPane::Other => {
                 non_terminal_search_text_fragments(self.generated_or_tab_title(), &self.subtitle)
             }
@@ -4087,9 +4098,8 @@ impl PaneGroup {
             // LOCAL FORK: the CodeDiff / AIFact / AIDocument / ExecutionProfileEditor /
             // CustomRouterEditor pane types were removed with the agent, and
             // EnvironmentManagement with the cloud Environments settings page.
-            IPaneType::GetStarted | IPaneType::NetworkLog | IPaneType::DeferredPlaceholder => {
-                TypedPane::Other
-            }
+            IPaneType::DeferredPlaceholder => TypedPane::RestoredTerminal,
+            IPaneType::GetStarted | IPaneType::NetworkLog => TypedPane::Other,
             #[cfg(test)]
             IPaneType::Dummy => TypedPane::Other,
         }
@@ -6659,6 +6669,7 @@ fn typed_pane_warp_drive_object_type(typed: &TypedPane<'_>) -> Option<DriveObjec
         | TypedPane::Code(_)
         | TypedPane::File
         | TypedPane::Settings
+        | TypedPane::RestoredTerminal
         | TypedPane::Other => None,
     }
 }
@@ -6679,7 +6690,9 @@ fn render_detail_section(
         TypedPane::Notebook { .. } | TypedPane::Workflow { .. } | TypedPane::EnvVarCollection => {
             render_warp_drive_object_detail_section(props, appearance, app)
         }
-        TypedPane::File | TypedPane::Settings | TypedPane::Other => Empty::new().finish(),
+        TypedPane::File | TypedPane::Settings | TypedPane::RestoredTerminal | TypedPane::Other => {
+            Empty::new().finish()
+        }
     }
 }
 pub(super) struct DetailSidecarOverlay {

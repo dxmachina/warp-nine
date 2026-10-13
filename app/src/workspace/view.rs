@@ -96,7 +96,7 @@ use warpui::ui_components::components::{Coords, UiComponent, UiComponentStyles};
 use warpui::windowing::state::ApplicationStage;
 use warpui::windowing::{StateEvent, WindowManager};
 use warpui::{
-    AppContext, Entity, EntityId, FocusContext, ModelHandle, SingletonEntity, TypedActionView,
+    App, AppContext, Entity, EntityId, FocusContext, ModelHandle, SingletonEntity, TypedActionView,
     UpdateModel, UpdateView, View, ViewAsRef, ViewContext, ViewHandle, WindowId,
 };
 
@@ -412,6 +412,17 @@ const PILL_FONT_SIZE: f32 = 12.;
 // We use the word "Warp" in the Update Ready button to make it obvious that the terminal is Warp.
 // This can lead to free advertising when users screen-share Warp when an update is available.
 const UPDATE_READY_TEXT: &str = "Update Warp";
+
+/// How long after a window is restored its background tabs' terminals start being built,
+/// leaving the active tab's shell to start on its own first.
+const DEFERRED_TABS_WARM_UP_DELAY: Duration = Duration::from_secs(1);
+
+/// The gap between building one restored background tab's terminals and the next.
+const DEFERRED_TAB_WARM_UP_INTERVAL: Duration = Duration::from_millis(100);
+
+/// How long the user has to have stopped typing, clicking or scrolling before a restored
+/// background tab's terminals are built, so building them doesn't delay the response.
+const DEFERRED_TAB_WARM_UP_IDLE: Duration = Duration::from_millis(500);
 
 const TAB_BAR_OVERFLOW_MENU_WIDTH: f32 = 300.;
 
@@ -783,6 +794,9 @@ pub struct Workspace {
     /// Tracks tab activation order (most-recently-used first).
     /// Each entry is the `pane_group.id()` of the corresponding tab.
     tab_mru_order: Vec<EntityId>,
+    /// Set while a window's saved tabs are being added, which activates each one in turn;
+    /// their deferred terminals are only built once the restored active tab is activated.
+    restoring_tabs: bool,
     pub(crate) hovered_tab_index: Option<TabBarHoverIndex>,
     tab_bar_hover_state: MouseStateHandle,
     tab_fixed_width: Option<f32>,
@@ -2490,6 +2504,7 @@ impl Workspace {
             tabs: Vec::new(),
             active_tab_index: 0,
             tab_mru_order: Vec::new(),
+            restoring_tabs: false,
             hovered_tab_index: None,
             tab_bar_hover_state: Default::default(),
             traffic_light_mouse_states: Default::default(),
@@ -2844,6 +2859,9 @@ impl Workspace {
                         .collect();
                 }
 
+                // Tabs are restored with their terminals deferred: only the active tab's are
+                // built before the first frame, and the rest shortly after, in the background.
+                self.restoring_tabs = true;
                 window_snapshot
                     .tabs
                     .iter()
@@ -2854,6 +2872,7 @@ impl Workspace {
                             PanesLayout::Snapshot {
                                 root: Box::new(saved_tab.root.clone()),
                                 block_lists: block_lists.clone(),
+                                defer_terminal_panes: true,
                             },
                             custom_title,
                             ctx,
@@ -2885,6 +2904,7 @@ impl Workspace {
                             );
                         }
                     });
+                self.restoring_tabs = false;
 
                 if self.tab_count() == 0 {
                     if self.should_trigger_get_started_onboarding(ctx) {
@@ -2905,6 +2925,7 @@ impl Workspace {
                 }
 
                 self.activate_tab_internal(active_tab_index, ctx);
+                self.schedule_deferred_tab_warm_up(DEFERRED_TABS_WARM_UP_DELAY, ctx);
                 self.check_and_trigger_onboarding(ctx);
             }
             NewWorkspaceSource::FromTemplate { window_template } => {
@@ -3628,6 +3649,14 @@ impl Workspace {
 
         self.active_tab_index = index;
 
+        if !self.restoring_tabs
+            && let Some(tab) = self.tabs.get(index)
+        {
+            tab.pane_group.clone().update(ctx, |pane_group, ctx| {
+                pane_group.materialize_deferred_panes(ctx)
+            });
+        }
+
         // The range selection's anchor is the active tab, so any change to
         // the active tab makes the existing selection stale; clear it.
         self.clear_tab_multi_selection(ctx);
@@ -3668,6 +3697,41 @@ impl Workspace {
         });
 
         self.update_active_session(ctx);
+    }
+
+    fn schedule_deferred_tab_warm_up(&mut self, delay: Duration, ctx: &mut ViewContext<Self>) {
+        ctx.spawn(
+            async move { warpui::r#async::Timer::after(delay).await },
+            |me, _, ctx| me.warm_up_next_deferred_tab(ctx),
+        );
+    }
+
+    /// Builds the terminals of the restored tab nearest the active one that still has
+    /// deferred terminals, then schedules the next. Tabs are warmed up one at a time, spaced
+    /// out and only in pauses in input, so the work doesn't hold up the active tab, and
+    /// switching to one later is instant.
+    fn warm_up_next_deferred_tab(&mut self, ctx: &mut ViewContext<Self>) {
+        if let Some(since_input) = App::time_since_last_input()
+            && since_input < DEFERRED_TAB_WARM_UP_IDLE
+        {
+            self.schedule_deferred_tab_warm_up(DEFERRED_TAB_WARM_UP_IDLE - since_input, ctx);
+            return;
+        }
+        let active_tab_index = self.active_tab_index;
+        let Some(pane_group) = self
+            .tabs
+            .iter()
+            .enumerate()
+            .filter(|(_, tab)| tab.pane_group.as_ref(ctx).has_deferred_panes())
+            .min_by_key(|(index, _)| index.abs_diff(active_tab_index))
+            .map(|(_, tab)| tab.pane_group.clone())
+        else {
+            return;
+        };
+        pane_group.update(ctx, |pane_group, ctx| {
+            pane_group.materialize_deferred_panes(ctx)
+        });
+        self.schedule_deferred_tab_warm_up(DEFERRED_TAB_WARM_UP_INTERVAL, ctx);
     }
 
     fn update_window_title(&self, ctx: &mut ViewContext<Self>) {
@@ -20170,6 +20234,9 @@ impl Workspace {
         ctx.unsubscribe_to_view(&placeholder_pane_group);
         ctx.subscribe_to_view(&new_pane_group, move |me, pane_group, event, ctx| {
             me.handle_file_tree_event(pane_group, event, ctx)
+        });
+        new_pane_group.update(ctx, |pane_group, ctx| {
+            pane_group.materialize_deferred_panes(ctx)
         });
 
         let working_directories_model = self.working_directories_model.clone();

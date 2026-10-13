@@ -1107,3 +1107,142 @@ fn test_focused_pane_is_synchronized_with_application_focus() {
         });
     });
 }
+
+fn restored_terminal_leaf(uuid: u8, is_focused: bool, is_active: bool) -> PaneNodeSnapshot {
+    PaneNodeSnapshot::Leaf(LeafSnapshot {
+        is_focused,
+        custom_vertical_tabs_title: None,
+        contents: LeafContents::Terminal(TerminalPaneSnapshot {
+            uuid: vec![uuid; 16],
+            cwd: None,
+            shell_launch_data: None,
+            is_active,
+            is_read_only: false,
+            llm_model_override: None,
+            active_profile_id: None,
+        }),
+    })
+}
+
+/// A saved split of two terminals, the second focused and holding the active session.
+fn restored_split() -> PaneNodeSnapshot {
+    PaneNodeSnapshot::Branch(BranchSnapshot {
+        direction: app_state::SplitDirection::Horizontal,
+        children: vec![
+            (
+                app_state::PaneFlex(1.),
+                restored_terminal_leaf(1, false, false),
+            ),
+            (
+                app_state::PaneFlex(1.),
+                restored_terminal_leaf(2, true, true),
+            ),
+        ],
+    })
+}
+
+fn deferred_layout(root: PaneNodeSnapshot) -> MockOptions {
+    MockOptions {
+        layout: PanesLayout::Snapshot {
+            root: Box::new(root),
+            block_lists: Default::default(),
+            defer_terminal_panes: true,
+        },
+        ..Default::default()
+    }
+}
+
+/// Each leaf's (uuid, is_focused, is_active), in order.
+fn terminal_leaves(node: &PaneNodeSnapshot) -> Vec<(Vec<u8>, bool, bool)> {
+    match node {
+        PaneNodeSnapshot::Branch(branch) => branch
+            .children
+            .iter()
+            .flat_map(|(_, child)| terminal_leaves(child))
+            .collect(),
+        PaneNodeSnapshot::Leaf(LeafSnapshot {
+            is_focused,
+            contents: LeafContents::Terminal(terminal),
+            ..
+        }) => vec![(terminal.uuid.clone(), *is_focused, terminal.is_active)],
+        PaneNodeSnapshot::Leaf(_) => vec![],
+    }
+}
+
+#[test]
+fn test_deferred_terminal_panes_snapshot_as_restored() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, deferred_layout(restored_split()));
+
+        pane_group.read(&app, |panes, ctx| {
+            assert!(panes.has_deferred_panes());
+            assert_eq!(panes.terminal_pane_ids().count(), 0);
+            assert_eq!(panes.active_session_id(ctx), None);
+            // Saving the session before the terminals are built keeps it as it was.
+            assert_eq!(panes.snapshot(ctx), restored_split());
+        });
+    });
+}
+
+#[test]
+fn test_materialize_deferred_panes() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(&mut app, deferred_layout(restored_split()));
+
+        pane_group.update(&mut app, |panes, ctx| {
+            panes.materialize_deferred_panes(ctx);
+
+            assert!(!panes.has_deferred_panes());
+            let visible = panes.visible_pane_ids();
+            assert_eq!(visible.len(), 2);
+            assert!(visible.iter().all(PaneId::is_terminal_pane));
+            assert_eq!(panes.terminal_pane_ids().count(), 2);
+            assert_eq!(panes.focused_pane_id(ctx), visible[1]);
+            assert_eq!(
+                panes.active_session_id(ctx).map(PaneId::from),
+                Some(visible[1])
+            );
+        });
+
+        // The terminals took over the restored sessions: same uuids, focus and active
+        // session, in the same places.
+        pane_group.read(&app, |panes, ctx| {
+            assert_eq!(
+                terminal_leaves(&panes.snapshot(ctx)),
+                terminal_leaves(&restored_split())
+            );
+        });
+
+        // Building them again is a no-op.
+        pane_group.update(&mut app, |panes, ctx| {
+            let before = panes.visible_pane_ids();
+            panes.materialize_deferred_panes(ctx);
+            assert_eq!(panes.visible_pane_ids(), before);
+        });
+    });
+}
+
+#[test]
+fn test_restored_terminal_panes_are_built_unless_deferred() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+        let pane_group = mock_pane_group(
+            &mut app,
+            MockOptions {
+                layout: PanesLayout::snapshot(restored_split()),
+                ..Default::default()
+            },
+        );
+
+        pane_group.read(&app, |panes, ctx| {
+            assert!(!panes.has_deferred_panes());
+            assert_eq!(panes.terminal_pane_ids().count(), 2);
+            assert_eq!(
+                terminal_leaves(&panes.snapshot(ctx)),
+                terminal_leaves(&restored_split())
+            );
+        });
+    });
+}

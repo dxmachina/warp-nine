@@ -5,8 +5,9 @@ use std::fmt::Debug;
 use std::path::Path;
 use std::pin::pin;
 use std::rc::{self, Rc};
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -70,7 +71,12 @@ mod tui;
 
 lazy_static! {
     static ref LAST_USER_ACTION_UNIX_TIMESTAMP: AtomicI64 = AtomicI64::new(0);
+    static ref PROCESS_START: Instant = Instant::now();
 }
+
+/// Milliseconds after [`PROCESS_START`] of the last time the user typed, clicked or scrolled,
+/// or `u64::MAX` if they haven't yet.
+static LAST_INPUT_MS: AtomicU64 = AtomicU64::new(u64::MAX);
 
 #[derive(Clone)]
 pub struct App(Rc<RefCell<AppContext>>);
@@ -241,6 +247,23 @@ impl App {
 
     pub fn record_last_active_timestamp() {
         LAST_USER_ACTION_UNIX_TIMESTAMP.fetch_max(Utc::now().timestamp(), Ordering::SeqCst);
+    }
+
+    /// How long ago the user last typed, clicked or scrolled in any window, or `None` if they
+    /// haven't yet. For work that can wait for a pause in input rather than delay the response
+    /// to it.
+    pub fn time_since_last_input() -> Option<Duration> {
+        let last_input_ms = LAST_INPUT_MS.load(Ordering::Relaxed);
+        (last_input_ms != u64::MAX).then(|| {
+            PROCESS_START
+                .elapsed()
+                .saturating_sub(Duration::from_millis(last_input_ms))
+        })
+    }
+
+    fn record_input() {
+        let elapsed_ms = u64::try_from(PROCESS_START.elapsed().as_millis()).unwrap_or(u64::MAX - 1);
+        LAST_INPUT_MS.store(elapsed_ms, Ordering::Relaxed);
     }
 
     pub fn dispatch_global_action<T: 'static + Any>(&self, name: &str, arg: T) {
@@ -3533,6 +3556,10 @@ impl AppContext {
         // local variable, then swap it back after.
         event_munger(&mut event, self);
         std::mem::swap(&mut event_munger, &mut self.event_munger);
+
+        if !matches!(event, Event::MouseMoved { .. }) {
+            App::record_input();
+        }
 
         let mut keystroke_handled = false;
         if self.key_bindings_enabled(window_id) {

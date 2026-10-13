@@ -10,6 +10,7 @@
 //! used to render a [`PaneView`] which internally renders the pane, including the [`BackingView`].
 pub(super) mod code_pane;
 pub(super) mod custom_router_editor_pane;
+pub(super) mod deferred_terminal_pane;
 pub(super) mod env_var_collection_pane;
 pub(super) mod file_pane;
 pub(super) mod get_started_pane;
@@ -291,7 +292,6 @@ impl PaneId {
         Self::new(IPaneType::NetworkLog, network_log_pane_view)
     }
 
-    #[cfg_attr(not(feature = "local_fs"), allow(dead_code))]
     pub(super) fn deferred_placeholder_pane_id() -> Self {
         Self(IPaneId {
             pane_type: IPaneType::DeferredPlaceholder,

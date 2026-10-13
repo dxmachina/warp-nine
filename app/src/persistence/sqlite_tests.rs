@@ -11,9 +11,9 @@ use warp_core::features::FeatureFlag;
 use warp_graphql::scalars::time::ServerTimestamp;
 
 use super::{
-    app_database_file_path, database_file_path_for_current_scope, database_file_path_for_scope,
-    decode_path, deduplicate_events, encode_path, get_all_codebase_index_metadata,
-    read_sqlite_data, save_app_state, save_codebase_index_metadata, setup_database, start_writer,
+    app_database_file_path, database_file_path_for_scope, decode_path, deduplicate_events,
+    encode_path, get_all_codebase_index_metadata, read_sqlite_data, save_app_state,
+    save_codebase_index_metadata, setup_database, start_writer,
 };
 use crate::app_state::{
     AppState, CodePaneSnapShot, CodePaneTabSnapshot, LeafContents, LeafSnapshot, PaneNodeSnapshot,
@@ -62,18 +62,6 @@ fn tui_scope_database_path_is_tui_subdirectory_of_app_database_dir() {
         .expect("TUI database path should have a parent");
     assert_eq!(tui_dir.file_name(), Some(OsStr::new("tui")));
     assert_eq!(tui_dir.parent(), app_path.parent());
-}
-
-#[test]
-fn database_path_for_current_scope_defaults_to_app_scope() {
-    // Unit tests never call `persistence::initialize`, so the process-wide
-    // scope defaults to `App` and ad-hoc read-only connections resolve to
-    // the GUI database. (nextest runs each test in its own process, so no
-    // other test can have set the scope.)
-    assert_eq!(
-        database_file_path_for_current_scope(),
-        app_database_file_path()
-    );
 }
 
 #[test]

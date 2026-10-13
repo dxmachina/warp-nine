@@ -197,19 +197,8 @@ fn read_persisted_data(
     }
 }
 
-/// Returns a read-only connection to the sqlite database.
-/// We want only one write connection to exist and use event processing to write any data needed.
-pub fn establish_ro_connection(database_url: &str) -> Result<SqliteConnection> {
-    establish_connection(database_url, true)
-}
-
-fn establish_connection(database_url: &str, read_only: bool) -> Result<SqliteConnection> {
-    let full_database_url = if read_only {
-        &format!("file:{database_url}?mode=ro")
-    } else {
-        database_url
-    };
-    let mut conn = SqliteConnection::establish(full_database_url)?;
+fn establish_connection(database_url: &str) -> Result<SqliteConnection> {
+    let mut conn = SqliteConnection::establish(database_url)?;
     conn.batch_execute(
         r#"
         PRAGMA foreign_keys = ON;           -- enforce foreign key constraints
@@ -431,7 +420,7 @@ fn setup_database(database_path: &Path) -> Result<SqliteConnection> {
     let db_url = database_path
         .to_str()
         .ok_or_else(|| anyhow!("Failed to convert db path to a string"))?;
-    let mut conn = establish_connection(db_url, false)?;
+    let mut conn = establish_connection(db_url)?;
 
     safe_info!(
         safe: ("Connecting to SQLite database"),
@@ -455,16 +444,6 @@ pub fn database_file_path_for_scope(scope: &PersistenceScope) -> PathBuf {
             remote_server_daemon_database_file_path(identity_key)
         }
     }
-}
-
-/// The database file path for the scope this process's persistence was
-/// initialized with (see [`super::current_scope`]).
-///
-/// Ad-hoc read-only connections should use this instead of hardcoding
-/// [`PersistenceScope::App`], so that a TUI process never reads the GUI's
-/// database.
-pub fn database_file_path_for_current_scope() -> PathBuf {
-    database_file_path_for_scope(&super::current_scope())
 }
 
 fn app_database_file_path() -> PathBuf {

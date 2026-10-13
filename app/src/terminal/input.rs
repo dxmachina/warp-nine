@@ -35,16 +35,12 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use async_channel::Sender;
-#[cfg(feature = "local_fs")]
-use diesel::SqliteConnection;
 use futures::FutureExt as _;
 use futures::stream::AbortHandle;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use ordered_float::Float;
 use parking_lot::FairMutex;
-#[cfg(feature = "local_fs")]
-use parking_lot::Mutex;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use settings::{Setting as _, ToggleableSetting};
@@ -146,8 +142,6 @@ use crate::input_suggestions::{
 };
 use crate::pane_group::PaneGroupAction;
 use crate::pane_group::focus_state::PaneFocusHandle;
-#[cfg(feature = "local_fs")]
-use crate::persistence::{database_file_path_for_current_scope, establish_ro_connection};
 use crate::prefix::longest_common_prefix;
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::search::QueryFilter;
@@ -1455,8 +1449,6 @@ pub struct Input {
 
     hoverable_handle: MouseStateHandle,
 
-    #[cfg(feature = "local_fs")]
-    conn: Option<Arc<Mutex<SqliteConnection>>>,
 
     /// Cached hint text to ensure it remains stable during shell initialization hooks
     cached_agent_mode_hint_text: Option<&'static str>,
@@ -2435,8 +2427,6 @@ impl Input {
             last_user_block_completed: None,
             hoverable_handle: Default::default(),
             terminal_view_id,
-            #[cfg(feature = "local_fs")]
-            conn: None,
             is_processing_attached_images: false,
             slash_command_model,
             inline_slash_commands_view,
@@ -2457,13 +2447,6 @@ impl Input {
             cloud_mode_composer_slash_command_data_source,
             input_contents_before_prompt_chip_command: None,
         };
-
-        #[cfg(feature = "local_fs")]
-        if let Some(db_url) = database_file_path_for_current_scope().to_str()
-            && let Ok(conn) = establish_ro_connection(db_url)
-        {
-            input.conn = Some(Arc::new(Mutex::new(conn)));
-        }
 
         {
             input.set_zero_state_hint_text(ctx);

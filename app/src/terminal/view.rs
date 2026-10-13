@@ -55,6 +55,7 @@ use std::ops::{Deref as _, Range};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -350,7 +351,7 @@ use crate::terminal::{
     terminal_size_element::TerminalSizeElement,
 };
 use crate::themes::theme::WarpTheme;
-use crate::throttle::throttle;
+use crate::throttle::throttle_quick_after_quiet;
 use crate::ui_components::icons::{self};
 use crate::util::bindings::{
     CustomAction, custom_tag_to_keystroke, keybinding_name_to_display_string,
@@ -435,6 +436,11 @@ pub const OVERFLOW_BUTTON_OFFSET_X: f32 = -3.;
 pub const MAX_WAKEUPS_PER_SECOND: u64 = 60;
 pub const WAKEUP_THROTTLE_PERIOD: Duration =
     Duration::from_micros(1000 * 1000 / MAX_WAKEUPS_PER_SECOND);
+/// How long the wakeup that follows a quiet spell in a program's output holds back the next
+/// one, rather than [`WAKEUP_THROTTLE_PERIOD`]. A program answering a keystroke in two
+/// writes (an echo, then a redraw) had the second held back by up to 16.7ms; output that
+/// keeps coming is still throttled to [`MAX_WAKEUPS_PER_SECOND`].
+const WAKEUP_AFTER_QUIET_PERIOD: Duration = Duration::from_millis(1);
 
 pub const EXECUTE_PENDING_COMMAND_DELAY: Duration = Duration::from_millis(100);
 
@@ -1845,6 +1851,10 @@ pub struct TerminalView {
     /// The block whose filter we are actively editing.
     active_filter_editor_block_index: Option<BlockIndex>,
     block_filter_editor: ViewHandle<BlockFilterEditor>,
+    /// Whether a PTY wakeup after quiet output may be followed quickly (see
+    /// [`WAKEUP_AFTER_QUIET_PERIOD`]). Not while find or a block filter re-scans the output on
+    /// every wakeup.
+    quick_wakeups: Arc<AtomicBool>,
 
     hovered_block_index: Option<BlockIndex>,
 
@@ -2446,8 +2456,14 @@ impl TerminalView {
             me.handle_terminal_event(event, ctx);
         });
 
+        let quick_wakeups = Arc::new(AtomicBool::new(true));
         let _ = ctx.spawn_stream_local(
-            throttle(WAKEUP_THROTTLE_PERIOD, wakeups_rx),
+            throttle_quick_after_quiet(
+                WAKEUP_THROTTLE_PERIOD,
+                WAKEUP_AFTER_QUIET_PERIOD,
+                quick_wakeups.clone(),
+                wakeups_rx,
+            ),
             Self::handle_terminal_wakeup,
             |_, _| {}, /* on_done */
         );
@@ -2930,6 +2946,7 @@ impl TerminalView {
             model_event_sender,
             block_filter_editor,
             active_filter_editor_block_index: None,
+            quick_wakeups,
             rich_content_views: Vec::new(),
             block_onboarding_active: false,
             onboarding_prompt_block: None,
@@ -4492,7 +4509,12 @@ impl TerminalView {
 
         let bytes = data.into();
         let bytes_vec = bytes.to_vec();
-        self.clear_selected_blocks(ctx);
+        // Every keystroke sent to a running program comes through here. With no blocks
+        // selected there is nothing to clear, and clearing anyway re-renders the view: that
+        // frame took the display's next refresh, so the program's echo waited for the one after.
+        if !self.selected_blocks.is_empty() {
+            self.clear_selected_blocks(ctx);
+        }
         self.update_scroll_position_locking(ScrollPositionUpdate::AfterWriteUserBytesToPty, ctx);
         self.write_to_pty(bytes, ctx);
         self.emit_non_editor_typed_event(bytes_vec, ctx);
@@ -4514,7 +4536,9 @@ impl TerminalView {
         // the bootstrap script, otherwise the user could accidentally interfere
         // with bootstrap script execution.
         if was_bootstrap_script_echoed && self.is_long_running() {
-            self.clear_selected_blocks(ctx);
+            if !self.selected_blocks.is_empty() {
+                self.clear_selected_blocks(ctx);
+            }
             self.update_scroll_position_locking(
                 ScrollPositionUpdate::AfterWriteUserBytesToPty,
                 ctx,
@@ -4677,18 +4701,22 @@ impl TerminalView {
     /// This function is invoked every time there is some form of view event
     /// such as a state change or terminal wakeup to update the view context.
     fn handle_terminal_wakeup(&mut self, _: (), ctx: &mut ViewContext<Self>) {
+        let is_find_bar_open = self.find_model.as_ref(ctx).is_find_bar_open();
         // If find bar is active, we update the matches for the last/active block or the alt screen.
-        if self.find_model.as_ref(ctx).is_find_bar_open() {
+        if is_find_bar_open {
             self.find_model.update(ctx, |find_model, ctx| {
                 find_model.rerun_find_on_active_grid(ctx);
             });
         }
 
         // For simplicity, we simply rescan the entire block for block filter matches.
-        self.model
-            .lock()
-            .block_list_mut()
-            .maybe_refilter_active_block_output();
+        let has_active_filter = {
+            let mut model = self.model.lock();
+            model.block_list_mut().maybe_refilter_active_block_output();
+            model.block_list().active_block().has_active_filter()
+        };
+        self.quick_wakeups
+            .store(!is_find_bar_open && !has_active_filter, Ordering::Relaxed);
 
         // If the block filter editor is open on an active block we update the
         // number of line matches.

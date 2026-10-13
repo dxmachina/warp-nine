@@ -1,20 +1,76 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::{pin, task};
 
 use futures_lite::{Stream, ready};
+use instant::Instant;
 use pin::Pin;
 use task::{Context, Poll};
 use warpui::r#async::Timer;
 
 pub struct Throttle<S> {
-    period: Duration,
+    pacing: Pacing,
     stream: S,
     timer: Option<Timer>,
 }
 
+/// Decides how long a throttle waits after letting an item through before letting the next
+/// one through.
+struct Pacing {
+    period: Duration,
+    /// See [`throttle_quick_after_quiet`].
+    quick: Option<(Duration, Arc<AtomicBool>)>,
+    last_quick_wait_at: Option<Instant>,
+}
+
+impl Pacing {
+    /// `was_idle` is whether the item arrived with no wait running, i.e. after the stream had
+    /// gone quiet; items that keep coming always arrive during a wait.
+    fn wait_after_item(&mut self, now: Instant, was_idle: bool) -> Duration {
+        if let Some((quick_period, enabled)) = &self.quick
+            && was_idle
+            && enabled.load(Ordering::Relaxed)
+            && self
+                .last_quick_wait_at
+                .is_none_or(|last| now.duration_since(last) >= self.period * 2)
+        {
+            self.last_quick_wait_at = Some(now);
+            return *quick_period;
+        }
+        self.period
+    }
+}
+
 pub fn throttle<S: Stream>(period: Duration, stream: S) -> impl Stream<Item = S::Item> {
     Throttle {
-        period,
+        pacing: Pacing {
+            period,
+            quick: None,
+            last_quick_wait_at: None,
+        },
+        stream,
+        timer: None,
+    }
+}
+
+/// Like [`throttle`], except that while `quick` is set, an item that comes after the stream
+/// has gone quiet is followed by a wait of only `quick_period`, at most once every two
+/// periods. A reply that arrives in two quick parts (an echo, then a redraw) isn't held back
+/// by a period, while a stream that keeps producing items is throttled to `period` as usual,
+/// however long each item takes to handle.
+pub fn throttle_quick_after_quiet<S: Stream>(
+    period: Duration,
+    quick_period: Duration,
+    quick: Arc<AtomicBool>,
+    stream: S,
+) -> impl Stream<Item = S::Item> {
+    Throttle {
+        pacing: Pacing {
+            period,
+            quick: Some((quick_period, quick)),
+            last_quick_wait_at: None,
+        },
         stream,
         timer: None,
     }
@@ -39,16 +95,19 @@ impl<S: Stream> Stream for Throttle<S> {
             }
 
             if last_poll.is_ready() {
-                let timer = Timer::after(self.period);
-                self.set_timer(Some(timer));
+                let wait = self
+                    .as_mut()
+                    .pacing()
+                    .wait_after_item(Instant::now(), false);
+                self.set_timer(Some(Timer::after(wait)));
             } else {
                 self.set_timer(None);
             }
             last_poll
         } else {
             let item = ready!(self.as_mut().stream().poll_next(ctx));
-            let timer = Timer::after(self.period);
-            self.set_timer(Some(timer));
+            let wait = self.as_mut().pacing().wait_after_item(Instant::now(), true);
+            self.set_timer(Some(Timer::after(wait)));
             Poll::Ready(item)
         }
     }
@@ -67,9 +126,18 @@ impl<S> Throttle<S> {
         unsafe { self.map_unchecked_mut(|s| &mut s.stream) }
     }
 
+    fn pacing(self: Pin<&mut Self>) -> &mut Pacing {
+        // SAFETY: `pacing` is never pinned structurally.
+        unsafe { &mut self.get_unchecked_mut().pacing }
+    }
+
     fn set_timer(self: Pin<&mut Self>, timer: Option<Timer>) {
         unsafe {
             self.get_unchecked_mut().timer = timer;
         }
     }
 }
+
+#[cfg(test)]
+#[path = "throttle_tests.rs"]
+mod tests;

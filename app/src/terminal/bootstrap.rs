@@ -62,6 +62,10 @@ pub fn is_container_subshell(session_info: &SessionInfo) -> bool {
 /// bootstrap is the only known way to bootstrap such subshells successfully.
 ///
 /// We use RC-file based bootstrap for MSYS2 because it has slow PTY throughput.
+///
+/// We use RC-file based bootstrap for local zsh sessions because written to the PTY, the
+/// script reaches zsh a line at a time through the tty and all of it is echoed back for us to
+/// parse; sourcing it from a file starts the session sooner.
 #[cfg(feature = "local_fs")]
 pub fn should_use_rc_file_bootstrap_method(
     shell_type: ShellType,
@@ -93,6 +97,9 @@ pub fn should_use_rc_file_bootstrap_method(
                 .is_some_and(|data| matches!(data, ShellLaunchData::MSYS2 { .. }));
             shell_type == ShellType::Fish
                 || shell_type == ShellType::PowerShell
+                || (shell_type == ShellType::Zsh
+                    && subshell_initialization_info.is_none()
+                    && cfg!(unix))
                 || is_poetry_subshell
                 || ((is_pipenv_subshell
                     || (subshell_initialization_info.is_some() && cfg!(windows)))

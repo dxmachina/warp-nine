@@ -509,8 +509,12 @@ void warp_marked_text_cleared(WarpHostView *);
     if (interpretingKeyEvents) {
         imeTouchedMarkedTextDuringInterpret = YES;
     }
+    // AppKit calls this after every insertText:, marked text or not. Only tell Warp when
+    // there was marked text to clear; otherwise each keystroke dispatched a ClearMarkedText
+    // event (an element-tree walk, a terminal-model lock and a re-render) that changed nothing.
+    BOOL hadMarkedText = [markedText length] > 0;
     [[markedText mutableString] setString:@""];
-    if (self.readyForWarp) {
+    if (self.readyForWarp && hadMarkedText) {
         warp_update_ime_state(self, NO);
         warp_marked_text_cleared(self);
     }

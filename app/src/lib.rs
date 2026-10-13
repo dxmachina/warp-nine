@@ -169,7 +169,7 @@ use ::settings::{Setting, ToggleableSetting};
 use anyhow::Context;
 use anyhow::{Result, anyhow};
 use appearance::{Appearance, AppearanceManager};
-use channel::ChannelState;
+use channel::{Channel, ChannelState};
 use interval_timer::IntervalTimer;
 use itertools::Itertools;
 #[cfg(feature = "integration_tests")]
@@ -412,7 +412,10 @@ impl LaunchMode {
     /// processes (daemon, CLI, proxy, TUI) would otherwise contend for the fixed port.
     #[cfg_attr(target_family = "wasm", allow(dead_code))]
     fn should_start_local_http_server(&self) -> bool {
-        !self.is_headless()
+        // LOCAL FORK: in the OSS build the server's only route is `/install_detection`, which
+        // lets warp.dev pages detect that the app is installed. Nothing here needs that, so
+        // don't bind a port and start a server for it on every launch.
+        !self.is_headless() && ChannelState::channel() != Channel::Oss
     }
 
     /// Returns `true` if this process can build and sync codebase indices.

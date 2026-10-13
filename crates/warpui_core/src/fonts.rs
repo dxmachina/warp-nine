@@ -201,6 +201,9 @@ pub struct FontInfo {
     pub is_monospace: bool,
 }
 
+#[cfg(not(target_family = "wasm"))]
+type SystemFontsSender = futures::channel::oneshot::Sender<Vec<(Option<FamilyId>, FontInfo)>>;
+
 type RasterBoundsKey = (GlyphKey, (OrderedFloat<f32>, OrderedFloat<f32>));
 
 pub struct Cache {
@@ -217,6 +220,9 @@ pub struct Cache {
     raster_bounds: DashMap<RasterBoundsKey, Result<RectI, Error>>,
     #[cfg_attr(target_family = "wasm", allow(dead_code))]
     available_system_fonts: Option<Vec<(Option<FamilyId>, FontInfo)>>,
+    /// Callers of [`Self::all_system_fonts`] waiting on the enumeration in progress, if any.
+    #[cfg(not(target_family = "wasm"))]
+    system_font_waiters: Option<Vec<SystemFontsSender>>,
     font_fallback_cache: FontFallbackCache,
 }
 
@@ -251,6 +257,8 @@ impl Cache {
             glyph_typographic_bounds: Default::default(),
             raster_bounds: Default::default(),
             available_system_fonts: Default::default(),
+            #[cfg(not(target_family = "wasm"))]
+            system_font_waiters: None,
             font_fallback_cache: Default::default(),
         }
     }
@@ -278,24 +286,34 @@ impl Cache {
     /// [`Self::set_system_fonts`].
     #[cfg(not(target_family = "wasm"))]
     pub fn all_system_fonts(
-        &self,
+        &mut self,
         ctx: &mut crate::ModelContext<Self>,
     ) -> BoxFuture<'static, Vec<(Option<FamilyId>, FontInfo)>> {
         if let Some(fonts) = self.available_system_fonts.as_ref() {
-            futures::future::ready(fonts.clone()).boxed()
+            return futures::future::ready(fonts.clone()).boxed();
+        }
+
+        let (tx, rx) = futures::channel::oneshot::channel();
+        // Callers that arrive while an enumeration is running share it. At startup two
+        // callers ask before the first result is cached, and each used to start its own
+        // enumeration of every installed font.
+        if let Some(waiters) = self.system_font_waiters.as_mut() {
+            waiters.push(tx);
         } else {
             log::info!("Computing available system fonts");
-            let (tx, rx) = futures::channel::oneshot::channel();
+            self.system_font_waiters = Some(vec![tx]);
             ctx.spawn(
                 self.platform.load_all_system_fonts(),
                 |me, loaded_system_fonts, _ctx| {
                     let system_fonts = me.platform.process_loaded_system_fonts(loaded_system_fonts);
                     me.available_system_fonts = Some(system_fonts.clone());
-                    let _ = tx.send(system_fonts);
+                    for tx in me.system_font_waiters.take().into_iter().flatten() {
+                        let _ = tx.send(system_fonts.clone());
+                    }
                 },
             );
-            rx.map(Result::unwrap_or_default).boxed()
         }
+        rx.map(Result::unwrap_or_default).boxed()
     }
 
     pub fn load_family_name_from_id(&self, id: FamilyId) -> Option<String> {

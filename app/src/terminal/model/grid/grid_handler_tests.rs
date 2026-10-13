@@ -1322,58 +1322,64 @@ fn test_fragment_boundary_at_point() {
 }
 
 #[test]
-fn test_serializing_string() {
+fn test_cell_sgr() {
     // a
     let a = Cell::from('a');
-    assert_eq!(GridHandler::cell_to_string(&a), "a");
+    assert_eq!(GridHandler::cell_sgr(&a), None);
 
     // b, red foreground
     let mut b = Cell::from('b');
     b.fg = Color::Named(NamedColor::Red);
-    assert_eq!(GridHandler::cell_to_string(&b), "\x1b[31mb\x1b[0m");
+    assert_eq!(GridHandler::cell_sgr(&b).as_deref(), Some("\x1b[31m"));
 
     // c, blue foreground, white background
     let mut c = Cell::from('c');
     c.fg = Color::Named(NamedColor::Blue);
     c.bg = Color::Named(NamedColor::White);
-    assert_eq!(GridHandler::cell_to_string(&c), "\x1b[34;47mc\x1b[0m");
+    assert_eq!(GridHandler::cell_sgr(&c).as_deref(), Some("\x1b[34;47m"));
 
     // d, bold
     let mut d = Cell::from('d');
     d.flags = Flags::BOLD;
-    assert_eq!(GridHandler::cell_to_string(&d), "\x1b[1md\x1b[0m");
+    assert_eq!(GridHandler::cell_sgr(&d).as_deref(), Some("\x1b[1m"));
 
     // e, italic, underline, strike
     let mut e = Cell::from('e');
     e.flags = Flags::ITALIC | Flags::UNDERLINE | Flags::STRIKEOUT;
-    assert_eq!(GridHandler::cell_to_string(&e), "\x1b[3;4;9me\x1b[0m");
+    assert_eq!(GridHandler::cell_sgr(&e).as_deref(), Some("\x1b[3;4;9m"));
 
     // f, italic, green background
     let mut f = Cell::from('f');
     f.bg = Color::Named(NamedColor::Green);
     f.flags = Flags::ITALIC;
-    assert_eq!(GridHandler::cell_to_string(&f), "\x1b[42;3mf\x1b[0m");
+    assert_eq!(GridHandler::cell_sgr(&f).as_deref(), Some("\x1b[42;3m"));
 
     // g, yellow background, white foreground, underline, strike
     let mut g = Cell::from('g');
     g.bg = Color::Named(NamedColor::Yellow);
     g.fg = Color::Named(NamedColor::White);
     g.flags = Flags::UNDERLINE | Flags::STRIKEOUT;
-    assert_eq!(GridHandler::cell_to_string(&g), "\x1b[37;43;4;9mg\x1b[0m");
+    assert_eq!(
+        GridHandler::cell_sgr(&g).as_deref(),
+        Some("\x1b[37;43;4;9m")
+    );
 
     // h, named fg, 256-color bg
     let mut h = Cell::from('h');
     h.bg = Color::Indexed(196);
     h.fg = Color::Named(NamedColor::Cyan);
-    assert_eq!(GridHandler::cell_to_string(&h), "\x1b[36;48;5;196mh\x1b[0m");
+    assert_eq!(
+        GridHandler::cell_sgr(&h).as_deref(),
+        Some("\x1b[36;48;5;196m")
+    );
 
     // i, true-color fg, named bg
     let mut i = Cell::from('i');
     i.bg = Color::Named(NamedColor::Magenta);
     i.fg = Color::Spec(ColorU::new(24, 143, 3, 255));
     assert_eq!(
-        GridHandler::cell_to_string(&i),
-        "\x1b[38;2;24;143;3;45mi\x1b[0m"
+        GridHandler::cell_sgr(&i).as_deref(),
+        Some("\x1b[38;2;24;143;3;45m")
     );
 
     // j, 256-color fg, true-color bg
@@ -1381,21 +1387,21 @@ fn test_serializing_string() {
     j.bg = Color::Spec(ColorU::new(130, 32, 10, 255));
     j.fg = Color::Indexed(67);
     assert_eq!(
-        GridHandler::cell_to_string(&j),
-        "\x1b[38;5;67;48;2;130;32;10mj\x1b[0m"
+        GridHandler::cell_sgr(&j).as_deref(),
+        Some("\x1b[38;5;67;48;2;130;32;10m")
     );
 
     // k, default fg and bg
     let mut k = Cell::from('k');
     k.bg = Color::Named(NamedColor::Background);
     k.fg = Color::Named(NamedColor::Foreground);
-    assert_eq!(GridHandler::cell_to_string(&k), "k");
+    assert_eq!(GridHandler::cell_sgr(&k), None);
 
     // l, bright colors
     let mut l = Cell::from('l');
     l.bg = Color::Named(NamedColor::BrightBlue);
     l.fg = Color::Named(NamedColor::BrightRed);
-    assert_eq!(GridHandler::cell_to_string(&l), "\x1b[91;104ml\x1b[0m");
+    assert_eq!(GridHandler::cell_sgr(&l).as_deref(), Some("\x1b[91;104m"));
 
     // m, handles an exceptional case with impossible colors
     let mut m = Cell::from('m');
@@ -1403,13 +1409,49 @@ fn test_serializing_string() {
     m.bg = Color::Named(NamedColor::Foreground);
     m.fg = Color::Named(NamedColor::Background);
     // should not crash. should fall back to default codes for fg/bg
-    assert_eq!(GridHandler::cell_to_string(&m), "\x1b[39;49mm\x1b[0m");
+    assert_eq!(GridHandler::cell_sgr(&m).as_deref(), Some("\x1b[39;49m"));
 
     // n, dim colors preserved
     let mut n = Cell::from('n');
     n.fg = Color::Named(NamedColor::Red);
     n.flags = Flags::DIM;
-    assert_eq!(GridHandler::cell_to_string(&n), "\x1b[31;2mn\x1b[0m");
+    assert_eq!(GridHandler::cell_sgr(&n).as_deref(), Some("\x1b[31;2m"));
+}
+
+#[test]
+fn test_serializing_string_writes_one_escape_per_style_run() {
+    let mut blockgrid = mock_blockgrid("redred plain BB");
+    let grid = blockgrid.grid_storage_mut();
+    for col in 0..6 {
+        grid[0][col].fg = Color::Named(NamedColor::Red);
+    }
+    for col in 13..15 {
+        grid[0][col].bg = Color::Named(NamedColor::Blue);
+        grid[0][col].flags.insert(Flags::BOLD);
+    }
+
+    assert_eq!(
+        blockgrid.contents_to_string(true, None),
+        "\x1b[31mredred\x1b[0m plain \x1b[44;1mBB\x1b[0m\r\n"
+    );
+    // Without escape sequences the text is unchanged.
+    assert_eq!(blockgrid.contents_to_string(false, None), "redred plain BB");
+}
+
+#[test]
+fn test_serializing_string_resets_between_adjacent_styles() {
+    let mut blockgrid = mock_blockgrid("ab");
+    let grid = blockgrid.grid_storage_mut();
+    grid[0][0].fg = Color::Named(NamedColor::Red);
+    grid[0][1].fg = Color::Named(NamedColor::Green);
+    grid[0][1].flags.insert(Flags::ITALIC);
+
+    // Each run starts from a reset, exactly as per-cell escapes did, so nothing from
+    // one run (here, the red) can leak into the next.
+    assert_eq!(
+        blockgrid.contents_to_string(true, None),
+        "\x1b[31ma\x1b[0m\x1b[32;3mb\x1b[0m\r\n"
+    );
 }
 
 #[test]

@@ -663,6 +663,32 @@ pub fn visible_bootstrap_block_event_fires_when_script_execution_becomes_visible
     assert_eq!(visible_events, 0);
 }
 
+// Blocks persisted with one escape sequence per styled cell (the format before styles were
+// written per run) restore to the same cells, re-serialize in the compact form, and the
+// compact form restores to itself.
+#[test]
+pub fn test_restored_styled_output_round_trips_compactly() {
+    let restore_and_serialize = |stylized_output: &[u8]| {
+        let restored_blocks = [SerializedBlock::new_for_test(
+            "cmd".into(),
+            stylized_output.to_vec(),
+        )];
+        let block_list = TestBlockListBuilder::new()
+            .with_restored_blocks(&restored_blocks)
+            .build();
+        SerializedBlock::from(&block_list.blocks[0]).stylized_output
+    };
+
+    let per_cell = "\x1b[31mr\x1b[0m\x1b[31me\x1b[0m\x1b[31md\x1b[0m plain \
+                    \x1b[44;1mB\x1b[0m\x1b[44;1mB\x1b[0m\r\n";
+    let compact = restore_and_serialize(per_cell.as_bytes());
+    assert_eq!(
+        std::str::from_utf8(&compact),
+        Ok("\x1b[31mred\x1b[0m plain \x1b[44;1mBB\x1b[0m\r\n")
+    );
+    assert_eq!(restore_and_serialize(&compact), compact);
+}
+
 // Add a few restored blocks and ensure they show up appropriately.
 #[test]
 pub fn test_restore_completed_blocks() {

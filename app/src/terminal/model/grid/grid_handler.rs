@@ -96,6 +96,15 @@ const KEYBOARD_MODE_STACK_MAX_DEPTH: usize = 4096;
 /// For escape sequences
 const CSI_START: &str = "\x1b[";
 const SGR_RESET_ATTRIBUTES: &str = "\x1b[0m";
+/// The cell flags [`GridHandler::cell_sgr`] encodes as SGR attributes.
+const SGR_STYLE_FLAGS: Flags = Flags::BOLD
+    .union(Flags::DIM)
+    .union(Flags::ITALIC)
+    .union(Flags::UNDERLINE)
+    .union(Flags::STRIKEOUT)
+    .union(Flags::INVERSE)
+    .union(Flags::HIDDEN)
+    .union(Flags::DOUBLE_UNDERLINE);
 const DEFAULT_FG_CODE: u8 = 39;
 const DEFAULT_BG_CODE: u8 = 49;
 /// the SGR (Select Graphic Rendition) parameters for 256-color and true-color
@@ -978,25 +987,22 @@ impl GridHandler {
         Some(self.hyperlink_registry.get(id)?.uri.as_str())
     }
 
-    /// Converts a cell to a string, with ansi escape sequences
-    fn cell_to_string(cell: &Cell) -> String {
-        let cell_content = cell.content_for_display();
+    /// A cell's colors and the attributes [`Self::cell_sgr`] encodes. Adjacent cells with
+    /// equal styles share one escape sequence when serializing.
+    fn cell_style(cell: &Cell) -> (Color, Color, Flags) {
+        (cell.fg, cell.bg, cell.flags & SGR_STYLE_FLAGS)
+    }
 
-        let style_checker = Flags::BOLD
-            | Flags::DIM
-            | Flags::ITALIC
-            | Flags::UNDERLINE
-            | Flags::STRIKEOUT
-            | Flags::INVERSE
-            | Flags::HIDDEN
-            | Flags::DOUBLE_UNDERLINE;
-        let contains_style = cell.flags.intersects(style_checker);
+    /// The SGR escape sequence selecting a cell's colors and attributes, or `None` for a
+    /// cell in the default style.
+    fn cell_sgr(cell: &Cell) -> Option<String> {
+        let contains_style = cell.flags.intersects(SGR_STYLE_FLAGS);
 
         let color_sequence = match (cell.fg, cell.bg) {
             (Color::Named(NamedColor::Foreground), Color::Named(NamedColor::Background))
                 if !contains_style =>
             {
-                return cell_content.to_string();
+                return None;
             }
             (Color::Named(NamedColor::Foreground), Color::Named(NamedColor::Background)) => None,
             (Color::Named(NamedColor::Foreground), _) => {
@@ -1048,21 +1054,17 @@ impl GridHandler {
             None
         };
 
-        match (color_sequence, style_sequence) {
+        Some(match (color_sequence, style_sequence) {
             (Some(color_sequence), Some(style_sequence)) => {
-                format!(
-                    "{CSI_START}{color_sequence};{style_sequence}m{cell_content}{SGR_RESET_ATTRIBUTES}"
-                )
+                format!("{CSI_START}{color_sequence};{style_sequence}m")
             }
             (color_sequence, style_sequence) => {
                 let color_sequence = color_sequence.unwrap_or_default();
                 let style_sequence = style_sequence.unwrap_or_default();
 
-                format!(
-                    "{CSI_START}{color_sequence}{style_sequence}m{cell_content}{SGR_RESET_ATTRIBUTES}",
-                )
+                format!("{CSI_START}{color_sequence}{style_sequence}m")
             }
-        }
+        })
     }
 
     /// Convert a single line in the grid to a String.
@@ -1094,6 +1096,16 @@ impl GridHandler {
         }
 
         let mut tab_mode = false;
+        // With escape sequences, styles are written once per run of identically-styled
+        // cells rather than around every cell: a truecolor cell costs ~35 bytes of escapes,
+        // which made a row of styled TUI output ~4KB to persist and to re-parse on restore.
+        // Each run still starts from a reset, so parsing this back yields the same cells.
+        let default_style = (
+            Color::Named(NamedColor::Foreground),
+            Color::Named(NamedColor::Background),
+            Flags::empty(),
+        );
+        let mut current_style = default_style;
         let should_show_secrets = force_secrets_obfuscated
             || (respect_obfuscated_secrets == RespectObfuscatedSecrets::Yes
                 && self.get_secret_obfuscation().is_visually_obfuscated());
@@ -1131,6 +1143,10 @@ impl GridHandler {
                         .secret_by_handle(handle)
                         .is_some_and(Secret::is_obfuscated)
                 {
+                    if current_style != default_style {
+                        text.push_str(SGR_RESET_ATTRIBUTES);
+                        current_style = default_style;
+                    }
                     text.push('*');
                     obfuscated_char = true;
                 }
@@ -1138,12 +1154,23 @@ impl GridHandler {
                 // If it's not obfuscated, push cell's primary character.
                 if !obfuscated_char {
                     if include_esc_sequences {
-                        text.push_str(&Self::cell_to_string(cell));
-                    } else {
-                        text.push_char_or_str(cell.content_for_display());
+                        let style = Self::cell_style(cell);
+                        if style != current_style {
+                            if current_style != default_style {
+                                text.push_str(SGR_RESET_ATTRIBUTES);
+                            }
+                            if let Some(sgr) = Self::cell_sgr(cell) {
+                                text.push_str(&sgr);
+                            }
+                            current_style = style;
+                        }
                     }
+                    text.push_char_or_str(cell.content_for_display());
                 }
             }
+        }
+        if current_style != default_style {
+            text.push_str(SGR_RESET_ATTRIBUTES);
         }
 
         if cols.end >= self.columns() - 1

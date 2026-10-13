@@ -16,33 +16,33 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
 
   # Byte sequence used to signal the start of a DCS. ([0x1b, 0x50, 0x24] which
   # maps to <ESC>, P, $ in ASCII.)
-  DCS_START="$(printf '\eP$')"
+  DCS_START=$'\eP$'
 
   # Appended to $DCS_START to signal that the following message is JSON-encoded.
   DCS_JSON_MARKER="d"
 
   # Byte sequence used to signal the end of a DCS (7-bit ST: ESC \).
-  DCS_END="$(printf '\x1b\x5c')"
+  DCS_END=$'\e\\'
 
   # OSC used to mark the start of in-band command output.
   #
   # Printable characters received this OSC and OSC_END_GENERATOR_OUTPUT are parsed and handled as
   # output for an in-band command.
-  OSC_START_GENERATOR_OUTPUT="$(printf '\e]9277;A\a')"
+  OSC_START_GENERATOR_OUTPUT=$'\e]9277;A\a'
 
   # OSC used to mark the end of in-band command output.
   #
   # Printable characters received between OSC_START_GENERATOR_OUTPUT and this are parsed and
   # handled as output for an in-band command.
-  OSC_END_GENERATOR_OUTPUT="$(printf '\e]9277;B\a')"
+  OSC_END_GENERATOR_OUTPUT=$'\e]9277;B\a'
 
-  OSC_START="$(printf '\e]9278;')"
+  OSC_START=$'\e]9278;'
 
-  OSC_END="$(printf '\a')"
+  OSC_END=$'\a'
 
   OSC_PARAM_SEPARATOR=";"
 
-  OSC_RESET_GRID="$(printf '\e]9279\a')"
+  OSC_RESET_GRID=$'\e]9279\a'
 
   # Attempt to cd to the desired initial working directory, swallowing any
   # errors.  If this fails, the user will end up in their home directory.
@@ -82,7 +82,9 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
       # Note that because the JSON string may contain characters that we don't control (including
       # unicode), we encode it as hexadecimal string to avoid prematurely calling unhook if
       # one of the bytes in JSON is 9c (ST) or other (CAN, SUB, ESC).
-      local msg=$(warp_hex_encode_string "$1")
+      local REPLY
+      warp_hex_encode_into_reply "$1"
+      local msg=$REPLY
       # We send the InitShell hook via OSCs when on WSL and via DCSs otherwise.
       if [ "$WARP_USING_WINDOWS_CON_PTY" = true ]; then
         printf $OSC_START$DCS_JSON_MARKER$OSC_PARAM_SEPARATOR$msg$OSC_END
@@ -147,8 +149,11 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
   # Note: If we're on windows, we send a reset grid to erase any cursor mutations caused by
   # the in-band command.
   warp_send_generator_output_osc() {
-      local hex_encoded_message=$(warp_hex_encode_string "$1")
-      local byte_count=$(LC_ALL="C"; printf "${#hex_encoded_message}")
+      local REPLY
+      warp_hex_encode_into_reply "$1"
+      local hex_encoded_message=$REPLY
+      # Hex digits are single bytes in any locale.
+      local byte_count=${#hex_encoded_message}
       printf "%b%i;%s%b" $OSC_START_GENERATOR_OUTPUT $byte_count $hex_encoded_message $OSC_END_GENERATOR_OUTPUT
       warp_maybe_send_reset_grid_osc
   }
@@ -252,7 +257,9 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
   # Note that this is very performance sensitive code, so try not to
   # invoke any external commands in here.
   warp_preexec () {
-      local warp_escaped_command="$(warp_escape_json $1)"
+      local REPLY
+      warp_escape_json_into_reply "$1"
+      local warp_escaped_command=$REPLY
       warp_send_json_message "{\"hook\": \"Preexec\", \"value\": {\"command\": \"$warp_escaped_command\", \"session_id\": $WARP_SESSION_ID}}"
       warp_maybe_send_reset_grid_osc
 
@@ -307,6 +314,7 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
       # in this function below).
       local exit_code=$?
       local next_block_id="precmd-$WARP_SESSION_ID-$((block_id++))"
+      local REPLY
 
       warp_send_json_message "{\"hook\": \"CommandFinished\", \"value\": {\"exit_code\": $exit_code, \"next_block_id\": \"$next_block_id\", \"session_id\": $WARP_SESSION_ID}}"
       warp_maybe_send_reset_grid_osc
@@ -372,10 +380,11 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
       local escaped_pwd
       if [ -n "${WSL_DISTRO_NAME:-}" ]; then
         # In WSL, avoid symlinks b/c on Windows `std::fs` is unable to resolve symlink inside WSL containers.
-        escaped_pwd=$(warp_escape_json "$(pwd -P)")
+        warp_escape_json_into_reply "$(pwd -P)"
       else
-        escaped_pwd=$(warp_escape_json "$PWD")
+        warp_escape_json_into_reply "$PWD"
       fi
+      escaped_pwd=$REPLY
 
       local escaped_virtual_env=""
       local escaped_conda_env=""
@@ -390,11 +399,13 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
       # user's rcfiles and have a fully-populated PATH.
       if [[ -n $WARP_BOOTSTRAPPED ]]; then
         if [[ -n ${VIRTUAL_ENV:-} ]]; then
-          escaped_virtual_env=$(warp_escape_json $VIRTUAL_ENV)
+          warp_escape_json_into_reply "$VIRTUAL_ENV"
+          escaped_virtual_env=$REPLY
         fi
 
         if [[ -n ${CONDA_DEFAULT_ENV:-} ]]; then
-          escaped_conda_env=$(warp_escape_json $CONDA_DEFAULT_ENV)
+          warp_escape_json_into_reply "$CONDA_DEFAULT_ENV"
+          escaped_conda_env=$REPLY
         fi
 
           # Get the Node.js version, but only when the Node.js Version chip is enabled.
@@ -443,7 +454,8 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
                       else
                           local node_version=$(node --version 2>/dev/null)
                           if [[ -n "$node_version" ]]; then
-                              escaped_node_version=$(warp_escape_json "$node_version")
+                              warp_escape_json_into_reply "$node_version"
+                              escaped_node_version=$REPLY
                           fi
                           _WARP_NODE_VERSION_CACHE_KEY="$node_cache_key"
                           _WARP_NODE_VERSION_CACHE_VALUE="$escaped_node_version"
@@ -453,7 +465,8 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
           fi
 
         if [[ -n ${KUBECONFIG:-} ]]; then
-          escaped_kube_config=$(warp_escape_json $KUBECONFIG)
+          warp_escape_json_into_reply "$KUBECONFIG"
+          escaped_kube_config=$REPLY
         fi
 
         # Note: We explicitly do _not_ use command -p here, as `git` is a command that can be
@@ -463,13 +476,20 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
         # information from the prompt.
         local git_branch=""
         local git_head=""
-        if command -v git >/dev/null 2>&1; then
+        warp_git_branch_from_head_file
+        local git_lookup=$?
+        if (( git_lookup == 0 )); then
+          git_branch=$REPLY
+          git_head=$REPLY
+        elif (( git_lookup == 2 )) && command -v git >/dev/null 2>&1; then
           git_branch=$(warp_git symbolic-ref --short HEAD 2> /dev/null)
           # The git branch the user is on, or the git commit hash if they're not on a branch.
           git_head="${git_branch:-$(warp_git rev-parse --short HEAD 2> /dev/null)}"
         fi
-        escaped_git_head=$(warp_escape_json "$git_head")
-        escaped_git_branch=$(warp_escape_json "$git_branch")
+        warp_escape_json_into_reply "$git_head"
+        escaped_git_head=$REPLY
+        warp_escape_json_into_reply "$git_branch"
+        escaped_git_branch=$REPLY
       fi
 
 
@@ -528,6 +548,31 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
       command -p sed -E 's/(["\\])/\\\1/g; s/'$'\b''/\\b/g; s/'$'\t''/\\t/g; s/'$'\f''/\\f/g; s/'$'\r''/\\r/g; $!s/$/\\n/' <<<"$*" | command -p tr -d '\n'
   }
 
+  # Formats a string value according to JSON syntax, like warp_escape_json, leaving the result
+  # in $REPLY. This runs several times on every prompt, so unlike warp_escape_json it doesn't
+  # start any processes, and callers don't need a command substitution (and the fork that comes
+  # with it) to get the result.
+  #
+  # Long text (some of the Bootstrapped message's lists) still goes through warp_escape_json,
+  # which is faster on it than parameter expansion. So does text that isn't valid in the
+  # current locale: sed rejects it, which leaves the value empty rather than sending invalid
+  # JSON.
+  warp_escape_json_into_reply () {
+      emulate -L zsh
+      local s="$*"
+      if (( ${#s} > 16384 )) || [[ $s == *[^[:print:][:cntrl:][:space:]]* ]]; then
+          REPLY=$(warp_escape_json "$s")
+          return
+      fi
+      s=${s//\\/\\\\}
+      s=${s//\"/\\\"}
+      s=${s//$'\b'/\\b}
+      s=${s//$'\t'/\\t}
+      s=${s//$'\f'/\\f}
+      s=${s//$'\r'/\\r}
+      REPLY=${s//$'\n'/\\n}
+  }
+
   warp_escape_ps1 () {
       # Turns out that the processed prompt is a complicated data structure that includes lots of
       # information that's passed to the shell (including the actual shell, version, working directory
@@ -548,6 +593,67 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
   # Accepts one argument: DCS JSON string
   warp_hex_encode_string () {
     printf '%s' "$1" | command -p od -An -v -tx1 | command -p tr -d ' \n'
+  }
+
+  # Hex-encodes a string like warp_hex_encode_string, leaving the result in $REPLY, without
+  # starting any processes: printf formats each byte's value. Needs `printf -v`, so zsh
+  # versions without it keep using warp_hex_encode_string, and so do long messages (the
+  # Bootstrapped one), which od encodes faster.
+  if builtin printf -v _warp_printf_v_check '%s' '' 2>/dev/null; then
+    warp_hex_encode_into_reply () {
+        emulate -L zsh
+        if [[ -z $1 ]]; then
+            REPLY=''
+            return
+        fi
+        if (( ${#1} > 16384 )); then
+            REPLY=$(warp_hex_encode_string "$1")
+            return
+        fi
+        # Split into bytes rather than characters.
+        local LC_ALL=C
+        local -a bytes
+        bytes=("${(@s::)1}")
+        builtin printf -v REPLY '%02x' "'${^bytes[@]}"
+    }
+  else
+    warp_hex_encode_into_reply () {
+        REPLY=$(warp_hex_encode_string "$1")
+    }
+  fi
+  unset _warp_printf_v_check
+
+  # Reads the checked-out branch from the repository's HEAD file, so the prompt doesn't have to
+  # start git to get it (or to find there's no repository). Returns 0 with the branch in $REPLY,
+  # 1 outside a repository, or 2 when git has to be asked: on a detached HEAD, with GIT_DIR or
+  # GIT_CEILING_DIRECTORIES set, in a bare repository, or when HEAD isn't a plain branch ref
+  # (the reftable backend leaves a placeholder branch named ".invalid" in it).
+  warp_git_branch_from_head_file () {
+      emulate -L zsh
+      [[ -n ${GIT_DIR:-} || -n ${GIT_CEILING_DIRECTORIES:-} ]] && return 2
+      local dir=$PWD git_dir line
+      while true; do
+          if [[ -d $dir/.git ]]; then
+              git_dir=$dir/.git
+              break
+          elif [[ -f $dir/.git ]]; then
+              # A linked worktree or a submodule: `.git` points at the real git dir.
+              IFS= read -r line < $dir/.git || return 2
+              [[ $line == 'gitdir: '* ]] || return 2
+              git_dir=${line#gitdir: }
+              [[ $git_dir == /* ]] || git_dir=$dir/$git_dir
+              break
+          elif [[ -f $dir/HEAD && -d $dir/objects && -d $dir/refs ]]; then
+              # Looks like a bare repository (or a git dir itself).
+              return 2
+          fi
+          [[ -z $dir || $dir == / ]] && return 1
+          dir=${dir%/*}
+      done
+      IFS= read -r line < $git_dir/HEAD 2>/dev/null || return 2
+      [[ $line == 'ref: refs/heads/'* ]] || return 2
+      REPLY=${line#ref: refs/heads/}
+      [[ -n $REPLY && $REPLY != .invalid ]] || return 2
   }
 
   # We set precmd and preexec hooks in order to set the title for the idle
@@ -645,7 +751,9 @@ if [[ -z $WARP_BOOTSTRAPPED ]]; then
   }
 
   function warp_report_input {
-    local escaped_input="$(warp_escape_json "$BUFFER")"
+    local REPLY
+    warp_escape_json_into_reply "$BUFFER"
+    local escaped_input=$REPLY
     warp_send_json_message "{ \"hook\": \"InputBuffer\", \"value\": { \"buffer\": \"$escaped_input\", \"session_id\": $WARP_SESSION_ID } }"
     # This prevents zsh from printing typeahead as background output after we've fetched it.
     BUFFER=""
@@ -1526,27 +1634,40 @@ esac
 
 
   function warp_bootstrapped () {
+    local REPLY
     # Note that for now we don't support dynamically changing HISTFILE within a session.
-    local escaped_histfile="$(warp_escape_json $HISTFILE)"
+    warp_escape_json_into_reply "$HISTFILE"
+    local escaped_histfile=$REPLY
 
     # The output of `alias` can include control characters that need to be escaped.
-    local escaped_aliases="$(warp_escape_json "`alias`")"
+    warp_escape_json_into_reply "`alias`"
+    local escaped_aliases=$REPLY
     local escaped_abbrs=""
-    local env_var_names="$(warp_escape_json "`echo ${(k)parameters[(R)*export*]}`")"
-    local function_names="$(warp_escape_json "`builtin print -l -- ${(ok)functions}`")"
-    local escaped_builtins="$(warp_escape_json "`builtin print -l -- ${(ok)builtins}`")"
-    local escaped_keywords="$(warp_escape_json "`builtin print -l -- ${(ok)reswords}`")"
+    warp_escape_json_into_reply "${(j: :)${(@k)parameters[(R)*export*]}}"
+    local env_var_names=$REPLY
+    warp_escape_json_into_reply "${(F)${(@ok)functions}}"
+    local function_names=$REPLY
+    warp_escape_json_into_reply "${(F)${(@ok)builtins}}"
+    local escaped_builtins=$REPLY
+    warp_escape_json_into_reply "${(F)${(@ok)reswords}}"
+    local escaped_keywords=$REPLY
 
-    local escaped_path="$(warp_escape_json "$PATH")"
+    warp_escape_json_into_reply "$PATH"
+    local escaped_path=$REPLY
 
-    local escaped_shell_plugins="$(warp_escape_json "`builtin print -l -- ${shell_plugins}`")"
+    warp_escape_json_into_reply "${(F)shell_plugins}"
+    local escaped_shell_plugins=$REPLY
 
     # The list of options enabled for the current shell.
-    local shell_options="$(warp_escape_json "`setopt`")"
+    warp_escape_json_into_reply "`setopt`"
+    local shell_options=$REPLY
 
-    local escaped_editor="$(warp_escape_json "$EDITOR")"
-    local escaped_shell_path="$(warp_escape_json "${commands[zsh]}")"
-    local escaped_cdpath="$(warp_escape_json "$CDPATH")"
+    warp_escape_json_into_reply "$EDITOR"
+    local escaped_editor=$REPLY
+    warp_escape_json_into_reply "${commands[zsh]}"
+    local escaped_shell_path=$REPLY
+    warp_escape_json_into_reply "$CDPATH"
+    local escaped_cdpath=$REPLY
     local escaped_json="{\"hook\": \"Bootstrapped\", \"value\": {\"histfile\": \"$escaped_histfile\", \"session_id\": $WARP_SESSION_ID, \"shell\": \"zsh\", \"home_dir\": \"$HOME\", \"path\": \"$escaped_path\", \"cdpath\": \"$escaped_cdpath\", \"editor\": \"$escaped_editor\", \"env_var_names\":  \"$env_var_names\", \"abbreviations\": \"$escaped_abbrs\", \"aliases\": \"$escaped_aliases\", \"function_names\": \"$function_names\",  \"builtins\": \"$escaped_builtins\",  \"keywords\": \"$escaped_keywords\", \"shell_version\": \"$ZSH_VERSION\", \"shell_options\": \"$shell_options\", \"rcfiles_start_time\": \"$rcfiles_start_time\", \"rcfiles_end_time\": \"$rcfiles_end_time\", \"shell_plugins\": \"$escaped_shell_plugins\", \"os_category\": \"$os_category\", \"linux_distribution\": \"$linux_distribution\", \"wsl_name\": \"${WSL_DISTRO_NAME:-}\", \"shell_path\": \"$escaped_shell_path\"}}"
     warp_send_json_message "$escaped_json"
   }

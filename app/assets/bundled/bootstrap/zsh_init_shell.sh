@@ -4,10 +4,12 @@
 # can find them even if the user has a clobbered PATH value.
  unsetopt ZLE
  WARP_SESSION_ID=@@WARP_SESSION_ID@@
- _hostname=$(command -pv hostname >/dev/null 2>&1 && command -p hostname 2>/dev/null || command -p uname -n)
- _user=$(command -pv whoami >/dev/null 2>&1 && command -p whoami 2>/dev/null || echo $USER)
- _msg=$(printf "{\"hook\": \"InitShell\", \"value\": {\"session_id\": $WARP_SESSION_ID, \"shell\": \"zsh\", \"user\": \"%s\", \"hostname\": \"%s\"}}" "$_user" "$_hostname" | command -p od -An -v -tx1 | command -p tr -d " \n")
+ # zsh already knows the host ($HOST, from gethostname like `hostname`) and the user
+ # ($USERNAME, like `whoami`), and printf can hex-encode the message, so this starts no
+ # processes. A zsh without `printf -v` hex-encodes with od instead.
+ _msg="{\"hook\": \"InitShell\", \"value\": {\"session_id\": $WARP_SESSION_ID, \"shell\": \"zsh\", \"user\": \"$USERNAME\", \"hostname\": \"$HOST\"}}"
+ () { local LC_ALL=C; local -a _bytes; _bytes=("${(@s::)_msg}"); builtin printf -v _msg "%02x" "\"${^_bytes[@]}" } 2>/dev/null || _msg=$(printf "%s" "$_msg" | command -p od -An -v -tx1 | command -p tr -d " \n")
  WARP_USING_WINDOWS_CON_PTY=@@USING_CON_PTY_BOOLEAN@@
  # We send the InitShell hook via OSCs when on Windows and via DCSs otherwise.
  if [ "$WARP_USING_WINDOWS_CON_PTY" = true ]; then printf '\e]9278;d;%s\x07' "$_msg"; else printf '\x1b\x50\x24\x64%s\x1b\x5c' "$_msg"; fi
- unset _hostname _user _msg
+ unset _msg

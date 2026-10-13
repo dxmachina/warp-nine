@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use warp_core::channel::ChannelState;
+use warp_core::channel::{Channel, ChannelState};
 pub use warp_core::features::*;
 
 /// Mark all features which should be enabled on the current channel as enabled.
@@ -474,6 +474,14 @@ fn enabled_features() -> HashSet<FeatureFlag> {
         #[cfg(feature = "terminal_lifecycle_recovery")]
         FeatureFlag::TerminalLifecycleRecovery,
     ]);
+
+    // LOCAL FORK: there is no update or changelog server for the OSS channel (`fetch_version`
+    // bails for it), but with these on the app still asked app.warp.dev at launch, for every
+    // window, and each time the app became active, then logged the failure.
+    if ChannelState::channel() == Channel::Oss {
+        flags.remove(&FeatureFlag::Autoupdate);
+        flags.remove(&FeatureFlag::Changelog);
+    }
 
     flags
 }

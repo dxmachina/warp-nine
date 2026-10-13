@@ -78,20 +78,23 @@ impl EnvVarCollectionView {
         #[cfg(all(not(target_family = "wasm"), feature = "local_tty"))]
         {
             let window_id = ctx.window_id();
-            let local_shell = LocalShellState::as_ref(ctx);
+            let local_shell = LocalShellState::handle(ctx);
             let secret_manager_clone = secret_manager.clone();
 
-            let Some(local_shell_state) = local_shell.local_shell_info() else {
+            let Some((shell_type, shell_path)) = local_shell
+                .as_ref(ctx)
+                .local_shell_info()
+                .map(|shell| (shell.get_shell_type(), shell.get_shell_path().clone()))
+            else {
                 return;
             };
-
-            let shell_type = local_shell_state.get_shell_type();
-            let shell_path = local_shell_state.get_shell_path().clone();
-            let path_env_var = local_shell_state.get_path_env_var().clone();
+            let path_env_var =
+                local_shell.update(ctx, |shell, ctx| shell.get_interactive_path_env_var(ctx));
 
             self.secrets_dialog.update(ctx, |_, dialog_ctx| {
                 let _ = dialog_ctx.spawn(
                     async move {
+                        let path_env_var = path_env_var.await;
                         secret_manager
                             .verify_installed_and_fetch_secrets(
                                 shell_type,

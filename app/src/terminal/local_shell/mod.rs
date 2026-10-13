@@ -48,8 +48,6 @@ pub struct LocalShell {
     shell_type: ShellType,
     /// Defines the path of the shell binary, i.e. /bin/zsh
     shell_path: PathBuf,
-    /// The PATH sourced from the user's shell (non-interactive, fast)
-    path_env_var: Option<String>,
     /// The PATH sourced from an interactive login shell (lazy, for LSP)
     #[cfg(feature = "local_tty")]
     interactive_env_state: InteractiveEnvState,
@@ -62,10 +60,6 @@ impl LocalShell {
 
     pub fn get_shell_path(&self) -> &PathBuf {
         &self.shell_path
-    }
-
-    pub fn get_path_env_var(&self) -> &Option<String> {
-        &self.path_env_var
     }
 }
 
@@ -103,35 +97,12 @@ impl LocalShellState {
             ShellStarterSourceOrWslName::WSLName { .. } => return LocalShellState::NotLoaded,
         };
 
-        let shell_path = shell_starter.logical_shell_path().to_owned();
-        let shell_type = shell_starter.shell_type();
-        let clone = shell_path.clone();
-
-        let command = match shell_type {
-            ShellType::Bash | ShellType::Zsh => "echo $PATH",
-            ShellType::Fish => "env | grep PATH",
-            ShellType::PowerShell => "echo $Env:PATH",
-        };
-
-        // Execute a command to fetch the user's PATH var, and store it
-        // in the associated field
-        ctx.spawn(
-            async move { execute_command(shell_type, clone, None, command).await },
-            |me, res, _| match me {
-                LocalShellState::Loaded(local_shell_state) => {
-                    // Trim to remove trailing newline from `echo $PATH` output
-                    local_shell_state.path_env_var = res.ok().map(|s| s.trim().to_string());
-                }
-                LocalShellState::NotLoaded => {
-                    log::warn!("Tried to execute a command on LocalShell that wasn't loaded")
-                }
-            },
-        );
-
+        // The user's PATH is captured lazily, by `get_interactive_path_env_var`. This used to
+        // also run the user's login shell at every launch to read a PATH that only the env-var
+        // secrets dialog used.
         Self::Loaded(LocalShell {
-            shell_type,
-            shell_path,
-            path_env_var: None,
+            shell_type: shell_starter.shell_type(),
+            shell_path: shell_starter.logical_shell_path().to_owned(),
             interactive_env_state: InteractiveEnvState::NotRequested,
         })
     }
